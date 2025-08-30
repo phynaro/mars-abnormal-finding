@@ -8,7 +8,7 @@
           "MSSQL_PORT": "1433",
           "MSSQL_USER": "sa",
           "MSSQL_PASSWORD": "Sonic@True101",
-          "MSSQL_DATABASE": "CMMS",
+          "MSSQL_DATABASE": "Cedar6_Mars",
           "MSSQL_ENCRYPT": "true",
           "MSSQL_TRUST_SERVER_CERTIFICATE": "true"
         }
