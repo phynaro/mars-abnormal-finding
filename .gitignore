@@ -11,6 +11,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
+# Backend uploads directory
+backend/uploads/
+
 # Build outputs
 dist/
 build/

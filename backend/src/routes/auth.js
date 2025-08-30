@@ -1,29 +1,25 @@
 const express = require('express');
-const authController = require('../controllers/authController');
-const authMiddleware = require('../middleware/auth');
-
 const router = express.Router();
+const { 
+  register, 
+  login, 
+  logout, 
+  changePassword, 
+  getProfile,
+  verifyEmail,
+  resendVerificationEmail
+} = require('../controllers/authController');
+const { authenticateToken } = require('../middleware/auth');
 
-// Test endpoint to verify auth controller is working
-router.get('/test', (req, res) => {
-  res.json({ 
-    message: 'Auth controller is working',
-    methods: Object.getOwnPropertyNames(Object.getPrototypeOf(authController))
-  });
-});
+// Public routes (no authentication required)
+router.post('/register', register);
+router.post('/login', login);
+router.post('/verify-email', verifyEmail);
+router.post('/resend-verification', resendVerificationEmail);
 
-// Authenticate user from LIFF profile
-router.post('/authenticate', authController.authenticateUser);
-
-// Logout
-router.post('/logout', authMiddleware, authController.logout);
-
-// Verify JWT token
-router.get('/verify', authMiddleware, (req, res) => {
-  res.json({
-    success: true,
-    user: req.user
-  });
-});
+// Protected routes (authentication required)
+router.post('/logout', authenticateToken, logout);
+router.post('/change-password', authenticateToken, changePassword);
+router.get('/profile', authenticateToken, getProfile);
 
 module.exports = router;

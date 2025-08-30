@@ -2,56 +2,87 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --background: 0 0% 100%;
-  --foreground: 222.2 84% 4.9%;
-  --card: 0 0% 100%;
-  --card-foreground: 222.2 84% 4.9%;
-  --popover: 0 0% 100%;
-  --popover-foreground: 222.2 84% 4.9%;
-  --primary: 221.2 83.2% 53.3%;
-  --primary-foreground: 210 40% 98%;
-  --secondary: 210 40% 96%;
-  --secondary-foreground: 222.2 84% 4.9%;
-  --muted: 210 40% 96%;
-  --muted-foreground: 215.4 16.3% 46.9%;
-  --accent: 210 40% 96%;
-  --accent-foreground: 222.2 84% 4.9%;
-  --destructive: 0 84.2% 60.2%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 214.3 31.8% 91.4%;
-  --input: 214.3 31.8% 91.4%;
-  --ring: 221.2 83.2% 53.3%;
-  --radius: 0.5rem;
+@layer base {
+  :root {
+    /* Neutral surfaces */
+    --background: 0 0% 100%;          /* white */
+    --foreground: 0 0% 10%;           /* near black */
+  
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 10%;
+  
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 10%;
+  
+    /* Brand highlight */
+    --primary: 156 65% 41%;           /* green-600 */
+    --primary-foreground: 0 0% 100%;  /* white text on green */
+  
+    /* Secondary neutrals */
+    --secondary: 0 0% 96%;            /* light gray */
+    --secondary-foreground: 0 0% 20%; /* dark gray text */
+  
+    /* Muted */
+    --muted: 0 0% 96%;                /* light gray background */
+    --muted-foreground: 0 0% 45%;     /* mid gray text */
+  
+    /* Accent (same as primary for simplicity) */
+    --accent: 156 65% 95%;
+    --accent-foreground: 0 0% 100%;
+  
+    /* Danger */
+    --destructive: 0 72% 50%;         /* red */
+    --destructive-foreground: 0 0% 100%;
+  
+    /* Borders, inputs, rings */
+    --border: 0 0% 90%;               /* light gray border */
+    --input: 0 0% 90%;
+    --ring: 156 65% 41%;              /* brand green for focus */
+  }       /* match primary */
+
+  .dark {
+    /* Neutral surfaces */
+    --background: 0 0% 10%;           /* near black */
+    --foreground: 0 0% 95%;           /* near white */
+  
+    --card: 0 0% 14%;                 /* dark gray card */
+    --card-foreground: 0 0% 95%;
+  
+    --popover: 0 0% 14%;
+    --popover-foreground: 0 0% 95%;
+  
+    /* Brand highlight */
+    --primary: 156 65% 41%;             /* green-500 (lighter on dark) */
+    --primary-foreground: 0 0% 100%;  /* white */
+  
+    /* Secondary neutrals */
+    --secondary: 0 0% 20%;            /* dark gray */
+    --secondary-foreground: 0 0% 80%; /* light gray text */
+  
+    /* Muted */
+    --muted: 0 0% 20%;
+    --muted-foreground: 0 0% 65%;
+  
+    /* Accent */
+    --accent: 156 65% 23%;
+    --accent-foreground: 0 0% 100%;
+  
+    /* Danger */
+    --destructive: 0 62% 45%;         /* darker red */
+    --destructive-foreground: 0 0% 100%;
+  
+    /* Borders, inputs, rings */
+    --border: 0 0% 25%;               /* dark gray border */
+    --input: 0 0% 25%;
+    --ring: 156 65% 51%;              /* green for focus */
+  }
 }
 
-.dark {
-  --background: 222.2 84% 4.9%;
-  --foreground: 210 40% 98%;
-  --card: 222.2 84% 4.9%;
-  --card-foreground: 210 40% 98%;
-  --popover: 222.2 84% 4.9%;
-  --popover-foreground: 210 40% 98%;
-  --primary: 217.2 91.2% 59.8%;
-  --primary-foreground: 222.2 84% 4.9%;
-  --secondary: 217.2 32.6% 17.5%;
-  --secondary-foreground: 210 40% 98%;
-  --muted: 217.2 32.6% 17.5%;
-  --muted-foreground: 215 20.2% 65.1%;
-  --accent: 217.2 32.6% 17.5%;
-  --accent-foreground: 210 40% 98%;
-  --destructive: 0 62.8% 30.6%;
-  --destructive-foreground: 210 40% 98%;
-  --border: 217.2 32.6% 17.5%;
-  --input: 217.2 32.6% 17.5%;
-  --ring: 224.3 76.3% 94.1%;
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
-
-* {
-  border-color: hsl(var(--border));
-}
-
-body {
-  background-color: hsl(var(--background));
-  color: hsl(var(--foreground));
-} 

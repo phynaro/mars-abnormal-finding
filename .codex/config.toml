@@ -1,0 +1,13 @@
+# IMPORTANT: the top-level key is `mcp_servers` rather than `mcpServers`.
+[mcp_servers.mssql-mcp-node-single]
+command = "npx"
+args = ["-y", "mssql-mcp-node"]
+env = {
+          "MSSQL_SERVER": "192.168.0.25\\SQLEXPRESS",
+          "MSSQL_PORT": "1433",
+          "MSSQL_USER": "sa",
+          "MSSQL_PASSWORD": "Sonic@True101",
+          "MSSQL_DATABASE": "CMMS",
+          "MSSQL_ENCRYPT": "true",
+          "MSSQL_TRUST_SERVER_CERTIFICATE": "true"
+        }

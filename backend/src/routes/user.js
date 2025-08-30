@@ -1,25 +1,39 @@
 const express = require('express');
-const authMiddleware = require('../middleware/auth');
+const { authenticateToken } = require('../middleware/auth');
+const { uploadAvatar } = require('../middleware/upload');
 const userController = require('../controllers/userController');
+const userManagementController = require('../controllers/userManagementController');
 
 const router = express.Router();
 
 // All routes require authentication
-router.use(authMiddleware);
+router.use(authenticateToken);
 
-// Get current user profile
+// Basic user profile routes (existing)
 router.get('/profile', userController.getProfile);
-
-// Update user profile
 router.put('/profile', userController.updateProfile);
-
-// Get user role
+router.post('/profile/avatar', uploadAvatar.single('avatar'), userController.uploadAvatar);
+router.post('/line/test', userController.sendLineTest);
 router.get('/role', userController.getRole);
 
-// Update user role (admin only)
-router.put('/role', userController.updateUserRole);
+// Role management routes (must come before parameterized routes)
+router.get('/roles', userManagementController.getRoles);
 
-// Get all users (admin only)
-router.get('/all', userController.getAllUsers);
+// User management routes (L3 only)
+router.get('/all', userManagementController.getAllUsers);
+router.get('/:userId', userManagementController.getUserById);
+router.post('/', userManagementController.createUser);
+router.put('/:userId', userManagementController.updateUser);
+router.delete('/:userId', userManagementController.deleteUser);
+
+// Role management routes
+router.put('/:userId/role', userManagementController.updateUserRole);
+
+// Password management
+router.put('/:userId/password', userManagementController.resetUserPassword);
+
+// Activity and bulk operations
+router.get('/:userId/activity', userManagementController.getUserActivityLogs);
+router.put('/bulk-update', userManagementController.bulkUpdateUsers);
 
 module.exports = router;
