@@ -1,15 +1,39 @@
 const axios = require('axios');
+const messageBuilders = require('./line/messages');
+const {
+  buildImageMessages,
+  isImageAccessible,
+  getAccessibleImages,
+  debugImageAccessibility,
+  selectHeroImage,
+  getStatusColor,
+  getPriorityColor,
+  getNotificationTitle,
+  getNotificationSubtitle,
+  getStatusText,
+  getPriorityText,
+} = require('./line/utils');
 
 class LineService {
   constructor() {
     this.channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
     this.apiBase = 'https://api.line.me/v2/bot/message';
     this.allowLocalImages = process.env.LINE_ALLOW_LOCAL_IMAGES === 'true';
-    this.imageHostingService = process.env.LINE_IMAGE_HOSTING_SERVICE || 'none'; // 'none', 'imgur', 'cloudinary', etc.
+    this.imageHostingService = process.env.LINE_IMAGE_HOSTING_SERVICE || 'none';
   }
 
   isConfigured() {
     return !!this.channelAccessToken;
+  }
+
+  getFlexMessageOptions(overrides = {}) {
+    return {
+      allowLocalImages: this.allowLocalImages,
+      backendUrl: process.env.BACKEND_URL,
+      frontendUrl: process.env.FRONTEND_URL,
+      baseUrl: process.env.FRONTEND_URL,
+      ...overrides,
+    };
   }
 
   async pushToUser(lineUserId, messages) {
@@ -23,16 +47,18 @@ class LineService {
         return { success: false, skipped: true };
       }
 
-      // Normalize to array of messages
-      let msgArray = Array.isArray(messages) ? messages : [messages];
+      if (typeof lineUserId !== 'string' || !lineUserId.startsWith('U') || lineUserId.length !== 33) {
+        console.error(`Invalid LineID format: ${lineUserId}. Expected format: U followed by 32 characters.`);
+        return { success: false, error: 'Invalid LineID format' };
+      }
 
-      // Handle special case where messages might be objects with text and images
+      const msgArray = Array.isArray(messages) ? messages : [messages];
+
       const processedMessages = [];
       for (const msg of msgArray) {
         if (typeof msg === 'string') {
           processedMessages.push({ type: 'text', text: msg });
         } else if (msg.text && msg.images) {
-          // Handle mixed message with text and images
           processedMessages.push({ type: 'text', text: msg.text });
           processedMessages.push(...msg.images);
         } else {
@@ -54,12 +80,18 @@ class LineService {
             Authorization: `Bearer ${this.channelAccessToken}`,
           },
           timeout: 10000,
-        }
+        },
       );
 
       return { success: true, status: res.status };
     } catch (error) {
-      console.error('LINE push error:', error?.response?.data || error.message);
+      console.error('LINE push error:', {
+        message: error?.response?.data || error.message,
+        status: error?.response?.status,
+        statusText: error?.response?.statusText,
+        lineUserId,
+        messages: JSON.stringify(messages, null, 2),
+      });
       return { success: false, error: error.message };
     }
   }
@@ -89,167 +121,263 @@ class LineService {
     }
   }
 
-  // Convenience message builders
   buildTicketCreatedMessage(ticket, reporterName) {
-    return `🚨 New Ticket Created\n#${ticket.ticket_number}\n${ticket.title}\nSeverity: ${ticket.severity_level}\nPriority: ${ticket.priority}\nBy: ${reporterName}`;
+    return messageBuilders.buildTicketCreatedMessage(ticket, reporterName);
+  }
+
+  buildTicketCreatedFlexMessage(ticket, reporterName, images = []) {
+    return messageBuilders.buildTicketCreatedFlexMessage(
+      ticket,
+      reporterName,
+      images,
+      this.getFlexMessageOptions(),
+    );
   }
 
   buildAssignmentMessage(ticket) {
-    return `📌 Ticket Assigned\n#${ticket.ticket_number}\n${ticket.title}\nSeverity: ${ticket.severity_level}\nPriority: ${ticket.priority}`;
+    return messageBuilders.buildAssignmentMessage(ticket);
   }
 
-  buildStatusUpdateMessage(ticket, oldStatus, newStatus, changedByName) {
-    return `🔄 Ticket Status Updated\n#${ticket.ticket_number}\n${ticket.title}\n${oldStatus || 'N/A'} → ${newStatus}\nBy: ${changedByName}`;
+  buildTicketAssignedFlexMessage(ticket, assigneeName, images = []) {
+    return messageBuilders.buildTicketAssignedFlexMessage(
+      ticket,
+      assigneeName,
+      images,
+      this.getFlexMessageOptions(),
+    );
+  }
+
+  buildTicketStatusUpdateMessage(ticket, oldStatus, newStatus, changedByName) {
+    return messageBuilders.buildTicketStatusUpdateMessage(ticket, oldStatus, newStatus, changedByName);
+  }
+
+  buildTicketStatusUpdateFlexMessage(ticket, oldStatus, newStatus, changedByName, images = []) {
+    return messageBuilders.buildTicketStatusUpdateFlexMessage(
+      ticket,
+      oldStatus,
+      newStatus,
+      changedByName,
+      images,
+      this.getFlexMessageOptions(),
+    );
   }
 
   buildTicketPreAssignedMessage(ticket, reporterName) {
-    return `📌 Ticket Pre-Assigned\n#${ticket.ticket_number}\n${ticket.title}\nReported By: ${reporterName}\nPriority: ${ticket.priority}\nSeverity: ${ticket.severity_level}\nYou have been pre-assigned to this ticket`;
+    return messageBuilders.buildTicketPreAssignedMessage(ticket, reporterName);
   }
 
-  buildTicketPreAssignedWithImagesMessage(ticket, reporterName, images) {
-    const baseMessage = this.buildTicketPreAssignedMessage(ticket, reporterName);
-    
-    if (images && images.length > 0) {
-      let accessibleImages = images;
-      
-      // If local images are not allowed, filter them out
-      if (!this.allowLocalImages) {
-        accessibleImages = images.filter(img => {
-          const url = img.url.toLowerCase();
-          return !url.includes('localhost') && !url.includes('127.0.0.1') && !url.includes('192.168.') && !url.includes('10.') && !url.includes('172.');
-        });
-      }
-      
-      if (accessibleImages.length > 0) {
-        return {
-          text: baseMessage,
-          images: accessibleImages.map(img => ({
-            type: 'image',
-            originalContentUrl: img.url,
-            previewImageUrl: img.url
-          }))
-        };
-      }
-    }
-    
-    return baseMessage;
+  buildTicketPreAssignedWithImagesMessage(ticket, reporterName, images = []) {
+    return messageBuilders.buildTicketPreAssignedWithImagesMessage(
+      ticket,
+      reporterName,
+      images,
+      this.getFlexMessageOptions(),
+    );
   }
 
   buildTicketAcceptedMessage(ticket, acceptorName) {
-    return `✅ Ticket Accepted\n#${ticket.ticket_number}\n${ticket.title}\nAccepted By: ${acceptorName}\nStatus: Work in Progress`;
+    return messageBuilders.buildTicketAcceptedMessage(ticket, acceptorName);
+  }
+
+  buildTicketAcceptedFlexMessage(ticket, acceptorName, images = []) {
+    return messageBuilders.buildTicketAcceptedFlexMessage(
+      ticket,
+      acceptorName,
+      images,
+      this.getFlexMessageOptions(),
+    );
+  }
+
+  buildTicketAcceptedFlexMessageSimple(ticket, acceptorName) {
+    return messageBuilders.buildTicketAcceptedFlexMessageSimple(
+      ticket,
+      acceptorName,
+      this.getFlexMessageOptions(),
+    );
   }
 
   buildTicketRejectedMessage(ticket, rejectorName, rejectionReason, status) {
-    return `❌ Ticket Rejected\n#${ticket.ticket_number}\n${ticket.title}\nRejected By: ${rejectorName}\nReason: ${rejectionReason}\nStatus: ${status}`;
+    return messageBuilders.buildTicketRejectedMessage(ticket, rejectorName, rejectionReason, status);
   }
 
-  buildJobCompletedMessage(ticket, completerName, completionNotes, actualDowntime) {
-    return `✅ Job Completed\n#${ticket.ticket_number}\n${ticket.title}\nCompleted By: ${completerName}\nActual Downtime: ${actualDowntime || 'Not specified'} hours${completionNotes ? `\nNotes: ${completionNotes}` : ''}`;
+  buildTicketRejectedFlexMessage(ticket, rejectorName, rejectionReason, status, images = []) {
+    return messageBuilders.buildTicketRejectedFlexMessage(
+      ticket,
+      rejectorName,
+      rejectionReason,
+      status,
+      images,
+      this.getFlexMessageOptions(),
+    );
+  }
+
+  buildTicketRejectedFlexMessageSimple(ticket, rejectorName, rejectionReason) {
+    return messageBuilders.buildTicketRejectedFlexMessageSimple(
+      ticket,
+      rejectorName,
+      rejectionReason,
+      this.getFlexMessageOptions(),
+    );
+  }
+
+  buildJobCompletedMessage(ticket, completerName, completionNotes, downtimeAvoidance, costAvoidance) {
+    return messageBuilders.buildJobCompletedMessage(
+      ticket,
+      completerName,
+      completionNotes,
+      downtimeAvoidance,
+      costAvoidance,
+    );
+  }
+
+  buildJobCompletedFlexMessage(ticket, completerName, completionNotes, downtimeAvoidance, costAvoidance, images = []) {
+    return messageBuilders.buildJobCompletedFlexMessage(
+      ticket,
+      completerName,
+      completionNotes,
+      downtimeAvoidance,
+      costAvoidance,
+      images,
+      this.getFlexMessageOptions(),
+    );
+  }
+
+  buildJobCompletedFlexMessageWithHero(ticket, completerName, downtimeAvoidance, costAvoidance, images = []) {
+    return messageBuilders.buildJobCompletedFlexMessageWithHero(
+      ticket,
+      completerName,
+      downtimeAvoidance,
+      costAvoidance,
+      images,
+      this.getFlexMessageOptions(),
+    );
   }
 
   buildTicketEscalatedMessage(ticket, escalatorName, escalationReason) {
-    return `🚨 Ticket Escalated\n#${ticket.ticket_number}\n${ticket.title}\nEscalated By: ${escalatorName}\nReason: ${escalationReason}`;
+    return messageBuilders.buildTicketEscalatedMessage(ticket, escalatorName, escalationReason);
   }
 
   buildTicketEscalatedToRequestorMessage(ticket, escalatorName, escalationReason) {
-    return `🚨 Ticket Escalated\n#${ticket.ticket_number}\n${ticket.title}\nEscalated By: ${escalatorName}\nReason: ${escalationReason}\nEscalated to L3 for review`;
+    return messageBuilders.buildTicketEscalatedToRequestorMessage(ticket, escalatorName, escalationReason);
+  }
+
+  buildTicketEscalatedFlexMessage(ticket, escalatorName, escalationReason, images = []) {
+    return messageBuilders.buildTicketEscalatedFlexMessage(
+      ticket,
+      escalatorName,
+      escalationReason,
+      images,
+      this.getFlexMessageOptions(),
+    );
+  }
+
+  buildTicketEscalatedFlexMessageSimple(ticket, escalatorName, escalationReason, images = []) {
+    return messageBuilders.buildTicketEscalatedFlexMessageSimple(
+      ticket,
+      escalatorName,
+      escalationReason,
+      images,
+      this.getFlexMessageOptions(),
+    );
   }
 
   buildTicketClosedMessage(ticket, closerName, closeReason, satisfactionRating) {
-    return `✅ Ticket Closed\n#${ticket.ticket_number}\n${ticket.title}\nClosed By: ${closerName}${closeReason ? `\nReason: ${closeReason}` : ''}${satisfactionRating ? `\nSatisfaction: ${satisfactionRating}/5` : ''}`;
+    return messageBuilders.buildTicketClosedMessage(ticket, closerName, closeReason, satisfactionRating);
+  }
+
+  buildTicketClosedFlexMessage(ticket, closerName, closeReason, satisfactionRating, images = []) {
+    return messageBuilders.buildTicketClosedFlexMessage(
+      ticket,
+      closerName,
+      closeReason,
+      satisfactionRating,
+      images,
+      this.getFlexMessageOptions(),
+    );
+  }
+
+  buildTicketClosedFlexMessageSimple(ticket, closerName, satisfactionRating) {
+    return messageBuilders.buildTicketClosedFlexMessageSimple(
+      ticket,
+      closerName,
+      satisfactionRating,
+      this.getFlexMessageOptions(),
+    );
   }
 
   buildTicketReopenedMessage(ticket, reopenerName, reopenReason) {
-    return `🔄 Ticket Reopened\n#${ticket.ticket_number}\n${ticket.title}\nReopened By: ${reopenerName}${reopenReason ? `\nReason: ${reopenReason}` : ''}`;
+    return messageBuilders.buildTicketReopenedMessage(ticket, reopenerName, reopenReason);
   }
 
-  buildTicketPreAssignedMessage(ticket, reporterName) {
-    return `📌 Ticket Pre-Assigned\n#${ticket.ticket_number}\n${ticket.title}\nReported By: ${reporterName}\nPriority: ${ticket.priority}\nSeverity: ${ticket.severity_level}\nYou have been pre-assigned to this ticket`;
+  buildTicketReopenedFlexMessage(ticket, reopenerName, reopenReason, images = []) {
+    return messageBuilders.buildTicketReopenedFlexMessage(
+      ticket,
+      reopenerName,
+      reopenReason,
+      images,
+      this.getFlexMessageOptions(),
+    );
   }
 
   buildTicketReassignedMessage(ticket, reassignerName, reassignmentReason) {
-    return `🔄 Ticket Reassigned\n#${ticket.ticket_number}\n${ticket.title}\nReassigned By: ${reassignerName}${reassignmentReason ? `\nReason: ${reassignmentReason}` : ''}\nReassigned by L3 management`;
+    return messageBuilders.buildTicketReassignedMessage(ticket, reassignerName, reassignmentReason);
   }
 
-  /**
-   * Helper function to get ticket images for LINE notifications
-   * @param {Array} images - Array of image objects with url and filename
-   * @returns {Array} Array of LINE image message objects
-   */
+  buildTicketReassignedFlexMessage(ticket, reassignerName, reassignmentReason, images = []) {
+    return messageBuilders.buildTicketReassignedFlexMessage(
+      ticket,
+      reassignerName,
+      reassignmentReason,
+      images,
+      this.getFlexMessageOptions(),
+    );
+  }
+
   buildImageMessages(images) {
-    if (!images || images.length === 0) {
-      return [];
-    }
-    
-    return images.map(img => ({
-      type: 'image',
-      originalContentUrl: img.url,
-      previewImageUrl: img.url
-    }));
+    return buildImageMessages(images);
   }
 
-  /**
-   * Check if an image URL is accessible from external servers (like LINE)
-   * @param {string} url - Image URL to check
-   * @returns {boolean} - True if accessible, false if local/private
-   */
   isImageAccessible(url) {
-    if (!url) return false;
-    
-    const lowerUrl = url.toLowerCase();
-    const localPatterns = [
-      'localhost', '127.0.0.1', '192.168.', '10.', '172.',
-      '::1', 'fe80:', 'fc00:', 'fd00:' // IPv6 local addresses
-    ];
-    
-    return !localPatterns.some(pattern => lowerUrl.includes(pattern));
+    return isImageAccessible(url);
   }
 
-  /**
-   * Get accessible images for LINE notifications
-   * @param {Array} images - Array of image objects
-   * @returns {Array} Array of accessible images
-   */
   getAccessibleImages(images) {
-    if (!images || images.length === 0) return [];
-    
-    if (this.allowLocalImages) {
-      return images; // Allow all images if configured
-    }
-    
-    return images.filter(img => this.isImageAccessible(img.url));
+    return getAccessibleImages(images, this.allowLocalImages);
   }
 
-  /**
-   * Debug method to check image accessibility
-   * @param {Array} images - Array of image objects
-   * @returns {Object} Debug information about images
-   */
   debugImageAccessibility(images) {
-    if (!images || images.length === 0) {
-      return { total: 0, accessible: 0, local: 0, details: [] };
-    }
-    
-    const details = images.map(img => ({
-      url: img.url,
-      filename: img.filename,
-      accessible: this.isImageAccessible(img.url),
-      reason: this.isImageAccessible(img.url) ? 'Public URL' : 'Local/Private URL'
-    }));
-    
-    const accessible = details.filter(d => d.accessible).length;
-    const local = details.filter(d => !d.accessible).length;
-    
-    return {
-      total: images.length,
-      accessible,
-      local,
-      details,
-      config: {
-        allowLocalImages: this.allowLocalImages,
-        imageHostingService: this.imageHostingService
-      }
-    };
+    return debugImageAccessibility(images, {
+      allowLocalImages: this.allowLocalImages,
+      imageHostingService: this.imageHostingService,
+    });
+  }
+
+  selectHeroImage(images) {
+    return selectHeroImage(images, this.getFlexMessageOptions());
+  }
+
+  getStatusColor(status) {
+    return getStatusColor(status);
+  }
+
+  getPriorityColor(priority) {
+    return getPriorityColor(priority);
+  }
+
+  getNotificationTitle(messageType) {
+    return getNotificationTitle(messageType);
+  }
+
+  getNotificationSubtitle(messageType) {
+    return getNotificationSubtitle(messageType);
+  }
+
+  getStatusText(status) {
+    return getStatusText(status);
+  }
+
+  getPriorityText(priority) {
+    return getPriorityText(priority);
   }
 }
 

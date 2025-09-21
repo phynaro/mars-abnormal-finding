@@ -127,7 +127,9 @@ class AuthService {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || 'Login failed');
+        // Use the server-provided message if available, otherwise provide a fallback
+        const errorMessage = result.message || this.getDefaultErrorMessage(response.status);
+        throw new Error(errorMessage);
       }
 
       if (result.success && result.token && result.user) {
@@ -136,7 +138,47 @@ class AuthService {
 
       return result;
     } catch (error) {
-      throw new Error(error instanceof Error ? error.message : 'Login failed');
+      // Handle network errors and other fetch failures
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+      }
+      
+      // Handle other network-related errors
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('NetworkError') ||
+        error.message.includes('ERR_NETWORK') ||
+        error.message.includes('ERR_INTERNET_DISCONNECTED')
+      )) {
+        throw new Error('Connection failed. Please check your internet connection and try again.');
+      }
+
+      // Re-throw the original error if it's already user-friendly
+      throw new Error(error instanceof Error ? error.message : 'Login failed. Please try again.');
+    }
+  }
+
+  // Helper method to provide default error messages based on HTTP status codes
+  private getDefaultErrorMessage(status: number): string {
+    switch (status) {
+      case 400:
+        return 'Invalid login information. Please check your username and password.';
+      case 401:
+        return 'Invalid username or password. Please try again.';
+      case 403:
+        return 'Access denied. Please contact your administrator.';
+      case 404:
+        return 'Login service not found. Please contact support.';
+      case 500:
+        return 'Server error. Please try again later.';
+      case 502:
+        return 'Service temporarily unavailable. Please try again in a few moments.';
+      case 503:
+        return 'Service temporarily unavailable. Please try again in a few moments.';
+      case 504:
+        return 'Request timeout. Please check your connection and try again.';
+      default:
+        return 'Login failed. Please try again.';
     }
   }
 
@@ -213,6 +255,10 @@ class AuthService {
       const result = await response.json();
 
       if (!response.ok) {
+        // If we get 401 or 403, the token is invalid/expired
+        if (response.status === 401 || response.status === 403) {
+          this.clearAuth();
+        }
         throw new Error(result.message || 'Failed to get profile');
       }
 
@@ -233,6 +279,9 @@ class AuthService {
       await this.getProfile();
     } catch (error) {
       console.error('Failed to refresh user data:', error);
+      // Clear auth data if profile fetch fails (token expired/invalid)
+      this.clearAuth();
+      throw error; // Re-throw to let the caller handle it
     }
   }
 

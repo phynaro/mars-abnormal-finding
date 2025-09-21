@@ -23,7 +23,8 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
   const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
   const uploadsBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
 
-  const canAccess = (item: MenuItem) => (user?.permissionLevel || 0) >= item.permissionLevel;
+  // Permission checks disabled: show all items regardless of user level
+  const canAccess = (_item: MenuItem) => true;
 
   // If user clicked an icon that has submenu but hasn't navigated yet,
   // highlight only that icon (not the previous route's icon)
@@ -34,7 +35,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
     <div className="sticky top-0 self-start flex h-[100dvh] flex-col justify-between bg-primary text-primary-foreground w-10 min-w-[48px] flex-none">
       <TooltipProvider>
         <div className="flex flex-col items-center py-3 gap-2">
-          {menuItems.filter(canAccess).filter(i => i.id !== 'settings').map(item => {
+          {menuItems.filter(i => i.id !== 'settings').map(item => {
             const isActive = forceHighlightById ? (activeId === item.id) : location.pathname.startsWith(item.path);
             return (
               <Tooltip key={item.id}>

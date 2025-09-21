@@ -58,6 +58,11 @@ const LoginPage: React.FC = () => {
         setShowResendVerification(true);
         setResendEmail(formData.username); // Assuming username might be email
       }
+      
+      // Log the error for debugging purposes (only in development)
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Login error:', error);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -93,7 +98,15 @@ const LoginPage: React.FC = () => {
         setError(data.message || 'Failed to resend verification email');
       }
     } catch (error) {
-      setError('Network error. Please try again later.');
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('NetworkError') ||
+        error.message.includes('ERR_NETWORK')
+      )) {
+        setError('Unable to send verification email. Please check your internet connection and try again.');
+      } else {
+        setError('Unable to send verification email. Please try again later.');
+      }
     } finally {
       setIsResending(false);
     }
@@ -131,6 +144,7 @@ const LoginPage: React.FC = () => {
                     onChange={handleInputChange}
                     className="pl-10"
                     placeholder={t('auth.username')}
+                    autoComplete="username"
                   />
                 </div>
               </div>
@@ -149,6 +163,7 @@ const LoginPage: React.FC = () => {
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
                     placeholder={t('auth.password')}
+                    autoComplete="current-password"
                   />
                   <Button
                     type="button"

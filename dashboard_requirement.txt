@@ -1,0 +1,93 @@
+Global filter
+1. Time Selectable between This Year, Last Year, This Period , Select Period > lead to period selector that include year and period selector
+2. Area selectable between All Area and each individual area.
+
+kpi tiles
+1. Total Ticket (This period)
+2. Closed Ticket (This month)
+3. Pending Ticket (All time)
+4. Total Downtime Avoidance
+5. Total Cost Avoidance
+6. Top Reporter name with profile picture
+7. Top Cost Saver name with profile picture
+8. Top Downtime Saver name with profile picture
+
+participation 
+1.total tickets count per period.
+    chart: combo (column + line)
+    x: time 
+    y1 (bar): total ticket count
+    y2 (line): factory target
+
+2.unique reporter & coverage rate
+    chart: dual-axis column
+    x: area
+    y1 (bar): unique reporter
+    y2 (bar): coverage rate (%) = unique/total employee in area
+
+3.who active (area)
+    chart: horizontal bar
+    x: ticket count
+    y: area
+
+4.who active (user)
+    chart: horizontal bar
+    x: ticket count
+    y: user (top 10)
+
+5.when active 
+    chart: calendar heatmap
+    intensity = ticket count
+
+Impact and Value
+1. Downtime avoidance trend
+    chart: area line (stack)
+    x: time
+    y: hours
+    stack by area
+2. Cost avoidance 
+    chart: combo (bar + line)
+    x: time
+    y1 (bar): cost avoidance (THB)
+    y2 (line): cost per case (THB/Case)
+3. downtime impact leader board
+    chart: horizontal bar 
+    x: hours
+    y: area
+4. cost impact leader board
+    chart: horizontal bar 
+    x: THB
+    y: area
+5. downtime impact leader board
+    chart: horizontal bar 
+    x: hours
+    y: reporter (top10)
+6. cost impact leader board
+    chart: horizontal bar 
+    x: THB
+    y: reporter (top10)
+7. downtime impact by failure mode
+    chart: pareto
+    x: failure mode
+    y: downtime avoidance
+8. cost impact by failure mode
+    chart: pareto
+    x: failure mode
+    y: cost avoidance
+
+Speed
+1. ticket average resolve duration/case
+    chart: horizontal bar
+    x: hours
+    y: area
+2. closure rate
+    chart: horizontal bar
+    x: %closure
+    y: area
+
+
+#optional do later#
+donut chart show ticket count ratio between by severity with toggle between this period and this year
+donut chart show sum of downtime avoidance by severity
+donut chart show sum of cost avoidance by severity
+

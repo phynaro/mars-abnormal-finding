@@ -108,6 +108,16 @@ export const ViewTicketModal: React.FC<ViewTicketModalProps> = ({
         return <AlertTriangle className="w-4 h-4" />;
       case 'closed':
         return <AlertTriangle className="w-4 h-4" />;
+      case 'rejected_pending_l3_review':
+        return <AlertTriangle className="w-4 h-4" />;
+      case 'rejected_final':
+        return <AlertTriangle className="w-4 h-4" />;
+      case 'completed':
+        return <AlertTriangle className="w-4 h-4" />;
+      case 'escalated':
+        return <AlertTriangle className="w-4 h-4" />;
+      case 'reopened_in_progress':
+        return <Clock className="w-4 h-4" />;
       default:
         return <AlertTriangle className="w-4 h-4" />;
     }
@@ -132,7 +142,12 @@ export const ViewTicketModal: React.FC<ViewTicketModalProps> = ({
     assigned: 'bg-yellow-100 text-yellow-800',
     in_progress: 'bg-purple-100 text-purple-800',
     resolved: 'bg-green-100 text-green-800',
-    closed: 'bg-gray-100 text-gray-800'
+    closed: 'bg-gray-100 text-gray-800',
+    rejected_pending_l3_review: 'bg-orange-100 text-orange-800',
+    rejected_final: 'bg-red-100 text-red-800',
+    completed: 'bg-green-100 text-green-800',
+    escalated: 'bg-red-100 text-red-800',
+    reopened_in_progress: 'bg-purple-100 text-purple-800'
   };
 
   return (
@@ -186,12 +201,8 @@ export const ViewTicketModal: React.FC<ViewTicketModalProps> = ({
                   <span className="text-gray-600">#{currentTicket.ticket_number}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium">Affected Point:</span>
-                  <span className="text-gray-600">{currentTicket.affected_point_name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Point Type:</span>
-                  <span className="text-gray-600 capitalize">{currentTicket.affected_point_type}</span>
+                  <span className="font-medium">PUCODE:</span>
+                  <span className="text-gray-600 font-mono">{currentTicket.pucode || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="font-medium">Created:</span>
@@ -224,19 +235,19 @@ export const ViewTicketModal: React.FC<ViewTicketModalProps> = ({
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium">Est. Downtime:</span>
+                  <span className="font-medium">Cost Avoidance:</span>
                   <span className="text-gray-600">
-                    {currentTicket.estimated_downtime_hours 
-                      ? `${currentTicket.estimated_downtime_hours}h` 
+                    {currentTicket.cost_avoidance 
+                      ? `$${currentTicket.cost_avoidance.toFixed(2)}` 
                       : 'Not specified'
                     }
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="font-medium">Actual Downtime:</span>
+                  <span className="font-medium">Downtime Avoidance:</span>
                   <span className="text-gray-600">
-                    {currentTicket.actual_downtime_hours 
-                      ? `${currentTicket.actual_downtime_hours}h` 
+                    {currentTicket.downtime_avoidance_hours 
+                      ? `${currentTicket.downtime_avoidance_hours}h` 
                       : 'Not recorded'
                     }
                   </span>

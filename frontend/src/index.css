@@ -28,7 +28,7 @@
   
     /* Accent (same as primary for simplicity) */
     --accent: 156 65% 95%;
-    --accent-foreground: 0 0% 100%;
+    --accent-foreground: 0 0% 10%;
   
     /* Danger */
     --destructive: 0 72% 50%;         /* red */

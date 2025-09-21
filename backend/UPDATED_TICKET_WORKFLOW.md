@@ -25,25 +25,33 @@ This document describes the updated ticket workflow implementation based on the 
 
 ### 1. Accept Ticket
 **POST** `/api/tickets/:id/accept`
-- **Permission**: L2+ (Engineer)
-- **Purpose**: L2 accepts a new ticket or L3 overrides L2 rejection
+- **Permission**: 
+  - L2+ (Engineer) for `open` tickets
+  - L3+ (Manager) for `rejected_pending_l3_review` tickets
+- **Purpose**: 
+  - L2 accepts a new ticket
+  - L3 overrides L2 rejection
 - **Body**: `{ "notes": "string" }`
-- **Status Change**: `open` → `in_progress` or `rejected_pending_l3_review` → `in_progress`
+- **Status Change**: 
+  - L2: `open` → `in_progress`
+  - L3: `rejected_pending_l3_review` → `in_progress`
 
 ### 2. Reject Ticket
 **POST** `/api/tickets/:id/reject`
-- **Permission**: L2+ (Engineer)
-- **Purpose**: L2 rejects ticket (with L3 escalation option) or L3 makes final rejection
-- **Body**: `{ "rejection_reason": "string", "escalate_to_l3": boolean }`
+- **Permission**: L2+ (Engineer) or L3+ (Manager)
+- **Purpose**: 
+  - L2 rejects ticket (always escalates to L3 for review)
+  - L3 makes final rejection decision
+- **Body**: `{ "rejection_reason": "string" }`
 - **Status Change**: 
-  - L2: `open` → `rejected_pending_l3_review` (if escalated)
-  - L3: `rejected_pending_l3_review` → `rejected_final`
+  - L2: `open` → `rejected_pending_l3_review` (always escalates to L3)
+  - L3: `rejected_pending_l3_review` → `rejected_final` (final decision)
 
 ### 3. Complete Job
 **POST** `/api/tickets/:id/complete`
 - **Permission**: L2+ (Engineer)
 - **Purpose**: L2 marks work as completed
-- **Body**: `{ "completion_notes": "string", "actual_downtime_hours": number }`
+- **Body**: `{ "completion_notes": "string", "downtime_avoidance_hours": number, "cost_avoidance": number, "failure_mode_id": number }`
 - **Status Change**: `in_progress` → `completed`
 
 ### 4. Escalate Ticket

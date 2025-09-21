@@ -4,7 +4,7 @@
         "command": "npx",
         "args": ["-y", "mssql-mcp-node"],
         "env": {
-          "MSSQL_SERVER": "192.168.0.25\\SQLEXPRESS",
+          "MSSQL_SERVER": "192.168.0.25",
           "MSSQL_PORT": "1433",
           "MSSQL_USER": "sa",
           "MSSQL_PASSWORD": "Sonic@True101",

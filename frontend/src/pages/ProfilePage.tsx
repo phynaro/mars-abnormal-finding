@@ -17,8 +17,9 @@ const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
-  const [department, setDepartment] = useState(user?.department || '');
-  const [shift, setShift] = useState(user?.shift || '');
+  const [email, setEmail] = useState(user?.email || '');
+  const [phone, setPhone] = useState(user?.phone || '');
+  const [title, setTitle] = useState(user?.title || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -43,7 +44,7 @@ const ProfilePage: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
         },
-        body: JSON.stringify({ firstName, lastName, department, shift, lineId })
+        body: JSON.stringify({ firstName, lastName, email, phone, title, lineId })
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.message || 'Failed to update profile');
@@ -193,12 +194,40 @@ const ProfilePage: React.FC = () => {
               <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Department</Label>
-              <Input value={department} onChange={(e) => setDepartment(e.target.value)} />
+              <Label>Email</Label>
+              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Shift</Label>
-              <Input value={shift} onChange={(e) => setShift(e.target.value)} />
+              <Label>Phone</Label>
+              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Title</Label>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
+            </div>
+            {/* Read-only derived fields */}
+            <div className="space-y-2">
+              <Label>Department</Label>
+              <Input
+                value={(() => {
+                  const u: any = user || {};
+                  return (
+                    u.departmentName ||
+                    (u.departmentCode ? `${u.departmentName ? `${u.departmentName} ` : ''}(${u.departmentCode})` : '') ||
+                    (u.department !== undefined ? String(u.department) : '') ||
+                    ''
+                  );
+                })()}
+                readOnly
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Group</Label>
+              <Input value={(user as any)?.groupName || ''} readOnly />
+            </div>
+            <div className="space-y-2">
+              <Label>Person Code</Label>
+              <Input value={(user as any)?.personCode || ''} readOnly />
             </div>
             <div className="space-y-2 md:col-span-2">
               <div className="flex items-center gap-2">

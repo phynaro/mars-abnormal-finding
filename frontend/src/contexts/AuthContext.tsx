@@ -47,7 +47,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       } catch (error) {
         console.error('Auth check failed:', error);
-        authService.logout();
+        // Clear authentication data and user state on any auth failure
+        await authService.logout();
+        setUser(null);
       } finally {
         setIsLoading(false);
       }

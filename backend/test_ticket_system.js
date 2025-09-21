@@ -1,4 +1,5 @@
 const sql = require('mssql');
+require('dotenv').config();
 const dbConfig = require('./src/config/dbConfig');
 
 async function testTicketSystem() {

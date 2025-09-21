@@ -1,0 +1,465 @@
+{
+  "info": {
+    "name": "Work Order API Tests",
+    "description": "Test collection for Work Order Management API endpoints",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3001/api",
+      "type": "string"
+    },
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testWorkOrderId",
+      "value": "201635",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.token) {",
+                  "        pm.collectionVariables.set('authToken', response.token);",
+                  "        pm.test('Authentication successful', () => {",
+                  "            pm.expect(response.success).to.be.true;",
+                  "            pm.expect(response.token).to.be.a('string');",
+                  "        });",
+                  "    }",
+                  "} else {",
+                  "    pm.test('Authentication failed', () => {",
+                  "        pm.expect.fail('Login request failed');",
+                  "    });",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"phynaro\",\n  \"password\": \"Jir@202501\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Work Orders",
+      "item": [
+        {
+          "name": "Get Single Work Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has success field', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('success', true);",
+                  "});",
+                  "",
+                  "pm.test('Work order data structure is valid', () => {",
+                  "    const response = pm.response.json();",
+                  "    const wo = response.data;",
+                  "    ",
+                  "    pm.expect(wo).to.have.property('id');",
+                  "    pm.expect(wo).to.have.property('woCode');",
+                  "    pm.expect(wo).to.have.property('status');",
+                  "    pm.expect(wo).to.have.property('type');",
+                  "    pm.expect(wo).to.have.property('schedule');",
+                  "    pm.expect(wo).to.have.property('actual');",
+                  "    pm.expect(wo).to.have.property('safety');",
+                  "    pm.expect(wo).to.have.property('allFields');",
+                  "});",
+                  "",
+                  "pm.test('Status object is valid', () => {",
+                  "    const response = pm.response.json();",
+                  "    const status = response.data.status;",
+                  "    ",
+                  "    pm.expect(status).to.have.property('id');",
+                  "    pm.expect(status).to.have.property('code');",
+                  "    pm.expect(status).to.have.property('name');",
+                  "});",
+                  "",
+                  "pm.test('Safety object has boolean values', () => {",
+                  "    const response = pm.response.json();",
+                  "    const safety = response.data.safety;",
+                  "    ",
+                  "    pm.expect(safety.hotWork).to.be.a('boolean');",
+                  "    pm.expect(safety.confineSpace).to.be.a('boolean');",
+                  "    pm.expect(safety.workAtHeight).to.be.a('boolean');",
+                  "    pm.expect(safety.lockOutTagOut).to.be.a('boolean');",
+                  "});",
+                  "",
+                  "console.log('Work Order Code:', pm.response.json().data.woCode);",
+                  "console.log('Status:', pm.response.json().data.status.name);",
+                  "console.log('Type:', pm.response.json().data.type.name);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workorders/{{testWorkOrderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workorders", "{{testWorkOrderId}}"]
+            }
+          }
+        },
+        {
+          "name": "Get Non-Existent Work Order",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response status is 404', () => {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Error response structure is valid', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response).to.have.property('success', false);",
+                  "    pm.expect(response).to.have.property('message');",
+                  "});",
+                  "",
+                  "console.log('Error message:', pm.response.json().message);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workorders/999999",
+              "host": ["{{baseUrl}}"],
+              "path": ["workorders", "999999"]
+            }
+          }
+        },
+        {
+          "name": "Get All Work Orders",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response has pagination', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('pagination');",
+                  "    pm.expect(response.data.pagination).to.have.property('page');",
+                  "    pm.expect(response.data.pagination).to.have.property('total');",
+                  "});",
+                  "",
+                  "pm.test('Work orders array exists', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('workOrders');",
+                  "    pm.expect(response.data.workOrders).to.be.an('array');",
+                  "});",
+                  "",
+                  "console.log('Total work orders:', pm.response.json().data.pagination.total);",
+                  "console.log('Current page:', pm.response.json().data.pagination.page);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workorders?page=1&limit=5",
+              "host": ["{{baseUrl}}"],
+              "path": ["workorders"],
+              "query": [
+                {
+                  "key": "page",
+                  "value": "1"
+                },
+                {
+                  "key": "limit",
+                  "value": "5"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Work Order Resources",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Resources array exists', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "if (pm.response.json().data.length > 0) {",
+                  "    pm.test('Resource object structure is valid', () => {",
+                  "        const resource = pm.response.json().data[0];",
+                  "        pm.expect(resource).to.have.property('id');",
+                  "        pm.expect(resource).to.have.property('workOrderId');",
+                  "        pm.expect(resource).to.have.property('type');",
+                  "        pm.expect(resource).to.have.property('name');",
+                  "        pm.expect(resource).to.have.property('quantity');",
+                  "        pm.expect(resource).to.have.property('unitCost');",
+                  "    });",
+                  "}",
+                  "",
+                  "console.log('Resources found:', pm.response.json().data.length);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workorders/{{testWorkOrderId}}/resources",
+              "host": ["{{baseUrl}}"],
+              "path": ["workorders", "{{testWorkOrderId}}", "resources"]
+            }
+          }
+        },
+        {
+          "name": "Get Work Order Tasks",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Tasks array exists', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "if (pm.response.json().data.length > 0) {",
+                  "    pm.test('Task object structure is valid', () => {",
+                  "        const task = pm.response.json().data[0];",
+                  "        pm.expect(task).to.have.property('id');",
+                  "        pm.expect(task).to.have.property('workOrderId');",
+                  "        pm.expect(task).to.have.property('name');",
+                  "        pm.expect(task).to.have.property('isDone');",
+                  "        pm.expect(task).to.have.property('isAbnormal');",
+                  "    });",
+                  "}",
+                  "",
+                  "console.log('Tasks found:', pm.response.json().data.length);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workorders/{{testWorkOrderId}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["workorders", "{{testWorkOrderId}}", "tasks"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reference Data",
+      "item": [
+        {
+          "name": "Get Work Order Statistics",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Statistics structure is valid', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.have.property('overview');",
+                  "    pm.expect(response.data).to.have.property('byType');",
+                  "    pm.expect(response.data).to.have.property('byPriority');",
+                  "});",
+                  "",
+                  "console.log('Total work orders:', pm.response.json().data.overview.total);",
+                  "console.log('Active work orders:', pm.response.json().data.overview.active);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workorders/stats/overview",
+              "host": ["{{baseUrl}}"],
+              "path": ["workorders", "stats", "overview"]
+            }
+          }
+        },
+        {
+          "name": "Get Work Order Types",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Types array exists', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "console.log('Work order types found:', pm.response.json().data.length);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workorders/types/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["workorders", "types", "list"]
+            }
+          }
+        },
+        {
+          "name": "Get Work Order Statuses",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Statuses array exists', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "console.log('Work order statuses found:', pm.response.json().data.length);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workorders/statuses/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["workorders", "statuses", "list"]
+            }
+          }
+        },
+        {
+          "name": "Get Work Order Priorities",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Response status is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Priorities array exists', () => {",
+                  "    const response = pm.response.json();",
+                  "    pm.expect(response.data).to.be.an('array');",
+                  "});",
+                  "",
+                  "console.log('Work order priorities found:', pm.response.json().data.length);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workorders/priorities/list",
+              "host": ["{{baseUrl}}"],
+              "path": ["workorders", "priorities", "list"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,15 +1,138 @@
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
 const emailService = require('../services/emailService');
+
+// Helper function to validate PUCODE format
+const validatePUCODE = (pucode) => {
+    if (!pucode || typeof pucode !== 'string') {
+        return { valid: false, error: 'PUCODE is required and must be a string' };
+    }
+    
+    const parts = pucode.split('-');
+    if (parts.length !== 5) {
+        return { valid: false, error: 'PUCODE must have exactly 5 parts separated by dashes (PLANT-AREA-LINE-MACHINE-NUMBER)' };
+    }
+    
+    const [plant, area, line, machine, number] = parts;
+    
+    // Validate each part
+    if (!plant || plant.trim() === '') {
+        return { valid: false, error: 'Plant code cannot be empty' };
+    }
+    if (!area || area.trim() === '') {
+        return { valid: false, error: 'Area code cannot be empty' };
+    }
+    if (!line || line.trim() === '') {
+        return { valid: false, error: 'Line code cannot be empty' };
+    }
+    if (!machine || machine.trim() === '') {
+        return { valid: false, error: 'Machine code cannot be empty' };
+    }
+    if (!number || isNaN(parseInt(number))) {
+        return { valid: false, error: 'Machine number must be a valid number' };
+    }
+    
+    return { 
+        valid: true, 
+        parts: { plant, area, line, machine, number: parseInt(number) }
+    };
+};
 const lineService = require('../services/lineService');
 const fs = require('fs');
 const path = require('path');
 
-// Generate unique ticket number
-const generateTicketNumber = () => {
-    const timestamp = Date.now().toString().slice(-8);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `TKT-${timestamp}-${random}`;
+const DEFAULT_BASE_URL = 'http://localhost:3001';
+
+const getBaseUrl = () => process.env.BACKEND_URL || process.env.FRONTEND_URL || DEFAULT_BASE_URL;
+
+const createSqlRequest = (pool, inputs = []) => {
+    const request = pool.request();
+    inputs.forEach(({ name, type, value }) => {
+        request.input(name, type, value);
+    });
+    return request;
+};
+
+const formatPersonName = (personRow, fallback = 'Unknown User') => {
+    if (!personRow) return fallback;
+    if (personRow.PERSON_NAME && personRow.PERSON_NAME.trim()) {
+        return personRow.PERSON_NAME.trim();
+    }
+    const first = personRow.FIRSTNAME ? personRow.FIRSTNAME.trim() : '';
+    const last = personRow.LASTNAME ? personRow.LASTNAME.trim() : '';
+    const combined = `${first} ${last}`.trim();
+    return combined || fallback;
+};
+
+const mapImagesToLinePayload = (records = [], baseUrl = getBaseUrl()) =>
+    records.map((img) => ({
+        url: `${baseUrl}${img.image_url}`,
+        filename: img.image_name,
+    }));
+
+// Generate unique ticket number in format TKT-YYYYMMDD-Case number
+const generateTicketNumber = async (pool) => {
+    try {
+        const today = new Date();
+        const dateStr = today.getFullYear().toString() + 
+                       (today.getMonth() + 1).toString().padStart(2, '0') + 
+                       today.getDate().toString().padStart(2, '0');
+        
+        // Get or create today's counter
+        const counterResult = await pool.request()
+            .input('date_str', sql.VarChar(8), dateStr)
+            .query(`
+                IF EXISTS (SELECT 1 FROM TicketDailyCounters WHERE date_str = @date_str)
+                    UPDATE TicketDailyCounters 
+                    SET case_number = case_number + 1 
+                    WHERE date_str = @date_str;
+                ELSE
+                    INSERT INTO TicketDailyCounters (date_str, case_number) 
+                    VALUES (@date_str, 1);
+                
+                SELECT case_number FROM TicketDailyCounters WHERE date_str = @date_str;
+            `);
+        
+        const caseNumber = counterResult.recordset[0].case_number;
+        return `TKT-${dateStr}-${caseNumber.toString().padStart(3, '0')}`;
+        
+    } catch (error) {
+        console.error('Error generating ticket number:', error);
+        // Fallback to timestamp-based generation if database fails
+        const timestamp = Date.now().toString().slice(-8);
+        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        return `TKT-${timestamp}-${random}`;
+    }
+};
+
+// Helper function to add status change comment
+const addStatusChangeComment = async (pool, ticketId, userId, oldStatus, newStatus, actionNote) => {
+    try {
+        // Get user name for the comment
+        const userResult = await pool.request()
+            .input('userId', sql.Int, userId)
+            .query('SELECT FIRSTNAME, LASTNAME FROM Person WHERE PERSONNO = @userId');
+        
+        const userName = userResult.recordset.length > 0 
+            ? `${userResult.recordset[0].FIRSTNAME} ${userResult.recordset[0].LASTNAME}`
+            : `User ${userId}`;
+        
+        // Create status change message
+        const statusChangeMessage = `Status changed from ${oldStatus} to ${newStatus}${actionNote ? ` - ${actionNote}` : ''}`;
+        
+        // Add comment to TicketComments table
+        await pool.request()
+            .input('ticket_id', sql.Int, ticketId)
+            .input('user_id', sql.Int, userId)
+            .input('comment', sql.NVarChar(500), statusChangeMessage)
+            .query(`
+                INSERT INTO TicketComments (ticket_id, user_id, comment, created_at)
+                VALUES (@ticket_id, @user_id, @comment, GETDATE())
+            `);
+    } catch (error) {
+        console.error('Error adding status change comment:', error);
+        // Don't throw error - this is supplementary functionality
+    }
 };
 
 // Create a new ticket
@@ -18,21 +141,30 @@ const createTicket = async (req, res) => {
         const {
             title,
             description,
-            machine_id,
-            area_id,
-            equipment_id,
-            affected_point_type,
-            affected_point_name,
+            pucode, // New field: PUCODE format (PLANT-AREA-LINE-MACHINE-NUMBER)
+            pu_id, // New field: PU ID for direct reference
             severity_level,
             priority,
-            estimated_downtime_hours,
-            suggested_assignee_id  // New field for pre-selecting assignee
+            cost_avoidance,
+            downtime_avoidance_hours,
+            failure_mode_id,
+            suggested_assignee_id
         } = req.body;
 
         const reported_by = req.user.id; // From auth middleware
-        const ticket_number = generateTicketNumber();
+
+        // Validate PUCODE format
+        const pucodeValidation = validatePUCODE(pucode);
+        if (!pucodeValidation.valid) {
+            return res.status(400).json({
+                success: false,
+                message: pucodeValidation.error,
+                error: 'Invalid PUCODE format'
+            });
+        }
 
         const pool = await sql.connect(dbConfig);
+        const ticket_number = await generateTicketNumber(pool);
         
         // Validate suggested assignee has L2+ permissions if provided
         let validatedAssigneeId = null;
@@ -40,9 +172,9 @@ const createTicket = async (req, res) => {
             const assigneeCheck = await pool.request()
                 .input('assignee_id', sql.Int, suggested_assignee_id)
                 .query(`
-                    SELECT UserID, FirstName, LastName, Email, LineID 
-                    FROM Users 
-                    WHERE UserID = @assignee_id AND IsActive = 1
+                    SELECT PERSONNO, FIRSTNAME, LASTNAME, EMAIL, DEPTNO 
+                    FROM Person 
+                    WHERE PERSONNO = @assignee_id AND FLAGDEL != 'Y'
                 `);
             
             if (assigneeCheck.recordset.length === 0) {
@@ -54,45 +186,34 @@ const createTicket = async (req, res) => {
             
             validatedAssigneeId = suggested_assignee_id;
         }
-        
+
+        // Use stored procedure to create ticket with PUCODE validation
         const result = await pool.request()
             .input('ticket_number', sql.VarChar(20), ticket_number)
             .input('title', sql.NVarChar(255), title)
             .input('description', sql.NVarChar(sql.MAX), description)
-            .input('machine_id', sql.Int, machine_id)
-            .input('area_id', sql.Int, area_id)
-            .input('equipment_id', sql.Int, equipment_id)
-            .input('affected_point_type', sql.VarChar(50), affected_point_type)
-            .input('affected_point_name', sql.NVarChar(255), affected_point_name)
+            .input('pucode', sql.VarChar(100), pucode)
+            .input('puid', sql.Int, pu_id)
             .input('severity_level', sql.VarChar(20), severity_level || 'medium')
             .input('priority', sql.VarChar(20), priority || 'normal')
-            .input('estimated_downtime_hours', sql.Decimal(5,2), estimated_downtime_hours)
+            .input('cost_avoidance', sql.Decimal(15,2), cost_avoidance)
+            .input('downtime_avoidance_hours', sql.Decimal(8,2), downtime_avoidance_hours)
+            .input('failure_mode_id', sql.Int, failure_mode_id || 0)
             .input('reported_by', sql.Int, reported_by)
             .input('assigned_to', sql.Int, validatedAssigneeId)
-            .query(`
-                INSERT INTO Tickets (
-                    ticket_number, title, description, machine_id, area_id, equipment_id,
-                    affected_point_type, affected_point_name, severity_level, priority,
-                    estimated_downtime_hours, reported_by, assigned_to
-                ) VALUES (
-                    @ticket_number, @title, @description, @machine_id, @area_id, @equipment_id,
-                    @affected_point_type, @affected_point_name, @severity_level, @priority,
-                    @estimated_downtime_hours, @reported_by, @assigned_to
-                );
-                SELECT SCOPE_IDENTITY() as id;
-            `);
+            .execute('sp_CreateTicketWithPUCODE');
 
-        const ticketId = result.recordset[0].id;
+        const ticketResult = result.recordset[0];
 
-        // Log status change
-        await pool.request()
-            .input('ticket_id', sql.Int, ticketId)
-            .input('new_status', sql.VarChar(20), 'open')
-            .input('changed_by', sql.Int, reported_by)
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, new_status, changed_by)
-                VALUES (@ticket_id, @new_status, @changed_by)
-            `);
+        if (ticketResult.status === 'ERROR') {
+            return res.status(400).json({
+                success: false,
+                message: ticketResult.message,
+                error: 'PUCODE validation failed'
+            });
+        }
+
+        const ticketId = ticketResult.ticket_id;
 
         // Send email notification (for demo, sending to phynaro@hotmail.com)
         try {
@@ -100,13 +221,14 @@ const createTicket = async (req, res) => {
             const reporterResult = await pool.request()
                 .input('user_id', sql.Int, reported_by)
                 .query(`
-                    SELECT FirstName + ' ' + LastName as full_name, LineID, Email
-                    FROM Users 
-                    WHERE UserID = @user_id
+                    SELECT p.PERSON_NAME, p.FIRSTNAME, p.LASTNAME, p.EMAIL, p.DEPTNO, u.LineID
+                    FROM Person p
+                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                    WHERE p.PERSONNO = @user_id
                 `);
             
             const reporterRow = reporterResult.recordset[0] || {};
-            const reporterName = reporterRow.full_name || 'Unknown User';
+            const reporterName = formatPersonName(reporterRow);
             
             // Get assignee info if ticket was pre-assigned
             let assigneeInfo = null;
@@ -114,11 +236,17 @@ const createTicket = async (req, res) => {
                 const assigneeResult = await pool.request()
                     .input('assignee_id', sql.Int, validatedAssigneeId)
                     .query(`
-                        SELECT FirstName + ' ' + LastName as full_name, LineID, Email
-                        FROM Users 
-                        WHERE UserID = @assignee_id
+                        SELECT p.PERSON_NAME, p.FIRSTNAME, p.LASTNAME, p.EMAIL, p.DEPTNO, u.LineID
+                        FROM Person p
+                        LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                        WHERE p.PERSONNO = @assignee_id
                     `);
-                assigneeInfo = assigneeResult.recordset[0] || {};
+                const assigneeRow = assigneeResult.recordset[0] || {};
+                assigneeInfo = {
+                    full_name: formatPersonName(assigneeRow),
+                    LineID: assigneeRow.LineID,
+                    Email: assigneeRow.EMAIL
+                };
             }
             
             // Prepare ticket data for email
@@ -127,14 +255,17 @@ const createTicket = async (req, res) => {
                 ticket_number: ticket_number,
                 title,
                 description,
-                machine_id,
-                area_id,
-                equipment_id,
-                affected_point_type,
-                affected_point_name,
+                pucode: pucode,
+                plant_id: ticketResult.plant_id,
+                area_id: ticketResult.area_id,
+                line_id: ticketResult.line_id,
+                machine_id: ticketResult.machine_id,
+                machine_number: ticketResult.machine_number,
                 severity_level: severity_level || 'medium',
                 priority: priority || 'normal',
-                estimated_downtime_hours,
+                cost_avoidance,
+                downtime_avoidance_hours,
+                failure_mode_id: failure_mode_id || 0,
                 reported_by,
                 assigned_to: validatedAssigneeId,
                 created_at: new Date().toISOString()
@@ -154,8 +285,9 @@ const createTicket = async (req, res) => {
                 }
             }
 
-            // Defer LINE notifications until after images are uploaded to avoid duplicates
-            console.log('Ticket created successfully. Deferring LINE notifications until images upload.');
+            // Note: LINE notification will be triggered after image uploads
+            // This ensures images are included in the notification
+            console.log('Ticket created successfully. LINE notification will be sent after image uploads.');
         } catch (emailError) {
             console.error('Failed to send email notification:', emailError);
             // Don't fail the ticket creation if email fails
@@ -168,6 +300,12 @@ const createTicket = async (req, res) => {
                 id: ticketId,
                 ticket_number: ticket_number,
                 title,
+                pucode: pucode,
+                plant_id: ticketResult.plant_id,
+                area_id: ticketResult.area_id,
+                line_id: ticketResult.line_id,
+                machine_id: ticketResult.machine_id,
+                machine_number: ticketResult.machine_number,
                 status: 'open'
             }
         });
@@ -228,15 +366,12 @@ const getTickets = async (req, res) => {
         }
 
         if (search) {
-            whereClause += ' AND (t.title LIKE @search OR t.description LIKE @search OR t.affected_point_name LIKE @search)';
+            whereClause += ' AND (t.title LIKE @search OR t.description LIKE @search OR t.ticket_number LIKE @search)';
             params.push({ name: 'search', value: `%${search}%`, type: sql.NVarChar(255) });
         }
 
         // Build the request with parameters
-        let request = pool.request();
-        params.forEach(param => {
-            request.input(param.name, param.type, param.value);
-        });
+        let request = createSqlRequest(pool, params);
 
         // Add offset and limit parameters
         request.input('offset', sql.Int, offset);
@@ -252,13 +387,13 @@ const getTickets = async (req, res) => {
         const ticketsResult = await request.query(`
             SELECT 
                 t.*,
-                r.FirstName + ' ' + r.LastName as reporter_name,
-                r.Email as reporter_email,
-                a.FirstName + ' ' + a.LastName as assignee_name,
-                a.Email as assignee_email
+                r.PERSON_NAME as reporter_name,
+                r.EMAIL as reporter_email,
+                a.PERSON_NAME as assignee_name,
+                a.EMAIL as assignee_email
             FROM Tickets t
-            LEFT JOIN Users r ON t.reported_by = r.UserID
-            LEFT JOIN Users a ON t.assigned_to = a.UserID
+            LEFT JOIN Person r ON t.reported_by = r.PERSONNO
+            LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
             ${whereClause}
             ORDER BY t.created_at DESC
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -293,20 +428,61 @@ const getTickets = async (req, res) => {
 const getTicketById = async (req, res) => {
     try {
         const { id } = req.params;
+        const userId = req.user.id; // Get current user ID for approval level calculation
         const pool = await sql.connect(dbConfig);
 
         const result = await pool.request()
             .input('id', sql.Int, id)
+            .input('userId', sql.Int, userId)
             .query(`
                 SELECT 
                     t.*,
-                    r.FirstName + ' ' + r.LastName as reporter_name,
-                    r.Email as reporter_email,
-                    a.FirstName + ' ' + a.LastName as assignee_name,
-                    a.Email as assignee_email
+                    r.PERSON_NAME as reporter_name,
+                    r.EMAIL as reporter_email,
+                    a.PERSON_NAME as assignee_name,
+                    a.EMAIL as assignee_email,
+                    -- Workflow tracking fields
+                    accepted_user.PERSON_NAME as accepted_by_name,
+                    rejected_user.PERSON_NAME as rejected_by_name,
+                    completed_user.PERSON_NAME as completed_by_name,
+                    escalated_user.PERSON_NAME as escalated_by_name,
+                    closed_user.PERSON_NAME as closed_by_name,
+                    reopened_user.PERSON_NAME as reopened_by_name,
+                    l3_override_user.PERSON_NAME as l3_override_by_name,
+                    -- Plant information
+                    p.name as plant_name,
+                    p.code as plant_code,
+                    -- Area information
+                    ar.name as area_name,
+                    ar.code as area_code,
+                    -- Line information
+                    l.name as line_name,
+                    l.code as line_code,
+                    -- Machine information
+                    m.name as machine_name,
+                    m.code as machine_code,
+                    -- User's relationship to this ticket
+                    CASE 
+                        WHEN t.reported_by = @userId THEN 'creator'
+                        WHEN ta.approval_level > 2 THEN 'approver'
+                        ELSE 'viewer'
+                    END as user_relationship,
+                    ta.approval_level as user_approval_level
                 FROM Tickets t
-                LEFT JOIN Users r ON t.reported_by = r.UserID
-                LEFT JOIN Users a ON t.assigned_to = a.UserID
+                LEFT JOIN Person r ON t.reported_by = r.PERSONNO
+                LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
+                LEFT JOIN Person accepted_user ON t.accepted_by = accepted_user.PERSONNO
+                LEFT JOIN Person rejected_user ON t.rejected_by = rejected_user.PERSONNO
+                LEFT JOIN Person completed_user ON t.completed_by = completed_user.PERSONNO
+                LEFT JOIN Person escalated_user ON t.escalated_by = escalated_user.PERSONNO
+                LEFT JOIN Person closed_user ON t.closed_by = closed_user.PERSONNO
+                LEFT JOIN Person reopened_user ON t.reopened_by = reopened_user.PERSONNO
+                LEFT JOIN Person l3_override_user ON t.l3_override_by = l3_override_user.PERSONNO
+                LEFT JOIN Plant p ON t.plant_id = p.id
+                LEFT JOIN Area ar ON t.area_id = ar.id
+                LEFT JOIN Line l ON t.line_id = l.id
+                LEFT JOIN Machine m ON t.machine_id = m.id
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
                 WHERE t.id = @id
             `);
 
@@ -330,23 +506,28 @@ const getTicketById = async (req, res) => {
             .query(`
                 SELECT 
                     tc.*,
-                    u.FirstName + ' ' + u.LastName as user_name,
-                    u.Email as user_email
+                    u.PERSON_NAME as user_name,
+                    u.EMAIL as user_email,
+                    s.AvatarUrl as user_avatar_url
                 FROM TicketComments tc
-                LEFT JOIN Users u ON tc.user_id = u.UserID
+                LEFT JOIN Person u ON tc.user_id = u.PERSONNO
+                LEFT JOIN _secUsers s ON u.PERSONNO = s.PersonNo
                 WHERE tc.ticket_id = @ticket_id 
                 ORDER BY tc.created_at
             `);
 
-        // Get status history
+        // Get comprehensive status history (including assignments)
         const historyResult = await pool.request()
             .input('ticket_id', sql.Int, id)
             .query(`
                 SELECT 
                     tsh.*,
-                    u.FirstName + ' ' + u.LastName as changed_by_name
+                    u.PERSON_NAME as changed_by_name,
+                    to_user_person.PERSON_NAME as to_user_name,
+                    to_user_person.EMAIL as to_user_email
                 FROM TicketStatusHistory tsh
-                LEFT JOIN Users u ON tsh.changed_by = u.UserID
+                LEFT JOIN Person u ON tsh.changed_by = u.PERSONNO
+                LEFT JOIN Person to_user_person ON tsh.to_user = to_user_person.PERSONNO
                 WHERE tsh.ticket_id = @ticket_id 
                 ORDER BY tsh.changed_at
             `);
@@ -355,6 +536,10 @@ const getTicketById = async (req, res) => {
         ticket.images = imagesResult.recordset;
         ticket.comments = commentsResult.recordset;
         ticket.status_history = historyResult.recordset;
+        
+        // Include user relationship and approval level
+        ticket.user_relationship = ticket.user_relationship;
+        ticket.user_approval_level = ticket.user_approval_level;
 
         res.json({
             success: true,
@@ -414,10 +599,7 @@ const updateTicket = async (req, res) => {
         updateFields.push('updated_at = GETDATE()');
 
         // Build the request with parameters
-        let request = pool.request();
-        params.forEach(param => {
-            request.input(param.name, param.type, param.value);
-        });
+        let request = createSqlRequest(pool, params);
 
         await request.query(`
             UPDATE Tickets 
@@ -447,34 +629,53 @@ const updateTicket = async (req, res) => {
                     .query(`
                         SELECT 
                             t.id, t.ticket_number, t.title, t.severity_level, t.priority,
-                            t.affected_point_type, t.affected_point_name
+                            t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number
                         FROM Tickets t
                         WHERE t.id = @ticket_id;
 
-                        SELECT FirstName + ' ' + LastName as full_name, Email, LineID 
-                        FROM Users 
-                        WHERE UserID = @reporter_id;
+                        SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID 
+                        FROM Person p
+                        LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                        WHERE p.PERSONNO = @reporter_id;
                     `);
 
                 const ticketData = detailResult.recordsets[0][0];
                 const reporter = detailResult.recordsets[1][0];
                 const changedByName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
 
-                if (reporter?.Email) {
+                if (reporter?.EMAIL) {
                     await emailService.sendTicketStatusUpdateNotification(
                         ticketData,
                         oldStatus,
                         updateData.status,
                         changedByName,
-                        reporter.Email
+                        reporter.EMAIL
                     );
                 }
 
                 // LINE push to reporter
                 try {
                     if (reporter?.LineID) {
-                        const msg = lineService.buildStatusUpdateMessage(ticketData, oldStatus, updateData.status, changedByName);
-                        await lineService.pushToUser(reporter.LineID, msg);
+                        // Get ticket images for FLEX message
+                        const imagesResult = await pool.request()
+                            .input('ticket_id', sql.Int, id)
+                            .query(`
+                                SELECT image_url, image_name 
+                                FROM TicketImages 
+                                WHERE ticket_id = @ticket_id 
+                                ORDER BY uploaded_at ASC
+                            `);
+                        
+                        const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
+                        
+                        const flexMsg = lineService.buildTicketStatusUpdateFlexMessage(
+                            ticketData, 
+                            oldStatus, 
+                            updateData.status, 
+                            changedByName, 
+                            ticketImages
+                        );
+                        await lineService.pushToUser(reporter.LineID, flexMsg);
                     }
                 } catch (lineErr) {
                     console.error('Failed to send LINE status update notification:', lineErr);
@@ -548,7 +749,7 @@ const assignTicket = async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
 
-        // Update ticket assignment
+        // Update ticket assignment and log in status history
         await pool.request()
             .input('id', sql.Int, id)
             .input('assigned_to', sql.Int, assigned_to)
@@ -556,28 +757,11 @@ const assignTicket = async (req, res) => {
             .input('notes', sql.NVarChar(500), notes)
             .query(`
                 UPDATE Tickets SET assigned_to = @assigned_to, updated_at = GETDATE() WHERE id = @id;
-                INSERT INTO TicketAssignments (ticket_id, assigned_to, assigned_by, notes)
-                VALUES (@id, @assigned_to, @assigned_by, @notes)
-            `);
-
-        // Update status to assigned if it was open
-        await pool.request()
-            .input('id', sql.Int, id)
-            .query(`
                 UPDATE Tickets 
                 SET status = 'assigned', updated_at = GETDATE()
-                WHERE id = @id AND status = 'open'
-            `);
-
-        // Log status change
-        await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .input('new_status', sql.VarChar(20), 'assigned')
-            .input('changed_by', sql.Int, assigned_by)
-            .input('notes', sql.NVarChar(500), `Ticket assigned to user ID: ${assigned_to}`)
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, new_status, changed_by, notes)
-                VALUES (@ticket_id, @new_status, @changed_by, @notes)
+                WHERE id = @id AND status = 'open';
+                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, to_user, notes)
+                VALUES (@id, 'open', 'assigned', @assigned_by, @assigned_to, @notes)
             `);
 
         // Send assignment notification to assignee
@@ -587,29 +771,46 @@ const assignTicket = async (req, res) => {
                 .input('ticket_id', sql.Int, id)
                 .input('assignee_id', sql.Int, assigned_to)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, affected_point_type, affected_point_name
+                    SELECT id, ticket_number, title, severity_level, priority, plant_id, area_id, line_id, machine_id, machine_number
                     FROM Tickets WHERE id = @ticket_id;
 
-                    SELECT FirstName + ' ' + LastName as full_name, Email, LineID
-                    FROM Users WHERE UserID = @assignee_id;
+                    SELECT PERSON_NAME, EMAIL, DEPTNO
+                    FROM Person WHERE PERSONNO = @assignee_id;
                 `);
 
             const ticketData = detailResult.recordsets[0][0];
             const assignee = detailResult.recordsets[1][0];
+            const assigneeDisplayName = formatPersonName(assignee, 'Assignee');
 
-            if (assignee?.Email) {
+            if (assignee?.EMAIL) {
                 await emailService.sendTicketAssignmentNotification(
                     ticketData,
-                    assignee.full_name || 'Assignee',
-                    assignee.Email
+                    assigneeDisplayName,
+                    assignee.EMAIL
                 );
             }
 
             // LINE push to assignee
             try {
-                if (assignee?.LineID) {
-                    const msg = lineService.buildAssignmentMessage(ticketData);
-                    await lineService.pushToUser(assignee.LineID, msg);
+                if (assignee?.DEPTNO) {
+                    // Get ticket images for FLEX message
+                    const imagesResult = await pool.request()
+                        .input('ticket_id', sql.Int, id)
+                        .query(`
+                            SELECT image_url, image_name 
+                            FROM TicketImages 
+                            WHERE ticket_id = @ticket_id 
+                            ORDER BY uploaded_at ASC
+                        `);
+                    
+                    const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
+                    
+                    const flexMsg = lineService.buildTicketAssignedFlexMessage(
+                        ticketData, 
+                        assigneeDisplayName, 
+                        ticketImages
+                    );
+                    await lineService.pushToUser(assignee.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE assignment notification:', lineErr);
@@ -697,8 +898,8 @@ const uploadTicketImage = async (req, res) => {
             .input('image_name', sql.NVarChar(255), image_name || req.file.originalname)
             .input('uploaded_by', sql.Int, user_id)
             .query(`
-                INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by)
-                VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by);
+                INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
+                VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
                 SELECT SCOPE_IDENTITY() as id;
             `);
 
@@ -711,18 +912,10 @@ const uploadTicketImage = async (req, res) => {
                 image_type,
                 image_url: relativePath,
                 image_name: image_name || req.file.originalname,
-                uploaded_at: new Date(),
+                uploaded_at: new Date().toISOString(),
                 uploaded_by: user_id
             }
         });
-
-        // Send delayed LINE notification with images after upload
-        try {
-            await sendDelayedTicketNotification(parseInt(id, 10));
-        } catch (notificationErr) {
-            console.error('Failed to send delayed LINE notification:', notificationErr);
-            // Don't fail the upload if notification fails
-        }
     } catch (error) {
         console.error('Error uploading ticket image:', error);
         res.status(500).json({ success: false, message: 'Failed to upload image', error: error.message });
@@ -761,8 +954,8 @@ const uploadTicketImages = async (req, res) => {
                 .input('image_name', sql.NVarChar(255), file.originalname)
                 .input('uploaded_by', sql.Int, user_id)
                 .query(`
-                    INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by)
-                    VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by);
+                    INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
+                    VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
                     SELECT SCOPE_IDENTITY() as id;
                 `);
             inserted.push({
@@ -771,7 +964,7 @@ const uploadTicketImages = async (req, res) => {
                 image_type,
                 image_url: relativePath,
                 image_name: file.originalname,
-                uploaded_at: new Date(),
+                uploaded_at: new Date().toISOString(),
                 uploaded_by: user_id
             });
         }
@@ -781,14 +974,6 @@ const uploadTicketImages = async (req, res) => {
             message: 'Images uploaded successfully',
             data: inserted
         });
-
-        // Send delayed LINE notification with images after batch upload
-        try {
-            await sendDelayedTicketNotification(parseInt(id, 10));
-        } catch (notificationErr) {
-            console.error('Failed to send delayed LINE notification:', notificationErr);
-            // Don't fail the upload if notification fails
-        }
     } catch (error) {
         console.error('Error uploading ticket images:', error);
         res.status(500).json({ success: false, message: 'Failed to upload images', error: error.message });
@@ -820,10 +1005,20 @@ const deleteTicketImage = async (req, res) => {
         // Ownership/role check: reporter, assignee, or L2+ can delete
         const ticketResult = await pool.request()
             .input('ticket_id', sql.Int, id)
-            .query('SELECT reported_by, assigned_to FROM Tickets WHERE id = @ticket_id');
+            .input('userId', sql.Int, req.user.id)
+            .query(`
+                SELECT 
+                    t.reported_by, 
+                    t.assigned_to,
+                    t.area_id,
+                    ta.approval_level as user_approval_level
+                FROM Tickets t
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
+                WHERE t.id = @ticket_id
+            `);
         const ticketRow = ticketResult.recordset[0];
         const isOwner = ticketRow && (ticketRow.reported_by === req.user.id || ticketRow.assigned_to === req.user.id);
-        const isL2Plus = (req.user.permissionLevel || 0) >= 2; // L2 or L3
+        const isL2Plus = (ticketRow?.user_approval_level || 0) >= 2; // L2 or L3
         if (!isOwner && !isL2Plus) {
             return res.status(403).json({ success: false, message: 'Not permitted to delete this image' });
         }
@@ -898,15 +1093,19 @@ const acceptTicket = async (req, res) => {
             statusNotes = 'Reopened ticket accepted and work restarted';
         }
 
-        // Update ticket status and assign to acceptor
+        // Update ticket status and assign to acceptor with workflow tracking
         await pool.request()
             .input('id', sql.Int, id)
             .input('status', sql.VarChar(50), newStatus)
             .input('assigned_to', sql.Int, accepted_by)
-            .input('updated_at', sql.DateTime2, new Date())
+            .input('accepted_by', sql.Int, accepted_by)
             .query(`
                 UPDATE Tickets 
-                SET status = @status, assigned_to = @assigned_to, updated_at = @updated_at
+                SET status = @status, 
+                    assigned_to = @assigned_to, 
+                    accepted_at = GETDATE(),
+                    accepted_by = @accepted_by,
+                    updated_at = GETDATE()
                 WHERE id = @id
             `);
 
@@ -922,17 +1121,25 @@ const acceptTicket = async (req, res) => {
                 VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
             `);
 
+        // Add status change comment
+        await addStatusChangeComment(pool, id, accepted_by, ticket.status, newStatus, notes);
+
         // Send notification to requestor
         try {
             const detailResult = await pool.request()
                 .input('ticket_id', sql.Int, id)
                 .input('reporter_id', sql.Int, ticket.reported_by)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, affected_point_type, affected_point_name
-                    FROM Tickets WHERE id = @ticket_id;
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.status, t.pu_id,
+                           pu.PUCODE, pu.PUNAME
+                    FROM Tickets t
+                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    WHERE t.id = @ticket_id;
 
-                    SELECT FirstName + ' ' + LastName as full_name, Email, LineID
-                    FROM Users WHERE UserID = @reporter_id;
+                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+                    FROM Person p
+                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                    WHERE p.PERSONNO = @reporter_id;
                 `);
 
             const ticketData = detailResult.recordsets[0][0];
@@ -950,8 +1157,27 @@ const acceptTicket = async (req, res) => {
             // LINE notification
             try {
                 if (reporter?.LineID) {
-                    const msg = lineService.buildTicketAcceptedMessage(ticketData, acceptorName);
-                    await lineService.pushToUser(reporter.LineID, msg);
+                    // Get ticket images for FLEX message
+                    // const imagesResult = await pool.request()
+                    //     .input('ticket_id', sql.Int, id)
+                    //     .query(`
+                    //         SELECT image_url, image_name 
+                    //         FROM TicketImages 
+                    //         WHERE ticket_id = @ticket_id 
+                    //         ORDER BY uploaded_at ASC
+                    //     `);
+                    
+                    // const ticketImages = imagesResult.recordset.map(img => ({
+                    //     url: `${baseUrl}${img.image_url}`,
+                    //     filename: img.image_name
+                    // }));
+                    
+                    const flexMsg = lineService.buildTicketAcceptedFlexMessage(
+                        ticketData, 
+                        acceptorName, 
+                       // ticketImages
+                    );
+                    await lineService.pushToUser(reporter.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE acceptance notification:', lineErr);
@@ -984,10 +1210,20 @@ const rejectTicket = async (req, res) => {
         const rejected_by = req.user.id;
         const pool = await sql.connect(dbConfig);
 
-        // Get current ticket status
+        // Get current ticket status and user's area-specific approval level
         const currentTicket = await pool.request()
             .input('id', sql.Int, id)
-            .query('SELECT status, reported_by FROM Tickets WHERE id = @id');
+            .input('userId', sql.Int, rejected_by)
+            .query(`
+                SELECT 
+                    t.status, 
+                    t.reported_by,
+                    t.area_id,
+                    ta.approval_level as user_approval_level
+                FROM Tickets t
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
+                WHERE t.id = @id
+            `);
 
         if (currentTicket.recordset.length === 0) {
             return res.status(404).json({
@@ -997,29 +1233,33 @@ const rejectTicket = async (req, res) => {
         }
 
         const ticket = currentTicket.recordset[0];
-        let newStatus = 'rejected_final';
-        let statusNotes = 'Ticket rejected';
+        let newStatus = 'rejected_pending_l3_review'; // Default to L3 review for L2 rejections
+        let statusNotes = 'Ticket rejected by L2, escalated to L3 for review';
 
         // Handle different rejection scenarios
-        if (escalate_to_l3 && req.user.permissionLevel < 3) {
-            // L2 rejecting and escalating to L3
-            newStatus = 'rejected_pending_l3_review';
-            statusNotes = 'Ticket rejected by L2, escalated to L3 for review';
-        } else if (req.user.permissionLevel >= 3) {
-            // L3 rejecting (final)
+        if ((ticket.user_approval_level || 0) >= 3) {
+            // L3 rejecting (final) - only L3 can make final rejections
             newStatus = 'rejected_final';
             statusNotes = 'Ticket rejected by L3 (final decision)';
+        } else {
+            // L2 rejecting - always goes to L3 review
+            newStatus = 'rejected_pending_l3_review';
+            statusNotes = 'Ticket rejected by L2, escalated to L3 for review';
         }
 
-        // Update ticket status and rejection reason
+        // Update ticket status and rejection reason with workflow tracking
         await pool.request()
             .input('id', sql.Int, id)
             .input('status', sql.VarChar(50), newStatus)
             .input('rejection_reason', sql.NVarChar(500), rejection_reason)
-            .input('updated_at', sql.DateTime2, new Date())
+            .input('rejected_by', sql.Int, rejected_by)
             .query(`
                 UPDATE Tickets 
-                SET status = @status, rejection_reason = @rejection_reason, updated_at = @updated_at
+                SET status = @status, 
+                    rejection_reason = @rejection_reason, 
+                    rejected_at = GETDATE(),
+                    rejected_by = @rejected_by,
+                    updated_at = GETDATE()
                 WHERE id = @id
             `);
 
@@ -1035,23 +1275,49 @@ const rejectTicket = async (req, res) => {
                 VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
             `);
 
-        // Send notification to requestor
+        // Add status change comment
+        await addStatusChangeComment(pool, id, rejected_by, ticket.status, newStatus, rejection_reason);
+
+        // Send notification to requestor and assignee
         try {
             const detailResult = await pool.request()
                 .input('ticket_id', sql.Int, id)
                 .input('reporter_id', sql.Int, ticket.reported_by)
+                .input('assignee_id', sql.Int, ticket.assigned_to)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, affected_point_type, affected_point_name
-                    FROM Tickets WHERE id = @ticket_id;
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.pu_id, t.assigned_to,
+                           pu.PUCODE, pu.PUNAME
+                    FROM Tickets t
+                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    WHERE t.id = @ticket_id;
 
-                    SELECT FirstName + ' ' + LastName as full_name, Email, LineID
-                    FROM Users WHERE UserID = @reporter_id;
+                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+                    FROM Person p
+                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                    WHERE p.PERSONNO = @reporter_id;
+
+                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+                    FROM Person p
+                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                    WHERE p.PERSONNO = @assignee_id;
                 `);
 
             const ticketData = detailResult.recordsets[0][0];
             const reporter = detailResult.recordsets[1][0];
+            const assignee = detailResult.recordsets[2][0];
             const rejectorName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
+            const reporterDisplayName = formatPersonName(reporter, 'ไม่ระบุ');
+            const assigneeDisplayName = assignee ? formatPersonName(assignee, 'ไม่ระบุ') : null;
 
+            // hydrate names for flex payloads
+            ticketData.reporter_name = reporterDisplayName;
+            if (assigneeDisplayName) {
+                ticketData.assignee_name = assigneeDisplayName;
+            }
+
+            // Note: Using simple rejection message format without images
+
+            // Send email notification to reporter
             if (reporter?.Email) {
                 await emailService.sendTicketRejectedNotification(
                     ticketData,
@@ -1062,14 +1328,43 @@ const rejectTicket = async (req, res) => {
                 );
             }
 
-            // LINE notification
+            // Send email notification to assignee (if exists)
+            if (assignee?.Email && assignee.PERSON_NAME) {
+                await emailService.sendTicketRejectedNotification(
+                    ticketData,
+                    rejectorName,
+                    rejection_reason,
+                    newStatus,
+                    assignee.Email
+                );
+            }
+
+            // LINE notification to reporter
             try {
                 if (reporter?.LineID) {
-                    const msg = lineService.buildTicketRejectedMessage(ticketData, rejectorName, rejection_reason, newStatus);
-                    await lineService.pushToUser(reporter.LineID, msg);
+                    const flexMsg = lineService.buildTicketRejectedFlexMessageSimple(
+                        ticketData, 
+                        rejectorName, 
+                        rejection_reason
+                    );
+                    await lineService.pushToUser(reporter.LineID, flexMsg);
                 }
             } catch (lineErr) {
-                console.error('Failed to send LINE rejection notification:', lineErr);
+                console.error('Failed to send LINE rejection notification to reporter:', lineErr);
+            }
+
+            // LINE notification to assignee (if exists)
+            try {
+                if (assignee?.LineID && assignee.PERSON_NAME) {
+                    const flexMsg = lineService.buildTicketRejectedFlexMessageSimple(
+                        ticketData, 
+                        rejectorName, 
+                        rejection_reason
+                    );
+                    await lineService.pushToUser(assignee.LineID, flexMsg);
+                }
+            } catch (lineErr) {
+                console.error('Failed to send LINE rejection notification to assignee:', lineErr);
             }
         } catch (emailErr) {
             console.error('Failed to send rejection email:', emailErr);
@@ -1095,7 +1390,7 @@ const rejectTicket = async (req, res) => {
 const completeJob = async (req, res) => {
     try {
         const { id } = req.params;
-        const { completion_notes, actual_downtime_hours } = req.body;
+        const { completion_notes, downtime_avoidance_hours, cost_avoidance, failure_mode_id } = req.body;
         const completed_by = req.user.id;
         const pool = await sql.connect(dbConfig);
 
@@ -1121,17 +1416,32 @@ const completeJob = async (req, res) => {
             });
         }
 
-        // Update ticket status to completed
+        // Check if ticket is in a completable status
+        if (ticket.status !== 'in_progress' && ticket.status !== 'reopened_in_progress') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only in-progress or reopened tickets can be completed'
+            });
+        }
+
+        // Update ticket status to completed with new fields and workflow tracking
         await pool.request()
             .input('id', sql.Int, id)
             .input('status', sql.VarChar(50), 'completed')
-            .input('actual_downtime_hours', sql.Decimal(5,2), actual_downtime_hours)
-            .input('resolved_at', sql.DateTime2, new Date())
-            .input('updated_at', sql.DateTime2, new Date())
+            .input('downtime_avoidance_hours', sql.Decimal(8,2), downtime_avoidance_hours)
+            .input('cost_avoidance', sql.Decimal(15,2), cost_avoidance)
+            .input('failure_mode_id', sql.Int, failure_mode_id)
+            .input('completed_by', sql.Int, completed_by)
             .query(`
                 UPDATE Tickets 
-                SET status = @status, actual_downtime_hours = @actual_downtime_hours, 
-                    resolved_at = @resolved_at, updated_at = @updated_at
+                SET status = @status, 
+                    downtime_avoidance_hours = @downtime_avoidance_hours,
+                    cost_avoidance = @cost_avoidance,
+                    failure_mode_id = @failure_mode_id,
+                    completed_at = GETDATE(),
+                    completed_by = @completed_by,
+                    resolved_at = GETDATE(), 
+                    updated_at = GETDATE()
                 WHERE id = @id
             `);
 
@@ -1147,17 +1457,27 @@ const completeJob = async (req, res) => {
                 VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
             `);
 
+        // Add status change comment
+        await addStatusChangeComment(pool, id, completed_by, ticket.status, 'completed', completion_notes);
+
         // Send notification to requestor
         try {
             const detailResult = await pool.request()
                 .input('ticket_id', sql.Int, id)
                 .input('reporter_id', sql.Int, ticket.reported_by)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, affected_point_type, affected_point_name
-                    FROM Tickets WHERE id = @ticket_id;
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.status, t.downtime_avoidance_hours, t.cost_avoidance, t.pu_id, t.failure_mode_id,
+                           fm.FailureModeCode, fm.FailureModeName,
+                           pu.PUCODE, pu.PUNAME
+                    FROM Tickets t
+                    LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo AND fm.FlagDel != 'Y'
+                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    WHERE t.id = @ticket_id;
 
-                    SELECT FirstName + ' ' + LastName as full_name, Email, LineID
-                    FROM Users WHERE UserID = @reporter_id;
+                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+                    FROM Person p
+                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                    WHERE p.PERSONNO = @reporter_id;
                 `);
 
             const ticketData = detailResult.recordsets[0][0];
@@ -1169,7 +1489,8 @@ const completeJob = async (req, res) => {
                     ticketData,
                     completerName,
                     completion_notes,
-                    actual_downtime_hours,
+                    downtime_avoidance_hours,
+                    cost_avoidance,
                     reporter.Email
                 );
             }
@@ -1177,8 +1498,27 @@ const completeJob = async (req, res) => {
             // LINE notification
             try {
                 if (reporter?.LineID) {
-                    const msg = lineService.buildJobCompletedMessage(ticketData, completerName, completion_notes, actual_downtime_hours);
-                    await lineService.pushToUser(reporter.LineID, msg);
+                    // Get ticket images for FLEX message
+                    const imagesResult = await pool.request()
+                        .input('ticket_id', sql.Int, id)
+                        .query(`
+                            SELECT image_url, image_name 
+                            FROM TicketImages 
+                            WHERE ticket_id = @ticket_id AND image_type = 'after'
+                            ORDER BY uploaded_at ASC
+                        `);
+                    
+                    const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
+                    
+                    const flexMsg = lineService.buildJobCompletedFlexMessage(
+                        ticketData, 
+                        completerName, 
+                        completion_notes, 
+                        downtime_avoidance_hours,
+                        cost_avoidance,
+                        ticketImages
+                    );
+                    await lineService.pushToUser(reporter.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE completion notification:', lineErr);
@@ -1190,7 +1530,12 @@ const completeJob = async (req, res) => {
         res.json({
             success: true,
             message: 'Job completed successfully',
-            data: { status: 'completed', actual_downtime_hours }
+            data: { 
+                status: 'completed', 
+                downtime_avoidance_hours,
+                cost_avoidance,
+                failure_mode_id
+            }
         });
 
     } catch (error) {
@@ -1233,17 +1578,29 @@ const escalateTicket = async (req, res) => {
             });
         }
 
-        // Update ticket status to escalated
+        // Check if ticket is in an escalatable status
+        if (ticket.status !== 'in_progress' && ticket.status !== 'reopened_in_progress') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only in-progress or reopened tickets can be escalated'
+            });
+        }
+
+        // Update ticket status to escalated with workflow tracking
         await pool.request()
             .input('id', sql.Int, id)
             .input('status', sql.VarChar(50), 'escalated')
             .input('escalated_to', sql.Int, escalated_to)
             .input('escalation_reason', sql.NVarChar(500), escalation_reason)
-            .input('updated_at', sql.DateTime2, new Date())
+            .input('escalated_by', sql.Int, escalated_by)
             .query(`
                 UPDATE Tickets 
-                SET status = @status, escalated_to = @escalated_to, 
-                    escalation_reason = @escalation_reason, updated_at = @updated_at
+                SET status = @status, 
+                    escalated_to = @escalated_to, 
+                    escalation_reason = @escalation_reason, 
+                    escalated_at = GETDATE(),
+                    escalated_by = @escalated_by,
+                    updated_at = GETDATE()
                 WHERE id = @id
             `);
 
@@ -1259,6 +1616,9 @@ const escalateTicket = async (req, res) => {
                 VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
             `);
 
+        // Add status change comment
+        await addStatusChangeComment(pool, id, escalated_by, ticket.status, 'escalated', escalation_reason);
+
         // Send notification to L3 and requestor
         try {
             const detailResult = await pool.request()
@@ -1266,21 +1626,37 @@ const escalateTicket = async (req, res) => {
                 .input('reporter_id', sql.Int, ticket.reported_by)
                 .input('escalated_to_id', sql.Int, escalated_to)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, affected_point_type, affected_point_name
-                    FROM Tickets WHERE id = @ticket_id;
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.pu_id,
+                           pu.PUCODE, pu.PUNAME
+                    FROM Tickets t
+                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    WHERE t.id = @ticket_id;
 
-                    SELECT FirstName + ' ' + LastName as full_name, Email, LineID
-                    FROM Users WHERE UserID = @reporter_id;
+                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+                    FROM Person p
+                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                    WHERE p.PERSONNO = @reporter_id;
 
-                    SELECT FirstName + ' ' + LastName as full_name, Email, LineID
-                    FROM Users WHERE UserID = @escalated_to_id;
+                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+                    FROM Person p
+                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                    WHERE p.PERSONNO = @escalated_to_id;
+
+                    SELECT image_name as filename, image_url as url, uploaded_at, uploaded_by
+                    FROM TicketImages 
+                    WHERE ticket_id = @ticket_id
+                    ORDER BY uploaded_at ASC;
                 `);
 
             const ticketData = detailResult.recordsets[0][0];
             const reporter = detailResult.recordsets[1][0];
             const escalatedTo = detailResult.recordsets[2][0];
+            const images = detailResult.recordsets[3] || [];
             const escalatorName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
 
+            // Email notifications
+            const sentToEmails = new Set();
+            
             // Notify L3
             if (escalatedTo?.Email) {
                 await emailService.sendTicketEscalatedNotification(
@@ -1289,10 +1665,11 @@ const escalateTicket = async (req, res) => {
                     escalation_reason,
                     escalatedTo.Email
                 );
+                sentToEmails.add(escalatedTo.Email);
             }
 
-            // Notify requestor
-            if (reporter?.Email) {
+            // Notify requestor (only if different from L3)
+            if (reporter?.Email && !sentToEmails.has(reporter.Email)) {
                 await emailService.sendTicketEscalatedToRequestorNotification(
                     ticketData,
                     escalatorName,
@@ -1303,13 +1680,29 @@ const escalateTicket = async (req, res) => {
 
             // LINE notifications
             try {
+                // Check for duplicate notifications (if escalatedTo and reporter are the same person)
+                const sentToUsers = new Set();
+                
                 if (escalatedTo?.LineID) {
-                    const msg = lineService.buildTicketEscalatedMessage(ticketData, escalatorName, escalation_reason);
-                    await lineService.pushToUser(escalatedTo.LineID, msg);
+                    const flexMsg = lineService.buildTicketEscalatedFlexMessageSimple(
+                        ticketData, 
+                        escalatorName, 
+                        escalation_reason,
+                        images
+                    );
+                    await lineService.pushToUser(escalatedTo.LineID, flexMsg);
+                    sentToUsers.add(escalatedTo.LineID);
                 }
-                if (reporter?.LineID) {
-                    const msg = lineService.buildTicketEscalatedToRequestorMessage(ticketData, escalatorName, escalation_reason);
-                    await lineService.pushToUser(reporter.LineID, msg);
+                
+                // Only send to reporter if they haven't already received a notification
+                if (reporter?.LineID && !sentToUsers.has(reporter.LineID)) {
+                    const flexMsg = lineService.buildTicketEscalatedFlexMessageSimple(
+                        ticketData, 
+                        escalatorName, 
+                        escalation_reason,
+                        images
+                    );
+                    await lineService.pushToUser(reporter.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE escalation notification:', lineErr);
@@ -1372,15 +1765,19 @@ const closeTicket = async (req, res) => {
             });
         }
 
-        // Update ticket status to closed
+        // Update ticket status to closed with workflow tracking
         await pool.request()
             .input('id', sql.Int, id)
             .input('status', sql.VarChar(50), 'closed')
-            .input('closed_at', sql.DateTime2, new Date())
-            .input('updated_at', sql.DateTime2, new Date())
+            .input('closed_by', sql.Int, closed_by)
+            .input('satisfaction_rating', sql.Int, satisfaction_rating)
             .query(`
                 UPDATE Tickets 
-                SET status = @status, closed_at = @closed_at, updated_at = @updated_at
+                SET status = @status, 
+                    closed_at = GETDATE(),
+                    closed_by = @closed_by,
+                    satisfaction_rating = @satisfaction_rating,
+                    updated_at = GETDATE()
                 WHERE id = @id
             `);
 
@@ -1396,23 +1793,31 @@ const closeTicket = async (req, res) => {
                 VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
             `);
 
+        // Add status change comment
+        await addStatusChangeComment(pool, id, closed_by, ticket.status, 'closed', close_reason);
+
         // Send notification to assignee
         try {
             const detailResult = await pool.request()
                 .input('ticket_id', sql.Int, id)
                 .input('assignee_id', sql.Int, ticket.assigned_to)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, affected_point_type, affected_point_name
-                    FROM Tickets WHERE id = @ticket_id;
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.status, t.pu_id,
+                           pu.PUCODE, pu.PUNAME
+                    FROM Tickets t
+                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    WHERE t.id = @ticket_id;
 
-                    SELECT FirstName + ' ' + LastName as full_name, Email, LineID
-                    FROM Users WHERE UserID = @assignee_id;
+                    
+                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+                    FROM Person p
+                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                    WHERE p.PERSONNO = @assignee_id;
                 `);
 
             const ticketData = detailResult.recordsets[0][0];
             const assignee = detailResult.recordsets[1][0];
             const closerName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
-
             if (assignee?.Email) {
                 await emailService.sendTicketClosedNotification(
                     ticketData,
@@ -1426,8 +1831,12 @@ const closeTicket = async (req, res) => {
             // LINE notification
             try {
                 if (assignee?.LineID) {
-                    const msg = lineService.buildTicketClosedMessage(ticketData, closerName, close_reason, satisfaction_rating);
-                    await lineService.pushToUser(assignee.LineID, msg);
+                    const flexMsg = lineService.buildTicketClosedFlexMessageSimple(
+                        ticketData, 
+                        closerName, 
+                        satisfaction_rating
+                    );
+                    await lineService.pushToUser(assignee.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE closure notification:', lineErr);
@@ -1439,7 +1848,7 @@ const closeTicket = async (req, res) => {
         res.json({
             success: true,
             message: 'Ticket closed successfully',
-            data: { status: 'closed', closed_at: new Date() }
+            data: { status: 'closed', closed_at: new Date().toISOString() }
         });
 
     } catch (error) {
@@ -1456,22 +1865,25 @@ const closeTicket = async (req, res) => {
 const reassignTicket = async (req, res) => {
     try {
         const { id } = req.params;
-        const { new_assignee_id, reassignment_reason } = req.body;
+        const { assigned_to: new_assignee_id, reassignment_reason } = req.body;
         const reassigned_by = req.user.id;
         const pool = await sql.connect(dbConfig);
 
-        // Check if user has L3 permissions
-        if ((req.user.permissionLevel || 0) < 3) {
-            return res.status(403).json({
-                success: false,
-                message: 'Only L3 managers can reassign tickets'
-            });
-        }
-
-        // Get current ticket status
+        // Get current ticket status and user's area-specific approval level
         const currentTicket = await pool.request()
             .input('id', sql.Int, id)
-            .query('SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id');
+            .input('userId', sql.Int, reassigned_by)
+            .query(`
+                SELECT 
+                    t.status, 
+                    t.reported_by, 
+                    t.assigned_to,
+                    t.area_id,
+                    ta.approval_level as user_approval_level
+                FROM Tickets t
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
+                WHERE t.id = @id
+            `);
 
         if (currentTicket.recordset.length === 0) {
             return res.status(404).json({
@@ -1482,41 +1894,49 @@ const reassignTicket = async (req, res) => {
 
         const ticket = currentTicket.recordset[0];
 
-        // Check if ticket is in a state that allows reassignment
-        if (!['rejected_pending_l3_review', 'escalated'].includes(ticket.status)) {
-            return res.status(400).json({
+        // Check if user has L3+ approval level for this area
+        if ((ticket.user_approval_level || 0) < 3) {
+            return res.status(403).json({
                 success: false,
-                message: 'Ticket must be in rejected_pending_l3_review or escalated status to be reassigned'
+                message: 'Only L3+ managers can reassign tickets in this area'
             });
         }
 
-        // Validate new assignee
-        const assigneeCheck = await pool.request()
+        // Check if ticket is in a state that allows reassignment
+        // L3 can reassign tickets in any status except rejected_final and closed
+        if (['rejected_final', 'closed'].includes(ticket.status)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Ticket cannot be reassigned when it is rejected_final or closed'
+            });
+        }
+
+        // No need to validate new assignee - we trust the area-filtered list from frontend
+        // The frontend only shows users who have L2+ approval level for this ticket's area
+        
+        // Get assignee name for logging (simple query since we trust the ID)
+        const assigneeNameResult = await pool.request()
             .input('assignee_id', sql.Int, new_assignee_id)
             .query(`
-                SELECT UserID, FirstName, LastName, Email, LineID 
-                FROM Users 
-                WHERE UserID = @assignee_id AND IsActive = 1
+                SELECT p.FIRSTNAME, p.LASTNAME, p.EMAIL, u.LineID 
+                FROM Person p 
+                LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo 
+                WHERE p.PERSONNO = @assignee_id
             `);
         
-        if (assigneeCheck.recordset.length === 0) {
-            return res.status(400).json({
-                success: false,
-                message: 'New assignee not found or inactive'
-            });
-        }
-
-        const newAssignee = assigneeCheck.recordset[0];
+        const assigneeRow = assigneeNameResult.recordset[0];
+        const assigneeName = assigneeRow
+            ? formatPersonName(assigneeRow, `User ${new_assignee_id}`)
+            : `User ${new_assignee_id}`;
 
         // Update ticket assignment and status
         await pool.request()
             .input('id', sql.Int, id)
             .input('new_assignee_id', sql.Int, new_assignee_id)
             .input('status', sql.VarChar(50), 'open')
-            .input('updated_at', sql.DateTime2, new Date())
             .query(`
                 UPDATE Tickets 
-                SET assigned_to = @new_assignee_id, status = @status, updated_at = @updated_at
+                SET assigned_to = @new_assignee_id, status = @status, updated_at = GETDATE()
                 WHERE id = @id
             `);
 
@@ -1526,21 +1946,26 @@ const reassignTicket = async (req, res) => {
             .input('old_status', sql.VarChar(50), ticket.status)
             .input('new_status', sql.VarChar(50), 'open')
             .input('changed_by', sql.Int, reassigned_by)
-            .input('notes', sql.NVarChar(500), `Ticket reassigned to ${newAssignee.FirstName} ${newAssignee.LastName}: ${reassignment_reason || 'Reassigned by L3'}`)
+            .input('notes', sql.NVarChar(500), `Ticket reassigned to ${assigneeName}: ${reassignment_reason || 'Reassigned by L3'}`)
             .query(`
                 INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, notes)
                 VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
             `);
 
-        // Log assignment change
+        // Add status change comment
+        await addStatusChangeComment(pool, id, reassigned_by, ticket.status, 'open', reassignment_reason);
+
+        // Log assignment change in status history
         await pool.request()
             .input('ticket_id', sql.Int, id)
-            .input('assigned_to', sql.Int, new_assignee_id)
-            .input('assigned_by', sql.Int, reassigned_by)
+            .input('old_status', sql.VarChar(50), ticket.status)
+            .input('new_status', sql.VarChar(50), 'assigned')
+            .input('changed_by', sql.Int, reassigned_by)
+            .input('to_user', sql.Int, new_assignee_id)
             .input('notes', sql.NVarChar(500), `Reassigned by L3: ${reassignment_reason || 'Ticket reassigned'}`)
             .query(`
-                INSERT INTO TicketAssignments (ticket_id, assigned_to, assigned_by, notes)
-                VALUES (@ticket_id, @assigned_to, @assigned_by, @notes)
+                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, to_user, notes)
+                VALUES (@ticket_id, @old_status, @new_status, @changed_by, @to_user, @notes)
             `);
 
         // Send notification to new assignee
@@ -1548,27 +1973,46 @@ const reassignTicket = async (req, res) => {
             const detailResult = await pool.request()
                 .input('ticket_id', sql.Int, id)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, affected_point_type, affected_point_name
+                    SELECT id, ticket_number, title, severity_level, priority, plant_id, area_id, line_id, machine_id, machine_number
                     FROM Tickets WHERE id = @ticket_id
                 `);
 
             const ticketData = detailResult.recordset[0];
             const reassignerName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
+            const assigneeEmail = assigneeRow ? assigneeRow.EMAIL : null;
 
-            if (newAssignee.Email) {
+            if (assigneeEmail) {
                 await emailService.sendTicketReassignedNotification(
                     ticketData,
                     reassignerName,
                     reassignment_reason,
-                    newAssignee.Email
+                    assigneeEmail
                 );
             }
 
             // LINE notification
             try {
-                if (newAssignee.LineID) {
-                    const msg = lineService.buildTicketReassignedMessage(ticketData, reassignerName, reassignment_reason);
-                    await lineService.pushToUser(newAssignee.LineID, msg);
+            const assigneeLineID = assigneeRow ? assigneeRow.LineID : null;
+                if (assigneeLineID) {
+                    // Get ticket images for FLEX message
+                    const imagesResult = await pool.request()
+                        .input('ticket_id', sql.Int, id)
+                        .query(`
+                            SELECT image_url, image_name 
+                            FROM TicketImages 
+                            WHERE ticket_id = @ticket_id 
+                            ORDER BY uploaded_at ASC
+                        `);
+                    
+                    const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
+                    
+                    const flexMsg = lineService.buildTicketReassignedFlexMessage(
+                        ticketData, 
+                        reassignerName, 
+                        reassignment_reason, 
+                        ticketImages
+                    );
+                    await lineService.pushToUser(assigneeLineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE reassignment notification:', lineErr);
@@ -1583,7 +2027,7 @@ const reassignTicket = async (req, res) => {
             data: { 
                 status: 'open', 
                 assigned_to: new_assignee_id,
-                new_assignee_name: `${newAssignee.FirstName} ${newAssignee.LastName}`
+                new_assignee_name: assigneeName
             }
         });
 
@@ -1597,6 +2041,37 @@ const reassignTicket = async (req, res) => {
     }
 };
 
+// Helper function to get L2+ authorized users for an area
+const getL2AuthorizedUsersForArea = async (pool, areaId) => {
+    try {
+        const result = await pool.request()
+            .input('area_id', sql.Int, areaId)
+            .query(`
+                SELECT DISTINCT
+                    p.PERSONNO,
+                    p.PERSON_NAME,
+                    p.FIRSTNAME,
+                    p.LASTNAME,
+                    p.EMAIL,
+                    u.LineID
+                FROM TicketApproval ta
+                INNER JOIN Person p ON ta.personno = p.PERSONNO
+                LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                WHERE ta.area_id = @area_id
+                AND ta.approval_level >= 2
+                AND ta.is_active = 1
+                AND p.FLAGDEL != 'Y'
+                AND u.LineID IS NOT NULL
+                AND u.LineID != ''
+            `);
+        
+        return result.recordset;
+    } catch (error) {
+        console.error('Error getting L2 authorized users for area:', error);
+        return [];
+    }
+};
+
 // Send delayed ticket notification with images (called after image uploads)
 const sendDelayedTicketNotification = async (ticketId) => {
     try {
@@ -1607,15 +2082,19 @@ const sendDelayedTicketNotification = async (ticketId) => {
             .input('ticket_id', sql.Int, ticketId)
             .query(`
                 SELECT t.*, 
-                       r.FirstName + ' ' + r.LastName as reporter_name,
-                       r.LineID as reporter_line_id,
-                       r.Email as reporter_email,
-                       a.FirstName + ' ' + a.LastName as assignee_name,
-                       a.LineID as assignee_line_id,
-                       a.Email as assignee_email
+                       r.PERSON_NAME as reporter_name,
+                       ur.LineID as reporter_line_id,
+                       r.EMAIL as reporter_email,
+                       a.PERSON_NAME as assignee_name,
+                       ua.LineID as assignee_line_id,
+                       a.EMAIL as assignee_email,
+                       pu.PUCODE, pu.PUNAME
                 FROM Tickets t
-                LEFT JOIN Users r ON t.reported_by = r.UserID
-                LEFT JOIN Users a ON t.assigned_to = a.UserID
+                LEFT JOIN Person r ON t.reported_by = r.PERSONNO
+                LEFT JOIN _secUsers ur ON r.PERSONNO = ur.PersonNo
+                LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
+                LEFT JOIN _secUsers ua ON a.PERSONNO = ua.PersonNo
+                LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
                 WHERE t.id = @ticket_id
             `);
         
@@ -1637,42 +2116,67 @@ const sendDelayedTicketNotification = async (ticketId) => {
             `);
         
         // Convert file paths to URLs
-        const baseUrl = process.env.BACKEND_URL || 'http://localhost:3001';
-        const ticketImages = imagesResult.recordset.map(img => ({
-            url: `${baseUrl}${img.image_url}`,
-            filename: img.image_name
-        }));
+        const baseUrl = getBaseUrl();
+        const ticketImages = mapImagesToLinePayload(imagesResult.recordset, baseUrl);
         
-        // Send LINE notification to pre-assigned user if applicable
-        if (ticket.assigned_to && ticket.assignee_line_id) {
+        // For development/testing, allow local images
+        const allowLocalImages = process.env.NODE_ENV === 'development' || process.env.ALLOW_LOCAL_IMAGES === 'true';
+        
+        // 1. Send LINE notification to requester (reporter)
+        if (ticket.reporter_line_id) {
             try {
-                const msg = lineService.buildTicketPreAssignedWithImagesMessage(ticket, ticket.reporter_name, ticketImages);
-                
-                // Log detailed image status for debugging
-                if (ticketImages.length > 0) {
-                    const debugInfo = lineService.debugImageAccessibility(ticketImages);
-                    console.log(`Delayed LINE notification for ticket ${ticketId}:`, JSON.stringify(debugInfo, null, 2));
-                }
-                
-                await lineService.pushToUser(ticket.assignee_line_id, msg);
-                console.log(`Delayed LINE notification sent to assignee for ticket ${ticketId}`);
-                
-            } catch (assigneeLineErr) {
-                console.error(`Failed to send delayed LINE notification to assignee for ticket ${ticketId}:`, assigneeLineErr);
+                const flexMsg = lineService.buildTicketCreatedFlexMessage(ticket, ticket.reporter_name, ticketImages, { allowLocalImages });
+                await lineService.pushToUser(ticket.reporter_line_id, flexMsg);
+                console.log(`LINE notification sent to requester for ticket ${ticketId}`);
+            } catch (reporterLineErr) {
+                console.error(`Failed to send LINE notification to requester for ticket ${ticketId}:`, reporterLineErr);
             }
         }
         
-        // Send LINE notification to reporter with images (if accessible)
-        if (ticket.reporter_line_id) {
+        // 2. Send LINE notification to all L2+ authorized users in the area
+        const l2Users = await getL2AuthorizedUsersForArea(pool, ticket.area_id);
+        console.log(`Found ${l2Users.length} L2+ authorized users for area ${ticket.area_id}:`, 
+            l2Users.map(u => `${u.PERSON_NAME} (${u.PERSONNO})`).join(', '));
+        
+        for (const user of l2Users) {
+            // Skip if this is the same person as the reporter (already notified above)
+            if (user.PERSONNO === ticket.reported_by) {
+                console.log(`Skipping L2 notification for reporter (already notified): ${user.PERSON_NAME}`);
+                continue;
+            }
+            
             try {
-                const accessible = lineService.getAccessibleImages(ticketImages);
-                const text = lineService.buildTicketCreatedMessage(ticket, ticket.reporter_name);
-                const imageMsgs = lineService.buildImageMessages(accessible);
-                const messagePayload = imageMsgs.length > 0 ? { text, images: imageMsgs } : text;
-                await lineService.pushToUser(ticket.reporter_line_id, messagePayload);
-                console.log(`Delayed LINE notification sent to reporter for ticket ${ticketId} with ${imageMsgs.length} images`);
-            } catch (reporterLineErr) {
-                console.error(`Failed to send delayed LINE notification to reporter for ticket ${ticketId}:`, reporterLineErr);
+                const flexMsg = lineService.buildTicketCreatedFlexMessage(ticket, ticket.reporter_name, ticketImages, { allowLocalImages });
+                await lineService.pushToUser(user.LineID, flexMsg);
+                console.log(`LINE notification sent to L2 user ${user.PERSON_NAME} (${user.PERSONNO}) for ticket ${ticketId}`);
+            } catch (l2UserLineErr) {
+                console.error(`Failed to send LINE notification to L2 user ${user.PERSON_NAME} for ticket ${ticketId}:`, l2UserLineErr);
+            }
+        }
+        
+        // 3. Send LINE notification to pre-assigned user if applicable (separate from L2 users)
+        if (ticket.assigned_to && ticket.assignee_line_id) {
+            // Check if assignee is already in L2 users list to avoid duplicate notifications
+            const isAssigneeInL2Users = l2Users.some(user => user.PERSONNO === ticket.assigned_to);
+            
+            if (!isAssigneeInL2Users) {
+                try {
+                    const flexMsg = lineService.buildTicketCreatedFlexMessage(ticket, ticket.reporter_name, ticketImages, { allowLocalImages });
+                    
+                    // Log detailed image status for debugging
+                    if (ticketImages.length > 0) {
+                        const debugInfo = lineService.debugImageAccessibility(ticketImages);
+                        console.log(`Delayed LINE notification for ticket ${ticketId}:`, JSON.stringify(debugInfo, null, 2));
+                    }
+                    
+                    await lineService.pushToUser(ticket.assignee_line_id, flexMsg);
+                    console.log(`LINE notification sent to pre-assigned user for ticket ${ticketId}`);
+                    
+                } catch (assigneeLineErr) {
+                    console.error(`Failed to send LINE notification to pre-assigned user for ticket ${ticketId}:`, assigneeLineErr);
+                }
+            } else {
+                console.log(`Pre-assigned user already notified as L2 user for ticket ${ticketId}`);
             }
         }
         
@@ -1685,35 +2189,98 @@ const sendDelayedTicketNotification = async (ticketId) => {
 // Get available L2+ users for assignment
 const getAvailableAssignees = async (req, res) => {
     try {
+        const { search, ticket_id, escalation_only } = req.query;
         const pool = await sql.connect(dbConfig);
 
-        // Get all active users with L2+ permissions
-        const result = await pool.request()
-            .query(`
-                SELECT 
-                    u.UserID,
-                    u.FirstName,
-                    u.LastName,
-                    u.Email,
-                    u.Department,
-                    u.EmployeeID,
-                    r.RoleName,
-                    r.PermissionLevel
-                FROM Users u
-                LEFT JOIN Roles r ON u.RoleID = r.RoleID
-                WHERE u.IsActive = 1 
-                AND r.PermissionLevel >= 2
-                ORDER BY u.FirstName, u.LastName
-            `);
+        // Get ticket's area_id if ticket_id is provided
+        let areaFilter = '';
+        let request = pool.request();
+        
+        if (ticket_id) {
+            const ticketResult = await pool.request()
+                .input('ticket_id', sql.Int, ticket_id)
+                .query('SELECT area_id FROM Tickets WHERE id = @ticket_id');
+            
+            if (ticketResult.recordset.length > 0) {
+                const areaId = ticketResult.recordset[0].area_id;
+                if (areaId) {
+                    // For escalation, only show L3 users (approval_level >= 3)
+                    // For reassign, show L2+ users (approval_level >= 2)
+                    const minApprovalLevel = escalation_only === 'true' ? 3 : 2;
+                    
+                    areaFilter = `AND EXISTS (
+                        SELECT 1 FROM TicketApproval ta 
+                        WHERE ta.personno = p.PERSONNO 
+                        AND ta.area_id = @area_id 
+                        AND ta.approval_level >= @min_approval_level
+                    )`;
+                    request.input('area_id', sql.Int, areaId);
+                    request.input('min_approval_level', sql.Int, minApprovalLevel);
+                }
+            }
+        }
 
-        const assignees = result.recordset.map(user => ({
-            id: user.UserID,
-            name: `${user.FirstName} ${user.LastName}`,
-            email: user.Email,
-            department: user.Department,
-            employeeId: user.EmployeeID,
-            role: user.RoleName,
-            permissionLevel: user.PermissionLevel
+        // Build search condition
+        let searchCondition = '';
+        if (search) {
+            searchCondition = `AND (p.FIRSTNAME LIKE @search OR p.LASTNAME LIKE @search OR p.PERSON_NAME LIKE @search OR p.EMAIL LIKE @search)`;
+            request.input('search', sql.NVarChar, `%${search}%`);
+        }
+
+        // Get all active persons with user groups (excluding basic Requesters)
+        // Filter by area-specific approval levels if ticket_id is provided
+        const result = await request.query(`
+            SELECT DISTINCT
+                p.PERSONNO,
+                p.FIRSTNAME,
+                p.LASTNAME,
+                p.PERSON_NAME,
+                p.EMAIL,
+                p.PHONE,
+                p.TITLE,
+                p.DEPTNO,
+                -- Get the first non-null user group name for display
+                (SELECT TOP 1 vpug2.USERGROUPNAME 
+                 FROM V_PERSON_USERGROUP vpug2 
+                 WHERE vpug2.PERSONNO = p.PERSONNO 
+                 AND vpug2.USERGROUPNAME IS NOT NULL
+                 AND vpug2.USERGROUPNAME != 'Requester'
+                 AND (
+                     vpug2.USERGROUPNAME LIKE '%Manager%' 
+                     OR vpug2.USERGROUPNAME LIKE '%Owner%'
+                     OR vpug2.USERGROUPNAME LIKE '%Technician%'
+                     OR vpug2.USERGROUPNAME LIKE '%Planner%'
+                     OR vpug2.USERGROUPNAME LIKE '%Approval%'
+                 )
+                 ORDER BY vpug2.USERGROUPNAME) AS USERGROUPNAME
+            FROM Person p
+            WHERE p.FLAGDEL != 'Y'
+            AND EXISTS (
+                SELECT 1 FROM V_PERSON_USERGROUP vpug 
+                WHERE vpug.PERSONNO = p.PERSONNO
+                AND vpug.USERGROUPNAME IS NOT NULL
+                AND vpug.USERGROUPNAME != 'Requester'
+                AND (
+                    vpug.USERGROUPNAME LIKE '%Manager%' 
+                    OR vpug.USERGROUPNAME LIKE '%Owner%'
+                    OR vpug.USERGROUPNAME LIKE '%Technician%'
+                    OR vpug.USERGROUPNAME LIKE '%Planner%'
+                    OR vpug.USERGROUPNAME LIKE '%Approval%'
+                )
+            )
+            ${areaFilter}
+            ${searchCondition}
+            ORDER BY p.FIRSTNAME, p.LASTNAME
+        `);
+
+        const assignees = result.recordset.map(person => ({
+            id: person.PERSONNO,
+            name: person.PERSON_NAME || `${person.FIRSTNAME} ${person.LASTNAME}`,
+            email: person.EMAIL,
+            phone: person.PHONE,
+            title: person.TITLE,
+            department: person.DEPTNO,
+            userGroup: person.USERGROUPNAME
         }));
 
         res.json({
@@ -1769,14 +2336,17 @@ const reopenTicket = async (req, res) => {
             });
         }
 
-        // Update ticket status to reopened
+        // Update ticket status to reopened with workflow tracking
         await pool.request()
             .input('id', sql.Int, id)
             .input('status', sql.VarChar(50), 'reopened_in_progress')
-            .input('updated_at', sql.DateTime2, new Date())
+            .input('reopened_by', sql.Int, reopened_by)
             .query(`
                 UPDATE Tickets 
-                SET status = @status, updated_at = @updated_at
+                SET status = @status,
+                    reopened_at = GETDATE(),
+                    reopened_by = @reopened_by,
+                    updated_at = GETDATE()
                 WHERE id = @id
             `);
 
@@ -1792,37 +2362,57 @@ const reopenTicket = async (req, res) => {
                 VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
             `);
 
+        // Add status change comment
+        await addStatusChangeComment(pool, id, reopened_by, ticket.status, 'reopened_in_progress', reopen_reason);
+
         // Send notification to assignee
         try {
             const detailResult = await pool.request()
                 .input('ticket_id', sql.Int, id)
                 .input('assignee_id', sql.Int, ticket.assigned_to)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, affected_point_type, affected_point_name
+                    SELECT id, ticket_number, title, severity_level, priority, plant_id, area_id, line_id, machine_id, machine_number
                     FROM Tickets WHERE id = @ticket_id;
 
-                    SELECT FirstName + ' ' + LastName as full_name, Email, LineID
-                    FROM Users WHERE UserID = @assignee_id;
+                    SELECT PERSON_NAME, EMAIL, DEPTNO
+                    FROM Person WHERE PERSONNO = @assignee_id;
                 `);
 
             const ticketData = detailResult.recordsets[0][0];
             const assignee = detailResult.recordsets[1][0];
             const reopenerName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
 
-            if (assignee?.Email) {
+            if (assignee?.EMAIL) {
                 await emailService.sendTicketReopenedNotification(
                     ticketData,
                     reopenerName,
                     reopen_reason,
-                    assignee.Email
+                    assignee.EMAIL
                 );
             }
 
             // LINE notification
             try {
-                if (assignee?.LineID) {
-                    const msg = lineService.buildTicketReopenedMessage(ticketData, reopenerName, reopen_reason);
-                    await lineService.pushToUser(assignee.LineID, msg);
+                if (assignee?.DEPTNO) {
+                    // Get ticket images for FLEX message
+                    const imagesResult = await pool.request()
+                        .input('ticket_id', sql.Int, id)
+                        .query(`
+                            SELECT image_url, image_name 
+                            FROM TicketImages 
+                            WHERE ticket_id = @ticket_id 
+                            ORDER BY uploaded_at ASC
+                        `);
+                    
+                    const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
+                    
+                    const flexMsg = lineService.buildTicketReopenedFlexMessage(
+                        ticketData, 
+                        reopenerName, 
+                        reopen_reason, 
+                        ticketImages
+                    );
+                    await lineService.pushToUser(assignee.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE reopen notification:', lineErr);
@@ -1847,10 +2437,199 @@ const reopenTicket = async (req, res) => {
     }
 };
 
+// Get user-related pending tickets
+const getUserPendingTickets = async (req, res) => {
+    try {
+        const userId = req.user.id; // Changed from req.user.personno to req.user.id
+        
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID not found in token'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        // Query to get tickets related to the user:
+        // 1. Tickets created by the user
+        // 2. Tickets where user has approval_level > 2 for the ticket's area_id
+        // Status should not be 'closed', 'completed', or 'canceled'
+        const query = `
+            SELECT
+                t.id,
+                t.ticket_number,
+                t.title,
+                t.description,
+                t.status,
+                t.priority,
+                t.severity_level,
+                t.created_at,
+                t.updated_at,
+                t.assigned_to,
+                t.reported_by,
+                t.area_id,
+                a.name as area_name,
+                a.code as area_code,
+                p.name as plant_name,
+                p.code as plant_code,
+                -- Creator info
+                creator.FIRSTNAME + ' ' + creator.LASTNAME as creator_name,
+                creator.PERSONNO as creator_id,
+                -- Assignee info
+                assignee.FIRSTNAME + ' ' + assignee.LASTNAME as assignee_name,
+                assignee.PERSONNO as assignee_id,
+                -- User's relationship to this ticket
+                CASE 
+                    WHEN t.reported_by = @userId THEN 'creator'
+                    WHEN ta.approval_level > 2 THEN 'approver'
+                    ELSE 'viewer'
+                END as user_relationship,
+                ta.approval_level as user_approval_level,
+                -- Add priority and created_at to SELECT for ORDER BY
+                CASE t.priority 
+                    WHEN 'urgent' THEN 1
+                    WHEN 'high' THEN 2
+                    WHEN 'medium' THEN 3
+                    WHEN 'low' THEN 4
+                END as priority_order,
+                t.created_at as created_at_order
+            FROM Tickets t
+            LEFT JOIN Area a ON a.id = t.area_id
+            LEFT JOIN Plant p ON p.id = a.plant_id
+            LEFT JOIN Person creator ON creator.PERSONNO = t.reported_by
+            LEFT JOIN Person assignee ON assignee.PERSONNO = t.assigned_to
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
+            WHERE (
+                -- Tickets created by the user
+                t.reported_by = @userId
+                OR 
+                -- Tickets where user has approval_level > 2 for the area
+                (ta.approval_level > 2 AND ta.is_active = 1)
+            )
+            AND t.status NOT IN ('closed', 'completed', 'canceled', 'rejected_final')
+            ORDER BY 
+                priority_order,
+                created_at_order DESC
+        `;
+
+        const result = await pool.request()
+            .input('userId', sql.Int, userId)
+            .query(query);
+
+        const tickets = result.recordset.map(ticket => ({
+            id: ticket.id,
+            ticket_number: ticket.ticket_number,
+            title: ticket.title,
+            description: ticket.description,
+            status: ticket.status,
+            priority: ticket.priority,
+            severity_level: ticket.severity_level,
+            created_at: ticket.created_at,
+            updated_at: ticket.updated_at,
+            assigned_to: ticket.assigned_to,
+            reported_by: ticket.reported_by,
+            area_id: ticket.area_id,
+            area_name: ticket.area_name,
+            area_code: ticket.area_code,
+            plant_name: ticket.plant_name,
+            plant_code: ticket.plant_code,
+            creator_name: ticket.creator_name,
+            creator_id: ticket.creator_id,
+            assignee_name: ticket.assignee_name,
+            assignee_id: ticket.assignee_id,
+            user_relationship: ticket.user_relationship,
+            user_approval_level: ticket.user_approval_level
+        }));
+
+        res.json({
+            success: true,
+            data: tickets,
+            count: tickets.length
+        });
+
+    } catch (error) {
+        console.error('Error fetching user pending tickets:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch pending tickets',
+            error: error.message
+        });
+    }
+};
+
+// Trigger LINE notification for ticket (called after image uploads)
+const triggerTicketNotification = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pool = await sql.connect(dbConfig);
+
+        // Verify ticket exists
+        const ticketCheck = await pool.request()
+            .input('ticket_id', sql.Int, id)
+            .query('SELECT id FROM Tickets WHERE id = @ticket_id');
+
+        if (ticketCheck.recordset.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Ticket not found'
+            });
+        }
+
+        // Send delayed notification with images
+        await sendDelayedTicketNotification(id);
+        
+        res.json({
+            success: true,
+            message: 'LINE notification sent successfully'
+        });
+
+    } catch (error) {
+        console.error('Error triggering ticket notification:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to send LINE notification',
+            error: error.message
+        });
+    }
+};
+
+// Get failure modes for dropdown
+const getFailureModes = async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request()
+            .query(`
+                SELECT 
+                    FailureModeNo as id,
+                    FailureModeCode as code,
+                    FailureModeName as name
+                FROM FailureModes 
+                WHERE FlagDel != 'Y'
+                ORDER BY FailureModeName
+            `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching failure modes:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch failure modes',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     createTicket,
     getTickets,
     getTicketById,
+    getFailureModes,
     updateTicket,
     addComment,
     assignTicket,
@@ -1866,5 +2645,7 @@ module.exports = {
     reopenTicket,
     reassignTicket,
     getAvailableAssignees,
-    sendDelayedTicketNotification
+    sendDelayedTicketNotification,
+    getUserPendingTickets,
+    triggerTicketNotification
 };

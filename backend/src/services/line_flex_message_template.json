@@ -1,0 +1,257 @@
+{
+    "type": "bubble",
+    "hero": {
+      "type": "image",
+      "url": "https://images.unsplash.com/photo-1581090700227-1e37b190418e?auto=format&fit=crop&w=1200&q=60",
+      "size": "full",
+      "aspectRatio": "20:13",
+      "aspectMode": "cover",
+      "action": {
+        "type": "uri",
+        "uri": "https://example.com/cmms/wo/WO-2025-00125"
+      }
+    },
+    "body": {
+      "type": "box",
+      "layout": "vertical",
+      "contents": [
+        {
+          "type": "text",
+          "text": "Work Order Created",
+          "weight": "bold",
+          "size": "xl"
+        },
+        {
+          "type": "text",
+          "text": "มีการเปิดใบงานใหม่ในระบบ CMMS",
+          "size": "sm",
+          "color": "#666666",
+          "wrap": true,
+          "margin": "sm"
+        },
+        {
+          "type": "box",
+          "layout": "horizontal",
+          "margin": "lg",
+          "contents": [
+            {
+              "type": "text",
+              "text": "WO#",
+              "size": "sm",
+              "color": "#aaaaaa",
+              "flex": 2
+            },
+            {
+              "type": "text",
+              "text": "WO-2025-00125",
+              "size": "sm",
+              "weight": "bold",
+              "align": "end",
+              "flex": 5
+            }
+          ]
+        },
+        {
+          "type": "box",
+          "layout": "horizontal",
+          "margin": "sm",
+          "spacing": "sm",
+          "contents": [
+            {
+              "type": "text",
+              "text": "Status",
+              "size": "sm",
+              "color": "#aaaaaa",
+              "flex": 2
+            },
+            {
+              "type": "text",
+              "text": "เปิด",
+              "size": "sm",
+              "weight": "bold",
+              "color": "#1E7D33",
+              "flex": 2
+            },
+            {
+              "type": "text",
+              "text": "ความสำคัญ: สูง",
+              "size": "sm",
+              "weight": "bold",
+              "color": "#C0392B",
+              "align": "end",
+              "flex": 3
+            }
+          ]
+        },
+        {
+          "type": "separator",
+          "margin": "lg"
+        },
+        {
+          "type": "box",
+          "layout": "vertical",
+          "margin": "lg",
+          "spacing": "sm",
+          "contents": [
+            {
+              "type": "box",
+              "layout": "horizontal",
+              "spacing": "sm",
+              "contents": [
+                {
+                  "type": "text",
+                  "text": "Asset",
+                  "color": "#aaaaaa",
+                  "size": "sm",
+                  "flex": 2
+                },
+                {
+                  "type": "text",
+                  "text": "พาเลทไทเซอร์ #2 – ABB OmniCore",
+                  "wrap": true,
+                  "color": "#666666",
+                  "size": "sm",
+                  "flex": 5
+                }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "horizontal",
+              "spacing": "sm",
+              "contents": [
+                {
+                  "type": "text",
+                  "text": "Location",
+                  "color": "#aaaaaa",
+                  "size": "sm",
+                  "flex": 2
+                },
+                {
+                  "type": "text",
+                  "text": "สายการผลิตบรรจุภัณฑ์ A / เซลล์ 2",
+                  "wrap": true,
+                  "color": "#666666",
+                  "size": "sm",
+                  "flex": 5
+                }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "horizontal",
+              "spacing": "sm",
+              "contents": [
+                {
+                  "type": "text",
+                  "text": "Problem",
+                  "color": "#aaaaaa",
+                  "size": "sm",
+                  "flex": 2
+                },
+                {
+                  "type": "text",
+                  "text": "แรงดันลมที่กริปเปอร์ต่ำ ทำให้หยิบชิ้นงานล้มเหลวบ่อยครั้ง",
+                  "wrap": true,
+                  "color": "#666666",
+                  "size": "sm",
+                  "flex": 5
+                }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "horizontal",
+              "spacing": "sm",
+              "contents": [
+                {
+                  "type": "text",
+                  "text": "Requester",
+                  "color": "#aaaaaa",
+                  "size": "sm",
+                  "flex": 2
+                },
+                {
+                  "type": "text",
+                  "text": "สมชาย พ. (หัวหน้างาน)",
+                  "wrap": true,
+                  "color": "#666666",
+                  "size": "sm",
+                  "flex": 5
+                }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "horizontal",
+              "spacing": "sm",
+              "contents": [
+                {
+                  "type": "text",
+                  "text": "Assigned to",
+                  "color": "#aaaaaa",
+                  "size": "sm",
+                  "flex": 2
+                },
+                {
+                  "type": "text",
+                  "text": "ทีมซ่อมบำรุง ระดับ 2",
+                  "wrap": true,
+                  "color": "#666666",
+                  "size": "sm",
+                  "flex": 5
+                }
+              ]
+            },
+            {
+              "type": "box",
+              "layout": "horizontal",
+              "spacing": "sm",
+              "contents": [
+                {
+                  "type": "text",
+                  "text": "Due",
+                  "color": "#aaaaaa",
+                  "size": "sm",
+                  "flex": 2
+                },
+                {
+                  "type": "text",
+                  "text": "30 ส.ค. 2025 เวลา 18:00 (SLA 8 ชม.)",
+                  "wrap": true,
+                  "color": "#666666",
+                  "size": "sm",
+                  "flex": 5
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "footer": {
+      "type": "box",
+      "layout": "vertical",
+      "spacing": "sm",
+      "contents": [
+        {
+          "type": "button",
+          "style": "link",
+          "height": "sm",
+          "action": {
+            "type": "uri",
+            "label": "OPEN IN APP",
+            "uri": "https://example.com/cmms/wo/WO-2025-00125"
+          },
+          "color": "#25AD76"
+        },
+        {
+          "type": "box",
+          "layout": "vertical",
+          "contents": [],
+          "margin": "sm"
+        }
+      ],
+      "flex": 0
+    }
+  }

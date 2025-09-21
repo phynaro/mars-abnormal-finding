@@ -480,7 +480,7 @@ class EmailService {
   /**
    * Send job completed notification to requestor
    */
-  async sendJobCompletedNotification(ticketData, completerName, completionNotes, actualDowntime, toEmail) {
+  async sendJobCompletedNotification(ticketData, completerName, completionNotes, downtimeAvoidance, costAvoidance, toEmail) {
     try {
       const { data, error } = await resend.emails.send({
         from: this.fromEmail,
@@ -492,7 +492,8 @@ class EmailService {
             <p><strong>Ticket:</strong> #${ticketData.ticket_number}</p>
             <p><strong>Title:</strong> ${ticketData.title}</p>
             <p><strong>Completed By:</strong> ${completerName}</p>
-            <p><strong>Actual Downtime:</strong> ${actualDowntime || 'Not specified'} hours</p>
+            <p><strong>Downtime Avoidance:</strong> ${downtimeAvoidance || 'Not specified'} hours</p>
+            <p><strong>Cost Avoidance:</strong> ${costAvoidance ? `$${costAvoidance.toFixed(2)}` : 'Not specified'}</p>
             ${completionNotes ? `<p><strong>Notes:</strong> ${completionNotes}</p>` : ''}
             <p>Your ticket has been completed. Please review and close it if you're satisfied with the work.</p>
           </div>

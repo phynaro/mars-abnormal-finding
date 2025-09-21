@@ -1,6 +1,6 @@
-const bcrypt = require('bcryptjs');
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
+const { hashPasswordMD5 } = require('./authController');
 
 // Helper function to get database connection
 async function getConnection() {
@@ -13,62 +13,99 @@ async function getConnection() {
   }
 }
 
-// Helper function to get default permissions based on permission level
-function getDefaultPermissions(permissionLevel) {
-  switch (permissionLevel) {
-    case 3:
-      return ['all'];
-    case 2:
-      return ['dashboard', 'tickets', 'tickets-admin', 'machines', 'reports'];
-    case 1:
-      return ['dashboard', 'tickets'];
-    default:
-      return ['dashboard'];
-  }
-}
-
 const userManagementController = {
-  // Get all users (L3 only)
+  // Get all users (Admin only)
   getAllUsers: async (req, res) => {
     try {
-      // Check if user has L3 permissions
-      if (req.user.permissionLevel < 3) {
+      // Check if user has admin permissions (GroupCode = 'ADMIN' or similar)
+      if (req.user.groupCode !== 'ADMIN') {
         return res.status(403).json({
           success: false,
-          message: 'Access denied. Requires L3 permissions.'
+          message: 'Access denied. Requires admin permissions.'
         });
       }
 
       try {
         const pool = await getConnection();
         
-        // Get all users with role information
+        // Get all users with group and person information
         const result = await pool.request()
           .query(`
-            SELECT u.UserID, u.Username, u.Email, u.FirstName, u.LastName, 
-                   u.EmployeeID, u.Department, u.Shift, u.LastLogin, u.CreatedAt,
-                   r.RoleName as role, r.PermissionLevel as permissionLevel,
-                   CASE WHEN u.IsActive = 1 THEN 1 ELSE 0 END as isActive
-            FROM Users u
-            JOIN Roles r ON u.RoleID = r.RoleID
-            WHERE u.IsActive = 1
+            SELECT 
+              u.PersonNo,
+              u.UserID,
+              u.GroupNo,
+              u.LevelReport,
+              u.StoreRoom,
+              u.DBNo,
+              u.StartDate,
+              u.LastDate,
+              u.ExpireDate,
+              u.NeverExpireFlag,
+              u.EmailVerified,
+              u.LastLogin,
+              u.CreatedAt,
+              u.UpdatedAt,
+              u.LineID,
+              u.AvatarUrl,
+              u.IsActive,
+              g.UserGCode,
+              g.UserGName,
+              p.PERSONCODE,
+              p.FIRSTNAME,
+              p.LASTNAME,
+              p.EMAIL,
+              p.PHONE,
+              p.TITLE,
+              p.DEPTNO,
+              p.CRAFTNO,
+              p.CREWNO,
+              p.PERSON_NAME,
+              p.SiteNo,
+              p.PINCODE,
+              d.DEPTCODE,
+              d.DEPTNAME,
+              s.SiteCode,
+              s.SiteName
+            FROM _secUsers u
+            LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
+            LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
+            LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+            LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
+            WHERE (u.IsActive = 1 OR u.IsActive IS NULL)
             ORDER BY u.CreatedAt DESC
           `);
 
         const users = result.recordset.map(user => ({
-          id: user.UserID,
-          username: user.Username,
-          email: user.Email,
-          firstName: user.FirstName,
-          lastName: user.LastName,
-          employeeID: user.EmployeeID,
-          department: user.Department,
-          shift: user.Shift,
-          role: user.role,
-          permissionLevel: user.permissionLevel,
+          id: user.PersonNo,
+          userId: user.UserID,
+          username: user.UserID,
+          personCode: user.PERSONCODE,
+          firstName: user.FIRSTNAME,
+          lastName: user.LASTNAME,
+          fullName: user.PERSON_NAME,
+          email: user.EMAIL,
+          phone: user.PHONE,
+          title: user.TITLE,
+          department: user.DEPTNO,
+          departmentCode: user.DEPTCODE,
+          departmentName: user.DEPTNAME,
+          craft: user.CRAFTNO,
+          crew: user.CREWNO,
+          siteNo: user.SiteNo,
+          siteCode: user.SiteCode,
+          siteName: user.SiteName,
+          groupNo: user.GroupNo,
+          groupCode: user.UserGCode,
+          groupName: user.UserGName,
+          levelReport: user.LevelReport,
+          storeRoom: user.StoreRoom,
+          dbNo: user.DBNo,
+          lineId: user.LineID,
+          avatarUrl: user.AvatarUrl,
           lastLogin: user.LastLogin,
           createdAt: user.CreatedAt,
-          isActive: user.isActive === 1
+          isActive: user.IsActive === 1 || user.IsActive === null
         }));
 
         res.json({
@@ -76,67 +113,18 @@ const userManagementController = {
           users: users
         });
       } catch (dbError) {
-        console.error('Database error, using fallback data:', dbError);
-        
-        // Fallback to mock data for development
-        const fallbackUsers = [
-          {
-            id: 1,
-            username: 'admin',
-            email: 'admin@company.com',
-            firstName: 'System',
-            lastName: 'Administrator',
-            employeeID: 'EMP001',
-            department: 'IT',
-            shift: 'Day',
-            role: 'admin',
-            permissionLevel: 3,
-            lastLogin: new Date().toISOString(),
-            createdAt: new Date('2024-01-01').toISOString(),
-            isActive: true
-          },
-          {
-            id: 2,
-            username: 'manager',
-            email: 'manager@company.com',
-            firstName: 'John',
-            lastName: 'Manager',
-            employeeID: 'EMP002',
-            department: 'Operations',
-            shift: 'Day',
-            role: 'manager',
-            permissionLevel: 2,
-            lastLogin: new Date(Date.now() - 86400000).toISOString(),
-            createdAt: new Date('2024-01-15').toISOString(),
-            isActive: true
-          },
-          {
-            id: 3,
-            username: 'operator',
-            email: 'operator@company.com',
-            firstName: 'Jane',
-            lastName: 'Operator',
-            employeeID: 'EMP003',
-            department: 'Production',
-            shift: 'Night',
-            role: 'operator',
-            permissionLevel: 1,
-            lastLogin: null,
-            createdAt: new Date('2024-02-01').toISOString(),
-            isActive: true
-          }
-        ];
-
-        res.json({
-          success: true,
-          users: fallbackUsers
+        console.error('Database error:', dbError);
+        res.status(500).json({
+          success: false,
+          message: 'Failed to fetch users',
+          error: dbError.message
         });
       }
     } catch (error) {
-      console.error('Get All Users Error:', error);
+      console.error('Get all users error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to fetch users'
+        message: 'Internal server error'
       });
     }
   },
@@ -146,128 +134,113 @@ const userManagementController = {
     try {
       const { userId } = req.params;
 
-      // Check if user has permission to view this user
-      if (req.user.permissionLevel < 3 && req.user.id !== parseInt(userId)) {
+      // Check if user has admin permissions
+      if (req.user.groupCode !== 'ADMIN') {
         return res.status(403).json({
           success: false,
-          message: 'Access denied'
+          message: 'Access denied. Requires admin permissions.'
         });
       }
 
-      try {
-        const pool = await getConnection();
-        
-        // Get user with role information
-        const result = await pool.request()
-          .input('userID', sql.Int, parseInt(userId))
-          .query(`
-            SELECT u.UserID, u.Username, u.Email, u.FirstName, u.LastName, 
-                   u.EmployeeID, u.Department, u.Shift, u.LastLogin, u.CreatedAt,
-                   r.RoleName as role, r.PermissionLevel as permissionLevel,
-                   CASE WHEN u.IsActive = 1 THEN 1 ELSE 0 END as isActive
-            FROM Users u
-            JOIN Roles r ON u.RoleID = r.RoleID
-            WHERE u.UserID = @userID AND u.IsActive = 1
-          `);
+      const pool = await getConnection();
+      
+      const result = await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .query(`
+          SELECT 
+            u.PersonNo,
+            u.UserID,
+            u.GroupNo,
+            u.LevelReport,
+            u.StoreRoom,
+            u.DBNo,
+            u.StartDate,
+            u.LastDate,
+            u.ExpireDate,
+            u.NeverExpireFlag,
+            u.EmailVerified,
+            u.LastLogin,
+            u.CreatedAt,
+            u.UpdatedAt,
+            u.LineID,
+            u.AvatarUrl,
+            u.IsActive,
+            g.UserGCode,
+            g.UserGName,
+            p.PERSONCODE,
+            p.FIRSTNAME,
+            p.LASTNAME,
+            p.EMAIL,
+            p.PHONE,
+            p.TITLE,
+            p.DEPTNO,
+            p.CRAFTNO,
+            p.CREWNO,
+            p.PERSON_NAME,
+            p.SiteNo,
+            p.PINCODE,
+            d.DEPTCODE,
+            d.DEPTNAME,
+            s.SiteCode,
+            s.SiteName
+          FROM _secUsers u
+          LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
+          LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
+          LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+          LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
+          WHERE u.UserID = @userID AND (u.IsActive = 1 OR u.IsActive IS NULL)
+        `);
 
-        if (result.recordset.length === 0) {
-          return res.status(404).json({
-            success: false,
-            message: 'User not found'
-          });
-        }
-
-        const user = result.recordset[0];
-        const userData = {
-          id: user.UserID,
-          username: user.Username,
-          email: user.Email,
-          firstName: user.FirstName,
-          lastName: user.LastName,
-          employeeID: user.EmployeeID,
-          department: user.Department,
-          shift: user.Shift,
-          role: user.role,
-          permissionLevel: user.permissionLevel,
-          lastLogin: user.LastLogin,
-          createdAt: user.CreatedAt,
-          isActive: user.isActive === 1
-        };
-
-        res.json({
-          success: true,
-          user: userData
-        });
-      } catch (dbError) {
-        console.error('Database error, using fallback data:', dbError);
-        
-        // Fallback to mock data for development
-        const fallbackUsers = [
-          {
-            id: 1,
-            username: 'admin',
-            email: 'admin@company.com',
-            firstName: 'System',
-            lastName: 'Administrator',
-            employeeID: 'EMP001',
-            department: 'IT',
-            shift: 'Day',
-            role: 'admin',
-            permissionLevel: 3,
-            lastLogin: new Date().toISOString(),
-            createdAt: new Date('2024-01-01').toISOString(),
-            isActive: true
-          },
-          {
-            id: 2,
-            username: 'manager',
-            email: 'manager@company.com',
-            firstName: 'John',
-            lastName: 'Manager',
-            employeeID: 'EMP002',
-            department: 'Operations',
-            shift: 'Day',
-            role: 'manager',
-            permissionLevel: 2,
-            lastLogin: new Date(Date.now() - 86400000).toISOString(),
-            createdAt: new Date('2024-01-15').toISOString(),
-            isActive: true
-          },
-          {
-            id: 3,
-            username: 'operator',
-            email: 'operator@company.com',
-            firstName: 'Jane',
-            lastName: 'Operator',
-            employeeID: 'EMP003',
-            department: 'Production',
-            shift: 'Night',
-            role: 'operator',
-            permissionLevel: 1,
-            lastLogin: null,
-            createdAt: new Date('2024-02-01').toISOString(),
-            isActive: true
-          }
-        ];
-
-        const user = fallbackUsers.find(u => u.id === parseInt(userId));
-        if (!user) {
-          return res.status(404).json({
-            success: false,
-            message: 'User not found'
-          });
-        }
-
-        res.json({
-          success: true,
-          user: user
+      if (result.recordset.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
         });
       }
+
+      const user = result.recordset[0];
+      const userData = {
+        id: user.PersonNo,
+        userId: user.UserID,
+        username: user.UserID,
+        personCode: user.PERSONCODE,
+        firstName: user.FIRSTNAME,
+        lastName: user.LASTNAME,
+        fullName: user.PERSON_NAME,
+        email: user.EMAIL,
+        phone: user.PHONE,
+        title: user.TITLE,
+        department: user.DEPTNO,
+        departmentCode: user.DEPTCODE,
+        departmentName: user.DEPTNAME,
+        craft: user.CRAFTNO,
+        crew: user.CREWNO,
+        siteNo: user.SiteNo,
+        siteCode: user.SiteCode,
+        siteName: user.SiteName,
+        groupNo: user.GroupNo,
+        groupCode: user.UserGCode,
+        groupName: user.UserGName,
+        levelReport: user.LevelReport,
+        storeRoom: user.StoreRoom,
+        dbNo: user.DBNo,
+        lineId: user.LineID,
+        avatarUrl: user.AvatarUrl,
+        lastLogin: user.LastLogin,
+        createdAt: user.CreatedAt,
+        isActive: user.IsActive === 1 || user.IsActive === null
+      };
+
+      res.json({
+        success: true,
+        user: userData
+      });
+
     } catch (error) {
-      console.error('Get User By ID Error:', error);
+      console.error('Get user by ID error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to fetch user'
+        message: 'Internal server error'
       });
     }
   },
@@ -275,99 +248,142 @@ const userManagementController = {
   // Create new user
   createUser: async (req, res) => {
     try {
-      // Check if user has L3 permissions
-      if (req.user.permissionLevel < 3) {
+      // Check if user has admin permissions
+      if (req.user.groupCode !== 'ADMIN') {
         return res.status(403).json({
           success: false,
-          message: 'Access denied. Requires L3 permissions.'
+          message: 'Access denied. Requires admin permissions.'
         });
       }
 
       const {
-        username,
-        email,
+        userId,
         password,
         firstName,
         lastName,
-        employeeID,
+        email,
+        phone,
+        title,
         department,
-        shift,
-        role,
-        permissionLevel
+        craft,
+        crew,
+        siteNo,
+        groupNo,
+        levelReport,
+        storeRoom,
+        dbNo,
+        lineId,
+        personCode
       } = req.body;
 
       // Validation
-      if (!username || !email || !password || !firstName || !lastName || !role) {
+      if (!userId || !password || !firstName || !lastName || !groupNo) {
         return res.status(400).json({
           success: false,
-          message: 'Missing required fields'
+          message: 'Missing required fields: userId, password, firstName, lastName, groupNo'
         });
       }
 
+      const pool = await getConnection();
+      
+      // Check if userId already exists
+      const existingUser = await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .query('SELECT UserID FROM _secUsers WHERE UserID = @userID');
+
+      if (existingUser.recordset.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'User ID already exists'
+        });
+      }
+
+      // Check if group exists
+      const groupResult = await pool.request()
+        .input('groupNo', sql.Int, groupNo)
+        .query('SELECT GroupNo, UserGCode, UserGName FROM _secUserGroups WHERE GroupNo = @groupNo');
+
+      if (groupResult.recordset.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid group number specified'
+        });
+      }
+
+      // Hash password using MD5
+      const hashedPassword = hashPasswordMD5(password);
+
+      // Start transaction
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+
       try {
-        const pool = await getConnection();
-        
-        // Check if username or email already exists
-        const existingUser = await pool.request()
-          .input('username', sql.NVarChar, username)
-          .input('email', sql.NVarChar, email)
-          .query('SELECT UserID FROM Users WHERE Username = @username OR Email = @email');
-
-        if (existingUser.recordset.length > 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Username or email already exists'
-          });
-        }
-
-        // Get role ID based on role name
-        const roleResult = await pool.request()
-          .input('roleName', sql.NVarChar, role)
-          .query('SELECT RoleID, PermissionLevel FROM Roles WHERE RoleName = @roleName');
-
-        if (roleResult.recordset.length === 0) {
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid role specified'
-          });
-        }
-
-        const roleInfo = roleResult.recordset[0];
-        const actualPermissionLevel = permissionLevel || roleInfo.PermissionLevel;
-
-        // Hash password
-        const hashedPassword = await bcrypt.hash(password, 10);
-
-        // Create new user
-        const result = await pool.request()
-          .input('username', sql.NVarChar, username)
-          .input('email', sql.NVarChar, email)
-          .input('passwordHash', sql.NVarChar, hashedPassword)
-          .input('firstName', sql.NVarChar, firstName)
-          .input('lastName', sql.NVarChar, lastName)
-          .input('employeeID', sql.NVarChar, employeeID || null)
-          .input('department', sql.NVarChar, department || null)
-          .input('shift', sql.NVarChar, shift || null)
-          .input('roleID', sql.Int, roleInfo.RoleID)
+        // 1. Create Person record
+        const personResult = await transaction.request()
+          .input('personCode', sql.NVarChar(20), personCode || null)
+          .input('firstName', sql.NVarChar(30), firstName)
+          .input('lastName', sql.NVarChar(30), lastName)
+          .input('email', sql.NVarChar(200), email || null)
+          .input('phone', sql.NVarChar(30), phone || null)
+          .input('title', sql.NVarChar(200), title || null)
+          .input('department', sql.Int, department || null)
+          .input('craft', sql.Int, craft || null)
+          .input('crew', sql.Int, crew || null)
+          .input('siteNo', sql.Int, siteNo || null)
+          .input('createUser', sql.Int, req.user.id)
+          .input('createDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''))
           .query(`
-            INSERT INTO Users (Username, Email, PasswordHash, FirstName, LastName, EmployeeID, Department, Shift, RoleID, IsActive, CreatedAt)
-            OUTPUT INSERTED.UserID, INSERTED.Username, INSERTED.Email, INSERTED.FirstName, INSERTED.LastName, INSERTED.CreatedAt
-            VALUES (@username, @email, @passwordHash, @firstName, @lastName, @employeeID, @department, @shift, @roleID, 1, GETDATE())
+            INSERT INTO Person (PERSONCODE, FIRSTNAME, LASTNAME, EMAIL, PHONE, TITLE, DEPTNO, CRAFTNO, CREWNO, SiteNo, PERSON_NAME, FLAGDEL, CREATEUSER, CREATEDATE)
+            OUTPUT INSERTED.PERSONNO
+            VALUES (@personCode, @firstName, @lastName, @email, @phone, @title, @department, @craft, @crew, @siteNo, @firstName + ' ' + @lastName, 'F', @createUser, @createDate)
           `);
 
-        const newUser = result.recordset[0];
+        const personNo = personResult.recordset[0].PERSONNO;
+
+        // 2. Create _secUsers record
+        const secUserResult = await transaction.request()
+          .input('personNo', sql.Int, personNo)
+          .input('userID', sql.VarChar(50), userId)
+          .input('passwd', sql.NVarChar(250), hashedPassword)
+          .input('groupNo', sql.Int, groupNo)
+          .input('levelReport', sql.Int, levelReport || 1)
+          .input('storeRoom', sql.Int, storeRoom || 1)
+          .input('dbNo', sql.Int, dbNo || 1)
+          .input('lineId', sql.NVarChar(500), lineId || null)
+          .input('neverExpireFlag', sql.VarChar(1), 'Y')
+          .input('emailVerified', sql.NChar(10), 'Y')
+          .input('isActive', sql.Bit, 1)
+          .input('createUser', sql.Int, req.user.id)
+          .input('createDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''))
+          .query(`
+            INSERT INTO _secUsers (PersonNo, UserID, Passwd, GroupNo, LevelReport, StoreRoom, DBNo, LineID, NeverExpireFlag, EmailVerified, IsActive, CreateUser, CreatedAt)
+            OUTPUT INSERTED.PersonNo, INSERTED.UserID, INSERTED.CreatedAt
+            VALUES (@personNo, @userID, @passwd, @groupNo, @levelReport, @storeRoom, @dbNo, @lineId, @neverExpireFlag, @emailVerified, @isActive, @createUser, GETDATE())
+          `);
+
+        await transaction.commit();
+
+        const newUser = secUserResult.recordset[0];
         const userData = {
-          id: newUser.UserID,
-          username: newUser.Username,
-          email: newUser.Email,
-          firstName: newUser.FirstName,
-          lastName: newUser.LastName,
-          employeeID: employeeID || null,
-          department: department || null,
-          shift: shift || null,
-          role: role,
-          permissionLevel: actualPermissionLevel,
-          lastLogin: null,
+          id: newUser.PersonNo,
+          userId: newUser.UserID,
+          username: newUser.UserID,
+          personCode: personCode,
+          firstName: firstName,
+          lastName: lastName,
+          fullName: firstName + ' ' + lastName,
+          email: email,
+          phone: phone,
+          title: title,
+          department: department,
+          craft: craft,
+          crew: crew,
+          siteNo: siteNo,
+          groupNo: groupNo,
+          levelReport: levelReport || 1,
+          storeRoom: storeRoom || 1,
+          dbNo: dbNo || 1,
+          lineId: lineId,
           createdAt: newUser.CreatedAt,
           isActive: true
         };
@@ -377,18 +393,18 @@ const userManagementController = {
           message: 'User created successfully',
           user: userData
         });
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        res.status(500).json({
-          success: false,
-          message: 'Failed to create user due to database error'
-        });
+
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
       }
+
     } catch (error) {
-      console.error('Create User Error:', error);
+      console.error('Create user error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to create user'
+        message: 'Failed to create user',
+        error: error.message
       });
     }
   },
@@ -398,147 +414,121 @@ const userManagementController = {
     try {
       const { userId } = req.params;
 
-      // Check if user has permission to update this user
-      if (req.user.permissionLevel < 3 && req.user.id !== parseInt(userId)) {
+      // Check if user has admin permissions
+      if (req.user.groupCode !== 'ADMIN') {
         return res.status(403).json({
           success: false,
-          message: 'Access denied'
+          message: 'Access denied. Requires admin permissions.'
         });
       }
 
       const updateData = req.body;
 
+      const pool = await getConnection();
+      
+      // Check if user exists
+      const userResult = await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .query('SELECT PersonNo, UserID FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
+
+      if (userResult.recordset.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      const user = userResult.recordset[0];
+      const personNo = user.PersonNo;
+
+      // Start transaction
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+
       try {
-        const pool = await getConnection();
-        
-        // Check if user exists
-        const userResult = await pool.request()
-          .input('userID', sql.Int, parseInt(userId))
-          .query('SELECT UserID, Email FROM Users WHERE UserID = @userID AND IsActive = 1');
-
-        if (userResult.recordset.length === 0) {
-          return res.status(404).json({
-            success: false,
-            message: 'User not found'
-          });
+        // Update Person table if personal info is provided
+        if (updateData.firstName || updateData.lastName || updateData.email || updateData.phone || updateData.title || 
+            updateData.department !== undefined || updateData.craft !== undefined || updateData.crew !== undefined || 
+            updateData.siteNo !== undefined) {
+          
+          await transaction.request()
+            .input('personNo', sql.Int, personNo)
+            .input('firstName', sql.NVarChar(30), updateData.firstName || null)
+            .input('lastName', sql.NVarChar(30), updateData.lastName || null)
+            .input('email', sql.NVarChar(200), updateData.email || null)
+            .input('phone', sql.NVarChar(30), updateData.phone || null)
+            .input('title', sql.NVarChar(200), updateData.title || null)
+            .input('department', sql.Int, updateData.department || null)
+            .input('craft', sql.Int, updateData.craft || null)
+            .input('crew', sql.Int, updateData.crew || null)
+            .input('siteNo', sql.Int, updateData.siteNo || null)
+            .input('updateUser', sql.Int, req.user.id)
+            .input('updateDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''))
+            .query(`
+              UPDATE Person
+              SET FIRSTNAME = COALESCE(@firstName, FIRSTNAME),
+                  LASTNAME = COALESCE(@lastName, LASTNAME),
+                  EMAIL = COALESCE(@email, EMAIL),
+                  PHONE = COALESCE(@phone, PHONE),
+                  TITLE = COALESCE(@title, TITLE),
+                  DEPTNO = COALESCE(@department, DEPTNO),
+                  CRAFTNO = COALESCE(@craft, CRAFTNO),
+                  CREWNO = COALESCE(@crew, CREWNO),
+                  SiteNo = COALESCE(@siteNo, SiteNo),
+                  PERSON_NAME = COALESCE(@firstName, FIRSTNAME) + ' ' + COALESCE(@lastName, LASTNAME),
+                  UPDATEUSER = @updateUser,
+                  UPDATEDATE = @updateDate
+              WHERE PERSONNO = @personNo
+            `);
         }
 
-        const existingUser = userResult.recordset[0];
-
-        // Check if email is being changed and if it already exists
-        if (updateData.email && updateData.email !== existingUser.Email) {
-          const emailCheck = await pool.request()
-            .input('email', sql.NVarChar, updateData.email)
-            .input('userID', sql.Int, parseInt(userId))
-            .query('SELECT UserID FROM Users WHERE Email = @email AND UserID != @userID');
-
-          if (emailCheck.recordset.length > 0) {
-            return res.status(400).json({
-              success: false,
-              message: 'Email already exists'
-            });
-          }
+        // Update _secUsers table if security info is provided
+        if (updateData.groupNo !== undefined || updateData.levelReport !== undefined || 
+            updateData.storeRoom !== undefined || updateData.dbNo !== undefined || 
+            updateData.lineId !== undefined || updateData.isActive !== undefined) {
+          
+          await transaction.request()
+            .input('userID', sql.VarChar(50), userId)
+            .input('groupNo', sql.Int, updateData.groupNo || null)
+            .input('levelReport', sql.Int, updateData.levelReport || null)
+            .input('storeRoom', sql.Int, updateData.storeRoom || null)
+            .input('dbNo', sql.Int, updateData.dbNo || null)
+            .input('lineId', sql.NVarChar(500), updateData.lineId || null)
+            .input('isActive', sql.Bit, updateData.isActive !== undefined ? updateData.isActive : null)
+            .input('updateUser', sql.Int, req.user.id)
+            .input('updateDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''))
+            .query(`
+              UPDATE _secUsers
+              SET GroupNo = COALESCE(@groupNo, GroupNo),
+                  LevelReport = COALESCE(@levelReport, LevelReport),
+                  StoreRoom = COALESCE(@storeRoom, StoreRoom),
+                  DBNo = COALESCE(@dbNo, DBNo),
+                  LineID = COALESCE(@lineId, LineID),
+                  IsActive = COALESCE(@isActive, IsActive),
+                  UpdateUser = @updateUser,
+                  UpdatedAt = GETDATE()
+              WHERE UserID = @userID
+            `);
         }
 
-        // Build update query dynamically
-        let updateFields = [];
-
-        if (updateData.firstName !== undefined) {
-          updateFields.push('FirstName = @firstName');
-          params.firstName = sql.NVarChar, updateData.firstName;
-        }
-        if (updateData.lastName !== undefined) {
-          updateFields.push('LastName = @lastName');
-          params.lastName = sql.NVarChar, updateData.lastName;
-        }
-        if (updateData.email !== undefined) {
-          updateFields.push('Email = @email');
-          params.email = sql.NVarChar, updateData.email;
-        }
-        if (updateData.employeeID !== undefined) {
-          updateFields.push('EmployeeID = @employeeID');
-          params.employeeID = sql.NVarChar, updateData.employeeID;
-        }
-        if (updateData.department !== undefined) {
-          updateFields.push('Department = @department');
-          params.department = sql.NVarChar, updateData.department;
-        }
-        if (updateData.shift !== undefined) {
-          updateFields.push('Shift = @shift');
-          params.shift = sql.NVarChar, updateData.shift;
-        }
-        if (updateData.isActive !== undefined) {
-          updateFields.push('IsActive = @isActive');
-          params.isActive = sql.Bit, updateData.isActive ? 1 : 0;
-        }
-
-        // Update user if there are fields to update
-        if (updateFields.length > 0) {
-          const updateQuery = `
-            UPDATE Users 
-            SET ${updateFields.join(', ')}, UpdatedAt = GETDATE()
-            WHERE UserID = @userID
-          `;
-
-          await pool.request()
-            .input('userID', sql.Int, parseInt(userId))
-            .input('firstName', sql.NVarChar, updateData.firstName)
-            .input('lastName', sql.NVarChar, updateData.lastName)
-            .input('email', sql.NVarChar, updateData.email)
-            .input('employeeID', sql.NVarChar, updateData.employeeID)
-            .input('department', sql.NVarChar, updateData.department)
-            .input('shift', sql.NVarChar, updateData.shift)
-            .input('isActive', sql.Bit, updateData.isActive ? 1 : 0)
-            .query(updateQuery);
-        }
-
-        // Get updated user data
-        const updatedUserResult = await pool.request()
-          .input('userID', sql.Int, parseInt(userId))
-          .query(`
-            SELECT u.UserID, u.Username, u.Email, u.FirstName, u.LastName, 
-                   u.EmployeeID, u.Department, u.Shift, u.LastLogin, u.CreatedAt,
-                   r.RoleName as role, r.PermissionLevel as permissionLevel,
-                   CASE WHEN u.IsActive = 1 THEN 1 ELSE 0 END as isActive
-            FROM Users u
-            JOIN Roles r ON u.RoleID = r.RoleID
-            WHERE u.UserID = @userID
-          `);
-
-        const updatedUser = updatedUserResult.recordset[0];
-        const userData = {
-          id: updatedUser.UserID,
-          username: updatedUser.Username,
-          email: updatedUser.Email,
-          firstName: updatedUser.FirstName,
-          lastName: updatedUser.LastName,
-          employeeID: updatedUser.EmployeeID,
-          department: updatedUser.Department,
-          shift: updatedUser.Shift,
-          role: updatedUser.role,
-          permissionLevel: updatedUser.permissionLevel,
-          lastLogin: updatedUser.LastLogin,
-          createdAt: updatedUser.CreatedAt,
-          isActive: updatedUser.isActive === 1
-        };
+        await transaction.commit();
 
         res.json({
           success: true,
-          message: 'User updated successfully',
-          user: userData
+          message: 'User updated successfully'
         });
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        res.status(500).json({
-          success: false,
-          message: 'Failed to update user due to database error'
-        });
+
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
       }
+
     } catch (error) {
-      console.error('Update User Error:', error);
+      console.error('Update user error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update user'
+        message: 'Failed to update user',
+        error: error.message
       });
     }
   },
@@ -548,175 +538,86 @@ const userManagementController = {
     try {
       const { userId } = req.params;
 
-      // Check if user has L3 permissions
-      if (req.user.permissionLevel < 3) {
+      // Check if user has admin permissions
+      if (req.user.groupCode !== 'ADMIN') {
         return res.status(403).json({
           success: false,
-          message: 'Access denied. Requires L3 permissions.'
+          message: 'Access denied. Requires admin permissions.'
         });
       }
 
-      // Prevent deleting own account
-      if (req.user.id === parseInt(userId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Cannot delete your own account'
-        });
-      }
+      const pool = await getConnection();
+      
+      // Check if user exists
+      const userResult = await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .query('SELECT UserID FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
 
-      try {
-        const pool = await getConnection();
-        
-        // Check if user exists
-        const userResult = await pool.request()
-          .input('userID', sql.Int, parseInt(userId))
-          .query('SELECT UserID FROM Users WHERE UserID = @userID AND IsActive = 1');
-
-        if (userResult.recordset.length === 0) {
-          return res.status(404).json({
-            success: false,
-            message: 'User not found'
-          });
-        }
-
-                // Soft delete by setting isActive to false
-        await pool.request()
-          .input('userID', sql.Int, parseInt(userId))
-          .query('UPDATE Users SET IsActive = 0, UpdatedAt = GETDATE() WHERE UserID = @userID');
-
-        res.json({
-          success: true,
-          message: 'User deactivated successfully'
-        });
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        res.status(500).json({
-          success: false,
-          message: 'Failed to delete user due to database error'
-        });
-      }
-    } catch (error) {
-      console.error('Delete User Error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete user'
-      });
-    }
-  },
-
-  // Update user role
-  updateUserRole: async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { role, permissionLevel } = req.body;
-
-      // Check if user has L3 permissions
-      if (req.user.permissionLevel < 3) {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires L3 permissions.'
-        });
-      }
-
-      const userIndex = users.findIndex(u => u.id === parseInt(userId));
-
-      if (userIndex === -1) {
+      if (userResult.recordset.length === 0) {
         return res.status(404).json({
           success: false,
           message: 'User not found'
         });
       }
 
-      // Prevent changing own role
-      if (req.user.id === parseInt(userId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Cannot change your own role'
-        });
-      }
-
-      // Update role and permission level
-      users[userIndex].role = role;
-      users[userIndex].permissionLevel = permissionLevel;
+      // Soft delete by setting IsActive = 0
+      await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .input('updateUser', sql.Int, req.user.id)
+        .query(`
+          UPDATE _secUsers 
+          SET IsActive = 0, UpdateUser = @updateUser, UpdatedAt = GETDATE() 
+          WHERE UserID = @userID
+        `);
 
       res.json({
         success: true,
-        message: 'User role updated successfully'
+        message: 'User deleted successfully'
       });
+
     } catch (error) {
-      console.error('Update User Role Error:', error);
+      console.error('Delete user error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to update user role'
+        message: 'Failed to delete user',
+        error: error.message
       });
     }
   },
 
-  // Get all roles
-  getRoles: async (req, res) => {
+  // Get available groups for user creation
+  getAvailableGroups: async (req, res) => {
     try {
-      try {
-        const pool = await getConnection();
-        
-        // Get all roles with permissions
-        const result = await pool.request()
-          .query(`
-            SELECT RoleID as id, RoleName as name, RoleDescription as description, 
-                   PermissionLevel as permissionLevel
-            FROM Roles
-            ORDER BY PermissionLevel DESC
-          `);
-
-        const roles = result.recordset.map(role => ({
-          id: role.name.toLowerCase(),
-          name: role.name,
-          description: role.description || `${role.name} role`,
-          permissionLevel: role.permissionLevel,
-          permissions: getDefaultPermissions(role.permissionLevel)
-        }));
-
-        res.json({
-          success: true,
-          roles: roles
-        });
-      } catch (dbError) {
-        console.error('Database error, using fallback roles:', dbError);
-        
-        // Fallback to mock data for development
-        const fallbackRoles = [
-          {
-            id: 'admin',
-            name: 'Administrator',
-            description: 'Full system access',
-            permissionLevel: 3,
-            permissions: ['all']
-          },
-          {
-            id: 'manager',
-            name: 'Manager',
-            description: 'Department management',
-            permissionLevel: 2,
-            permissions: ['dashboard', 'tickets', 'tickets-admin', 'machines', 'reports']
-          },
-          {
-            id: 'operator',
-            name: 'Operator',
-            description: 'Basic operations',
-            permissionLevel: 1,
-            permissions: ['dashboard', 'tickets']
-          }
-        ];
-
-        res.json({
-          success: true,
-          roles: fallbackRoles
+      // Check if user has admin permissions
+      if (req.user.groupCode !== 'ADMIN') {
+        return res.status(403).json({
+          success: false,
+          message: 'Access denied. Requires admin permissions.'
         });
       }
+
+      const pool = await getConnection();
+      
+      const result = await pool.request()
+        .query('SELECT GroupNo, UserGCode, UserGName FROM _secUserGroups ORDER BY UserGCode');
+
+      const groups = result.recordset.map(group => ({
+        groupNo: group.GroupNo,
+        groupCode: group.UserGCode,
+        groupName: group.UserGName
+      }));
+
+      res.json({
+        success: true,
+        groups: groups
+      });
+
     } catch (error) {
-      console.error('Get Roles Error:', error);
+      console.error('Get available groups error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to fetch roles'
+        message: 'Failed to fetch groups',
+        error: error.message
       });
     }
   },
@@ -727,127 +628,60 @@ const userManagementController = {
       const { userId } = req.params;
       const { newPassword } = req.body;
 
-      // Check if user has L3 permissions
-      if (req.user.permissionLevel < 3) {
+      // Check if user has admin permissions
+      if (req.user.groupCode !== 'ADMIN') {
         return res.status(403).json({
           success: false,
-          message: 'Access denied. Requires L3 permissions.'
+          message: 'Access denied. Requires admin permissions.'
         });
       }
 
-      const userIndex = users.findIndex(u => u.id === parseInt(userId));
+      if (!newPassword) {
+        return res.status(400).json({
+          success: false,
+          message: 'New password is required'
+        });
+      }
 
-      if (userIndex === -1) {
+      const pool = await getConnection();
+      
+      // Check if user exists
+      const userResult = await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .query('SELECT UserID FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
+
+      if (userResult.recordset.length === 0) {
         return res.status(404).json({
           success: false,
           message: 'User not found'
         });
       }
 
-      // Hash new password
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
-      users[userIndex].password = hashedPassword;
+      // Hash password using MD5
+      const hashedPassword = hashPasswordMD5(newPassword);
+
+      // Update password
+      await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .input('newPassword', sql.NVarChar(250), hashedPassword)
+        .input('updateUser', sql.Int, req.user.id)
+        .query(`
+          UPDATE _secUsers 
+          SET Passwd = @newPassword, UpdateUser = @updateUser, UpdatedAt = GETDATE() 
+          WHERE UserID = @userID
+        `);
 
       res.json({
         success: true,
         message: 'Password reset successfully'
       });
+
     } catch (error) {
-      console.error('Reset Password Error:', error);
+      console.error('Reset password error:', error);
       res.status(500).json({
         success: false,
-        message: 'Failed to reset password'
-      });
-    }
-  },
-
-  // Get user activity logs (placeholder)
-  getUserActivityLogs: async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const { limit = 50 } = req.query;
-
-      // Check if user has L3 permissions
-      if (req.user.permissionLevel < 3) {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires L3 permissions.'
-        });
-      }
-
-      // Mock activity logs
-      const logs = [
-        {
-          id: 1,
-          action: 'login',
-          timestamp: new Date().toISOString(),
-          details: 'User logged in successfully'
-        },
-        {
-          id: 2,
-          action: 'profile_update',
-          timestamp: new Date(Date.now() - 3600000).toISOString(),
-          details: 'Profile information updated'
-        }
-      ];
-
-      res.json({
-        success: true,
-        logs: logs.slice(0, parseInt(limit))
-      });
-    } catch (error) {
-      console.error('Get User Activity Logs Error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to fetch user activity logs'
-      });
-    }
-  },
-
-  // Bulk update users
-  bulkUpdateUsers: async (req, res) => {
-    try {
-      const { updates } = req.body;
-
-      // Check if user has L3 permissions
-      if (req.user.permissionLevel < 3) {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires L3 permissions.'
-        });
-      }
-
-      if (!Array.isArray(updates)) {
-        return res.status(400).json({
-          success: false,
-          message: 'Invalid updates format'
-        });
-      }
-
-      const results = [];
-      for (const update of updates) {
-        const { userId, updates: userUpdates } = update;
-        const userIndex = users.findIndex(u => u.id === userId);
-
-        if (userIndex !== -1) {
-          // Apply updates
-          Object.assign(users[userIndex], userUpdates);
-          results.push({ userId, success: true });
-        } else {
-          results.push({ userId, success: false, message: 'User not found' });
-        }
-      }
-
-      res.json({
-        success: true,
-        message: 'Bulk update completed',
-        results
-      });
-    } catch (error) {
-      console.error('Bulk Update Users Error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Failed to bulk update users'
+        message: 'Failed to reset password',
+        error: error.message
       });
     }
   }

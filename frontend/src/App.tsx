@@ -8,16 +8,50 @@ import Layout from './components/layout/Layout';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
+import HomePage from './pages/HomePage';
 import DashboardPage from './pages/DashboardPage';
+import DashboardMaintenanceKPIPage from './pages/dashboard/DashboardMaintenanceKPIPage';
+import DashboardPreventiveMaintenancePage from './pages/dashboard/DashboardPreventiveMaintenancePage';
+import DashboardCalibrationPage from './pages/dashboard/DashboardCalibrationPage';
+import DashboardMCCPage from './pages/dashboard/DashboardMCCPage';
+import DashboardSparePartPage from './pages/dashboard/DashboardSparePartPage';
+import DashboardBacklogPage from './pages/dashboard/DashboardBacklogPage';
+import DashboardBacklogDetailPage from './pages/dashboard/DashboardBacklogDetailPage';
+import AbnormalReportDashboardV2Page from './pages/dashboard/AbnormalReportDashboardV2Page';
 import UserManagementPage from './pages/UserManagementPage';
 import RoleManagementPage from './pages/RoleManagementPage';
-import MachineManagementPage from './pages/MachineManagementPage';
-import MachineDashboardPage from './pages/MachineDashboardPage';
+// Removed old machine pages from menu in favor of Assets
+import WorkOrdersPage from './pages/WorkOrdersPage';
+import WorkOrderDetailsPage from './pages/WorkOrderDetailsPage';
+import WorkRequestsPage from './pages/WorkRequestsPage';
+import PreventiveMaintenancePage from './pages/PreventiveMaintenancePage';
+import WorkRequestDetailsPage from './pages/WorkRequestDetailsPage';
+import InventoryOverviewPage from './pages/InventoryOverviewPage';
+import InventoryCatalogPage from './pages/InventoryCatalogPage';
+import InventoryStoresPage from './pages/InventoryStoresPage';
+import InventoryVendorsPage from './pages/InventoryVendorsPage';
+import InventoryAnalyticsPage from './pages/InventoryAnalyticsPage';
+import InventoryCatalogDetailsPage from './pages/InventoryCatalogDetailsPage';
+import OrgDepartmentsPage from './pages/org/OrgDepartmentsPage';
+import OrgDepartmentDetailsPage from './pages/org/OrgDepartmentDetailsPage';
+import OrgGroupsPage from './pages/org/OrgGroupsPage';
+import OrgGroupDetailsPage from './pages/org/OrgGroupDetailsPage';
+import OrgTitlesPage from './pages/org/OrgTitlesPage';
+import OrgTitleDetailsPage from './pages/org/OrgTitleDetailsPage';
+import OrgUsersPage from './pages/org/OrgUsersPage';
+import OrgUserDetailsPage from './pages/org/OrgUserDetailsPage';
 import TicketManagementPage from './pages/TicketManagementPage';
 import TicketDetailsPage from './pages/TicketDetailsPage';
 import TicketCreatePage from './pages/TicketCreatePage';
 import TicketCreateWizardPage from './pages/TicketCreateWizardPage';
+import NewTicketForm from './pages/NewTicketForm';
 import ProfilePage from './pages/ProfilePage';
+import AssetSitesPage from './pages/AssetSitesPage';
+import AssetDepartmentsPage from './pages/AssetDepartmentsPage';
+import ProductionUnitPage from './pages/ProductionUnitPage';
+import EquipmentPage from './pages/EquipmentPage';
+import AssetHierarchyPage from './pages/AssetHierarchyPage';
+import WorkflowTypesPage from './pages/WorkflowTypesPage';
 
 // Main App Component with Routing
 const AppContent: React.FC = () => {
@@ -103,25 +137,78 @@ const AppContent: React.FC = () => {
             </Layout>
           </ProtectedRoute>
         }>
-          <Route index element={<Navigate to="/dashboard" replace />} />
-          <Route path="dashboard" element={<DashboardPage />} />
+          <Route index element={<Navigate to="/home" replace />} />
+          <Route path="home" element={<HomePage />} />
+          <Route path="dashboard" element={<Navigate to="/dashboard/abnormal" replace />} />
+          <Route path="dashboard/abnormal" element={<DashboardPage />} />
+          <Route path="dashboard/abnormal-v2" element={<AbnormalReportDashboardV2Page />} />
+          <Route path="dashboard/maintenance-kpi" element={<DashboardMaintenanceKPIPage />} />
+          <Route path="dashboard/preventive-maintenance" element={<DashboardPreventiveMaintenancePage />} />
+          <Route path="dashboard/calibration" element={<DashboardCalibrationPage />} />
+          <Route path="dashboard/mcc" element={<DashboardMCCPage />} />
+          <Route path="dashboard/spare-part" element={<DashboardSparePartPage />} />
+          <Route path="dashboard/backlog" element={<DashboardBacklogPage />} />
+          <Route path="dashboard/backlog/department/:deptCode" element={<DashboardBacklogDetailPage />} />
+          <Route path="dashboard/backlog/user/:personName" element={<DashboardBacklogDetailPage />} />
           
-          {/* Machine Management Routes */}
-          <Route path="machines" element={<MachineManagementPage />} />
-          <Route path="machines/list" element={<MachineManagementPage />} />
-          <Route path="machines/maintenance" element={<MachineDashboardPage />} />
+          {/* Maintenance Routes */}
+          <Route path="maintenance" element={<WorkOrdersPage />} />
+          <Route path="maintenance/work-orders" element={<WorkOrdersPage />} />
+          <Route path="maintenance/work-orders/:woId" element={<WorkOrderDetailsPage />} />
+          <Route path="maintenance/work-requests" element={<WorkRequestsPage />} />
+          <Route path="maintenance/work-requests/:wrId" element={<WorkRequestDetailsPage />} />
+          <Route path="maintenance/preventive-maintenance" element={<PreventiveMaintenancePage />} />
+
+          {/* Inventory */}
+          <Route path="inventory" element={<InventoryOverviewPage />} />
+          <Route path="inventory/catalog" element={<InventoryCatalogPage />} />
+          <Route path="inventory/stores" element={<InventoryStoresPage />} />
+          <Route path="inventory/vendors" element={<InventoryVendorsPage />} />
+          <Route path="inventory/analytics" element={<InventoryAnalyticsPage />} />
           
           {/* User Management Routes */}
           <Route path="users" element={<UserManagementPage />} />
           <Route path="users/list" element={<UserManagementPage />} />
           <Route path="users/roles" element={<RoleManagementPage />} />
-          
+
           {/* Ticket Management Routes */}
           <Route path="tickets" element={<TicketManagementPage />} />
           <Route path="tickets/create" element={<TicketCreatePage />} />
           <Route path="tickets/create/wizard" element={<TicketCreateWizardPage />} />
+          <Route path="tickets/create/new" element={<NewTicketForm />} />
           <Route path="tickets/:ticketId" element={<TicketDetailsPage />} />
           <Route path="profile" element={<ProfilePage />} />
+
+          {/* Asset Management Routes */}
+          <Route path="assets" element={<AssetSitesPage />} />
+          <Route path="assets/sites" element={<AssetSitesPage />} />
+          <Route path="assets/departments" element={<AssetDepartmentsPage />} />
+          <Route path="assets/production-units" element={<ProductionUnitPage />} />
+          <Route path="assets/equipment" element={<EquipmentPage />} />
+          <Route path="assets/hierarchy" element={<AssetHierarchyPage />} />
+
+          {/* Spare Part (Inventory) */}
+          <Route path="spare" element={<InventoryOverviewPage />} />
+          <Route path="spare/overview" element={<InventoryOverviewPage />} />
+          <Route path="spare/catalog" element={<InventoryCatalogPage />} />
+          <Route path="spare/catalog/:itemId" element={<InventoryCatalogDetailsPage />} />
+          <Route path="spare/stores" element={<InventoryStoresPage />} />
+          <Route path="spare/vendors" element={<InventoryVendorsPage />} />
+          <Route path="spare/analytics" element={<InventoryAnalyticsPage />} />
+
+          {/* Organization */}
+          <Route path="org/departments" element={<OrgDepartmentsPage />} />
+          <Route path="org/departments/:id" element={<OrgDepartmentDetailsPage />} />
+          <Route path="org/groups" element={<OrgGroupsPage />} />
+          <Route path="org/groups/:id" element={<OrgGroupDetailsPage />} />
+          <Route path="org/titles" element={<OrgTitlesPage />} />
+          <Route path="org/titles/:id" element={<OrgTitleDetailsPage />} />
+          <Route path="org/users" element={<OrgUsersPage />} />
+          <Route path="org/users/:id" element={<OrgUserDetailsPage />} />
+
+          {/* Workflow */}
+          <Route path="workflow" element={<WorkflowTypesPage />} />
+          <Route path="workflow/types" element={<WorkflowTypesPage />} />
           
           {/* Catch all route - redirect to dashboard */}
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

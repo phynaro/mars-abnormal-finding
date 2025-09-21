@@ -140,6 +140,7 @@ const RegisterPage: React.FC = () => {
                     onChange={handleInputChange}
                     className="pl-10"
                     placeholder={t('auth.username')}
+                    autoComplete="username"
                   />
                 </div>
               </div>
@@ -158,6 +159,7 @@ const RegisterPage: React.FC = () => {
                     onChange={handleInputChange}
                     className="pl-10"
                     placeholder={t('auth.email')}
+                    autoComplete="email"
                   />
                 </div>
               </div>
@@ -177,6 +179,7 @@ const RegisterPage: React.FC = () => {
                       onChange={handleInputChange}
                       className="pl-10"
                       placeholder={t('auth.firstName')}
+                      autoComplete="given-name"
                     />
                   </div>
                 </div>
@@ -194,6 +197,7 @@ const RegisterPage: React.FC = () => {
                       onChange={handleInputChange}
                       className="pl-10"
                       placeholder={t('auth.lastName')}
+                      autoComplete="family-name"
                     />
                   </div>
                 </div>
@@ -267,6 +271,7 @@ const RegisterPage: React.FC = () => {
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
                     placeholder={t('auth.password')}
+                    autoComplete="new-password"
                   />
                   <Button
                     type="button"
@@ -298,6 +303,7 @@ const RegisterPage: React.FC = () => {
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
                     placeholder={t('auth.confirmPassword')}
+                    autoComplete="new-password"
                   />
                   <Button
                     type="button"

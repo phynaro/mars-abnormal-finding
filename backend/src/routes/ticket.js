@@ -1,85 +1,120 @@
 const express = require('express');
 const router = express.Router();
 const ticketController = require('../controllers/ticketController');
-const { authenticateToken, requireL1Operator, requireL2Engineer, requireL3Manager } = require('../middleware/auth');
+const { authenticateToken, requireFormPermission } = require('../middleware/auth');
 const { upload } = require('../middleware/upload');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
 
-// Create a new ticket (L1+)
-router.post('/', requireL1Operator, ticketController.createTicket);
+// Create a new ticket (requires TKT form save permission)
+router.post('/', requireFormPermission('TKT', 'save'), ticketController.createTicket);
 
-// Get all tickets with filtering and pagination (L1+)
-router.get('/', requireL1Operator, ticketController.getTickets);
+// Get all tickets with filtering and pagination (requires TKT form view permission)
+router.get('/', requireFormPermission('TKT', 'view'), ticketController.getTickets);
 
-// Get ticket by ID (L1+)
-router.get('/:id', requireL1Operator, ticketController.getTicketById);
+// Get user-related pending tickets (requires TKT form view permission)
+router.get('/pending/user', requireFormPermission('TKT', 'view'), ticketController.getUserPendingTickets);
 
-// Update ticket (L2+)
-router.put('/:id', requireL2Engineer, ticketController.updateTicket);
+// Get failure modes (requires TKT form view permission)
+router.get('/failure-modes', requireFormPermission('TKT', 'view'), ticketController.getFailureModes);
 
-// Add comment to ticket (L1+)
-router.post('/:id/comments', requireL1Operator, ticketController.addComment);
+// Get ticket by ID (requires TKT form view permission)
+router.get('/:id', requireFormPermission('TKT', 'view'), ticketController.getTicketById);
 
-// Assign ticket (L2+)
-router.post('/:id/assign', requireL2Engineer, ticketController.assignTicket);
+// Update ticket (requires TKT form save permission)
+router.put('/:id', requireFormPermission('TKT', 'save'), ticketController.updateTicket);
+
+// Add comment to ticket (requires TKT form save permission)
+router.post('/:id/comments', requireFormPermission('TKT', 'save'), ticketController.addComment);
+
+// Assign ticket (requires TKT form save permission)
+router.post('/:id/assign', requireFormPermission('TKT', 'save'), ticketController.assignTicket);
 
 // Workflow endpoints
-// Accept ticket (L2+)
-router.post('/:id/accept', requireL2Engineer, ticketController.acceptTicket);
+// Accept ticket (requires TKT form save permission)
+router.post('/:id/accept', requireFormPermission('TKT', 'save'), ticketController.acceptTicket);
 
-// Reject ticket (L2+)
-router.post('/:id/reject', requireL2Engineer, ticketController.rejectTicket);
+// Reject ticket (requires TKT form save permission)
+router.post('/:id/reject', requireFormPermission('TKT', 'save'), ticketController.rejectTicket);
 
-// Complete job (L2+)
-router.post('/:id/complete', requireL2Engineer, ticketController.completeJob);
+// Complete job (requires TKT form save permission)
+router.post('/:id/complete', requireFormPermission('TKT', 'save'), ticketController.completeJob);
 
-// Escalate ticket (L2+)
-router.post('/:id/escalate', requireL2Engineer, ticketController.escalateTicket);
+// Escalate ticket (requires TKT form save permission)
+router.post('/:id/escalate', requireFormPermission('TKT', 'save'), ticketController.escalateTicket);
 
-// Close ticket (Requestor only)
-router.post('/:id/close', requireL1Operator, ticketController.closeTicket);
+// Close ticket (requires TKT form save permission)
+router.post('/:id/close', requireFormPermission('TKT', 'save'), ticketController.closeTicket);
 
-// Reopen ticket (Requestor only)
-router.post('/:id/reopen', requireL1Operator, ticketController.reopenTicket);
+// Reopen ticket (requires TKT form save permission)
+router.post('/:id/reopen', requireFormPermission('TKT', 'save'), ticketController.reopenTicket);
 
-// Reassign ticket (L3 only)
-router.post('/:id/reassign', requireL3Manager, ticketController.reassignTicket);
+// Reassign ticket (requires TKT form save permission)
+router.post('/:id/reassign', requireFormPermission('TKT', 'save'), ticketController.reassignTicket);
 
-// Get available assignees (L1+)
-router.get('/assignees/available', requireL1Operator, ticketController.getAvailableAssignees);
+// Get available assignees (requires TKT form view permission)
+router.get('/assignees/available', requireFormPermission('TKT', 'view'), ticketController.getAvailableAssignees);
 
-// Trigger delayed notification manually (for testing)
-router.post('/:id/trigger-notification', requireL1Operator, async (req, res) => {
+// Trigger LINE notification for ticket (called after image uploads)
+router.post('/:id/trigger-notification', requireFormPermission('TKT', 'save'), ticketController.triggerTicketNotification);
+
+// Test L2 users for an area (for testing)
+router.get('/test-l2-users/:area_id', requireFormPermission('TKT', 'view'), async (req, res) => {
     try {
-        const { id } = req.params;
-        await ticketController.sendDelayedTicketNotification(parseInt(id, 10));
+        const { area_id } = req.params;
+        const sql = require('mssql');
+        const dbConfig = require('../config/dbConfig');
+        const pool = await sql.connect(dbConfig);
+        
+        // Use the same query as in the helper function
+        const result = await pool.request()
+            .input('area_id', sql.Int, area_id)
+            .query(`
+                SELECT DISTINCT
+                    p.PERSONNO,
+                    p.PERSON_NAME,
+                    p.FIRSTNAME,
+                    p.LASTNAME,
+                    p.EMAIL,
+                    u.LineID,
+                    ta.approval_level
+                FROM TicketApproval ta
+                INNER JOIN Person p ON ta.personno = p.PERSONNO
+                LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                WHERE ta.area_id = @area_id
+                AND ta.approval_level >= 2
+                AND ta.is_active = 1
+                AND p.FLAGDEL != 'Y'
+                ORDER BY ta.approval_level DESC, p.PERSON_NAME
+            `);
+        
         res.json({
             success: true,
-            message: 'Delayed notification triggered successfully'
+            message: `Found ${result.recordset.length} L2+ users for area ${area_id}`,
+            data: result.recordset
         });
     } catch (error) {
-        console.error('Error triggering delayed notification:', error);
+        console.error('Error getting L2 users:', error);
         res.status(500).json({
             success: false,
-            message: 'Failed to trigger delayed notification',
+            message: 'Failed to get L2 users',
             error: error.message
         });
     }
 });
 
-// Delete ticket (L3 only)
-router.delete('/:id', requireL3Manager, ticketController.deleteTicket);
+// Delete ticket (requires TKT form delete permission)
+router.delete('/:id', requireFormPermission('TKT', 'delete'), ticketController.deleteTicket);
 
-// Upload ticket image (L1+)
-router.post('/:id/images', requireL1Operator, upload.single('image'), ticketController.uploadTicketImage);
+// Upload ticket image (requires TKT form save permission)
+router.post('/:id/images', requireFormPermission('TKT', 'save'), upload.single('image'), ticketController.uploadTicketImage);
 
-// Delete ticket image (L1+)
-router.delete('/:id/images/:imageId', requireL1Operator, ticketController.deleteTicketImage);
+// Delete ticket image (requires TKT form save permission)
+router.delete('/:id/images/:imageId', requireFormPermission('TKT', 'save'), ticketController.deleteTicketImage);
 
-// Upload multiple images (L1+)
-router.post('/:id/images/batch', requireL1Operator, upload.array('images', 10), ticketController.uploadTicketImages);
+// Upload multiple images (requires TKT form save permission)
+router.post('/:id/images/batch', requireFormPermission('TKT', 'save'), upload.array('images', 10), ticketController.uploadTicketImages);
 
 // Test email notification (for development/testing)
 router.post('/test-email', async (req, res) => {
@@ -99,16 +134,20 @@ router.post('/test-email', async (req, res) => {
             estimated_downtime_hours: 4,
             created_at: new Date().toISOString()
         };
-        
-        const result = await emailService.sendNewTicketNotification(testTicketData, 'Test User');
-        
+
+        // Send test email
+        await emailService.sendTicketCreatedNotification(
+            testTicketData,
+            'Test User',
+            'test@example.com'
+        );
+
         res.json({
             success: true,
-            message: 'Test email sent successfully',
-            data: result
+            message: 'Test email sent successfully'
         });
     } catch (error) {
-        console.error('Test email error:', error);
+        console.error('Error sending test email:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to send test email',

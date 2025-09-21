@@ -1,0 +1,4917 @@
+openapi: 3.0.3
+info:
+  title: MARS System API
+  description: |
+    Comprehensive API for the MARS (Manufacturing Asset Resource System) including authentication,
+    work request management, and workflow processing in the Cedar6_Mars CMMS system.
+    
+    This API provides endpoints for:
+    - User authentication and account management
+    - Creating and managing work requests
+    - Executing workflow actions (approve, reject, cancel, generate WO)
+    - Tracking workflow status and history
+    - Managing user workflow tasks
+    - Retrieving master data (types, statuses, urgencies)
+    
+    ## Authentication
+    Most endpoints require JWT authentication via Bearer token. Use the "Authorize" button in Swagger UI to set your token.
+    
+    ## User Mapping
+    The system automatically maps between the modern `Users` table and legacy `Person` table for workflow operations.
+    
+    ## Workflow Process
+    1. Create work request → Automatically starts workflow
+    2. Check workflow status and available actions
+    3. Execute workflow actions (approve/reject/etc.)
+    4. Generate work orders from approved requests
+    5. Track progress in personal task inbox
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@company.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3001/api
+    description: Development server
+  - url: https://api.company.com/api
+    description: Production server
+
+paths:
+  # ========== AUTHENTICATION ENDPOINTS ==========
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register a new user
+      description: Create a new user account with email verification
+      operationId: registerUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - email
+                - password
+                - firstName
+                - lastName
+              properties:
+                username:
+                  type: string
+                  description: Unique username
+                  example: "john.doe"
+                email:
+                  type: string
+                  format: email
+                  description: User email address
+                  example: "john.doe@company.com"
+                password:
+                  type: string
+                  format: password
+                  minLength: 6
+                  description: User password (minimum 6 characters)
+                  example: "securePassword123"
+                firstName:
+                  type: string
+                  description: User's first name
+                  example: "John"
+                lastName:
+                  type: string
+                  description: User's last name
+                  example: "Doe"
+                employeeID:
+                  type: string
+                  description: Employee ID (optional)
+                  example: "EMP001"
+                department:
+                  type: string
+                  description: Department (optional)
+                  example: "Production"
+                shift:
+                  type: string
+                  description: Work shift (optional)
+                  example: "Day Shift"
+      responses:
+        '201':
+          description: User registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "User registered successfully. Please check your email to verify your account."
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: Username or email already exists
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Username or email already exists"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: User logout
+      description: Logout user and invalidate session
+      operationId: logoutUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Logout successful"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change user password
+      description: Change the current user's password
+      operationId: changePassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                  description: Current password
+                  example: "oldPassword123"
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 6
+                  description: New password (minimum 6 characters)
+                  example: "newPassword123"
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Password changed successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Current password is incorrect
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Current password is incorrect"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/profile:
+    get:
+      tags:
+        - User Management
+      summary: Get current user profile
+      description: Retrieve the current user's profile information from Cedar6_Mars system
+      operationId: getProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/Cedar6User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "User not found"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/permissions:
+    get:
+      tags:
+        - User Management
+      summary: Get user permissions
+      description: Retrieve the current user's permissions from Cedar6_Mars system
+      operationId: getUserPermissions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User permissions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  permissions:
+                    $ref: '#/components/schemas/UserPermissions'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/check-permission:
+    post:
+      tags:
+        - User Management
+      summary: Check specific permission
+      description: Check if the current user has a specific permission for a form/action
+      operationId: checkSpecificPermission
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - formId
+              properties:
+                formId:
+                  type: string
+                  description: Form ID to check permission for
+                  example: "WO"
+                action:
+                  type: string
+                  enum: [view, save, delete]
+                  default: view
+                  description: Action to check permission for
+                  example: "view"
+      responses:
+        '200':
+          description: Permission check completed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  hasPermission:
+                    type: boolean
+                    example: true
+                  formId:
+                    type: string
+                    example: "WO"
+                  action:
+                    type: string
+                    example: "view"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ========== USER MANAGEMENT ENDPOINTS ==========
+  /users/profile:
+    get:
+      tags:
+        - User Management
+      summary: Get current user profile (redirects to auth)
+      description: Retrieve the current user's profile information
+      operationId: getUserProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/Cedar6User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    put:
+      tags:
+        - User Management
+      summary: Update current user profile
+      description: Update the current user's profile information in Cedar6_Mars system
+      operationId: updateUserProfile
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                firstName:
+                  type: string
+                  description: User's first name
+                  example: "John"
+                lastName:
+                  type: string
+                  description: User's last name
+                  example: "Doe"
+                email:
+                  type: string
+                  format: email
+                  description: User's email address
+                  example: "john.doe@company.com"
+                phone:
+                  type: string
+                  description: User's phone number
+                  example: "+1234567890"
+                title:
+                  type: string
+                  description: User's job title
+                  example: "Maintenance Engineer"
+                lineId:
+                  type: string
+                  description: LINE messaging ID for notifications
+                  example: "U1234567890abcdef"
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Profile updated successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/profile/avatar:
+    post:
+      tags:
+        - User Management
+      summary: Upload user avatar
+      description: Upload an avatar image for the current user
+      operationId: uploadUserAvatar
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - avatar
+              properties:
+                avatar:
+                  type: string
+                  format: binary
+                  description: Avatar image file (JPG, PNG, GIF)
+      responses:
+        '201':
+          description: Avatar uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Avatar updated"
+                  data:
+                    type: object
+                    properties:
+                      avatarUrl:
+                        type: string
+                        example: "/uploads/avatars/123/avatar.jpg"
+        '400':
+          description: No avatar file uploaded
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "No avatar file uploaded"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/role:
+    get:
+      tags:
+        - User Management
+      summary: Get user role information
+      description: Retrieve the current user's role/group information from Cedar6_Mars system
+      operationId: getUserRole
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User role retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  groupCode:
+                    type: string
+                    description: User group code
+                    example: "MP"
+                  groupName:
+                    type: string
+                    description: User group name
+                    example: "Maintenance Planner"
+                  groupNo:
+                    type: integer
+                    description: User group number
+                    example: 11
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /users/line/test:
+    post:
+      tags:
+        - User Management
+      summary: Send test LINE notification
+      description: Send a test LINE notification to the current user's LineID
+      operationId: sendLineTest
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Test notification sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Test LINE notification sent"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user and return JWT token
+      operationId: loginUser
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+              properties:
+                username:
+                  type: string
+                  description: Username or email
+                  example: "john.doe"
+                password:
+                  type: string
+                  format: password
+                  description: User password
+                  example: "securePassword123"
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Login successful"
+                  token:
+                    type: string
+                    description: JWT access token
+                    example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                  user:
+                    $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid credentials"
+        '403':
+          description: Email not verified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Please verify your email address before logging in. Check your inbox for a verification email."
+                  requiresEmailVerification:
+                    type: boolean
+                    example: true
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: User logout
+      description: Logout user and invalidate session
+      operationId: logoutUser
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logout successful
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Logout successful"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/profile:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user profile
+      description: Retrieve current authenticated user's profile information
+      operationId: getUserProfile
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "User not found"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/change-password:
+    post:
+      tags:
+        - Authentication
+      summary: Change user password
+      description: Change current user's password
+      operationId: changePassword
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - currentPassword
+                - newPassword
+              properties:
+                currentPassword:
+                  type: string
+                  format: password
+                  description: Current password
+                  example: "oldPassword123"
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 6
+                  description: New password (minimum 6 characters)
+                  example: "newPassword123"
+      responses:
+        '200':
+          description: Password changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Password changed successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Current password is incorrect
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Current password is incorrect"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "User not found"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/verify-email:
+    post:
+      tags:
+        - Authentication
+      summary: Verify email address
+      description: Verify user's email address using verification token
+      operationId: verifyEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - token
+              properties:
+                token:
+                  type: string
+                  description: Email verification token
+                  example: "abc123def456ghi789..."
+      responses:
+        '200':
+          description: Email verified successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Email verified successfully! You can now log in to your account."
+        '400':
+          description: Invalid or expired verification token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid or expired verification token"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /auth/resend-verification:
+    post:
+      tags:
+        - Authentication
+      summary: Resend verification email
+      description: Resend email verification token to user
+      operationId: resendVerificationEmail
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: User email address
+                  example: "john.doe@company.com"
+      responses:
+        '200':
+          description: Verification email sent successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Verification email sent successfully. Please check your inbox."
+        '400':
+          description: Email is already verified or invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Email is already verified"
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "User not found"
+        '429':
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Please wait 15 minutes before requesting another verification email"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ========== WORK REQUEST ENDPOINTS ==========
+  /workrequest:
+    get:
+      tags:
+        - Work Requests
+      summary: Get all work requests
+      description: Retrieve work requests with filtering, pagination, and sorting options
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: status
+          in: query
+          description: Filter by work request status ID
+          schema:
+            type: integer
+        - name: urgency
+          in: query
+          description: Filter by urgency level ID
+          schema:
+            type: integer
+        - name: requestType
+          in: query
+          description: Filter by request type ID
+          schema:
+            type: integer
+        - name: startDate
+          in: query
+          description: Filter by start date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: endDate
+          in: query
+          description: Filter by end date (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: search
+          in: query
+          description: Search in WR code, description, or requester name
+          schema:
+            type: string
+        - name: sortBy
+          in: query
+          description: Field to sort by
+          schema:
+            type: string
+            default: CREATEDATE
+            enum: [CREATEDATE, WRDATE, WRCODE, REQUESTERNAME]
+        - name: sortOrder
+          in: query
+          description: Sort order
+          schema:
+            type: string
+            default: DESC
+            enum: [ASC, DESC]
+      responses:
+        '200':
+          description: Successfully retrieved work requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkRequestListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      tags:
+        - Work Requests
+      summary: Create new work request with workflow
+      description: |
+        Create a new work request using the primary sp_WRMain_Insert stored procedure 
+        and automatically start the workflow process.
+        The system will:
+        1. Map current user to legacy Person table
+        2. Create work request via sp_WRMain_Insert (primary SP)
+        3. Initiate workflow routing
+        4. Return created work request details
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateWorkRequestRequest'
+      responses:
+        '201':
+          description: Work request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateWorkRequestResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/{id}:
+    get:
+      tags:
+        - Work Requests
+      summary: Get work request by ID
+      description: Retrieve detailed information about a specific work request
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Work request ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Work request found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkRequestDetailResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/{id}/workflow/status:
+    get:
+      tags:
+        - Workflow
+      summary: Get workflow status and available actions
+      description: |
+        Retrieve the current workflow status, available actions, and workflow history 
+        for a specific work request. Shows what actions the current user can perform.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Work request ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Workflow status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowStatusResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/{id}/workflow/action:
+    post:
+      tags:
+        - Workflow
+      summary: Execute workflow action
+      description: |
+        Execute a workflow action on a work request. Supported actions:
+        - **approve**: Approve the work request
+        - **reject**: Reject and return to requester
+        - **cancel**: Cancel the work request
+        - **generate_wo**: Generate work order from approved request
+        - **route**: Execute custom workflow routing
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Work request ID
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/WorkflowActionRequest'
+      responses:
+        '200':
+          description: Workflow action executed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowActionResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/workflow/my-tasks:
+    get:
+      tags:
+        - Workflow
+      summary: Get user's workflow tasks
+      description: |
+        Retrieve workflow tasks assigned to the current user.
+        Tasks can be filtered by type (pending, completed, all).
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          description: Page number for pagination
+          schema:
+            type: integer
+            default: 1
+            minimum: 1
+        - name: limit
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+            minimum: 1
+            maximum: 100
+        - name: taskType
+          in: query
+          description: Type of tasks to retrieve
+          schema:
+            type: string
+            default: pending
+            enum: [pending, completed, all]
+      responses:
+        '200':
+          description: Tasks retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkflowTasksResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/stats/overview:
+    get:
+      tags:
+        - Statistics
+      summary: Get work request statistics
+      description: Retrieve overview statistics for work requests including counts by status, urgency, and request type
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkRequestStatsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/types/list:
+    get:
+      tags:
+        - Master Data
+      summary: Get work request types
+      description: Retrieve list of available work request types
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Work request types retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkRequestTypesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/statuses/list:
+    get:
+      tags:
+        - Master Data
+      summary: Get work request statuses
+      description: Retrieve list of available work request statuses
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Work request statuses retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkRequestStatusesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/urgencies/list:
+    get:
+      tags:
+        - Master Data
+      summary: Get work request urgency levels
+      description: Retrieve list of available urgency levels
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Urgency levels retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkRequestUrgenciesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/categories/list:
+    get:
+      tags:
+        - Master Data
+      summary: Get work request categories
+      description: Retrieve list of available work request categories (request types)
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Categories retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkRequestCategoriesResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /workrequest/{id}/resources:
+    get:
+      tags:
+        - Work Requests
+      summary: Get work request resources
+      description: Retrieve resources (materials, labor, tools) associated with a work request
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Work request ID
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Resources retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WorkRequestResourcesResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ========== BACKLOG ENDPOINTS ==========
+  /backlog/assign:
+    get:
+      tags:
+        - Backlog
+      summary: Get backlog by department
+      description: Returns work order backlog grouped by department and status
+      operationId: getBacklogAssign
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: siteNo
+          in: query
+          description: Site number
+          required: false
+          schema:
+            type: integer
+            default: 3
+          example: 3
+      responses:
+        '200':
+          description: Backlog data by department retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      backlog:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            woStatusName:
+                              type: string
+                              example: "Scheduled"
+                            woStatusNo:
+                              type: integer
+                              example: 3
+                            deptCode:
+                              type: string
+                              example: "REL-DRY"
+                            count:
+                              type: integer
+                              example: 594
+                            total:
+                              type: integer
+                              example: 2360
+                      summary:
+                        type: object
+                        properties:
+                          totalWorkOrders:
+                            type: number
+                            example: 2360
+                          totalDepartments:
+                            type: integer
+                            example: 5
+                          siteNo:
+                            type: integer
+                            example: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /backlog/assign/lv1:
+    get:
+      tags:
+        - Backlog
+      summary: Get backlog by department - Level 1 detail
+      description: Returns detailed work order information for a specific department
+      operationId: getBacklogAssignLv1
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: siteNo
+          in: query
+          description: Site number
+          required: false
+          schema:
+            type: integer
+            default: 3
+          example: 3
+        - name: deptCode
+          in: query
+          description: Department code
+          required: true
+          schema:
+            type: string
+          example: "REL-PP"
+      responses:
+        '200':
+          description: Detailed backlog data by department retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            wono:
+                              type: integer
+                              example: 201636
+                            woCode:
+                              type: string
+                              example: "WO24-000002"
+                            deptCode:
+                              type: string
+                              example: "REL-PP"
+                            woStatusName:
+                              type: string
+                              example: "Finish"
+                            symptom:
+                              type: string
+                              example: "pump leak"
+                            puName:
+                              type: string
+                              example: "Volumetic Pump of Filler 1"
+                      summary:
+                        type: object
+                        properties:
+                          totalWorkOrders:
+                            type: integer
+                            example: 10
+                          department:
+                            type: string
+                            example: "REL-PP"
+                          siteNo:
+                            type: integer
+                            example: 3
+                          statusBreakdown:
+                            type: object
+                            example:
+                              "Finish": 2
+                              "Scheduled": 5
+                              "In Progress": 3
+        '400':
+          description: Bad request - missing required parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "deptCode parameter is required"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /backlog/assignto:
+    get:
+      tags:
+        - Backlog
+      summary: Get backlog by user
+      description: Returns work order backlog grouped by assigned user and status
+      operationId: getBacklogAssignTo
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: siteNo
+          in: query
+          description: Site number
+          required: false
+          schema:
+            type: integer
+            default: 3
+          example: 3
+      responses:
+        '200':
+          description: Backlog data by user retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      backlog:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            woStatusName:
+                              type: string
+                              example: "Scheduled"
+                            woStatusNo:
+                              type: integer
+                              example: 3
+                            personName:
+                              type: string
+                              example: "Aree Tatongjai"
+                            count:
+                              type: integer
+                              example: 675
+                            total:
+                              type: integer
+                              example: 865
+                      summary:
+                        type: object
+                        properties:
+                          totalWorkOrders:
+                            type: number
+                            example: 865
+                          totalUsers:
+                            type: integer
+                            example: 4
+                          siteNo:
+                            type: integer
+                            example: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /backlog/assignto/lv1:
+    get:
+      tags:
+        - Backlog
+      summary: Get backlog by user - Level 1 detail
+      description: Returns detailed work order information for a specific user
+      operationId: getBacklogAssignToLv1
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: siteNo
+          in: query
+          description: Site number
+          required: false
+          schema:
+            type: integer
+            default: 3
+          example: 3
+        - name: personName
+          in: query
+          description: Person name
+          required: true
+          schema:
+            type: string
+          example: "Aree Tatongjai"
+      responses:
+        '200':
+          description: Detailed backlog data by user retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      details:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            wono:
+                              type: integer
+                              example: 201427
+                            woCode:
+                              type: string
+                              example: "PM23-000236"
+                            personName:
+                              type: string
+                              example: "Aree Tatongjai"
+                            woStatusName:
+                              type: string
+                              example: "Scheduled"
+                            symptom:
+                              type: string
+                              example: "Engine Fire Pump inspection & Test runing"
+                      summary:
+                        type: object
+                        properties:
+                          totalWorkOrders:
+                            type: integer
+                            example: 10
+                          personName:
+                            type: string
+                            example: "Aree Tatongjai"
+                          siteNo:
+                            type: integer
+                            example: 3
+                          statusBreakdown:
+                            type: object
+                            example:
+                              "Scheduled": 8
+                              "Finish": 1
+                              "In Progress": 1
+        '400':
+          description: Bad request - missing required parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "personName parameter is required"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ========== DASHBOARD ENDPOINTS ==========
+  /dashboard/workorder-volume-trend:
+    get:
+      tags:
+        - Dashboard
+      summary: Get Work Order Volume Trend
+      description: |
+        Returns aggregated work order counts over time with filtering options.
+        Supports daily, weekly, and period grouping with filters for work order type,
+        department, site, and assignment.
+        
+        **Period System**: Each period is 28 days starting from the first Sunday of the year.
+        Weeks start on Sunday and end on Saturday.
+      operationId: getWorkOrderVolumeTrend
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          description: Start date for filtering (YYYY-MM-DD format)
+          required: false
+          schema:
+            type: string
+            format: date
+          example: "2024-01-01"
+        - name: endDate
+          in: query
+          description: End date for filtering (YYYY-MM-DD format)
+          required: false
+          schema:
+            type: string
+            format: date
+          example: "2024-12-31"
+        - name: groupBy
+          in: query
+          description: Grouping interval for the trend data
+          required: false
+          schema:
+            type: string
+            enum: [daily, weekly, period]
+            default: daily
+          example: "daily"
+        - name: woType
+          in: query
+          description: Filter by work order type ID
+          required: false
+          schema:
+            type: integer
+          example: 1
+        - name: department
+          in: query
+          description: Filter by department ID
+          required: false
+          schema:
+            type: integer
+          example: 2
+        - name: site
+          in: query
+          description: Filter by site ID
+          required: false
+          schema:
+            type: integer
+          example: 1
+        - name: assign
+          in: query
+          description: Filter by assigned user ID
+          required: false
+          schema:
+            type: integer
+          example: 21
+      responses:
+        '200':
+          description: Work order volume trend data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      trend:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            date:
+                              type: string
+                              description: Date/period identifier
+                              example: "2024-01-15"
+                            count:
+                              type: integer
+                              description: Number of work orders for this period
+                              example: 25
+                            periodStart:
+                              type: string
+                              format: date
+                              description: Start of the period
+                              example: "2024-01-15"
+                            periodEnd:
+                              type: string
+                              format: date
+                              description: End of the period
+                              example: "2024-01-15"
+                            year:
+                              type: integer
+                              description: Year (for weekly/monthly grouping)
+                              example: 2024
+                            week:
+                              type: integer
+                              description: Week number (for weekly grouping)
+                              example: 3
+                            month:
+                              type: integer
+                              description: Month number (for monthly grouping)
+                              example: 1
+                      filters:
+                        type: object
+                        properties:
+                          woTypes:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 1
+                                code:
+                                  type: string
+                                  example: "CM"
+                                name:
+                                  type: string
+                                  example: "Corrective Maintenance"
+                          departments:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 1
+                                code:
+                                  type: string
+                                  example: "PROD"
+                                name:
+                                  type: string
+                                  example: "Production"
+                          sites:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 1
+                                code:
+                                  type: string
+                                  example: "SITE1"
+                                name:
+                                  type: string
+                                  example: "Main Site"
+                      summary:
+                        type: object
+                        properties:
+                          totalWorkOrders:
+                            type: integer
+                            description: Total work orders in the filtered dataset
+                            example: 150
+                          dateRange:
+                            type: object
+                            properties:
+                              start:
+                                type: string
+                                format: date
+                                example: "2024-01-01"
+                              end:
+                                type: string
+                                format: date
+                                example: "2024-12-31"
+                          groupBy:
+                            type: string
+                            example: "daily"
+                          appliedFilters:
+                            type: object
+                            properties:
+                              woType:
+                                type: integer
+                                example: 1
+                              department:
+                                type: integer
+                                example: 2
+                              site:
+                                type: integer
+                                example: 1
+                              assign:
+                                type: integer
+                                example: 21
+              example:
+                success: true
+                data:
+                  trend:
+                    - date: "2024-01-15"
+                      count: 25
+                      periodStart: "2024-01-15"
+                      periodEnd: "2024-01-15"
+                    - date: "2024-01-16"
+                      count: 18
+                      periodStart: "2024-01-16"
+                      periodEnd: "2024-01-16"
+                    - date: "2024-01-17"
+                      count: 32
+                      periodStart: "2024-01-17"
+                      periodEnd: "2024-01-17"
+                  filters:
+                    woTypes:
+                      - id: 1
+                        code: "CM"
+                        name: "Corrective Maintenance"
+                      - id: 2
+                        code: "PM"
+                        name: "Preventive Maintenance"
+                    departments:
+                      - id: 1
+                        code: "PROD"
+                        name: "Production"
+                      - id: 2
+                        code: "MAINT"
+                        name: "Maintenance"
+                    sites:
+                      - id: 1
+                        code: "SITE1"
+                        name: "Main Site"
+                      - id: 2
+                        code: "SITE2"
+                        name: "Secondary Site"
+                  summary:
+                    totalWorkOrders: 75
+                    dateRange:
+                      start: "2024-01-15"
+                      end: "2024-01-17"
+                    groupBy: "daily"
+                    appliedFilters:
+                      woType: 1
+                      department: 2
+                      site: 1
+                      assign: 21
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /dashboard/workorder-volume:
+    get:
+      tags:
+        - Dashboard
+      summary: Get Work Order Volume Statistics
+      description: |
+        Returns work order statistics grouped by company year and period with comprehensive filtering options.
+        Provides detailed metrics including work order counts, status breakdowns, on-time performance,
+        and downtime analysis.
+        
+        **Period System**: Each period is 28 days starting from the first Sunday of the year.
+        Statistics are grouped by CompanyYear and PeriodNo for detailed analysis.
+      operationId: getWorkOrderVolume
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: companyYear
+          in: query
+          description: Filter by company year (required)
+          required: true
+          schema:
+            type: integer
+          example: 2024
+        - name: assignee
+          in: query
+          description: Filter by assigned user ID (NULL means all assignees)
+          required: false
+          schema:
+            type: integer
+          example: 21
+        - name: woTypeNo
+          in: query
+          description: Filter by work order type ID (NULL means all types)
+          required: false
+          schema:
+            type: integer
+          example: 1
+        - name: deptno
+          in: query
+          description: Filter by department ID (NULL means all departments)
+          required: false
+          schema:
+            type: integer
+          example: 2
+        - name: puno
+          in: query
+          description: Filter by production unit ID (NULL means all production units)
+          required: false
+          schema:
+            type: integer
+          example: 3
+      responses:
+        '200':
+          description: Work order volume statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      statistics:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            companyYear:
+                              type: integer
+                              description: Company year
+                              example: 2024
+                            periodNo:
+                              type: integer
+                              description: Period number within the year
+                              example: 5
+                            woCount:
+                              type: integer
+                              description: Total work order count for this period
+                              example: 45
+                            hasWR:
+                              type: integer
+                              description: Count of work orders with work requests
+                              example: 38
+                            history:
+                              type: integer
+                              description: Count of work orders in history status
+                              example: 25
+                            canceled:
+                              type: integer
+                              description: Count of canceled work orders
+                              example: 2
+                            closeToHistory:
+                              type: integer
+                              description: Count of work orders close to history
+                              example: 3
+                            finish:
+                              type: integer
+                              description: Count of finished work orders
+                              example: 20
+                            inProgress:
+                              type: integer
+                              description: Count of work orders in progress
+                              example: 8
+                            scheduled:
+                              type: integer
+                              description: Count of scheduled work orders
+                              example: 5
+                            planResource:
+                              type: integer
+                              description: Count of work orders in plan resource status
+                              example: 3
+                            workInitiated:
+                              type: integer
+                              description: Count of work initiated work orders
+                              example: 2
+                            hasWR_OnTime:
+                              type: integer
+                              description: Count of work orders with WR completed on time
+                              example: 30
+                            hasWR_Late:
+                              type: integer
+                              description: Count of work orders with WR completed late
+                              example: 8
+                            onTimeRatePct:
+                              type: number
+                              format: decimal
+                              description: On-time completion rate percentage
+                              example: 78.95
+                            downtime:
+                              type: number
+                              format: decimal
+                              description: Total downtime duration in hours
+                              example: 12.5
+                      filters:
+                        type: object
+                        description: Available filter options for frontend dropdowns
+                        properties:
+                          assignees:
+                            type: array
+                            description: List of users who have been assigned work orders
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 21
+                                name:
+                                  type: string
+                                  example: "John Doe"
+                          woTypes:
+                            type: array
+                            description: Available work order types
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 1
+                                code:
+                                  type: string
+                                  example: "CM"
+                                name:
+                                  type: string
+                                  example: "Corrective Maintenance"
+                          departments:
+                            type: array
+                            description: Available departments
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 1
+                                code:
+                                  type: string
+                                  example: "PROD"
+                                name:
+                                  type: string
+                                  example: "Production"
+                          productionUnits:
+                            type: array
+                            description: Available production units
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 1
+                                name:
+                                  type: string
+                                  example: "Unit A"
+                          companyYears:
+                            type: array
+                            description: Available company years for filtering
+                            items:
+                              type: integer
+                            example: [2024, 2023, 2022]
+                      summary:
+                        type: object
+                        properties:
+                          totalRecords:
+                            type: integer
+                            description: Total number of period records returned
+                            example: 13
+                          totalWorkOrders:
+                            type: integer
+                            description: Total work orders across all periods
+                            example: 585
+                          totalWithWR:
+                            type: integer
+                            description: Total work orders with work requests
+                            example: 494
+                          totalOnTime:
+                            type: integer
+                            description: Total work orders completed on time
+                            example: 390
+                          totalLate:
+                            type: integer
+                            description: Total work orders completed late
+                            example: 104
+                          totalDowntime:
+                            type: number
+                            format: decimal
+                            description: Total downtime across all periods
+                            example: 156.75
+                          appliedFilters:
+                            type: object
+                            properties:
+                              companyYear:
+                                type: integer
+                                example: 2024
+                              assignee:
+                                type: integer
+                                example: 21
+                              woTypeNo:
+                                type: integer
+                                example: 1
+                              deptno:
+                                type: integer
+                                example: 2
+                              puno:
+                                type: integer
+                                example: 3
+              example:
+                success: true
+                data:
+                  statistics:
+                    - companyYear: 2024
+                      periodNo: 1
+                      woCount: 42
+                      hasWR: 35
+                      history: 28
+                      canceled: 1
+                      closeToHistory: 2
+                      finish: 25
+                      inProgress: 6
+                      scheduled: 4
+                      planResource: 2
+                      workInitiated: 1
+                      hasWR_OnTime: 30
+                      hasWR_Late: 5
+                      onTimeRatePct: 85.71
+                      downtime: 8.5
+                    - companyYear: 2024
+                      periodNo: 2
+                      woCount: 38
+                      hasWR: 32
+                      history: 24
+                      canceled: 2
+                      closeToHistory: 1
+                      finish: 22
+                      inProgress: 5
+                      scheduled: 3
+                      planResource: 2
+                      workInitiated: 1
+                      hasWR_OnTime: 26
+                      hasWR_Late: 6
+                      onTimeRatePct: 81.25
+                      downtime: 7.25
+                  filters:
+                    assignees:
+                      - id: 21
+                        name: "John Doe"
+                      - id: 22
+                        name: "Jane Smith"
+                    woTypes:
+                      - id: 1
+                        code: "CM"
+                        name: "Corrective Maintenance"
+                      - id: 2
+                        code: "PM"
+                        name: "Preventive Maintenance"
+                    departments:
+                      - id: 1
+                        code: "PROD"
+                        name: "Production"
+                      - id: 2
+                        code: "MAINT"
+                        name: "Maintenance"
+                    productionUnits:
+                      - id: 1
+                        name: "Unit A"
+                      - id: 2
+                        name: "Unit B"
+                    companyYears: [2024, 2023, 2022]
+                  summary:
+                    totalRecords: 13
+                    totalWorkOrders: 585
+                    totalWithWR: 494
+                    totalOnTime: 390
+                    totalLate: 104
+                    totalDowntime: 156.75
+                    appliedFilters:
+                      companyYear: 2024
+                      assignee: 21
+                      woTypeNo: 1
+                      deptno: 2
+                      puno: 3
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /dashboard/workorder-volume/personal:
+    get:
+      tags:
+        - Dashboard
+      summary: Get Personal Work Order Volume Statistics
+      description: |
+        Returns work order statistics grouped by assignee within the selected department.
+        This endpoint provides personal performance metrics for each team member in the department.
+        Both company year and department are required parameters.
+      operationId: getPersonalWorkOrderVolume
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: companyYear
+          in: query
+          description: Filter by company year (required)
+          required: true
+          schema:
+            type: integer
+          example: 2024
+        - name: deptno
+          in: query
+          description: Filter by department number (required)
+          required: true
+          schema:
+            type: integer
+          example: 2
+        - name: assignee
+          in: query
+          description: Filter by assigned user ID (optional)
+          required: false
+          schema:
+            type: integer
+          example: 21
+        - name: woTypeNo
+          in: query
+          description: Filter by work order type number (optional)
+          required: false
+          schema:
+            type: integer
+          example: 1
+        - name: puno
+          in: query
+          description: Filter by production unit number (optional)
+          required: false
+          schema:
+            type: integer
+          example: 3
+      responses:
+        '200':
+          description: Personal work order statistics grouped by assignee
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      statistics:
+                        type: array
+                        description: Personal work order statistics grouped by assignee
+                        items:
+                          type: object
+                          properties:
+                            assigneeId:
+                              type: integer
+                              description: Assignee user ID
+                              example: 21
+                            assignee:
+                              type: string
+                              description: Assignee name
+                              example: "John Doe"
+                            woCount:
+                              type: integer
+                              description: Total work orders assigned
+                              example: 45
+                            hasWR:
+                              type: integer
+                              description: Count of work orders with work requests
+                              example: 38
+                            history:
+                              type: integer
+                              description: Count of completed work orders
+                              example: 32
+                            closeToHistory:
+                              type: integer
+                              description: Count of work orders close to completion
+                              example: 2
+                            finish:
+                              type: integer
+                              description: Count of finished work orders
+                              example: 30
+                            inProgress:
+                              type: integer
+                              description: Count of work orders in progress
+                              example: 6
+                            scheduled:
+                              type: integer
+                              description: Count of scheduled work orders
+                              example: 4
+                            planResource:
+                              type: integer
+                              description: Count of work orders in plan resource status
+                              example: 2
+                            workInitiated:
+                              type: integer
+                              description: Count of work initiated work orders
+                              example: 1
+                            canceled:
+                              type: integer
+                              description: Count of canceled work orders
+                              example: 1
+                            created:
+                              type: integer
+                              description: Count of created work orders
+                              example: 0
+                            hasWR_OnTime:
+                              type: integer
+                              description: Count of work orders with WR completed on time
+                              example: 30
+                            hasWR_Late:
+                              type: integer
+                              description: Count of work orders with WR completed late
+                              example: 8
+                            onTimeRatePct:
+                              type: number
+                              format: decimal
+                              description: On-time completion rate percentage
+                              example: 78.95
+                            downtime:
+                              type: number
+                              format: decimal
+                              description: Total downtime duration in hours
+                              example: 12.5
+                      summary:
+                        type: object
+                        properties:
+                          totalRecords:
+                            type: integer
+                            description: Total number of assignees returned
+                            example: 5
+                          totalWorkOrders:
+                            type: integer
+                            description: Total work orders across all assignees
+                            example: 185
+                          totalWithWR:
+                            type: integer
+                            description: Total work orders with work requests
+                            example: 156
+                          totalOnTime:
+                            type: integer
+                            description: Total work orders completed on time
+                            example: 120
+                          totalLate:
+                            type: integer
+                            description: Total work orders completed late
+                            example: 36
+                          totalDowntime:
+                            type: number
+                              format: decimal
+                            description: Total downtime across all assignees
+                            example: 45.75
+                          appliedFilters:
+                            type: object
+                            properties:
+                              companyYear:
+                                type: integer
+                                example: 2024
+                              assignee:
+                                type: integer
+                                example: 21
+                              woTypeNo:
+                                type: integer
+                                example: 1
+                              deptno:
+                                type: integer
+                                example: 2
+                              puno:
+                                type: integer
+                                example: 3
+              example:
+                success: true
+                data:
+                  statistics:
+                    - assigneeId: 21
+                      assignee: "John Doe"
+                      woCount: 45
+                      hasWR: 38
+                      history: 32
+                      canceled: 1
+                      closeToHistory: 2
+                      finish: 30
+                      inProgress: 6
+                      scheduled: 4
+                      planResource: 2
+                      workInitiated: 1
+                      created: 0
+                      hasWR_OnTime: 30
+                      hasWR_Late: 8
+                      onTimeRatePct: 78.95
+                      downtime: 12.5
+                    - assigneeId: 22
+                      assignee: "Jane Smith"
+                      woCount: 38
+                      hasWR: 32
+                      history: 28
+                      canceled: 2
+                      closeToHistory: 1
+                      finish: 25
+                      inProgress: 5
+                      scheduled: 3
+                      planResource: 2
+                      workInitiated: 1
+                      created: 0
+                      hasWR_OnTime: 26
+                      hasWR_Late: 6
+                      onTimeRatePct: 81.25
+                      downtime: 8.25
+                  summary:
+                    totalRecords: 2
+                    totalWorkOrders: 83
+                    totalWithWR: 70
+                    totalOnTime: 56
+                    totalLate: 14
+                    totalDowntime: 20.75
+                    appliedFilters:
+                      companyYear: 2024
+                      assignee: null
+                      woTypeNo: null
+                      deptno: 2
+                      puno: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /dashboard/workorder-volume/personal/period:
+    get:
+      tags:
+        - Dashboard
+      summary: Get Personal Work Order Volume Statistics by Period
+      description: |
+        Returns work order statistics grouped by assignee and period within the selected department.
+        This endpoint provides time-series personal performance metrics showing how each team member
+        performed across different periods. Both company year and department are required parameters.
+      operationId: getPersonalWorkOrderVolumeByPeriod
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: companyYear
+          in: query
+          description: Filter by company year (required)
+          required: true
+          schema:
+            type: integer
+          example: 2024
+        - name: deptno
+          in: query
+          description: Filter by department number (required)
+          required: true
+          schema:
+            type: integer
+          example: 2
+        - name: assignee
+          in: query
+          description: Filter by assigned user ID (optional)
+          required: false
+          schema:
+            type: integer
+          example: 21
+        - name: woTypeNo
+          in: query
+          description: Filter by work order type number (optional)
+          required: false
+          schema:
+            type: integer
+          example: 1
+        - name: puno
+          in: query
+          description: Filter by production unit number (optional)
+          required: false
+          schema:
+            type: integer
+          example: 3
+      responses:
+        '200':
+          description: Personal work order statistics grouped by assignee and period
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      statistics:
+                        type: array
+                        description: Personal work order statistics grouped by assignee and period
+                        items:
+                          type: object
+                          properties:
+                            assigneeId:
+                              type: integer
+                              description: Assignee user ID
+                              example: 21
+                            assignee:
+                              type: string
+                              description: Assignee name
+                              example: "John Doe"
+                            companyYear:
+                              type: integer
+                              description: Company year
+                              example: 2024
+                            periodNo:
+                              type: integer
+                              description: Period number
+                              example: 1
+                            woCount:
+                              type: integer
+                              description: Total work orders assigned in this period
+                              example: 15
+                            hasWR:
+                              type: integer
+                              description: Count of work orders with work requests
+                              example: 12
+                            history:
+                              type: integer
+                              description: Count of completed work orders
+                              example: 10
+                            closeToHistory:
+                              type: integer
+                              description: Count of work orders close to completion
+                              example: 1
+                            finish:
+                              type: integer
+                              description: Count of finished work orders
+                              example: 9
+                            inProgress:
+                              type: integer
+                              description: Count of work orders in progress
+                              example: 2
+                            scheduled:
+                              type: integer
+                              description: Count of scheduled work orders
+                              example: 1
+                            planResource:
+                              type: integer
+                              description: Count of work orders in plan resource status
+                              example: 1
+                            workInitiated:
+                              type: integer
+                              description: Count of work initiated work orders
+                              example: 0
+                            canceled:
+                              type: integer
+                              description: Count of canceled work orders
+                              example: 0
+                            created:
+                              type: integer
+                              description: Count of created work orders
+                              example: 0
+                            hasWR_OnTime:
+                              type: integer
+                              description: Count of work orders with WR completed on time
+                              example: 8
+                            hasWR_Late:
+                              type: integer
+                              description: Count of work orders with WR completed late
+                              example: 4
+                            onTimeRatePct:
+                              type: number
+                              format: decimal
+                              description: On-time completion rate percentage
+                              example: 66.67
+                            downtime:
+                              type: number
+                              format: decimal
+                              description: Total downtime duration in hours
+                              example: 4.5
+                      summary:
+                        type: object
+                        properties:
+                          totalRecords:
+                            type: integer
+                            description: Total number of assignee-period records returned
+                            example: 26
+                          totalWorkOrders:
+                            type: integer
+                            description: Total work orders across all assignees and periods
+                            example: 185
+                          totalWithWR:
+                            type: integer
+                            description: Total work orders with work requests
+                            example: 156
+                          totalOnTime:
+                            type: integer
+                            description: Total work orders completed on time
+                            example: 120
+                          totalLate:
+                            type: integer
+                            description: Total work orders completed late
+                            example: 36
+                          totalDowntime:
+                            type: number
+                              format: decimal
+                            description: Total downtime across all assignees and periods
+                            example: 45.75
+                          appliedFilters:
+                            type: object
+                            properties:
+                              companyYear:
+                                type: integer
+                                example: 2024
+                              assignee:
+                                type: integer
+                                example: 21
+                              woTypeNo:
+                                type: integer
+                                example: 1
+                              deptno:
+                                type: integer
+                                example: 2
+                              puno:
+                                type: integer
+                                example: 3
+              example:
+                success: true
+                data:
+                  statistics:
+                    - assigneeId: 21
+                      assignee: "John Doe"
+                      companyYear: 2024
+                      periodNo: 1
+                      woCount: 15
+                      hasWR: 12
+                      history: 10
+                      canceled: 0
+                      closeToHistory: 1
+                      finish: 9
+                      inProgress: 2
+                      scheduled: 1
+                      planResource: 1
+                      workInitiated: 0
+                      created: 0
+                      hasWR_OnTime: 8
+                      hasWR_Late: 4
+                      onTimeRatePct: 66.67
+                      downtime: 4.5
+                    - assigneeId: 21
+                      assignee: "John Doe"
+                      companyYear: 2024
+                      periodNo: 2
+                      woCount: 18
+                      hasWR: 15
+                      history: 12
+                      canceled: 1
+                      closeToHistory: 0
+                      finish: 11
+                      inProgress: 3
+                      scheduled: 2
+                      planResource: 1
+                      workInitiated: 1
+                      created: 0
+                      hasWR_OnTime: 10
+                      hasWR_Late: 5
+                      onTimeRatePct: 66.67
+                      downtime: 5.2
+                    - assigneeId: 22
+                      assignee: "Jane Smith"
+                      companyYear: 2024
+                      periodNo: 1
+                      woCount: 12
+                      hasWR: 10
+                      history: 8
+                      canceled: 0
+                      closeToHistory: 1
+                      finish: 7
+                      inProgress: 2
+                      scheduled: 1
+                      planResource: 1
+                      workInitiated: 0
+                      created: 0
+                      hasWR_OnTime: 7
+                      hasWR_Late: 3
+                      onTimeRatePct: 70.00
+                      downtime: 3.1
+                  summary:
+                    totalRecords: 3
+                    totalWorkOrders: 45
+                    totalWithWR: 37
+                    totalOnTime: 25
+                    totalLate: 12
+                    totalDowntime: 12.8
+                    appliedFilters:
+                      companyYear: 2024
+                      assignee: null
+                      woTypeNo: null
+                      deptno: 2
+                      puno: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /dashboard/workorder-volume/filter-options:
+    get:
+      tags:
+        - Dashboard
+      summary: Get Work Order Volume Filter Options
+      description: |
+        Returns available filter options for the work order volume dashboard with cascading filter support.
+        This endpoint should be called when the page loads and whenever filters change to update
+        available options. The main chart data is fetched separately using the workorder-volume endpoint.
+        
+        **Cascading Filters**: Each filter selection dynamically updates available options for other filters.
+        For example, selecting a company year will only show departments, users, and WO types that
+        have records in that year.
+      operationId: getWorkOrderVolumeFilterOptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: companyYear
+          in: query
+          description: Current company year filter (affects other filter options)
+          required: false
+          schema:
+            type: integer
+          example: 2024
+        - name: assignee
+          in: query
+          description: Current assignee filter (affects other filter options)
+          required: false
+          schema:
+            type: integer
+          example: 21
+        - name: woTypeNo
+          in: query
+          description: Current work order type filter (affects other filter options)
+          required: false
+          schema:
+            type: integer
+          example: 1
+        - name: deptno
+          in: query
+          description: Current department filter (affects other filter options)
+          required: false
+          schema:
+            type: integer
+          example: 2
+        - name: puno
+          in: query
+          description: Current production unit filter (affects other filter options)
+          required: false
+          schema:
+            type: integer
+          example: 3
+      responses:
+        '200':
+          description: Filter options retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      filters:
+                        type: object
+                        description: Available filter options based on current filter context
+                        properties:
+                          assignees:
+                            type: array
+                            description: Available assignees based on current filters
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 21
+                                name:
+                                  type: string
+                                  example: "John Doe"
+                          woTypes:
+                            type: array
+                            description: Available work order types based on current filters
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 1
+                                code:
+                                  type: string
+                                  example: "CM"
+                                name:
+                                  type: string
+                                  example: "Corrective Maintenance"
+                          departments:
+                            type: array
+                            description: Available departments based on current filters
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 1
+                                code:
+                                  type: string
+                                  example: "PROD"
+                                name:
+                                  type: string
+                                  example: "Production"
+                          productionUnits:
+                            type: array
+                            description: Available production units based on current filters
+                            items:
+                              type: object
+                              properties:
+                                id:
+                                  type: integer
+                                  example: 1
+                                name:
+                                  type: string
+                                  example: "Unit A"
+                          companyYears:
+                            type: array
+                            description: Available company years that have work order records
+                            items:
+                              type: integer
+                            example: [2024, 2023, 2022]
+                      appliedFilters:
+                        type: object
+                        description: Currently applied filter values
+                        properties:
+                          companyYear:
+                            type: integer
+                            example: 2024
+                          assignee:
+                            type: integer
+                            example: 21
+                          woTypeNo:
+                            type: integer
+                            example: 1
+                          deptno:
+                            type: integer
+                            example: 2
+                          puno:
+                            type: integer
+                            example: 3
+              example:
+                success: true
+                data:
+                  filters:
+                    assignees:
+                      - id: 21
+                        name: "John Doe"
+                      - id: 22
+                        name: "Jane Smith"
+                    woTypes:
+                      - id: 1
+                        code: "CM"
+                        name: "Corrective Maintenance"
+                      - id: 2
+                        code: "PM"
+                        name: "Preventive Maintenance"
+                    departments:
+                      - id: 1
+                        code: "PROD"
+                        name: "Production"
+                      - id: 2
+                        code: "MAINT"
+                        name: "Maintenance"
+                    productionUnits:
+                      - id: 1
+                        name: "Unit A"
+                      - id: 2
+                        name: "Unit B"
+                    companyYears: [2024, 2023, 2022]
+                  appliedFilters:
+                    companyYear: 2024
+                    assignee: 21
+                    woTypeNo: 1
+                    deptno: 2
+                    puno: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /dashboard/current-company-year:
+    get:
+      tags:
+        - Dashboard
+      summary: Get Current Company Year
+      description: |
+        Returns the current company year based on today's date using the database function `dbo.fn_CompanyYearOfDate`.
+        This endpoint helps the frontend determine which company year to use as the default filter
+        for dashboard queries and reports.
+      operationId: getCurrentCompanyYear
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current company year retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      currentCompanyYear:
+                        type: integer
+                        description: The current company year based on today's date
+                        example: 2024
+                      today:
+                        type: string
+                        format: date
+                        description: Today's date in YYYY-MM-DD format
+                        example: "2024-01-15"
+                      timestamp:
+                        type: string
+                        format: date-time
+                        description: Current timestamp in ISO format
+                        example: "2024-01-15T10:30:00.000Z"
+              example:
+                success: true
+                data:
+                  currentCompanyYear: 2024
+                  today: "2024-01-15"
+                  timestamp: "2024-01-15T10:30:00.000Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /dashboard/af:
+    get:
+      tags:
+        - Dashboard
+      summary: Get Abnormal Finding Dashboard KPIs
+      description: |
+        Returns comprehensive KPIs for abnormal finding tickets with comparison data between current and previous periods.
+        Provides ticket counts, closure rates, cost avoidance, downtime avoidance, and top performer information.
+        
+        **Key Features**:
+        - Current vs Previous period comparison
+        - Top reporter, cost saver, and downtime saver identification
+        - Avatar URLs included for user profiles
+        - Area-based filtering support
+        - Growth rate calculations for all metrics
+        
+        **Status Definitions**:
+        - **Closed**: status IN ('closed', 'completed')
+        - **Pending**: status IN ('open', 'in_progress')
+        
+        **Permissions**: Requires TKT form view permission
+      operationId: getAbnormalFindingKPIs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: startDate
+          in: query
+          description: Start date for current period (YYYY-MM-DD format)
+          required: true
+          schema:
+            type: string
+            format: date
+          example: "2024-01-01"
+        - name: endDate
+          in: query
+          description: End date for current period (YYYY-MM-DD format)
+          required: true
+          schema:
+            type: string
+            format: date
+          example: "2024-01-31"
+        - name: compare_startDate
+          in: query
+          description: Start date for comparison period (YYYY-MM-DD format)
+          required: false
+          schema:
+            type: string
+            format: date
+          example: "2023-12-01"
+        - name: compare_endDate
+          in: query
+          description: End date for comparison period (YYYY-MM-DD format)
+          required: false
+          schema:
+            type: string
+            format: date
+          example: "2023-12-31"
+        - name: area_id
+          in: query
+          description: Filter by specific area ID
+          required: false
+          schema:
+            type: integer
+          example: 1
+      responses:
+        '200':
+          description: Abnormal finding KPIs retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      kpis:
+                        type: object
+                        description: Key Performance Indicators for current and comparison periods
+                        properties:
+                          totalTicketsThisPeriod:
+                            type: integer
+                            description: Total tickets in current period
+                            example: 150
+                          totalTicketsLastPeriod:
+                            type: integer
+                            description: Total tickets in comparison period
+                            example: 120
+                          closedTicketsThisPeriod:
+                            type: integer
+                            description: Closed tickets in current period
+                            example: 100
+                          closedTicketsLastPeriod:
+                            type: integer
+                            description: Closed tickets in comparison period
+                            example: 80
+                          pendingTicketsThisPeriod:
+                            type: integer
+                            description: Pending tickets in current period
+                            example: 50
+                          pendingTicketsLastPeriod:
+                            type: integer
+                            description: Pending tickets in comparison period
+                            example: 40
+                          totalDowntimeAvoidanceThisPeriod:
+                            type: number
+                            format: decimal
+                            description: Total downtime avoidance hours in current period
+                            example: 250.5
+                          totalDowntimeAvoidanceLastPeriod:
+                            type: number
+                            format: decimal
+                            description: Total downtime avoidance hours in comparison period
+                            example: 200.0
+                          totalCostAvoidanceThisPeriod:
+                            type: number
+                            format: decimal
+                            description: Total cost avoidance in current period
+                            example: 50000.00
+                          totalCostAvoidanceLastPeriod:
+                            type: number
+                            format: decimal
+                            description: Total cost avoidance in comparison period
+                            example: 40000.00
+                      topPerformers:
+                        type: object
+                        description: Top performing users in current period
+                        properties:
+                          topReporter:
+                            type: object
+                            nullable: true
+                            description: User with most tickets created
+                            properties:
+                              personno:
+                                type: integer
+                                description: Person number
+                                example: 21
+                              personName:
+                                type: string
+                                description: Full name of the person
+                                example: "John Doe"
+                              avatarUrl:
+                                type: string
+                                nullable: true
+                                description: URL to user's avatar image
+                                example: "/uploads/avatars/21/profile.jpg"
+                              ticketCount:
+                                type: integer
+                                description: Number of tickets created
+                                example: 25
+                          topCostSaver:
+                            type: object
+                            nullable: true
+                            description: User with highest cost savings
+                            properties:
+                              personno:
+                                type: integer
+                                description: Person number
+                                example: 15
+                              personName:
+                                type: string
+                                description: Full name of the person
+                                example: "Jane Smith"
+                              avatarUrl:
+                                type: string
+                                nullable: true
+                                description: URL to user's avatar image
+                                example: "/uploads/avatars/15/profile.jpg"
+                              totalSavings:
+                                type: number
+                                format: decimal
+                                description: Total cost savings achieved
+                                example: 15000.00
+                          topDowntimeSaver:
+                            type: object
+                            nullable: true
+                            description: User with highest downtime savings
+                            properties:
+                              personno:
+                                type: integer
+                                description: Person number
+                                example: 8
+                              personName:
+                                type: string
+                                description: Full name of the person
+                                example: "Mike Johnson"
+                              avatarUrl:
+                                type: string
+                                nullable: true
+                                description: URL to user's avatar image
+                                example: "/uploads/avatars/8/profile.jpg"
+                              totalDowntimeSaved:
+                                type: number
+                                format: decimal
+                                description: Total downtime hours saved
+                                example: 45.5
+                      periodInfo:
+                        type: object
+                        description: Information about the periods being compared
+                        properties:
+                          currentPeriod:
+                            type: object
+                            properties:
+                              startDate:
+                                type: string
+                                format: date
+                                description: Start date of current period
+                                example: "2024-01-01"
+                              endDate:
+                                type: string
+                                format: date
+                                description: End date of current period
+                                example: "2024-01-31"
+                          lastPeriod:
+                            type: object
+                            nullable: true
+                            properties:
+                              startDate:
+                                type: string
+                                format: date
+                                description: Start date of comparison period
+                                example: "2023-12-01"
+                              endDate:
+                                type: string
+                                format: date
+                                description: End date of comparison period
+                                example: "2023-12-31"
+                      summary:
+                        type: object
+                        description: Summary information and applied filters
+                        properties:
+                          appliedFilters:
+                            type: object
+                            properties:
+                              startDate:
+                                type: string
+                                format: date
+                                example: "2024-01-01"
+                              endDate:
+                                type: string
+                                format: date
+                                example: "2024-01-31"
+                              compare_startDate:
+                                type: string
+                                format: date
+                                nullable: true
+                                example: "2023-12-01"
+                              compare_endDate:
+                                type: string
+                                format: date
+                                nullable: true
+                                example: "2023-12-31"
+                              area_id:
+                                type: integer
+                                nullable: true
+                                example: 1
+                          comparisonMetrics:
+                            type: object
+                            description: Growth rates and improvements compared to previous period
+                            properties:
+                              ticketGrowthRate:
+                                type: number
+                                format: decimal
+                                description: Percentage growth in ticket count
+                                example: 25.0
+                              closureRateImprovement:
+                                type: number
+                                format: decimal
+                                description: Percentage improvement in closure rate
+                                example: 5.2
+                              costAvoidanceGrowth:
+                                type: number
+                                format: decimal
+                                description: Percentage growth in cost avoidance
+                                example: 25.0
+                              downtimeAvoidanceGrowth:
+                                type: number
+                                format: decimal
+                                description: Percentage growth in downtime avoidance
+                                example: 25.25
+        '400':
+          description: Bad request - missing required parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "startDate and endDate are required"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # ========== HIERARCHY ENDPOINTS ==========
+  /hierarchy/areas:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get all active areas
+      description: |
+        Retrieves all active areas from the database with their associated plant information.
+        This endpoint is useful for populating area filter dropdowns in the frontend.
+        
+        **Key Features**:
+        - Returns all active areas across all plants
+        - Includes plant information for each area
+        - Ordered by plant name, then area name
+        - Suitable for filter dropdowns and selection lists
+      operationId: getAllAreas
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved areas list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Area'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /ticket/pending/user:
+    get:
+      tags:
+        - Tickets
+      summary: Get user-related pending tickets
+      description: |
+        Retrieve pending tickets related to the current user based on:
+        1. Tickets created by the user
+        2. Tickets where the user has approval_level > 2 for the ticket's area_id
+        
+        Tickets are filtered to exclude 'closed', 'completed', or 'canceled' status.
+        Results are ordered by priority (urgent → high → medium → low) and creation date.
+        
+        **Approval Level Meanings:**
+        - Level 3: Manager + Approver + Requester
+        - Level 2: Approver + Requester  
+        - Level 1: Requester only
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved user pending tickets
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PendingTicket'
+                  count:
+                    type: integer
+                    description: Total number of pending tickets
+                    example: 5
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from authentication endpoint
+
+  schemas:
+    # User Models
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: User ID
+          example: 1
+        username:
+          type: string
+          description: Username
+          example: "john.doe"
+        email:
+          type: string
+          format: email
+          description: User email address
+          example: "john.doe@company.com"
+        firstName:
+          type: string
+          description: User's first name
+          example: "John"
+        lastName:
+          type: string
+          description: User's last name
+          example: "Doe"
+        employeeID:
+          type: string
+          description: Employee ID
+          example: "EMP001"
+        department:
+          type: string
+          description: Department
+          example: "Production"
+        shift:
+          type: string
+          description: Work shift
+          example: "Day Shift"
+        role:
+          type: string
+          description: User role name
+          example: "L1_Operator"
+        permissionLevel:
+          type: integer
+          description: Permission level (1=L1, 2=L2, 3=L3, 4=Admin)
+          example: 1
+        lineId:
+          type: integer
+          description: Associated line ID
+          example: 1
+        avatarUrl:
+          type: string
+          description: Avatar image URL
+          example: "/uploads/avatars/1/avatar.jpg"
+        lastLogin:
+          type: string
+          format: date-time
+          description: Last login timestamp
+          example: "2024-01-15T10:30:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          description: Account creation timestamp
+          example: "2024-01-01T08:00:00Z"
+        emailVerified:
+          type: boolean
+          description: Email verification status
+          example: true
+
+    Cedar6User:
+      type: object
+      description: User information from Cedar6_Mars system
+      properties:
+        id:
+          type: integer
+          description: Person number from Person table
+          example: 418
+        userId:
+          type: string
+          description: User ID from _secUsers table
+          example: "arriskit"
+        username:
+          type: string
+          description: Username (same as userId)
+          example: "arriskit"
+        personCode:
+          type: string
+          description: Person code from Person table
+          example: "2-1201"
+        firstName:
+          type: string
+          description: First name from Person table
+          example: "Kittipon"
+        lastName:
+          type: string
+          description: Last name from Person table
+          example: "Arrisucharitlak"
+        fullName:
+          type: string
+          description: Full name from Person table
+          example: "Kittipon Arrisucharitlak"
+        email:
+          type: string
+          format: email
+          description: Email from Person table
+          example: "kittipon@company.com"
+        phone:
+          type: string
+          description: Phone from Person table
+          example: "+66123456789"
+        title:
+          type: string
+          description: Job title from Person table
+          example: "Maintenance Engineer"
+        department:
+          type: integer
+          description: Department number from Person table
+          example: 5
+        departmentCode:
+          type: string
+          description: Department code from Dept table
+          example: "PROD"
+        departmentName:
+          type: string
+          description: Department name from Dept table
+          example: "Production Department"
+        craft:
+          type: integer
+          description: Craft number from Person table
+          example: 3
+        crew:
+          type: integer
+          description: Crew number from Person table
+          example: 2
+        siteNo:
+          type: integer
+          description: Site number from Person table
+          example: 1
+        siteCode:
+          type: string
+          description: Site code from Site table
+          example: "SITE01"
+        siteName:
+          type: string
+          description: Site name from Site table
+          example: "Main Production Site"
+        groupNo:
+          type: integer
+          description: Group number from _secUsers table
+          example: 11
+        groupCode:
+          type: string
+          description: Group code from _secUserGroups table
+          example: "MP"
+        groupName:
+          type: string
+          description: Group name from _secUserGroups table
+          example: "Assistance Engineer / Maintenance Planner"
+        levelReport:
+          type: integer
+          description: Level report from _secUsers table
+          example: 1
+        storeRoom:
+          type: integer
+          description: Store room from _secUsers table
+          example: 1
+        dbNo:
+          type: integer
+          description: Database number from _secUsers table
+          example: 1
+        lineId:
+          type: string
+          description: LINE ID from _secUsers table
+          example: "U1234567890abcdef"
+        avatarUrl:
+          type: string
+          description: Avatar URL from _secUsers table
+          example: "/uploads/avatars/418/avatar.jpg"
+        lastLogin:
+          type: string
+          format: date-time
+          description: Last login from _secUsers table
+          example: "2024-01-15T10:30:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          description: Created date from _secUsers table
+          example: "2024-01-01T00:00:00Z"
+
+    PendingTicket:
+      type: object
+      description: Pending ticket information for user dashboard
+      properties:
+        id:
+          type: integer
+          description: Ticket ID
+          example: 123
+        ticket_number:
+          type: string
+          description: Unique ticket number
+          example: "TKT-2024-001"
+        title:
+          type: string
+          description: Ticket title/summary
+          example: "Machine vibration issue on Line A"
+        description:
+          type: string
+          description: Detailed ticket description
+          example: "Excessive vibration detected in production line machine during operation"
+        status:
+          type: string
+          enum: [open, in_progress, pending_approval, pending_assignment]
+          description: Current ticket status
+          example: "open"
+        priority:
+          type: string
+          enum: [urgent, high, medium, low]
+          description: Ticket priority level
+          example: "high"
+        severity_level:
+          type: string
+          enum: [critical, high, medium, low]
+          description: Severity level of the issue
+          example: "medium"
+        created_at:
+          type: string
+          format: date-time
+          description: Ticket creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2024-01-15T14:20:00Z"
+        assigned_to:
+          type: integer
+          nullable: true
+          description: Person ID of assignee
+          example: 456
+        reported_by:
+          type: integer
+          description: Person ID of ticket creator
+          example: 123
+        area_id:
+          type: integer
+          description: Area ID where ticket occurred
+          example: 5
+        area_name:
+          type: string
+          description: Area name
+          example: "Production Area A"
+        area_code:
+          type: string
+          description: Area code
+          example: "AREA-A"
+        plant_name:
+          type: string
+          description: Plant name
+          example: "Main Plant"
+        plant_code:
+          type: string
+          description: Plant code
+          example: "PLANT"
+        creator_name:
+          type: string
+          description: Full name of ticket creator
+          example: "John Doe"
+        creator_id:
+          type: integer
+          description: Person ID of creator
+          example: 123
+        assignee_name:
+          type: string
+          nullable: true
+          description: Full name of assignee
+          example: "Jane Smith"
+        assignee_id:
+          type: integer
+          nullable: true
+          description: Person ID of assignee
+          example: 456
+        user_relationship:
+          type: string
+          enum: [creator, approver, viewer]
+          description: User's relationship to this ticket
+          example: "creator"
+        user_approval_level:
+          type: integer
+          nullable: true
+          description: User's approval level for this ticket's area
+          example: 3
+
+    UserPermissions:
+      type: object
+      description: User permissions from Cedar6_Mars system
+      properties:
+        groupPrivileges:
+          type: array
+          description: Group-based permissions from _secUserGroupPrivileges table
+          items:
+            type: object
+            properties:
+              FormID:
+                type: string
+                description: Form identifier
+                example: "WO"
+              HaveView:
+                type: string
+                enum: [T, F]
+                description: View permission
+                example: "T"
+              HaveSave:
+                type: string
+                enum: [T, F]
+                description: Save permission
+                example: "T"
+              HaveDelete:
+                type: string
+                enum: [T, F]
+                description: Delete permission
+                example: "F"
+        userPermissions:
+          type: array
+          description: Individual user permissions from _secUserPermissions table
+          items:
+            type: object
+            properties:
+              FormID:
+                type: string
+                description: Form identifier
+                example: "WO"
+              ObjFieldName:
+                type: string
+                description: Object field name
+                example: "WO_STATUS"
+              ReadOnly_Flag:
+                type: string
+                enum: [T, F]
+                description: Read-only flag
+                example: "F"
+              ShowData_Flag:
+                type: string
+                enum: [T, F]
+                description: Show data flag
+                example: "T"
+
+    Area:
+      type: object
+      description: Area information from the database
+      properties:
+        id:
+          type: integer
+          description: Area ID
+          example: 1
+        name:
+          type: string
+          description: Area name
+          example: "Production Area A"
+        code:
+          type: string
+          description: Area code
+          example: "AREA-A"
+        description:
+          type: string
+          description: Area description
+          example: "Main production area for Line A"
+        plant_id:
+          type: integer
+          description: Associated plant ID
+          example: 1
+        is_active:
+          type: boolean
+          description: Whether the area is active
+          example: true
+        plant_name:
+          type: string
+          description: Associated plant name
+          example: "Main Plant"
+        plant_code:
+          type: string
+          description: Associated plant code
+          example: "PLANT"
+
+    # Core Work Request Models
+    WorkRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Work request ID
+          example: 1001
+        wrCode:
+          type: string
+          description: Work request code
+          example: "WR-2024-001001"
+        date:
+          type: string
+          description: Work request date (YYYYMMDD)
+          example: "20241201"
+        time:
+          type: string
+          description: Work request time (HHMM)
+          example: "1430"
+        description:
+          type: string
+          description: Work request description
+          example: "Equipment malfunction - urgent repair needed"
+        remark:
+          type: string
+          description: Additional remarks
+          example: "Found during routine inspection"
+        note:
+          type: string
+          description: Internal notes
+          example: "May require external contractor"
+        budgetCost:
+          type: number
+          format: decimal
+          description: Estimated budget cost
+          example: 15000.00
+        requester:
+          $ref: '#/components/schemas/RequesterInfo'
+        status:
+          $ref: '#/components/schemas/StatusInfo'
+        urgency:
+          $ref: '#/components/schemas/UrgencyInfo'
+        requestType:
+          $ref: '#/components/schemas/RequestTypeInfo'
+        equipment:
+          $ref: '#/components/schemas/EquipmentInfo'
+        productionUnit:
+          $ref: '#/components/schemas/ProductionUnitInfo'
+        departments:
+          $ref: '#/components/schemas/DepartmentInfo'
+        site:
+          $ref: '#/components/schemas/SiteInfo'
+        safety:
+          $ref: '#/components/schemas/SafetyInfo'
+        schedule:
+          $ref: '#/components/schemas/ScheduleInfo'
+        createdDate:
+          type: string
+          description: Creation date
+          example: "20241201"
+        updatedDate:
+          type: string
+          description: Last update date
+          example: "20241201"
+
+    RequesterInfo:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "John Smith"
+        phone:
+          type: string
+          example: "+66-123-456789"
+        email:
+          type: string
+          example: "john.smith@company.com"
+        requestDate:
+          type: string
+          example: "20241201"
+        requestTime:
+          type: string
+          example: "1430"
+
+    StatusInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        code:
+          type: string
+          example: "DRAFT"
+        name:
+          type: string
+          example: "Draft"
+        workflowStatus:
+          type: string
+          example: "10-00"
+
+    UrgencyInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2
+        code:
+          type: string
+          example: "H"
+        name:
+          type: string
+          example: "High"
+
+    RequestTypeInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        code:
+          type: string
+          example: "MAINT"
+        name:
+          type: string
+          example: "Maintenance"
+
+    EquipmentInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 456
+        code:
+          type: string
+          example: "PUMP-001"
+        name:
+          type: string
+          example: "Primary Water Pump"
+
+    ProductionUnitInfo:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 123
+        code:
+          type: string
+          example: "PU-01"
+        name:
+          type: string
+          example: "Production Unit 1"
+
+    DepartmentInfo:
+      type: object
+      properties:
+        requesting:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "PROD"
+            name:
+              type: string
+              example: "Production"
+        receiving:
+          type: object
+          properties:
+            code:
+              type: string
+              example: "MAINT"
+            name:
+              type: string
+              example: "Maintenance"
+
+    SiteInfo:
+      type: object
+      properties:
+        code:
+          type: string
+          example: "SITE01"
+        name:
+          type: string
+          example: "Main Plant"
+
+    SafetyInfo:
+      type: object
+      properties:
+        hotWork:
+          type: boolean
+          example: false
+        confineSpace:
+          type: boolean
+          example: false
+        workAtHeight:
+          type: boolean
+          example: false
+        lockOutTagOut:
+          type: boolean
+          example: true
+        safety:
+          type: boolean
+          example: true
+        environment:
+          type: boolean
+          example: false
+
+    ScheduleInfo:
+      type: object
+      properties:
+        startDate:
+          type: string
+          example: "20241202"
+        startTime:
+          type: string
+          example: "0800"
+        finishDate:
+          type: string
+          example: "20241202"
+        finishTime:
+          type: string
+          example: "1700"
+        duration:
+          type: number
+          example: 8.0
+
+    # Request/Response Models
+    CreateWorkRequestRequest:
+      type: object
+      required:
+        - description
+      properties:
+        description:
+          type: string
+          description: Work request description (required)
+          example: "Equipment malfunction - urgent repair needed"
+        equipmentCode:
+          type: string
+          description: Equipment code for lookup
+          example: "PUMP-001"
+        productionUnitId:
+          type: integer
+          description: Production unit ID
+          example: 123
+        equipmentId:
+          type: integer
+          description: Equipment ID (alternative to equipmentCode)
+          example: 456
+        costCenterId:
+          type: integer
+          description: Cost center ID
+          example: 789
+        urgencyId:
+          type: integer
+          description: Urgency level ID
+          default: 1
+          example: 2
+        requestTypeId:
+          type: integer
+          description: Request type ID
+          example: 1
+        requestDate:
+          type: string
+          format: date
+          description: Requested completion date
+          example: "2024-12-02"
+        requestTime:
+          type: string
+          description: Requested completion time (HH:MM)
+          example: "14:30"
+        scheduledStartDate:
+          type: string
+          format: date
+          description: Scheduled start date
+          example: "2024-12-02"
+        scheduledStartTime:
+          type: string
+          description: Scheduled start time (HH:MM)
+          example: "08:00"
+        remark:
+          type: string
+          description: Additional remarks
+          example: "Found during routine inspection"
+        note:
+          type: string
+          description: Internal notes
+          example: "May require external contractor"
+        budgetCost:
+          type: number
+          format: decimal
+          description: Estimated budget cost
+          example: 15000.00
+        meterNumber:
+          type: integer
+          description: Meter number for reading
+          example: 101
+        meterReading:
+          type: number
+          format: float
+          description: Current meter reading
+          example: 12345.67
+        failureModeId:
+          type: integer
+          description: Failure mode ID
+          example: 5
+        symptomId:
+          type: integer
+          description: Symptom ID
+          example: 3
+        phoneNumber:
+          type: string
+          description: Contact phone number
+          example: "+66-123-456789"
+        flagPU:
+          type: boolean
+          description: Production unit affected flag
+          default: false
+        flagTPM:
+          type: boolean
+          description: TPM related flag
+          default: false
+        tpmId:
+          type: integer
+          description: TPM ID if applicable
+          example: 7
+        sjId:
+          type: integer
+          description: Service job ID
+          example: 8
+        taskId:
+          type: integer
+          description: Task ID
+          example: 9
+        # New safety-related parameters for sp_WRMain_Insert
+        hotWork:
+          type: boolean
+          description: Hot work required flag
+          default: false
+          example: false
+        confineSpace:
+          type: boolean
+          description: Confined space work flag
+          default: false
+          example: false
+        workAtHeight:
+          type: boolean
+          description: Work at height flag
+          default: false
+          example: false
+        lockOutTagOut:
+          type: boolean
+          description: Lock out tag out required flag
+          default: false
+          example: false
+        flagSafety:
+          type: boolean
+          description: Safety-related work flag
+          default: false
+          example: false
+        flagEnvironment:
+          type: boolean
+          description: Environment-related work flag
+          default: false
+          example: false
+        eqCompNo:
+          type: integer
+          description: Equipment component number
+          example: 1
+        flagEQ:
+          type: boolean
+          description: Equipment flag
+          default: false
+          example: false
+        requestor:
+          type: integer
+          description: Alternative requestor person number
+          example: 1
+
+    CreateWorkRequestResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Work request created and workflow started successfully"
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1001
+            wrCode:
+              type: string
+              example: "WR-2024-001001"
+            description:
+              type: string
+              example: "Equipment malfunction - urgent repair needed"
+            status:
+              $ref: '#/components/schemas/StatusInfo'
+            requester:
+              $ref: '#/components/schemas/RequesterInfo'
+            dates:
+              type: object
+              properties:
+                created:
+                  type: string
+                  example: "20241201"
+                createdTime:
+                  type: string
+                  example: "1430"
+                requested:
+                  type: string
+                  example: "20241202"
+                requestedTime:
+                  type: string
+                  example: "1430"
+            urgency:
+              type: string
+              example: "High"
+            remark:
+              type: string
+              example: "Found during routine inspection"
+            note:
+              type: string
+              example: "May require external contractor"
+            budgetCost:
+              type: number
+              example: 15000.00
+            responseEmail:
+              type: string
+              example: "maintenance@company.com"
+
+    WorkflowActionRequest:
+      type: object
+      required:
+        - actionType
+      properties:
+        actionType:
+          type: string
+          enum: [approve, reject, cancel, generate_wo, route]
+          description: Type of workflow action to execute
+          example: "approve"
+        actionId:
+          type: integer
+          description: Specific action ID (required for route action)
+          example: 150
+        description:
+          type: string
+          description: Action description or comment
+          example: "Approved for maintenance work"
+        reason:
+          type: string
+          description: Reason for rejection or cancellation
+          example: "Insufficient budget documentation"
+        woTypeId:
+          type: integer
+          description: Work order type ID (for generate_wo action)
+          default: 1
+          example: 1
+        assignedDeptId:
+          type: integer
+          description: Assigned department ID (for generate_wo action)
+          example: 10
+        assignedPersonId:
+          type: integer
+          description: Assigned person ID (for generate_wo action)
+          example: 25
+        assignedUserGroupId:
+          type: integer
+          description: Assigned user group ID (for generate_wo action)
+          example: 5
+        vendorId:
+          type: integer
+          description: Vendor ID (for generate_wo action)
+          example: 3
+        accountId:
+          type: integer
+          description: Account ID (for generate_wo action)
+          default: 0
+          example: 0
+
+    WorkflowStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            workRequest:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1001
+                code:
+                  type: string
+                  example: "WR-2024-001001"
+                status:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 2
+                    name:
+                      type: string
+                      example: "Pending Approval"
+                    type:
+                      type: string
+                      example: "U"
+                    workflowStatus:
+                      type: string
+                      example: "20-00"
+                    stepApproveNo:
+                      type: string
+                      example: "20"
+                workflowNode:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 12
+                    type:
+                      type: string
+                      example: "A"
+                    name:
+                      type: string
+                      example: "Supervisor Approval"
+                    workflowId:
+                      type: integer
+                      example: 1
+            availableActions:
+              type: object
+              properties:
+                canApprove:
+                  type: boolean
+                  example: true
+                canReject:
+                  type: boolean
+                  example: true
+                canCancel:
+                  type: boolean
+                  example: true
+                canGenerateWO:
+                  type: boolean
+                  example: false
+                workflowActions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 120
+                      name:
+                        type: string
+                        example: "Approve"
+                      description:
+                        type: string
+                        example: "Approve work request"
+                      sequence:
+                        type: integer
+                        example: 1
+                      isRouting:
+                        type: boolean
+                        example: true
+                      fromGroup:
+                        type: integer
+                        example: 5
+                      toGroup:
+                        type: integer
+                        example: 8
+            workflowHistory:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorkflowHistoryItem'
+            userContext:
+              $ref: '#/components/schemas/UserContext'
+
+    WorkflowActionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "approve action executed successfully"
+        data:
+          type: object
+          properties:
+            workRequest:
+              type: object
+              properties:
+                id:
+                  type: integer
+                  example: 1001
+                code:
+                  type: string
+                  example: "WR-2024-001001"
+                status:
+                  $ref: '#/components/schemas/StatusInfo'
+                workflowNode:
+                  type: object
+                  properties:
+                    id:
+                      type: integer
+                      example: 15
+                    type:
+                      type: string
+                      example: "A"
+                    name:
+                      type: string
+                      example: "Manager Approval"
+            actionResult:
+              type: object
+              properties:
+                type:
+                  type: string
+                  example: "approve"
+                returnValue:
+                  type: integer
+                  example: 1
+                generatedWONO:
+                  type: integer
+                  description: Generated work order number (if applicable)
+                  example: 2001
+            recentActivity:
+              type: array
+              items:
+                $ref: '#/components/schemas/ActivityItem'
+
+    WorkflowHistoryItem:
+      type: object
+      properties:
+        order:
+          type: integer
+          example: 1
+        subject:
+          type: string
+          example: "Initial Submission"
+        description:
+          type: string
+          example: "Work request submitted"
+        actionId:
+          type: integer
+          example: 100
+        date:
+          type: string
+          example: "20241201"
+        time:
+          type: string
+          example: "1430"
+        from:
+          type: object
+          properties:
+            personId:
+              type: integer
+              example: 21
+            personName:
+              type: string
+              example: "John Smith"
+        to:
+          type: object
+          properties:
+            personId:
+              type: integer
+              example: 25
+            personName:
+              type: string
+              example: "Bob Supervisor"
+            userGroupId:
+              type: integer
+              example: 5
+        flags:
+          type: object
+          properties:
+            sendFor:
+              type: integer
+              example: 1
+            approved:
+              type: boolean
+              example: false
+            notApproved:
+              type: boolean
+              example: false
+            readed:
+              type: boolean
+              example: false
+            actionCompleted:
+              type: boolean
+              example: false
+
+    ActivityItem:
+      type: object
+      properties:
+        order:
+          type: integer
+          example: 2
+        subject:
+          type: string
+          example: "Manager Approval"
+        description:
+          type: string
+          example: "Approved for maintenance work"
+        date:
+          type: string
+          example: "20241201"
+        time:
+          type: string
+          example: "1500"
+        actionBy:
+          type: string
+          example: "Jane Manager"
+        sendFor:
+          type: integer
+          example: 1
+
+    UserContext:
+      type: object
+      properties:
+        userId:
+          type: integer
+          example: 42
+        personId:
+          type: integer
+          example: 25
+        name:
+          type: string
+          example: "Bob Supervisor"
+        departmentId:
+          type: integer
+          example: 10
+
+    WorkflowTasksResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            tasks:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorkflowTask'
+            pagination:
+              $ref: '#/components/schemas/PaginationInfo'
+            summary:
+              type: object
+              properties:
+                taskType:
+                  type: string
+                  example: "pending"
+                userContext:
+                  $ref: '#/components/schemas/UserContext'
+
+    WorkflowTask:
+      type: object
+      properties:
+        workRequest:
+          type: object
+          properties:
+            id:
+              type: integer
+              example: 1001
+            code:
+              type: string
+              example: "WR-2024-001001"
+            description:
+              type: string
+              example: "Equipment malfunction - urgent repair needed"
+            requester:
+              type: string
+              example: "John Smith"
+            requestDate:
+              type: string
+              example: "20241201"
+            department:
+              type: string
+              example: "Production"
+            status:
+              $ref: '#/components/schemas/StatusInfo'
+            urgency:
+              $ref: '#/components/schemas/UrgencyInfo'
+        workflow:
+          type: object
+          properties:
+            subject:
+              type: string
+              example: "Supervisor Approval"
+            description:
+              type: string
+              example: "Work request requires supervisor approval"
+            eventDate:
+              type: string
+              example: "20241201"
+            eventTime:
+              type: string
+              example: "1430"
+            sendFor:
+              type: integer
+              example: 1
+            flags:
+              type: object
+              properties:
+                actionCompleted:
+                  type: boolean
+                  example: false
+                approved:
+                  type: boolean
+                  example: false
+                read:
+                  type: boolean
+                  example: false
+
+    WorkRequestListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            workRequests:
+              type: array
+              items:
+                $ref: '#/components/schemas/WorkRequest'
+            pagination:
+              $ref: '#/components/schemas/PaginationInfo'
+
+    WorkRequestDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/WorkRequest'
+
+    WorkRequestStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            overview:
+              type: object
+              properties:
+                total:
+                  type: integer
+                  example: 1250
+                pending:
+                  type: integer
+                  example: 45
+                completed:
+                  type: integer
+                  example: 1180
+                initiated:
+                  type: integer
+                  example: 15
+                approved:
+                  type: integer
+                  example: 8
+                woGenerated:
+                  type: integer
+                  example: 2
+                avgDowntime:
+                  type: number
+                  example: 4.5
+                avgBudgetCost:
+                  type: number
+                  example: 12500.0
+            byUrgency:
+              type: array
+              items:
+                type: object
+                properties:
+                  urgencyName:
+                    type: string
+                    example: "High"
+                  urgencyCode:
+                    type: string
+                    example: "H"
+                  count:
+                    type: integer
+                    example: 150
+            byRequestType:
+              type: array
+              items:
+                type: object
+                properties:
+                  typeName:
+                    type: string
+                    example: "Maintenance"
+                  typeCode:
+                    type: string
+                    example: "MAINT"
+                  count:
+                    type: integer
+                    example: 800
+
+    WorkRequestTypesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 1
+              code:
+                type: string
+                example: "MAINT"
+              name:
+                type: string
+                example: "Maintenance"
+
+    WorkRequestStatusesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 1
+              code:
+                type: string
+                example: "DRAFT"
+              name:
+                type: string
+                example: "Draft"
+              type:
+                type: string
+                example: "U"
+              nextStatus:
+                type: integer
+                example: 2
+
+    WorkRequestUrgenciesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/UrgencyInfo'
+
+    WorkRequestCategoriesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 1
+              code:
+                type: string
+                example: "MAINT"
+              name:
+                type: string
+                example: "Maintenance"
+              siteId:
+                type: integer
+                example: 1
+
+    WorkRequestResourcesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+                example: 101
+              workRequestId:
+                type: integer
+                example: 1001
+              type:
+                type: string
+                example: "M"
+              subType:
+                type: string
+                example: "PART"
+              name:
+                type: string
+                example: "Pump Seal"
+              unit:
+                type: string
+                example: "PCS"
+              unitCost:
+                type: number
+                example: 150.00
+              quantity:
+                type: number
+                example: 2
+              hours:
+                type: number
+                example: 0
+              quantityHours:
+                type: number
+                example: 0
+              amount:
+                type: number
+                example: 300.00
+              remark:
+                type: string
+                example: "Original replacement part"
+              isActual:
+                type: boolean
+                example: false
+              transactionDate:
+                type: string
+                example: "20241201"
+              relatedIds:
+                type: object
+                properties:
+                  craft:
+                    type: integer
+                    example: null
+                  tool:
+                    type: integer
+                    example: null
+                  part:
+                    type: integer
+                    example: 567
+              createdDate:
+                type: string
+                example: "20241201"
+              createdBy:
+                type: integer
+                example: 21
+
+    PaginationInfo:
+      type: object
+      properties:
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 20
+        total:
+          type: integer
+          example: 150
+        totalPages:
+          type: integer
+          example: 8
+        hasNext:
+          type: boolean
+          example: true
+        hasPrev:
+          type: boolean
+          example: false
+
+    # Common Error Responses
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error description"
+        error:
+          type: string
+          description: Technical error details
+          example: "Detailed error information"
+
+  responses:
+    BadRequest:
+      description: Bad request - validation error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Description is required"
+            error: "Validation failed"
+
+    Unauthorized:
+      description: Unauthorized - authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "User authentication required"
+            error: "JWT token missing or invalid"
+
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Work request not found"
+            error: "No work request found with the specified ID"
+
+    InternalServerError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            message: "Failed to process request"
+            error: "Database connection failed"
+
+tags:
+  - name: Authentication
+    description: User authentication and account management operations
+  - name: User Management
+    description: User profile and permission management operations
+  - name: Work Requests
+    description: Work request creation and management operations
+  - name: Workflow
+    description: Workflow status and action operations
+  - name: Statistics
+    description: Work request statistics and reporting
+  - name: Master Data
+    description: Reference data for work requests (types, statuses, urgencies)
+  - name: Backlog
+    description: Work order backlog analysis and reporting operations
+  - name: Dashboard
+    description: Dashboard analytics and reporting operations
+  - name: Tickets
+    description: Ticket management and workflow operations

@@ -12,13 +12,14 @@ export const SubmenuPanel: React.FC<SubmenuPanelProps> = ({ activeId, collapsed 
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
-  const canAccess = (item: MenuItem) => (user?.permissionLevel || 0) >= item.permissionLevel;
+  // Permission checks disabled for submenu: show all children
+  const canAccess = (_item: MenuItem) => true;
 
   const active = menuItems.find(m => m.id === activeId) || null;
   const hasChildren = !!active?.children?.length;
   // Render container to support slide animation even when collapsed
 
-  const items = (active?.children || []).filter(canAccess);
+  const items = (active?.children || []);
 
   return (
     <div className={`sticky top-0 self-start h-[100dvh] border-r bg-card flex flex-col transition-[width] duration-300 ease-in-out overflow-hidden ${!active || !hasChildren ? 'w-0 min-w-0' : (collapsed ? 'w-0 min-w-0' : 'w-48 min-w-[128px]')}`}>

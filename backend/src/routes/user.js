@@ -14,26 +14,18 @@ router.get('/profile', userController.getProfile);
 router.put('/profile', userController.updateProfile);
 router.post('/profile/avatar', uploadAvatar.single('avatar'), userController.uploadAvatar);
 router.post('/line/test', userController.sendLineTest);
+router.get('/stats', userController.getUserStats);
 router.get('/role', userController.getRole);
 
-// Role management routes (must come before parameterized routes)
-router.get('/roles', userManagementController.getRoles);
-
-// User management routes (L3 only)
+// User management routes (Admin only)
 router.get('/all', userManagementController.getAllUsers);
+router.get('/groups', userManagementController.getAvailableGroups);
 router.get('/:userId', userManagementController.getUserById);
 router.post('/', userManagementController.createUser);
 router.put('/:userId', userManagementController.updateUser);
 router.delete('/:userId', userManagementController.deleteUser);
 
-// Role management routes
-router.put('/:userId/role', userManagementController.updateUserRole);
-
 // Password management
 router.put('/:userId/password', userManagementController.resetUserPassword);
-
-// Activity and bulk operations
-router.get('/:userId/activity', userManagementController.getUserActivityLogs);
-router.put('/bulk-update', userManagementController.bulkUpdateUsers);
 
 module.exports = router;

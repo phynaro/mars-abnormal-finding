@@ -57,6 +57,12 @@ export interface UserManagementResponse {
   data?: any;
 }
 
+export interface AvailableGroup {
+  groupNo: number;
+  groupCode: string;
+  groupName: string;
+}
+
 class UserManagementService {
   private getAuthHeaders(): Record<string, string> {
     return authService.getAuthHeaders();
@@ -83,7 +89,7 @@ class UserManagementService {
   }
 
   // Get user by ID
-  async getUserById(userId: number): Promise<User> {
+  async getUserById(userId: number | string): Promise<User> {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         method: 'GET',
@@ -124,7 +130,7 @@ class UserManagementService {
   }
 
   // Update user
-  async updateUser(userId: number, userData: UpdateUserData): Promise<UserManagementResponse> {
+  async updateUser(userId: number | string, userData: UpdateUserData): Promise<UserManagementResponse> {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         method: 'PUT',
@@ -145,7 +151,7 @@ class UserManagementService {
   }
 
   // Delete user (soft delete by setting isActive to false)
-  async deleteUser(userId: number): Promise<UserManagementResponse> {
+  async deleteUser(userId: number | string): Promise<UserManagementResponse> {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         method: 'DELETE',
@@ -165,7 +171,7 @@ class UserManagementService {
   }
 
   // Update user role
-  async updateUserRole(userId: number, role: string, permissionLevel: number): Promise<UserManagementResponse> {
+  async updateUserRole(userId: number | string, role: string, permissionLevel: number): Promise<UserManagementResponse> {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}/role`, {
         method: 'PUT',
@@ -206,7 +212,7 @@ class UserManagementService {
   }
 
   // Reset user password
-  async resetUserPassword(userId: number, newPassword: string): Promise<UserManagementResponse> {
+  async resetUserPassword(userId: number | string, newPassword: string): Promise<UserManagementResponse> {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}/password`, {
         method: 'PUT',
@@ -227,7 +233,7 @@ class UserManagementService {
   }
 
   // Get user activity logs
-  async getUserActivityLogs(userId: number, limit: number = 50): Promise<any[]> {
+  async getUserActivityLogs(userId: number | string, limit: number = 50): Promise<any[]> {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}/activity?limit=${limit}`, {
         method: 'GET',
@@ -264,6 +270,23 @@ class UserManagementService {
       return result;
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : 'Failed to bulk update users');
+    }
+  }
+
+  // Get available security groups (from _secUserGroups)
+  async getGroups(): Promise<AvailableGroup[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/groups`, {
+        method: 'GET',
+        headers: this.getAuthHeaders(),
+      });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to fetch groups');
+      }
+      return result.groups || [];
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch groups');
     }
   }
 }

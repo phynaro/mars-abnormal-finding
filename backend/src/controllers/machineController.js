@@ -121,62 +121,91 @@ const machineController = {
 
       const pool = await sql.connect(dbConfig);
 
-      // Build parameterized WHERE clause and inputs
-      const conditions = ['IsActive = 1'];
+      // Build parameterized WHERE clause and inputs - adapted for PU table
+      const conditions = ['FLAGDEL != \'Y\'']; // Active production units (not deleted)
       const requestForCount = pool.request();
       const requestForData = pool.request();
 
       if (search) {
-        conditions.push('(MachineName LIKE @search OR MachineCode LIKE @search OR Location LIKE @search)');
+        conditions.push('(PUNAME LIKE @search OR PUCODE LIKE @search OR PULOCATION LIKE @search)');
         requestForCount.input('search', sql.NVarChar, `%${search}%`);
         requestForData.input('search', sql.NVarChar, `%${search}%`);
       }
 
       if (department) {
-        conditions.push('Department = @department');
-        requestForCount.input('department', sql.NVarChar, department);
-        requestForData.input('department', sql.NVarChar, department);
+        conditions.push('DEPTNO = @department');
+        requestForCount.input('department', sql.Int, department);
+        requestForData.input('department', sql.Int, department);
       }
 
       if (status) {
-        conditions.push('Status = @status');
-        requestForCount.input('status', sql.NVarChar, status);
-        requestForData.input('status', sql.NVarChar, status);
+        // Map status to FLAGDEL field
+        const flagValue = status === 'Active' ? 'N' : 'Y';
+        conditions.push('FLAGDEL = @status');
+        requestForCount.input('status', sql.VarChar, flagValue);
+        requestForData.input('status', sql.VarChar, flagValue);
       }
 
       if (machineType) {
-        conditions.push('MachineType = @machineType');
-        requestForCount.input('machineType', sql.NVarChar, machineType);
-        requestForData.input('machineType', sql.NVarChar, machineType);
+        conditions.push('PUTYPENO = @machineType');
+        requestForCount.input('machineType', sql.Int, machineType);
+        requestForData.input('machineType', sql.Int, machineType);
       }
 
       if (criticality) {
-        conditions.push('Criticality = @criticality');
-        requestForCount.input('criticality', sql.NVarChar, criticality);
-        requestForData.input('criticality', sql.NVarChar, criticality);
+        // Map criticality to PUCRITICALNO
+        let criticalityNo = 1; // Default to Low
+        if (criticality === 'Medium') criticalityNo = 2;
+        else if (criticality === 'High') criticalityNo = 3;
+        
+        conditions.push('PUCRITICALNO = @criticality');
+        requestForCount.input('criticality', sql.Int, criticalityNo);
+        requestForData.input('criticality', sql.Int, criticalityNo);
       }
 
       const whereClause = `WHERE ${conditions.join(' AND ')}`;
 
-      // Get total count (parameterized)
-      const countResult = await requestForCount.query(`SELECT COUNT(*) AS total FROM Machine ${whereClause}`);
+      // Get total count (parameterized) - using PU table instead of Machine
+      const countResult = await requestForCount.query(`SELECT COUNT(*) AS total FROM PU ${whereClause}`);
       const total = countResult.recordset[0].total;
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       requestForData.input('offset', sql.Int, offset);
       requestForData.input('limit', sql.Int, parseInt(limit));
 
-      // Get machines with pagination (parameterized)
+      // Get machines with pagination (parameterized) - mapping PU table columns to Machine interface
       const result = await requestForData.query(`
         SELECT 
-          MachineID, MachineName, MachineCode, MachineType, Manufacturer, Model,
-          SerialNumber, Location, Department, InstallationDate, LastMaintenanceDate,
-          NextMaintenanceDate, Status, Capacity, PowerRating, OperatingHours,
-          Criticality, AssetTag, PurchasePrice, CurrentValue, WarrantyExpiryDate,
-          Notes, CreatedBy, CreatedDate, ModifiedBy, ModifiedDate
-        FROM Machine 
+          PUNO AS MachineID, 
+          PUNAME AS MachineName, 
+          PUCODE AS MachineCode, 
+          PUTYPENO AS MachineType, 
+          TEXT1 AS Manufacturer, 
+          TEXT2 AS Model,
+          TEXT3 AS SerialNumber, 
+          PULOCATION AS Location, 
+          DEPTNO AS Department, 
+          CREATEDATE AS InstallationDate, 
+          UPDATEDATE AS LastMaintenanceDate,
+          UPDATEDATE AS NextMaintenanceDate,
+          CASE WHEN FLAGDEL = 'Y' THEN 'Inactive' ELSE 'Active' END AS Status, 
+          TEXT4 AS Capacity, 
+          TEXT5 AS PowerRating, 
+          NUMBER1 AS OperatingHours,
+          CASE WHEN PUCRITICALNO = 1 THEN 'Low' WHEN PUCRITICALNO = 2 THEN 'Medium' WHEN PUCRITICALNO = 3 THEN 'High' ELSE 'Low' END AS Criticality, 
+          PUREFCODE AS AssetTag, 
+          NUMBER2 AS PurchasePrice, 
+          NUMBER1 AS CurrentValue, 
+          DATE1 AS WarrantyExpiryDate,
+          NOTE AS Notes, 
+          CREATEUSER AS CreatedBy, 
+          CREATEDATE AS CreatedDate, 
+          UPDATEUSER AS ModifiedBy, 
+          UPDATEDATE AS ModifiedDate,
+          CASE WHEN FLAGDEL = 'Y' THEN 0 ELSE 1 END AS IsActive
+        FROM PU 
         ${whereClause}
-        ORDER BY MachineID DESC
+        ORDER BY PUNO DESC
         OFFSET @offset ROWS
         FETCH NEXT @limit ROWS ONLY
       `);
@@ -210,16 +239,38 @@ const machineController = {
       const pool = await sql.connect(dbConfig);
       
       const result = await pool.request()
-        .input('MachineID', sql.Int, id)
+        .input('PUNO', sql.Int, id)
         .query(`
           SELECT 
-            MachineID, MachineName, MachineCode, MachineType, Manufacturer, Model,
-            SerialNumber, Location, Department, InstallationDate, LastMaintenanceDate,
-            NextMaintenanceDate, Status, Capacity, PowerRating, OperatingHours,
-            Criticality, AssetTag, PurchasePrice, CurrentValue, WarrantyExpiryDate,
-            Notes, CreatedBy, CreatedDate, ModifiedBy, ModifiedDate, IsActive
-          FROM Machine 
-          WHERE MachineID = @MachineID AND IsActive = 1
+            PUNO AS MachineID, 
+            PUNAME AS MachineName, 
+            PUCODE AS MachineCode, 
+            PUTYPENO AS MachineType, 
+            TEXT1 AS Manufacturer, 
+            TEXT2 AS Model,
+            TEXT3 AS SerialNumber, 
+            PULOCATION AS Location, 
+            DEPTNO AS Department, 
+            CREATEDATE AS InstallationDate, 
+            UPDATEDATE AS LastMaintenanceDate,
+            UPDATEDATE AS NextMaintenanceDate,
+            CASE WHEN FLAGDEL = 'Y' THEN 'Inactive' ELSE 'Active' END AS Status, 
+            TEXT4 AS Capacity, 
+            TEXT5 AS PowerRating, 
+            NUMBER1 AS OperatingHours,
+            CASE WHEN PUCRITICALNO = 1 THEN 'Low' WHEN PUCRITICALNO = 2 THEN 'Medium' WHEN PUCRITICALNO = 3 THEN 'High' ELSE 'Low' END AS Criticality, 
+            PUREFCODE AS AssetTag, 
+            NUMBER2 AS PurchasePrice, 
+            NUMBER1 AS CurrentValue, 
+            DATE1 AS WarrantyExpiryDate,
+            NOTE AS Notes, 
+            CREATEUSER AS CreatedBy, 
+            CREATEDATE AS CreatedDate, 
+            UPDATEUSER AS ModifiedBy, 
+            UPDATEDATE AS ModifiedDate,
+            CASE WHEN FLAGDEL = 'Y' THEN 0 ELSE 1 END AS IsActive
+          FROM PU 
+          WHERE PUNO = @PUNO AND FLAGDEL != 'Y'
         `);
 
       if (result.recordset.length === 0) {
@@ -385,14 +436,14 @@ const machineController = {
         .query(`
           SELECT 
             COUNT(*) AS totalMachines,
-            COUNT(CASE WHEN Status = 'Active' THEN 1 END) AS activeMachines,
-            COUNT(CASE WHEN Status = 'Maintenance' THEN 1 END) AS maintenanceMachines,
-            COUNT(CASE WHEN Status = 'Inactive' THEN 1 END) AS inactiveMachines,
-            COUNT(CASE WHEN Criticality = 'Critical' THEN 1 END) AS criticalMachines,
-            COUNT(CASE WHEN Criticality = 'High' THEN 1 END) AS highPriorityMachines,
-            COUNT(CASE WHEN NextMaintenanceDate <= DATEADD(day, 30, GETDATE()) THEN 1 END) AS maintenanceDueSoon
-          FROM Machine 
-          WHERE IsActive = 1
+            COUNT(CASE WHEN FLAGDEL != 'Y' THEN 1 END) AS activeMachines,
+            COUNT(CASE WHEN FLAGDEL = 'Y' THEN 1 END) AS maintenanceMachines,
+            COUNT(CASE WHEN FLAGDEL = 'Y' THEN 1 END) AS inactiveMachines,
+            COUNT(CASE WHEN PUCRITICALNO = 3 THEN 1 END) AS criticalMachines,
+            COUNT(CASE WHEN PUCRITICALNO = 3 THEN 1 END) AS highPriorityMachines,
+            COUNT(CASE WHEN UPDATEDATE <= FORMAT(DATEADD(day, 30, GETDATE()), 'yyyyMMdd') THEN 1 END) AS maintenanceDueSoon
+          FROM PU 
+          WHERE FLAGDEL != 'Y'
         `);
 
       res.json({

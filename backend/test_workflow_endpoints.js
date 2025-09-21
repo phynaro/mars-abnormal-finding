@@ -68,7 +68,9 @@ const testWorkflow = async () => {
     console.log('\n3. Completing job...');
     const completeResult = await makeRequest('POST', `/tickets/${ticketId}/complete`, {
         completion_notes: 'Job completed for testing',
-        actual_downtime_hours: 2.5
+        downtime_avoidance_hours: 1,
+        cost_avoidance: 10000,
+        failure_mode_id: 1
     });
     if (completeResult?.success) {
         console.log('✅ Job completed successfully');

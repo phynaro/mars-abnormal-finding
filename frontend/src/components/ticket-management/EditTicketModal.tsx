@@ -29,10 +29,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
     title: ticket.title,
     description: ticket.description,
     severity_level: ticket.severity_level,
-    status: ticket.status,
     priority: ticket.priority,
-    estimated_downtime_hours: ticket.estimated_downtime_hours,
-    actual_downtime_hours: ticket.actual_downtime_hours,
     assigned_to: ticket.assigned_to,
     status_notes: ''
   });
@@ -45,10 +42,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
       title: ticket.title,
       description: ticket.description,
       severity_level: ticket.severity_level,
-      status: ticket.status,
       priority: ticket.priority,
-      estimated_downtime_hours: ticket.estimated_downtime_hours,
-      actual_downtime_hours: ticket.actual_downtime_hours,
       assigned_to: ticket.assigned_to,
       status_notes: ''
     });

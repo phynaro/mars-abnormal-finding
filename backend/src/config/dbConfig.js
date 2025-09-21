@@ -10,7 +10,7 @@ const serverName = dbInstance ? `${dbServer}\\${dbInstance}` : dbServer;
 const dbConfig = {
   server: serverName,
   port: parseInt(process.env.DB_PORT || '1433', 10),
-  database: process.env.DB_NAME || 'CMMS',
+  database: process.env.DB_NAME || 'Cedar6_Mars',
   user: process.env.DB_USER || 'sa',
   password: process.env.DB_PASSWORD || '',
   options: {

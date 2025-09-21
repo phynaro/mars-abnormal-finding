@@ -6,7 +6,7 @@ function getTrail(pathname: string) {
   const parent = menuItems.find(m => pathname.startsWith(m.path));
   if (!parent) return [] as { label: string; path: string }[];
   const children = (parent.children || []);
-  const child = children.find(c => pathname === c.path);
+  const child = children.find(c => pathname === c.path || pathname.startsWith(c.path + '/'));
   const trail = [{ label: parent.label, path: parent.path }];
   if (child) trail.push({ label: child.label, path: child.path });
   return trail;

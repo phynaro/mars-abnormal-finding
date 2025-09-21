@@ -2,6 +2,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const sql = require('mssql');
 const crypto = require('crypto');
+const CryptoJS = require('crypto-js');
 const dbConfig = require('../config/dbConfig');
 const emailService = require('../services/emailService');
 
@@ -20,108 +21,60 @@ async function getConnection() {
   }
 }
 
-// User Registration
-const register = async (req, res) => {
-  try {
-    const { username, email, password, firstName, lastName, employeeID, department, shift } = req.body;
+// Helper function to hash password using MD5
+function hashPasswordMD5(password) {
+  return CryptoJS.MD5(password).toString();
+}
 
-    // Validation
-    if (!username || !email || !password || !firstName || !lastName) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Missing required fields' 
-      });
+// Helper function to get user permissions
+async function getUserPermissions(userId, groupNo) {
+  const pool = await getConnection();
+  
+  // Get group privileges
+  const groupPrivileges = await pool.request()
+    .input('groupNo', sql.Int, groupNo)
+    .query(`
+      SELECT FormID, HaveView, HaveSave, HaveDelete
+      FROM _secUserGroupPrivileges 
+      WHERE GroupNo = @groupNo
+    `);
+
+  // Get individual user permissions
+  const userPermissions = await pool.request()
+    .input('userId', sql.VarChar, userId)
+    .query(`
+      SELECT FormID, ObjFieldName, ReadOnly_Flag, ShowData_Flag
+      FROM _secUserPermissions 
+      WHERE UserID = @userId
+    `);
+
+  return {
+    groupPrivileges: groupPrivileges.recordset,
+    userPermissions: userPermissions.recordset
+  };
+}
+
+// Helper function to check if user has permission for a specific form
+async function hasPermission(userId, groupNo, formId, action = 'view') {
+  const permissions = await getUserPermissions(userId, groupNo);
+  
+  // Check group privileges first
+  const groupPriv = permissions.groupPrivileges.find(p => p.FormID === formId);
+  if (groupPriv) {
+    switch (action.toLowerCase()) {
+      case 'view':
+        return groupPriv.HaveView === 'T';
+      case 'save':
+        return groupPriv.HaveSave === 'T';
+      case 'delete':
+        return groupPriv.HaveDelete === 'T';
+      default:
+        return false;
     }
-
-    if (password.length < 6) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Password must be at least 6 characters long' 
-      });
-    }
-
-    const pool = await getConnection();
-
-    // Check if username or email already exists
-    const existingUser = await pool.request()
-      .input('username', sql.NVarChar, username)
-      .input('email', sql.NVarChar, email)
-      .query('SELECT UserID FROM Users WHERE Username = @username OR Email = @email');
-
-    if (existingUser.recordset.length > 0) {
-      return res.status(409).json({ 
-        success: false, 
-        message: 'Username or email already exists' 
-      });
-    }
-
-    // Hash password
-    const saltRounds = 12;
-    const passwordHash = await bcrypt.hash(password, saltRounds);
-
-    // Generate email verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationExpires = new Date();
-    verificationExpires.setHours(verificationExpires.getHours() + 24); // 24 hours from now
-
-    // Default role is L1_Operator (RoleID = 1)
-    const defaultRoleID = 1;
-
-    // Insert new user with email verification fields
-    const result = await pool.request()
-      .input('username', sql.NVarChar, username)
-      .input('email', sql.NVarChar, email)
-      .input('passwordHash', sql.NVarChar, passwordHash)
-      .input('firstName', sql.NVarChar, firstName)
-      .input('lastName', sql.NVarChar, lastName)
-      .input('employeeID', sql.NVarChar, employeeID || null)
-      .input('department', sql.NVarChar, department || null)
-      .input('shift', sql.NVarChar, shift || null)
-      .input('roleID', sql.Int, defaultRoleID)
-      .input('verificationToken', sql.NVarChar, verificationToken)
-      .input('verificationExpires', sql.DateTime2, verificationExpires)
-      .query(`
-        INSERT INTO Users (Username, Email, PasswordHash, FirstName, LastName, EmployeeID, Department, Shift, RoleID, EmailVerificationToken, EmailVerificationExpires)
-        OUTPUT INSERTED.UserID, INSERTED.Username, INSERTED.Email, INSERTED.FirstName, INSERTED.LastName, INSERTED.RoleID
-        VALUES (@username, @email, @passwordHash, @firstName, @lastName, @employeeID, @department, @shift, @roleID, @verificationToken, @verificationExpires)
-      `);
-
-    const newUser = result.recordset[0];
-
-    // Get role information
-    const roleResult = await pool.request()
-      .input('roleID', sql.Int, defaultRoleID)
-      .query('SELECT RoleName, PermissionLevel FROM Roles WHERE RoleID = @roleID');
-
-    const role = roleResult.recordset[0];
-
-    // Send verification email
-    try {
-      await emailService.sendVerificationEmail(email, firstName, verificationToken);
-      console.log(`Verification email sent to ${email}`);
-    } catch (emailError) {
-      console.error('Failed to send verification email:', emailError);
-      // Don't fail registration if email fails, but log the error
-    }
-
-    res.status(201).json({
-      success: true,
-      message: 'User registered successfully. Please check your email to verify your account.',
-      user: {
-        ...newUser,
-        role: role,
-        emailVerified: false
-      }
-    });
-
-  } catch (error) {
-    console.error('Registration error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error' 
-    });
   }
-};
+  
+  return false;
+}
 
 // User Login
 const login = async (req, res) => {
@@ -137,14 +90,53 @@ const login = async (req, res) => {
 
     const pool = await getConnection();
 
-    // Get user with role information
+    // Get user with group and person information
     const userResult = await pool.request()
-      .input('username', sql.NVarChar, username)
+      .input('username', sql.VarChar, username)
       .query(`
-        SELECT u.*, r.RoleName, r.PermissionLevel
-        FROM Users u
-        JOIN Roles r ON u.RoleID = r.RoleID
-        WHERE u.Username = @username AND u.IsActive = 1
+        SELECT 
+          u.PersonNo,
+          u.UserID,
+          u.GroupNo,
+          u.Passwd,
+          u.LevelReport,
+          u.StoreRoom,
+          u.DBNo,
+          u.StartDate,
+          u.LastDate,
+          u.ExpireDate,
+          u.NeverExpireFlag,
+          u.EmailVerified,
+          u.LastLogin,
+          u.CreatedAt,
+          u.UpdatedAt,
+          u.LineID,
+          u.AvatarUrl,
+          u.IsActive,
+          g.UserGCode,
+          g.UserGName,
+          p.PERSONCODE,
+          p.FIRSTNAME,
+          p.LASTNAME,
+          p.EMAIL,
+          p.PHONE,
+          p.TITLE,
+          p.DEPTNO,
+          p.CRAFTNO,
+          p.CREWNO,
+          p.PERSON_NAME,
+          p.SiteNo,
+          p.PINCODE,
+          d.DEPTCODE,
+          d.DEPTNAME,
+          s.SiteCode,
+          s.SiteName
+        FROM _secUsers u
+        LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
+        LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
+        LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
+        WHERE u.UserID = @username AND (u.IsActive = 1 OR u.IsActive IS NULL)
       `);
 
     if (userResult.recordset.length === 0) {
@@ -155,108 +147,138 @@ const login = async (req, res) => {
     }
 
     const user = userResult.recordset[0];
+    console.log(user);
+    // Check if account is expired
+    if (user.NeverExpireFlag !== 'Y' && user.ExpireDate) {
+      const expireDate = new Date(
+        user.ExpireDate.substring(0, 4) + '-' + 
+        user.ExpireDate.substring(4, 6) + '-' + 
+        user.ExpireDate.substring(6, 8)
+      );
+      if (expireDate < new Date()) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Account has expired' 
+        });
+      }
+    }
 
-    // Verify password
-    const isPasswordValid = await bcrypt.compare(password, user.PasswordHash);
-    if (!isPasswordValid) {
+    // Verify password using MD5
+    const hashedPassword = hashPasswordMD5(password);
+    if (hashedPassword !== user.Passwd) {
       return res.status(401).json({ 
         success: false, 
         message: 'Invalid credentials' 
       });
     }
 
-    // Check if email is verified
-    if (!user.EmailVerified) {
+    // Check if email is verified (if email verification is required)
+    if (user.EmailVerified === 'N') {
       return res.status(403).json({ 
         success: false, 
-        message: 'Please verify your email address before logging in. Check your inbox for a verification email.',
+        message: 'Please verify your email address before logging in.',
         requiresEmailVerification: true
       });
     }
 
-    // Generate JWT token
+    // Get user permissions
+    const permissions = await getUserPermissions(user.UserID, user.GroupNo);
+
+    // Generate JWT token (without full permissions to keep token size manageable)
     const token = jwt.sign(
       { 
         userId: user.UserID, 
-        username: user.Username, 
-        role: user.RoleName,
-        permissionLevel: user.PermissionLevel 
+        personNo: user.PersonNo,
+        username: user.UserID, 
+        groupNo: user.GroupNo,
+        groupCode: user.UserGCode,
+        groupName: user.UserGName
+        // Removed permissions from JWT to reduce token size
       },
       JWT_SECRET,
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    console.log('JWT Token:', token);
-
-    // Store session in database
-    const expiresAt = new Date();
-    expiresAt.setHours(expiresAt.getHours() + 24); // 24 hours from now
-
-    await pool.request()
-      .input('userID', sql.Int, user.UserID)
-      .input('tokenHash', sql.NVarChar, token)
-      .input('expiresAt', sql.DateTime2, expiresAt)
-      .query(`
-        INSERT INTO UserSessions (UserID, TokenHash, ExpiresAt)
-        VALUES (@userID, @tokenHash, @expiresAt)
-      `);
-
     // Update last login
     await pool.request()
-      .input('userID', sql.Int, user.UserID)
-      .query('UPDATE Users SET LastLogin = GETDATE() WHERE UserID = @userID');
+      .input('userID', sql.VarChar, user.UserID)
+      .query('UPDATE _secUsers SET LastLogin = GETDATE() WHERE UserID = @userID');
 
     // Remove sensitive data
-    delete user.PasswordHash;
+    delete user.Passwd;
 
     res.json({
       success: true,
       message: 'Login successful',
       token,
       user: {
-        id: user.UserID,
-        username: user.Username,
-        email: user.Email,
-        firstName: user.FirstName,
-        lastName: user.LastName,
-        employeeID: user.EmployeeID,
-        department: user.Department,
-        shift: user.Shift,
-        role: user.RoleName,
-        permissionLevel: user.PermissionLevel,
+        id: user.PersonNo,
+        userId: user.UserID,
+        username: user.UserID,
+        personCode: user.PERSONCODE,
+        firstName: user.FIRSTNAME,
+        lastName: user.LASTNAME,
+        fullName: user.PERSON_NAME,
+        email: user.EMAIL,
+        phone: user.PHONE,
+        title: user.TITLE,
+        department: user.DEPTNO,
+        departmentCode: user.DEPTCODE,
+        departmentName: user.DEPTNAME,
+        craft: user.CRAFTNO,
+        crew: user.CREWNO,
+        siteNo: user.SiteNo,
+        siteCode: user.SiteCode,
+        siteName: user.SiteName,
+        groupNo: user.GroupNo,
+        groupCode: user.UserGCode,
+        groupName: user.UserGName,
+        levelReport: user.LevelReport,
+        storeRoom: user.StoreRoom,
+        dbNo: user.DBNo,
         lineId: user.LineID,
-        avatarUrl: user.AvatarUrl
+        avatarUrl: user.AvatarUrl,
+        lastLogin: user.LastLogin,
+        createdAt: user.CreatedAt
+        // Permissions removed to reduce response size
       }
     });
 
   } catch (error) {
     console.error('Login error:', error);
-    res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error' 
-    });
+    
+    // Check if it's a database connection error
+    if (error.message === 'Database connection failed' || 
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('ETIMEDOUT') ||
+        error.message.includes('ConnectionError') ||
+        error.message.includes('Connection is closed')) {
+      res.status(503).json({ 
+        success: false, 
+        message: 'Service temporarily unavailable. Please try again in a few moments.',
+        errorType: 'database_connection'
+      });
+    } else if (error.message.includes('timeout')) {
+      res.status(504).json({ 
+        success: false, 
+        message: 'Request timeout. Please check your connection and try again.',
+        errorType: 'timeout'
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Unable to process login request. Please try again later.',
+        errorType: 'server_error'
+      });
+    }
   }
 };
 
 // User Logout
 const logout = async (req, res) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
-    
-    if (!token) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Token is required' 
-      });
-    }
-
-    const pool = await getConnection();
-
-    // Deactivate session
-    await pool.request()
-      .input('tokenHash', sql.NVarChar, token)
-      .query('UPDATE UserSessions SET IsActive = 0 WHERE TokenHash = @tokenHash');
-
+    // For this implementation, we'll just return success
+    // The JWT token will be invalidated on the client side
     res.json({
       success: true,
       message: 'Logout successful'
@@ -271,6 +293,10 @@ const logout = async (req, res) => {
   }
 };
 
+// Password validation configuration
+const PASSWORD_VALIDATION_ENABLED = false; // Set to true to enable password criteria validation
+const MIN_PASSWORD_LENGTH = 6;
+
 // Change Password
 const changePassword = async (req, res) => {
   try {
@@ -284,19 +310,24 @@ const changePassword = async (req, res) => {
       });
     }
 
-    if (newPassword.length < 6) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'New password must be at least 6 characters long' 
-      });
+    // Password validation (can be enabled/disabled)
+    if (PASSWORD_VALIDATION_ENABLED) {
+      if (newPassword.length < MIN_PASSWORD_LENGTH) {
+        return res.status(400).json({ 
+          success: false, 
+          message: `New password must be at least ${MIN_PASSWORD_LENGTH} characters long` 
+        });
+      }
+      // Add more password criteria here if needed
+      // Example: check for uppercase, lowercase, numbers, special characters, etc.
     }
 
     const pool = await getConnection();
 
     // Get current user
     const userResult = await pool.request()
-      .input('userID', sql.Int, userId)
-      .query('SELECT PasswordHash FROM Users WHERE UserID = @userID AND IsActive = 1');
+      .input('userID', sql.VarChar, userId)
+      .query('SELECT Passwd FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
 
     if (userResult.recordset.length === 0) {
       return res.status(404).json({ 
@@ -307,24 +338,23 @@ const changePassword = async (req, res) => {
 
     const user = userResult.recordset[0];
 
-    // Verify current password
-    const isCurrentPasswordValid = await bcrypt.compare(currentPassword, user.PasswordHash);
-    if (!isCurrentPasswordValid) {
+    // Verify current password using MD5
+    const currentHashedPassword = hashPasswordMD5(currentPassword);
+    if (currentHashedPassword !== user.Passwd) {
       return res.status(401).json({ 
         success: false, 
         message: 'Current password is incorrect' 
       });
     }
 
-    // Hash new password
-    const saltRounds = 12;
-    const newPasswordHash = await bcrypt.hash(newPassword, saltRounds);
+    // Hash new password using MD5
+    const newHashedPassword = hashPasswordMD5(newPassword);
 
     // Update password
     await pool.request()
-      .input('userID', sql.Int, userId)
-      .input('newPasswordHash', sql.NVarChar, newPasswordHash)
-      .query('UPDATE Users SET PasswordHash = @newPasswordHash, UpdatedAt = GETDATE() WHERE UserID = @userID');
+      .input('userID', sql.VarChar, userId)
+      .input('newPassword', sql.NVarChar, newHashedPassword)
+      .query('UPDATE _secUsers SET Passwd = @newPassword, UpdatedAt = GETDATE() WHERE UserID = @userID');
 
     res.json({
       success: true,
@@ -348,12 +378,50 @@ const getProfile = async (req, res) => {
     const pool = await getConnection();
 
     const userResult = await pool.request()
-      .input('userID', sql.Int, userId)
+      .input('userID', sql.VarChar, userId)
       .query(`
-        SELECT u.*, r.RoleName, r.PermissionLevel
-        FROM Users u
-        JOIN Roles r ON u.RoleID = r.RoleID
-        WHERE u.UserID = @userID AND u.IsActive = 1
+        SELECT 
+          u.PersonNo,
+          u.UserID,
+          u.GroupNo,
+          u.LevelReport,
+          u.StoreRoom,
+          u.DBNo,
+          u.StartDate,
+          u.LastDate,
+          u.ExpireDate,
+          u.NeverExpireFlag,
+          u.EmailVerified,
+          u.LastLogin,
+          u.CreatedAt,
+          u.UpdatedAt,
+          u.LineID,
+          u.AvatarUrl,
+          u.IsActive,
+          g.UserGCode,
+          g.UserGName,
+          p.PERSONCODE,
+          p.FIRSTNAME,
+          p.LASTNAME,
+          p.EMAIL,
+          p.PHONE,
+          p.TITLE,
+          p.DEPTNO,
+          p.CRAFTNO,
+          p.CREWNO,
+          p.PERSON_NAME,
+          p.SiteNo,
+          p.PINCODE,
+          d.DEPTCODE,
+          d.DEPTNAME,
+          s.SiteCode,
+          s.SiteName
+        FROM _secUsers u
+        LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
+        LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
+        LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
+        WHERE u.UserID = @userID AND (u.IsActive = 1 OR u.IsActive IS NULL)
       `);
 
     if (userResult.recordset.length === 0) {
@@ -364,25 +432,42 @@ const getProfile = async (req, res) => {
     }
 
     const user = userResult.recordset[0];
-    delete user.PasswordHash;
+
+    // Get user permissions (fetch separately when needed)
+    // const permissions = await getUserPermissions(user.UserID, user.GroupNo);
 
     res.json({
       success: true,
       user: {
-        id: user.UserID,
-        username: user.Username,
-        email: user.Email,
-        firstName: user.FirstName,
-        lastName: user.LastName,
-        employeeID: user.EmployeeID,
-        department: user.Department,
-        shift: user.Shift,
-        role: user.RoleName,
-        permissionLevel: user.PermissionLevel,
-        lastLogin: user.LastLogin,
-        createdAt: user.CreatedAt,
+        id: user.PersonNo,
+        userId: user.UserID,
+        username: user.UserID,
+        personCode: user.PERSONCODE,
+        firstName: user.FIRSTNAME,
+        lastName: user.LASTNAME,
+        fullName: user.PERSON_NAME,
+        email: user.EMAIL,
+        phone: user.PHONE,
+        title: user.TITLE,
+        department: user.DEPTNO,
+        departmentCode: user.DEPTCODE,
+        departmentName: user.DEPTNAME,
+        craft: user.CRAFTNO,
+        crew: user.CREWNO,
+        siteNo: user.SiteNo,
+        siteCode: user.SiteCode,
+        siteName: user.SiteName,
+        groupNo: user.GroupNo,
+        groupCode: user.UserGCode,
+        groupName: user.UserGName,
+        levelReport: user.LevelReport,
+        storeRoom: user.StoreRoom,
+        dbNo: user.DBNo,
         lineId: user.LineID,
-        avatarUrl: user.AvatarUrl
+        avatarUrl: user.AvatarUrl,
+        lastLogin: user.LastLogin,
+        createdAt: user.CreatedAt
+        // Permissions removed to reduce response size
       }
     });
 
@@ -398,23 +483,16 @@ const getProfile = async (req, res) => {
 // Validate Token (for middleware)
 const validateToken = async (token) => {
   try {
-    const pool = await getConnection();
-
-    // Check if session exists and is active
-    const sessionResult = await pool.request()
-      .input('tokenHash', sql.NVarChar, token)
-      .query('SELECT UserID, ExpiresAt FROM UserSessions WHERE TokenHash = @tokenHash AND IsActive = 1 AND ExpiresAt > GETDATE()');
-
-    if (sessionResult.recordset.length === 0) {
-      return null;
-    }
-
-    const session = sessionResult.recordset[0];
-
     // Verify JWT token
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    if (decoded.userId !== session.UserID) {
+    // Check if user still exists and is active
+    const pool = await getConnection();
+    const userResult = await pool.request()
+      .input('userID', sql.VarChar, decoded.userId)
+      .query('SELECT UserID, IsActive FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
+
+    if (userResult.recordset.length === 0 || (userResult.recordset[0].IsActive !== null && !userResult.recordset[0].IsActive)) {
       return null;
     }
 
@@ -426,68 +504,48 @@ const validateToken = async (token) => {
   }
 };
 
-// Verify Email
-const verifyEmail = async (req, res) => {
-  try {
-    const { token } = req.body;
-
-    if (!token) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Verification token is required' 
-      });
-    }
-
-    const pool = await getConnection();
-
-    // Find user with valid verification token
-    const userResult = await pool.request()
-      .input('token', sql.NVarChar, token)
-      .query(`
-        SELECT UserID, Email, FirstName, EmailVerificationExpires
-        FROM Users 
-        WHERE EmailVerificationToken = @token 
-        AND EmailVerificationExpires > GETDATE()
-        AND EmailVerified = 0
-      `);
-
-    if (userResult.recordset.length === 0) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Invalid or expired verification token' 
-      });
-    }
-
-    const user = userResult.recordset[0];
-
-    // Update user as verified
-    await pool.request()
-      .input('userID', sql.Int, user.UserID)
-      .query(`
-        UPDATE Users 
-        SET EmailVerified = 1, 
-            EmailVerificationToken = NULL, 
-            EmailVerificationExpires = NULL,
-            UpdatedAt = GETDATE()
-        WHERE UserID = @userID
-      `);
-
-    // Send welcome email
+// Check Permission Middleware Helper
+const checkPermission = (formId, action = 'view') => {
+  return async (req, res, next) => {
     try {
-      await emailService.sendWelcomeEmail(user.Email, user.FirstName);
-      console.log(`Welcome email sent to ${user.Email}`);
-    } catch (emailError) {
-      console.error('Failed to send welcome email:', emailError);
-      // Don't fail verification if welcome email fails
+      const userId = req.user.userId;
+      const groupNo = req.user.groupNo;
+      
+      const hasAccess = await hasPermission(userId, groupNo, formId, action);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ 
+          success: false, 
+          message: `Insufficient permissions for ${formId}` 
+        });
+      }
+      
+      next();
+    } catch (error) {
+      console.error('Permission check error:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Permission check failed' 
+      });
     }
+  };
+};
 
+// Get User Permissions
+const getUserPermissionsAPI = async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const groupNo = req.user.groupNo;
+    
+    const permissions = await getUserPermissions(userId, groupNo);
+    
     res.json({
       success: true,
-      message: 'Email verified successfully! You can now log in to your account.'
+      permissions: permissions
     });
 
   } catch (error) {
-    console.error('Email verification error:', error);
+    console.error('Get user permissions error:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Internal server error' 
@@ -495,91 +553,31 @@ const verifyEmail = async (req, res) => {
   }
 };
 
-// Resend Verification Email
-const resendVerificationEmail = async (req, res) => {
+// Check Specific Permission
+const checkSpecificPermission = async (req, res) => {
   try {
-    const { email } = req.body;
-
-    if (!email) {
+    const { formId, action = 'view' } = req.body;
+    const userId = req.user.userId;
+    const groupNo = req.user.groupNo;
+    
+    if (!formId) {
       return res.status(400).json({ 
         success: false, 
-        message: 'Email address is required' 
+        message: 'Form ID is required' 
       });
     }
-
-    const pool = await getConnection();
-
-    // Find user with unverified email
-    const userResult = await pool.request()
-      .input('email', sql.NVarChar, email)
-      .query(`
-        SELECT UserID, Email, FirstName, EmailVerified, EmailVerificationExpires
-        FROM Users 
-        WHERE Email = @email AND IsActive = 1
-      `);
-
-    if (userResult.recordset.length === 0) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'User not found' 
-      });
-    }
-
-    const user = userResult.recordset[0];
-
-    if (user.EmailVerified) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email is already verified' 
-      });
-    }
-
-    // Check if we can resend (not too frequent)
-    if (user.EmailVerificationExpires && new Date(user.EmailVerificationExpires) > new Date()) {
-      const timeLeft = Math.ceil((new Date(user.EmailVerificationExpires) - new Date()) / (1000 * 60));
-      return res.status(429).json({ 
-        success: false, 
-        message: `Please wait ${timeLeft} minutes before requesting another verification email` 
-      });
-    }
-
-    // Generate new verification token
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-    const verificationExpires = new Date();
-    verificationExpires.setHours(verificationExpires.getHours() + 24); // 24 hours from now
-
-    // Update user with new token
-    await pool.request()
-      .input('userID', sql.Int, user.UserID)
-      .input('verificationToken', sql.NVarChar, verificationToken)
-      .input('verificationExpires', sql.DateTime2, verificationExpires)
-      .query(`
-        UPDATE Users 
-        SET EmailVerificationToken = @verificationToken, 
-            EmailVerificationExpires = @verificationExpires,
-            UpdatedAt = GETDATE()
-        WHERE UserID = @userID
-      `);
-
-    // Send verification email
-    try {
-      await emailService.sendVerificationEmail(user.Email, user.FirstName, verificationToken);
-      console.log(`Verification email resent to ${user.Email}`);
-    } catch (emailError) {
-      console.error('Failed to resend verification email:', emailError);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Failed to send verification email. Please try again later.' 
-      });
-    }
-
+    
+    const hasAccess = await hasPermission(userId, groupNo, formId, action);
+    
     res.json({
       success: true,
-      message: 'Verification email sent successfully. Please check your inbox.'
+      hasPermission: hasAccess,
+      formId: formId,
+      action: action
     });
 
   } catch (error) {
-    console.error('Resend verification email error:', error);
+    console.error('Check specific permission error:', error);
     res.status(500).json({ 
       success: false, 
       message: 'Internal server error' 
@@ -588,12 +586,14 @@ const resendVerificationEmail = async (req, res) => {
 };
 
 module.exports = {
-  register,
   login,
   logout,
   changePassword,
   getProfile,
   validateToken,
-  verifyEmail,
-  resendVerificationEmail
+  checkPermission,
+  getUserPermissionsAPI,
+  checkSpecificPermission,
+  hasPermission,
+  getUserPermissions
 }; 

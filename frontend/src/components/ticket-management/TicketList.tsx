@@ -12,7 +12,6 @@ import {
   ChevronLeft, 
   ChevronRight, 
   Eye, 
-  Edit, 
   Trash2,
   Clock,
   User,
@@ -21,9 +20,9 @@ import {
 import { ticketService } from '@/services/ticketService';
 import type { Ticket, TicketFilters } from '@/services/ticketService';
 import { useToast } from '@/hooks/useToast';
-import { EditTicketModal } from './EditTicketModal';
 // Removed ViewTicketModal per requirement
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { formatTimelineTime } from '@/utils/timezone';
 
 const severityColors = {
   low: 'bg-green-100 text-green-800',
@@ -62,9 +61,7 @@ export const TicketList: React.FC = () => {
   const { toast } = useToast();
 
   // Modal states
-  const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   // Removed view modal state
-  const [editModalOpen, setEditModalOpen] = useState(false);
 
   // Filters
   const [filters, setFilters] = useState<TicketFilters>({
@@ -111,11 +108,6 @@ export const TicketList: React.FC = () => {
     navigate(`/tickets/${ticket.id}`);
   };
 
-  const handleEditTicket = (ticket: Ticket) => {
-    setSelectedTicket(ticket);
-    setEditModalOpen(true);
-  };
-
   const handleDeleteTicket = async (ticketId: number) => {
     if (!confirm('Are you sure you want to delete this ticket?')) {
       return;
@@ -139,13 +131,7 @@ export const TicketList: React.FC = () => {
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+    return formatTimelineTime(dateString);
   };
 
   const getStatusIcon = (status: string) => {
@@ -260,38 +246,49 @@ export const TicketList: React.FC = () => {
       </div>
 
       {/* Tickets List */}
-      <div className="dark:text-gray-100">
+      <div>
         {loading ? (
           <div className="flex justify-center items-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
         ) : tickets.length === 0 ? (
-          <div className="text-center py-8 text-gray-500">
+          <div className="text-center py-8 text-muted-foreground">
             No tickets found
           </div>
         ) : (
           <>
             {/* Mobile Cards */}
-            <div className="block md:hidden space-y-4">
+            <div className="block lg:hidden space-y-4">
               {tickets.map((ticket) => (
-                <div key={ticket.id} className="border rounded-lg p-4 bg-white dark:bg-gray-800 dark:border-gray-700">
+                <div key={ticket.id} className="border rounded-lg p-4 bg-card">
                   <div className="flex justify-between items-start">
                     <div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">#{ticket.ticket_number}</div>
-                      <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">{ticket.title}</div>
+                      <div className="text-sm text-muted-foreground">#{ticket.ticket_number}</div>
+                      <div className="text-lg font-semibold">{ticket.title}</div>
                     </div>
                     <Badge className={statusColors[ticket.status]}>{ticket.status.replace('_',' ')}</Badge>
                   </div>
-                  <div className="mt-2 text-sm text-gray-700 dark:text-gray-300 line-clamp-2">{ticket.description}</div>
+                  <div className="mt-2 text-sm text-muted-foreground line-clamp-2">{ticket.description}</div>
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Badge className={priorityColors[ticket.priority]}>{ticket.priority}</Badge>
                     <Badge className={severityColors[ticket.severity_level]}>{ticket.severity_level}</Badge>
                   </div>
-                  <div className="mt-4 flex justify-between items-center text-xs text-gray-500 dark:text-gray-400">
+                  <div className="mt-3 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      <span>Created by: {ticket.reporter_name || `User ${ticket.reported_by}`}</span>
+                    </div>
+                    {ticket.assigned_to && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <User className="w-4 h-4" />
+                        <span>Assigned to: {ticket.assignee_name || `User ${ticket.assigned_to}`}</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-4 flex justify-between items-center text-xs text-muted-foreground">
                     <span>Created {formatDate(ticket.created_at)}</span>
                     <div className="flex gap-2">
                       <Button variant="outline" size="sm" onClick={() => handleViewTicket(ticket)}>View</Button>
-                      <Button variant="outline" size="sm" onClick={() => handleEditTicket(ticket)}>Edit</Button>
                       <Button variant="ghost" size="sm" className="text-red-600" onClick={() => handleDeleteTicket(ticket.id)}>Delete</Button>
                     </div>
                   </div>
@@ -300,102 +297,103 @@ export const TicketList: React.FC = () => {
             </div>
 
               {/* Desktop Table */}
-              <div className="hidden md:block">
-                <div className="overflow-x-auto rounded-lg border border-border shadow-sm">
-                  <table className="min-w-full bg-card text-foreground">
-                    <thead className="bg-primary">
-                      <tr>
-                        <th className="text-left p-3 text-xs font-semibold uppercase tracking-wide text-primary-foreground">Ticket #</th>
-                        <th className="text-left p-3 text-xs font-semibold uppercase tracking-wide text-primary-foreground">Title</th>
-                        <th className="text-left p-3 text-xs font-semibold uppercase tracking-wide text-primary-foreground">Status</th>
-                        <th className="text-left p-3 text-xs font-semibold uppercase tracking-wide text-primary-foreground">Priority</th>
-                        <th className="text-left p-3 text-xs font-semibold uppercase tracking-wide text-primary-foreground">Severity</th>
-                        <th className="text-left p-3 text-xs font-semibold uppercase tracking-wide text-primary-foreground">Assigned To</th>
-                        <th className="text-left p-3 text-xs font-semibold uppercase tracking-wide text-primary-foreground">Created</th>
-                        <th className="text-left p-3 text-xs font-semibold uppercase tracking-wide text-primary-foreground">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                  {tickets.map((ticket) => (
-                    <tr key={ticket.id} className="border-b hover:bg-muted">
-                      <td className="p-3 font-mono text-sm">{ticket.ticket_number}</td>
-                      <td className="p-3">
-                        <div>
-                          <div className="font-medium">{ticket.title}</div>
-                          <div className="text-sm text-gray-500 truncate max-w-xs">
-                            {ticket.description}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <Badge className={statusColors[ticket.status]}>
-                          {getStatusIcon(ticket.status)}
-                          <span className="ml-1">{ticket.status.replace('_', ' ')}</span>
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        <Badge className={priorityColors[ticket.priority]}>
-                          {ticket.priority}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        <Badge className={severityColors[ticket.severity_level]}>
-                          {ticket.severity_level}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        {ticket.assigned_to ? (
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-gray-400" />
-                            <span>{ticket.assigned_to}</span>
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">Unassigned</span>
-                        )}
-                      </td>
-                      <td className="p-3 text-sm text-gray-500">
-                        {formatDate(ticket.created_at)}
-                      </td>
-                      <td className="p-3">
-                        <div className="flex gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleViewTicket(ticket)}
-                            title="View"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleEditTicket(ticket)}
-                            title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteTicket(ticket.id)}
-                            title="Delete"
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
+              <div className="hidden lg:block overflow-x-auto rounded border">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-muted/50 text-left">
+                    <tr>
+                      <th className="px-4 py-2">Ticket #</th>
+                      <th className="px-4 py-2">Title</th>
+                      <th className="px-4 py-2">Status</th>
+                      <th className="px-4 py-2">Priority</th>
+                      <th className="px-4 py-2">Severity</th>
+                      <th className="px-4 py-2">Created By</th>
+                      <th className="px-4 py-2">Assigned To</th>
+                      <th className="px-4 py-2">Created</th>
+                      <th className="px-4 py-2">Actions</th>
                     </tr>
-                  ))}
-                    </tbody>
-                  </table>
-                </div>
+                  </thead>
+                  <tbody>
+                    {tickets.map((ticket) => (
+                      <tr
+                        key={ticket.id}
+                        className="border-t cursor-pointer hover:bg-accent"
+                        onClick={() => handleViewTicket(ticket)}
+                      >
+                        <td className="px-4 py-2 whitespace-nowrap font-medium">{ticket.ticket_number}</td>
+                        <td className="px-4 py-2">
+                          <div>
+                            <div className="font-medium">{ticket.title}</div>
+                            <div className="text-muted-foreground truncate max-w-xs">
+                              {ticket.description}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">
+                          <Badge className={statusColors[ticket.status]}>
+                            {getStatusIcon(ticket.status)}
+                            <span className="ml-1">{ticket.status.replace('_', ' ')}</span>
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2">
+                          <Badge className={priorityColors[ticket.priority]}>
+                            {ticket.priority}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2">
+                          <Badge className={severityColors[ticket.severity_level]}>
+                            {ticket.severity_level}
+                          </Badge>
+                        </td>
+                        <td className="px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-muted-foreground" />
+                            <span>{ticket.reporter_name || `User ${ticket.reported_by}`}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-2">
+                          {ticket.assigned_to ? (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 text-muted-foreground" />
+                              <span>{ticket.assignee_name || `User ${ticket.assigned_to}`}</span>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">Unassigned</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
+                          {formatDate(ticket.created_at)}
+                        </td>
+                        <td className="px-4 py-2">
+                          <div className="flex gap-2" onClick={(e) => e.stopPropagation()}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleViewTicket(ticket)}
+                              title="View"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteTicket(ticket.id)}
+                              title="Delete"
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
 
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex justify-between items-center mt-6">
-                <div className="text-sm text-gray-500">
+                <div className="text-sm text-muted-foreground">
                   Showing {((currentPage - 1) * (filters.limit || 10)) + 1} to {Math.min(currentPage * (filters.limit || 10), totalTickets)} of {totalTickets} tickets
                 </div>
                 <div className="flex gap-2">
@@ -425,16 +423,7 @@ export const TicketList: React.FC = () => {
       </div>
 
       {/* Modals */}
-      {selectedTicket && (
-        <>
-          <EditTicketModal
-            ticket={selectedTicket}
-            open={editModalOpen}
-            onOpenChange={setEditModalOpen}
-            onTicketUpdated={fetchTickets}
-          />
-        </>
-      )}
+      {/* Removed EditTicketModal */}
     </div>
   );
 };

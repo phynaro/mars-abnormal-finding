@@ -13,6 +13,9 @@ import {
   ChevronRight,
   ChevronDown,
   Clock,
+  Boxes,
+  Building,
+  GitBranch,
   AlertTriangle,
   X
 } from 'lucide-react';
@@ -55,7 +58,66 @@ const Sidebar: React.FC<SidebarProps> = ({
       label: t('nav.dashboard'),
       icon: <LayoutDashboard className="h-5 w-5" />,
       path: '/dashboard',
-      permissionLevel: 1
+      permissionLevel: 1,
+      children: [
+        { id: 'dashboard-abnormal', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal', permissionLevel: 1 },
+        { id: 'dashboard-maintenance-kpi', label: 'Maintenance KPI', icon: <BarChart3 className="h-4 w-4" />, path: '/dashboard/maintenance-kpi', permissionLevel: 1 },
+        { id: 'dashboard-preventive-maintenance', label: 'Preventive Maintenance', icon: <Clock className="h-4 w-4" />, path: '/dashboard/preventive-maintenance', permissionLevel: 1 },
+        { id: 'dashboard-calibration', label: 'Calibration', icon: <FileText className="h-4 w-4" />, path: '/dashboard/calibration', permissionLevel: 1 },
+        { id: 'dashboard-mcc', label: 'MCC', icon: <FileText className="h-4 w-4" />, path: '/dashboard/mcc', permissionLevel: 1 },
+        { id: 'dashboard-spare-part', label: 'Spare Part', icon: <Boxes className="h-4 w-4" />, path: '/dashboard/spare-part', permissionLevel: 1 },
+      ]
+    },
+    {
+      id: 'workflow',
+      label: 'Workflow',
+      icon: <GitBranch className="h-5 w-5" />,
+      path: '/workflow',
+      permissionLevel: 1,
+      children: [
+        { id: 'workflow-types', label: 'Workflow Type', icon: <FileText className="h-4 w-4" />, path: '/workflow/types', permissionLevel: 1 },
+      ]
+    },
+    {
+      id: 'org',
+      label: 'Organization',
+      icon: <Building className="h-5 w-5" />,
+      path: '/org',
+      permissionLevel: 1,
+      children: [
+        { id: 'org-departments', label: 'Department', icon: <FileText className="h-4 w-4" />, path: '/org/departments', permissionLevel: 1 },
+        { id: 'org-groups', label: 'Group', icon: <FileText className="h-4 w-4" />, path: '/org/groups', permissionLevel: 1 },
+        { id: 'org-titles', label: 'Title', icon: <FileText className="h-4 w-4" />, path: '/org/titles', permissionLevel: 1 },
+        { id: 'org-users', label: 'User', icon: <Users className="h-4 w-4" />, path: '/org/users', permissionLevel: 1 },
+      ]
+    },
+    {
+      id: 'spare',
+      label: 'Spare Part',
+      icon: <Boxes className="h-5 w-5" />,
+      path: '/spare',
+      permissionLevel: 1,
+      children: [
+        { id: 'spare-overview', label: 'Overview', icon: <FileText className="h-4 w-4" />, path: '/spare/overview', permissionLevel: 1 },
+        { id: 'spare-catalog', label: 'Catalog', icon: <FileText className="h-4 w-4" />, path: '/spare/catalog', permissionLevel: 1 },
+        { id: 'spare-stores', label: 'Store', icon: <FileText className="h-4 w-4" />, path: '/spare/stores', permissionLevel: 1 },
+        { id: 'spare-vendors', label: 'Vendor', icon: <FileText className="h-4 w-4" />, path: '/spare/vendors', permissionLevel: 1 },
+        { id: 'spare-analytics', label: 'Analytic', icon: <BarChart3 className="h-4 w-4" />, path: '/spare/analytics', permissionLevel: 1 },
+      ]
+    },
+    {
+      id: 'assets',
+      label: 'Assets',
+      icon: <FileText className="h-5 w-5" />,
+      path: '/assets',
+      permissionLevel: 1,
+      children: [
+        { id: 'assets-sites', label: 'Sites', icon: <FileText className="h-4 w-4" />, path: '/assets/sites', permissionLevel: 1 },
+        { id: 'assets-departments', label: 'Departments', icon: <FileText className="h-4 w-4" />, path: '/assets/departments', permissionLevel: 1 },
+        { id: 'assets-pus', label: 'Production Units', icon: <FileText className="h-4 w-4" />, path: '/assets/production-units', permissionLevel: 1 },
+        { id: 'assets-equipment', label: 'Equipment', icon: <Wrench className="h-4 w-4" />, path: '/assets/equipment', permissionLevel: 1 },
+        { id: 'assets-hierarchy', label: 'Hierarchy', icon: <FileText className="h-4 w-4" />, path: '/assets/hierarchy', permissionLevel: 1 },
+      ]
     },
     {
       id: 'tickets',
@@ -65,26 +127,15 @@ const Sidebar: React.FC<SidebarProps> = ({
       permissionLevel: 1
     },
     {
-      id: 'machines',
-      label: t('nav.machines'),
+      id: 'maintenance',
+      label: 'Maintenance',
       icon: <Wrench className="h-5 w-5" />,
-      path: '/machines',
-      permissionLevel: 2,
+      path: '/maintenance',
+      permissionLevel: 1,
       children: [
-        {
-          id: 'machines-list',
-          label: 'Machine List',
-          icon: <FileText className="h-4 w-4" />,
-          path: '/machines/list',
-          permissionLevel: 2
-        },
-        {
-          id: 'machines-maintenance',
-          label: 'Maintenance Schedule',
-          icon: <Clock className="h-4 w-4" />,
-          path: '/machines/maintenance',
-          permissionLevel: 2
-        }
+        { id: 'maintenance-work-orders', label: 'Work Orders', icon: <FileText className="h-4 w-4" />, path: '/maintenance/work-orders', permissionLevel: 1 },
+        { id: 'maintenance-work-requests', label: 'Work Requests', icon: <FileText className="h-4 w-4" />, path: '/maintenance/work-requests', permissionLevel: 1 },
+        { id: 'maintenance-preventive', label: 'Preventive Maintenance', icon: <Clock className="h-4 w-4" />, path: '/maintenance/preventive-maintenance', permissionLevel: 1 },
       ]
     },
     {

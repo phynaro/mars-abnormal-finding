@@ -40,15 +40,53 @@ const authenticateToken = async (req, res, next) => {
     try {
       const pool = await getConnection();
       const userResult = await pool.request()
-        .input('userID', sql.Int, decodedToken.userId)
+        .input('userID', sql.VarChar, decodedToken.userId)
         .query(`
-          SELECT u.*, r.RoleName, r.PermissionLevel
-          FROM Users u
-          JOIN Roles r ON u.RoleID = r.RoleID
-          WHERE u.UserID = @userID AND u.IsActive = 1
+          SELECT 
+            u.PersonNo,
+            u.UserID,
+            u.GroupNo,
+            u.LevelReport,
+            u.StoreRoom,
+            u.DBNo,
+            u.StartDate,
+            u.LastDate,
+            u.ExpireDate,
+            u.NeverExpireFlag,
+            u.EmailVerified,
+            u.LastLogin,
+            u.CreatedAt,
+            u.UpdatedAt,
+            u.LineID,
+            u.AvatarUrl,
+            u.IsActive,
+            g.UserGCode,
+            g.UserGName,
+            p.PERSONCODE,
+            p.FIRSTNAME,
+            p.LASTNAME,
+            p.EMAIL,
+            p.PHONE,
+            p.TITLE,
+            p.DEPTNO,
+            p.CRAFTNO,
+            p.CREWNO,
+            p.PERSON_NAME,
+            p.SiteNo,
+            p.PINCODE,
+            d.DEPTCODE,
+            d.DEPTNAME,
+            s.SiteCode,
+            s.SiteName
+          FROM _secUsers u
+          LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
+          LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
+          LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+          LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
+          WHERE u.UserID = @userID AND (u.IsActive = 1 OR u.IsActive IS NULL)
         `);
 
-      if (userResult.recordset.length === 0) {
+      if (userResult.recordset.length === 0 || (userResult.recordset[0].IsActive !== null && !userResult.recordset[0].IsActive)) {
         return res.status(403).json({ 
           success: false, 
           message: 'User not found or inactive' 
@@ -59,20 +97,35 @@ const authenticateToken = async (req, res, next) => {
       
       // Add full user info to request object
       req.user = {
-        id: user.UserID,
+        id: user.PersonNo,
         userId: user.UserID,
-        username: user.Username,
-        email: user.Email,
-        firstName: user.FirstName,
-        lastName: user.LastName,
-        employeeID: user.EmployeeID,
-        department: user.Department,
-        shift: user.Shift,
-        role: user.RoleName,
-        permissionLevel: user.PermissionLevel,
+        username: user.UserID,
+        personCode: user.PERSONCODE,
+        firstName: user.FIRSTNAME,
+        lastName: user.LASTNAME,
+        fullName: user.PERSON_NAME,
+        email: user.EMAIL,
+        phone: user.PHONE,
+        title: user.TITLE,
+        department: user.DEPTNO,
+        departmentCode: user.DEPTCODE,
+        departmentName: user.DEPTNAME,
+        craft: user.CRAFTNO,
+        crew: user.CREWNO,
+        siteNo: user.SiteNo,
+        siteCode: user.SiteCode,
+        siteName: user.SiteName,
+        groupNo: user.GroupNo,
+        groupCode: user.UserGCode,
+        groupName: user.UserGName,
+        levelReport: user.LevelReport,
+        storeRoom: user.StoreRoom,
+        dbNo: user.DBNo,
         lineId: user.LineID,
+        avatarUrl: user.AvatarUrl,
         lastLogin: user.LastLogin,
         createdAt: user.CreatedAt
+        // Permissions will be fetched separately when needed
       };
       
       next();
@@ -93,8 +146,8 @@ const authenticateToken = async (req, res, next) => {
   }
 };
 
-// Role-based access control middleware
-const requireRole = (allowedRoles) => {
+// Group-based access control middleware
+const requireGroup = (allowedGroups) => {
   return (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ 
@@ -103,8 +156,8 @@ const requireRole = (allowedRoles) => {
       });
     }
 
-    // Check if user's role is in the allowed roles
-    if (!allowedRoles.includes(req.user.role)) {
+    // Check if user's group is in the allowed groups
+    if (!allowedGroups.includes(req.user.groupCode)) {
       return res.status(403).json({ 
         success: false, 
         message: 'Insufficient permissions' 
@@ -115,7 +168,7 @@ const requireRole = (allowedRoles) => {
   };
 };
 
-// Permission level middleware
+// Permission level middleware (based on LevelReport)
 const requirePermissionLevel = (minLevel) => {
   return (req, res, next) => {
     if (!req.user) {
@@ -126,7 +179,7 @@ const requirePermissionLevel = (minLevel) => {
     }
 
     // Check if user's permission level meets the minimum requirement
-    if (req.user.permissionLevel < minLevel) {
+    if (req.user.levelReport < minLevel) {
       return res.status(403).json({ 
         success: false, 
         message: 'Insufficient permission level' 
@@ -137,16 +190,63 @@ const requirePermissionLevel = (minLevel) => {
   };
 };
 
-// Specific role middleware functions
-const requireL1Operator = requireRole(['L1_Operator', 'L2_Engineer', 'L3_Manager']);
-const requireL2Engineer = requireRole(['L2_Engineer', 'L3_Manager']);
-const requireL3Manager = requireRole(['L3_Manager']);
+// Specific group middleware functions
+const requireAdmin = requireGroup(['ADMIN']);
+const requireMaintenancePlanner = requireGroup(['MP']);
+const requireMaintenanceManager = requireGroup(['MM']);
+const requireMaintenanceTechnician = requireGroup(['MT']);
+const requireMaintenanceEngineer = requireGroup(['ME']);
+const requirePlantMaintenanceAdmin = requireGroup(['MA']);
+const requireOperation = requireGroup(['OP']);
+const requireOperationSupervisor = requireGroup(['OS']);
+const requireStore = requireGroup(['ST']);
+const requireSupplier = requireGroup(['SP']);
+
+// Form-based permission middleware
+const requireFormPermission = (formId, action = 'view') => {
+  return async (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'Authentication required' 
+      });
+    }
+
+    try {
+      const { hasPermission } = require('../controllers/authController');
+      const hasAccess = await hasPermission(req.user.userId, req.user.groupNo, formId, action);
+      
+      if (!hasAccess) {
+        return res.status(403).json({ 
+          success: false, 
+          message: `Insufficient permissions for ${formId}` 
+        });
+      }
+      
+      next();
+    } catch (error) {
+      console.error('Form permission check error:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Permission check failed' 
+      });
+    }
+  };
+};
 
 module.exports = {
   authenticateToken,
-  requireRole,
+  requireGroup,
   requirePermissionLevel,
-  requireL1Operator,
-  requireL2Engineer,
-  requireL3Manager
+  requireAdmin,
+  requireMaintenancePlanner,
+  requireMaintenanceManager,
+  requireMaintenanceTechnician,
+  requireMaintenanceEngineer,
+  requirePlantMaintenanceAdmin,
+  requireOperation,
+  requireOperationSupervisor,
+  requireStore,
+  requireSupplier,
+  requireFormPermission
 }; 
