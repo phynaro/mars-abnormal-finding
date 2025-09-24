@@ -1,7 +1,24 @@
 const { Resend } = require('resend');
 
-// Initialize Resend with API key
-const resend = new Resend(process.env.RESEND_API_TOKEN);
+// Initialize Resend with API key (only if provided)
+let resend = null;
+if (process.env.RESEND_API_TOKEN) {
+  try {
+    resend = new Resend(process.env.RESEND_API_TOKEN);
+  } catch (error) {
+    console.log('Failed to initialize Resend:', error.message);
+    resend = null;
+  }
+}
+
+// Helper function to check if email service is available
+const isEmailServiceAvailable = () => {
+  if (!resend) {
+    console.log('Email service not configured - RESEND_API_TOKEN not set');
+    return false;
+  }
+  return true;
+};
 
 // Email templates
 const EMAIL_TEMPLATES = {
@@ -287,6 +304,10 @@ class EmailService {
    */
   async sendVerificationEmail(to, firstName, verificationToken) {
     try {
+      if (!isEmailServiceAvailable()) {
+        return { success: false, message: 'Email service not configured' };
+      }
+
       const verificationLink = `${process.env.FRONTEND_URL}/verify-email?token=${verificationToken}`;
       
       const { data, error } = await resend.emails.send({

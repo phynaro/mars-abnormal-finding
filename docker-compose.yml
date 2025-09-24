@@ -1,0 +1,26 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - DB_SERVER=${DB_SERVER:-host.docker.internal}
+      - DB_PORT=${DB_PORT:-1433}
+      - DB_NAME=${DB_NAME:-Cedar6_Mars}
+      - DB_USER=${DB_USER:-sa}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_ENCRYPT=${DB_ENCRYPT:-true}
+      - DB_TRUST_SERVER_CERT=${DB_TRUST_SERVER_CERT:-true}
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - CORS_ORIGIN=${CORS_ORIGIN:-https://mars-demo.trazor.cloud}
+      - FRONTEND_URL=${FRONTEND_URL:-https://mars-demo.trazor.cloud}
+    volumes:
+      - ./backend/uploads:/app/uploads
+    restart: unless-stopped
+    networks:
+      - mars-network
+
+networks:
+  mars-network:
+    driver: bridge
