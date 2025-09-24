@@ -4,7 +4,15 @@ services:
     ports:
       - "3001:3001"
     environment:
-      - NODE_ENV=development
+      # App Configuration
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=${PORT:-3001}
+      
+      # JWT Configuration
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - JWT_EXPIRES_IN=${JWT_EXPIRES_IN:-24h}
+      
+      # Database Configuration
       - DB_SERVER=${DB_SERVER:-host.docker.internal}
       - DB_PORT=${DB_PORT:-1433}
       - DB_NAME=${DB_NAME:-Cedar6_Mars}
@@ -12,9 +20,23 @@ services:
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_ENCRYPT=${DB_ENCRYPT:-true}
       - DB_TRUST_SERVER_CERT=${DB_TRUST_SERVER_CERT:-true}
-      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - DB_REQUEST_TIMEOUT=${DB_REQUEST_TIMEOUT:-30000}
+      - DB_CONNECTION_TIMEOUT=${DB_CONNECTION_TIMEOUT:-30000}
+      - DB_POOL_MAX=${DB_POOL_MAX:-10}
+      - DB_POOL_MIN=${DB_POOL_MIN:-0}
+      - DB_POOL_IDLE_TIMEOUT=${DB_POOL_IDLE_TIMEOUT:-30000}
+      
+      # CORS and Frontend Configuration
       - CORS_ORIGIN=${CORS_ORIGIN:-https://mars-demo.trazor.cloud}
       - FRONTEND_URL=${FRONTEND_URL:-https://mars-demo.trazor.cloud}
+      
+      # Email Configuration (optional)
+      - FROM_EMAIL=${FROM_EMAIL:-noreply@trazor.cloud}
+      - RESEND_API_TOKEN=${RESEND_API_TOKEN}
+      
+      # LINE Messaging Configuration (optional)
+      - LINE_CHANNEL_ACCESS_TOKEN=${LINE_CHANNEL_ACCESS_TOKEN}
+      - LINE_ALLOW_LOCAL_IMAGES=${LINE_ALLOW_LOCAL_IMAGES:-false}
     volumes:
       - ./backend/uploads:/app/uploads
     restart: unless-stopped
