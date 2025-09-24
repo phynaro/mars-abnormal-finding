@@ -8,7 +8,7 @@ set -e
 echo "🐳 Deploying Mars Frontend from GitHub"
 
 # Configuration
-REPO_URL="https://github.com/your-username/mars-abnormal-finding.git"
+REPO_URL="https://github.com/phynaro/mars-abnormal-finding.git"
 DEPLOY_DIR="/opt/mars-frontend"
 BRANCH="main"
 

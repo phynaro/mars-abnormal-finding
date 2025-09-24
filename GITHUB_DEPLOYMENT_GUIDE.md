@@ -24,7 +24,7 @@ git push origin main
 
 ```bash
 # On your Ubuntu server:
-wget https://raw.githubusercontent.com/your-username/mars-abnormal-finding/main/deploy-from-github.sh
+wget https://raw.githubusercontent.com/phynaro/mars-abnormal-finding/main/deploy-from-github.sh
 chmod +x deploy-from-github.sh
 ./deploy-from-github.sh
 ```
@@ -63,6 +63,8 @@ docker compose -f docker-compose-frontend.yml up -d --build
 ### **Method 2: Use Update Script**
 ```bash
 # On your Ubuntu server:
+wget https://raw.githubusercontent.com/phynaro/mars-abnormal-finding/main/update-from-github.sh
+chmod +x update-from-github.sh
 ./update-from-github.sh
 ```
 
