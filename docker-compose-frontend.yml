@@ -5,12 +5,15 @@ services:
     build: 
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=https://96f6316bf908.ngrok-free.app/api
+        - VITE_LIFF_ID=2007697113-EWn7vw08
     ports:
       - "80:80"
     environment:
       - NODE_ENV=production
       - VITE_LIFF_ID=2007697113-EWn7vw08
-      - VITE_API_URL=https://4eec5e8fde9e.ngrok-free.app/api
+      - VITE_API_URL=https://96f6316bf908.ngrok-free.app/api
     restart: unless-stopped
     networks:
       - mars-network
