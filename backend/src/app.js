@@ -25,7 +25,9 @@ const corsOptions = {
       'http://127.0.0.1:3000',
       'http://127.0.0.1:3001',
       'http://192.168.0.241:3000',
-      'http://192.168.0.241:3001'
+      'http://192.168.0.241:3001',
+      'http://mars-demo.trazor.cloud',
+      'https://mars-demo.trazor.cloud'
     ];
 
    // console.log(`CORS Check - Origin: ${origin}, FRONTEND_URL: ${process.env.FRONTEND_URL}`);
