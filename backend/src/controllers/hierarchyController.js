@@ -233,8 +233,9 @@ const searchPUCODE = async (req, res) => {
                     DEPTNO,
                     SiteNo
                 FROM PU 
-                WHERE PUCODE LIKE @search
+                WHERE (PUCODE LIKE @search OR PUNAME LIKE @search)
                 AND FLAGDEL = 'F'
+                AND PUCODE LIKE '%-%-%-%-%'  -- Only 5-section PUCODEs (Plant-Area-Line-Machine-Number)
                 ORDER BY PUCODE
             `);
 
@@ -302,6 +303,7 @@ const getPUCODEDetails = async (req, res) => {
                 FROM PU 
                 WHERE PUCODE = @pucode
                 AND FLAGDEL = 'F'
+                AND PUCODE LIKE '%-%-%-%-%'  -- Only 5-section PUCODEs (Plant-Area-Line-Machine-Number)
             `);
 
         if (result.recordset.length === 0) {

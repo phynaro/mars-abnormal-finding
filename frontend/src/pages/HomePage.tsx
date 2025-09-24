@@ -1,11 +1,20 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Line } from 'recharts';
-import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import React, { useMemo, useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Line,
+} from "recharts";
+import { useAuth } from "@/contexts/AuthContext";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Award,
   BarChart3,
@@ -19,10 +28,14 @@ import {
   TrendingUp as TrendingUpIcon,
   User,
   Users,
-} from 'lucide-react';
-import { ticketService, type PendingTicket as APIPendingTicket } from '@/services/ticketService';
+} from "lucide-react";
+import {
+  ticketService,
+  type PendingTicket as APIPendingTicket,
+} from "@/services/ticketService";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:3001/api";
 
 interface PersonalKPI {
   ticketsCreatedByMonth: Array<{
@@ -60,37 +73,71 @@ interface BadgeConfig {
   className: string;
 }
 
-const BADGE_BASE_CLASS = 'px-2 py-1 text-xs font-medium rounded-full';
-const DEFAULT_BADGE_CLASS = 'bg-gray-100 text-gray-800';
+const BADGE_BASE_CLASS =
+  "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold";
+const DEFAULT_BADGE_CLASS =
+  "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200";
 
-const STATUS_BADGES: Record<APIPendingTicket['status'], BadgeConfig> = {
-  open: { label: 'Open', className: 'bg-orange-100 text-orange-800' },
-  in_progress: { label: 'In Progress', className: 'bg-blue-100 text-blue-800' },
-  pending_approval: { label: 'Pending Approval', className: 'bg-yellow-100 text-yellow-800' },
-  pending_assignment: { label: 'Pending Assignment', className: 'bg-purple-100 text-purple-800' },
+const STATUS_BADGES: Record<APIPendingTicket["status"], BadgeConfig> = {
+  open: {
+    label: "Open",
+    className:
+      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-200",
+  },
+  in_progress: {
+    label: "In Progress",
+    className:
+      "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/40 dark:bg-blue-900/40 dark:text-blue-200",
+  },
+  pending_approval: {
+    label: "Pending Approval",
+    className:
+      "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-900/40 dark:text-yellow-200",
+  },
+  pending_assignment: {
+    label: "Pending Assignment",
+    className:
+      "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-500/40 dark:bg-purple-900/40 dark:text-purple-200",
+  },
 };
 
-const PRIORITY_BADGES: Record<APIPendingTicket['priority'], BadgeConfig> = {
-  urgent: { label: 'Urgent', className: 'bg-red-100 text-red-800' },
-  high: { label: 'High', className: 'bg-orange-100 text-orange-800' },
-  medium: { label: 'Medium', className: 'bg-yellow-100 text-yellow-800' },
-  low: { label: 'Low', className: 'bg-green-100 text-green-800' },
+const PRIORITY_BADGES: Record<APIPendingTicket["priority"], BadgeConfig> = {
+  urgent: {
+    label: "Urgent",
+    className:
+      "border-red-200 bg-red-50 text-red-700 dark:border-red-500/40 dark:bg-red-900/40 dark:text-red-200",
+  },
+  high: {
+    label: "High",
+    className:
+      "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/40 dark:bg-orange-900/40 dark:text-orange-200",
+  },
+  medium: {
+    label: "Medium",
+    className:
+      "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-900/40 dark:text-yellow-200",
+  },
+  low: {
+    label: "Low",
+    className:
+      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/40 dark:text-emerald-200",
+  },
 };
 
 const mockPersonalKPI: PersonalKPI = {
   ticketsCreatedByMonth: [
-    { month: 'Jan', tickets: 12, target: 15 },
-    { month: 'Feb', tickets: 18, target: 15 },
-    { month: 'Mar', tickets: 14, target: 15 },
-    { month: 'Apr', tickets: 22, target: 15 },
-    { month: 'May', tickets: 16, target: 15 },
-    { month: 'Jun', tickets: 19, target: 15 },
-    { month: 'Jul', tickets: 25, target: 15 },
-    { month: 'Aug', tickets: 21, target: 15 },
-    { month: 'Sep', tickets: 17, target: 15 },
-    { month: 'Oct', tickets: 23, target: 15 },
-    { month: 'Nov', tickets: 20, target: 15 },
-    { month: 'Dec', tickets: 18, target: 15 },
+    { month: "Jan", tickets: 12, target: 15 },
+    { month: "Feb", tickets: 18, target: 15 },
+    { month: "Mar", tickets: 14, target: 15 },
+    { month: "Apr", tickets: 22, target: 15 },
+    { month: "May", tickets: 16, target: 15 },
+    { month: "Jun", tickets: 19, target: 15 },
+    { month: "Jul", tickets: 25, target: 15 },
+    { month: "Aug", tickets: 21, target: 15 },
+    { month: "Sep", tickets: 17, target: 15 },
+    { month: "Oct", tickets: 23, target: 15 },
+    { month: "Nov", tickets: 20, target: 15 },
+    { month: "Dec", tickets: 18, target: 15 },
   ],
   downtimeAvoidance: {
     thisPeriod: 45.5,
@@ -110,14 +157,16 @@ const mockPersonalKPI: PersonalKPI = {
 };
 
 function getUploadsBase(apiBaseUrl: string) {
-  const withApiRemoved = apiBaseUrl.endsWith('/api') ? apiBaseUrl.slice(0, -4) : apiBaseUrl;
-  return withApiRemoved.replace(/\/$/, '');
+  const withApiRemoved = apiBaseUrl.endsWith("/api")
+    ? apiBaseUrl.slice(0, -4)
+    : apiBaseUrl;
+  return withApiRemoved.replace(/\/$/, "");
 }
 
 function formatCurrency(amount: number) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: 'USD',
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(amount);
@@ -131,17 +180,29 @@ const createBadge = (label: string, className: string) => (
   <span className={`${BADGE_BASE_CLASS} ${className}`}>{label}</span>
 );
 
-const StatusBadge: React.FC<{ status: APIPendingTicket['status'] }> = ({ status }) => {
-  const config = STATUS_BADGES[status] ?? { label: status, className: DEFAULT_BADGE_CLASS };
+const StatusBadge: React.FC<{ status: APIPendingTicket["status"] }> = ({
+  status,
+}) => {
+  const config = STATUS_BADGES[status] ?? {
+    label: status,
+    className: DEFAULT_BADGE_CLASS,
+  };
   return createBadge(config.label, config.className);
 };
 
-const PriorityBadge: React.FC<{ priority: APIPendingTicket['priority'] }> = ({ priority }) => {
-  const config = PRIORITY_BADGES[priority] ?? { label: priority, className: DEFAULT_BADGE_CLASS };
+const PriorityBadge: React.FC<{ priority: APIPendingTicket["priority"] }> = ({
+  priority,
+}) => {
+  const config = PRIORITY_BADGES[priority] ?? {
+    label: priority,
+    className: DEFAULT_BADGE_CLASS,
+  };
   return createBadge(config.label, config.className);
 };
 
-const QuickActionsSection: React.FC<{ actions: QuickAction[] }> = ({ actions }) => (
+const QuickActionsSection: React.FC<{ actions: QuickAction[] }> = ({
+  actions,
+}) => (
   <Card>
     <CardHeader>
       <CardTitle className="flex items-center space-x-2">
@@ -170,7 +231,12 @@ const QuickActionsSection: React.FC<{ actions: QuickAction[] }> = ({ actions }) 
   </Card>
 );
 
-const PendingTicketsSection: React.FC<{ tickets: APIPendingTicket[]; loading: boolean; error: string | null; onTicketClick: (ticketId: number) => void }> = ({ tickets, loading, error, onTicketClick }) => (
+const PendingTicketsSection: React.FC<{
+  tickets: APIPendingTicket[];
+  loading: boolean;
+  error: string | null;
+  onTicketClick: (ticketId: number) => void;
+}> = ({ tickets, loading, error, onTicketClick }) => (
   <Card>
     <CardHeader>
       <CardTitle className="flex items-center space-x-2">
@@ -180,13 +246,13 @@ const PendingTicketsSection: React.FC<{ tickets: APIPendingTicket[]; loading: bo
     </CardHeader>
     <CardContent>
       {loading ? (
-        <div className="text-center py-8 text-gray-500">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <div className="py-8 text-center text-muted-foreground">
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
           <p>Loading pending tickets...</p>
         </div>
       ) : error ? (
-        <div className="text-center py-8 text-red-500">
-          <Ticket className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <div className="py-8 text-center text-destructive dark:text-red-300">
+          <Ticket className="mx-auto mb-4 h-12 w-12 opacity-50" />
           <p>Error loading tickets</p>
           <p className="text-sm">{error}</p>
         </div>
@@ -194,36 +260,52 @@ const PendingTicketsSection: React.FC<{ tickets: APIPendingTicket[]; loading: bo
         <div className="space-y-4">
           <div className="hidden md:block">
             <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2 text-sm font-medium text-gray-600">Ticket</th>
-                    <th className="text-left py-2 text-sm font-medium text-gray-600">Title</th>
-                    <th className="text-left py-2 text-sm font-medium text-gray-600">Status</th>
-                    <th className="text-left py-2 text-sm font-medium text-gray-600">Priority</th>
-                    <th className="text-left py-2 text-sm font-medium text-gray-600">Area</th>
-                    <th className="text-left py-2 text-sm font-medium text-gray-600">Created</th>
+              <table className="w-full text-sm text-foreground">
+                <thead className="border-b border-border/70 bg-muted/40">
+                  <tr>
+                    <th className="py-2 text-left font-medium text-muted-foreground">
+                      Ticket
+                    </th>
+                    <th className="py-2 text-left font-medium text-muted-foreground">
+                      Title
+                    </th>
+                    <th className="py-2 text-left font-medium text-muted-foreground">
+                      Status
+                    </th>
+                    <th className="py-2 text-left font-medium text-muted-foreground">
+                      Priority
+                    </th>
+                    <th className="py-2 text-left font-medium text-muted-foreground">
+                      Area
+                    </th>
+                    <th className="py-2 text-left font-medium text-muted-foreground">
+                      Created
+                    </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-border/60">
                   {tickets.map((ticket) => (
-                    <tr 
-                      key={ticket.id} 
-                      className="border-b hover:bg-gray-50 cursor-pointer transition-colors"
+                    <tr
+                      key={ticket.id}
+                      className="cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
                       onClick={() => onTicketClick(ticket.id)}
                     >
-                      <td className="py-3 text-sm font-medium text-gray-900">{ticket.ticket_number}</td>
-                      <td className="py-3 text-sm text-gray-900 max-w-xs truncate">{ticket.title}</td>
+                      <td className="py-3 font-semibold text-foreground">
+                        {ticket.ticket_number}
+                      </td>
+                      <td className="py-3 max-w-xs truncate text-foreground">
+                        {ticket.title}
+                      </td>
                       <td className="py-3">
                         <StatusBadge status={ticket.status} />
                       </td>
                       <td className="py-3">
                         <PriorityBadge priority={ticket.priority} />
                       </td>
-                      <td className="py-3 text-sm text-gray-500">
-                        {ticket.area_name || 'N/A'}
+                      <td className="py-3 text-muted-foreground">
+                        {ticket.area_name || "N/A"}
                       </td>
-                      <td className="py-3 text-sm text-gray-500">
+                      <td className="py-3 text-muted-foreground">
                         {new Date(ticket.created_at).toLocaleDateString()}
                       </td>
                     </tr>
@@ -234,26 +316,35 @@ const PendingTicketsSection: React.FC<{ tickets: APIPendingTicket[]; loading: bo
           </div>
           <div className="md:hidden space-y-3">
             {tickets.map((ticket) => (
-              <div 
-                key={ticket.id} 
-                className="p-4 border rounded-lg bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
+              <div
+                key={ticket.id}
+                className="p-4 border border-border/70 rounded-lg bg-card hover:bg-muted/60 dark:hover:bg-muted/30 cursor-pointer transition-colors"
                 onClick={() => onTicketClick(ticket.id)}
               >
                 <div className="flex items-start justify-between mb-2">
-                  <div className="font-medium text-gray-900">{ticket.ticket_number}</div>
+                  <div className="font-medium text-foreground">
+                    {ticket.ticket_number}
+                  </div>
                   <div className="flex space-x-2">
                     <StatusBadge status={ticket.status} />
                     <PriorityBadge priority={ticket.priority} />
                   </div>
                 </div>
-                <div className="text-sm text-gray-700 mb-2">{ticket.title}</div>
-                <div className="text-xs text-gray-500 space-y-1">
-                  <div>Area: {ticket.area_name || 'N/A'}</div>
-                  <div>Created: {new Date(ticket.created_at).toLocaleDateString()}</div>
+                <div className="text-sm text-foreground mb-2">
+                  {ticket.title}
+                </div>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <div>Area: {ticket.area_name || "N/A"}</div>
+                  <div>
+                    Created: {new Date(ticket.created_at).toLocaleDateString()}
+                  </div>
                   {ticket.user_relationship && (
-                    <div className="text-blue-600 font-medium">
-                      {ticket.user_relationship === 'creator' ? 'You created this ticket' : 
-                       ticket.user_relationship === 'approver' ? 'Requires your approval' : 'View only'}
+                    <div className="font-medium text-primary">
+                      {ticket.user_relationship === "creator"
+                        ? "You created this ticket"
+                        : ticket.user_relationship === "approver"
+                          ? "Requires your approval"
+                          : "View only"}
                     </div>
                   )}
                 </div>
@@ -262,8 +353,8 @@ const PendingTicketsSection: React.FC<{ tickets: APIPendingTicket[]; loading: bo
           </div>
         </div>
       ) : (
-        <div className="text-center py-8 text-gray-500">
-          <Ticket className="h-12 w-12 mx-auto mb-4 opacity-50" />
+        <div className="py-8 text-center text-muted-foreground">
+          <Ticket className="mx-auto mb-4 h-12 w-12 opacity-50" />
           <p>No pending tickets</p>
           <p className="text-sm">All your tickets are up to date!</p>
         </div>
@@ -272,7 +363,9 @@ const PendingTicketsSection: React.FC<{ tickets: APIPendingTicket[]; loading: bo
   </Card>
 );
 
-const PersonalKPISection: React.FC<{ personalKPI: PersonalKPI }> = ({ personalKPI }) => (
+const PersonalKPISection: React.FC<{ personalKPI: PersonalKPI }> = ({
+  personalKPI,
+}) => (
   <div className="space-y-6">
     <Card>
       <CardHeader>
@@ -289,7 +382,14 @@ const PersonalKPISection: React.FC<{ personalKPI: PersonalKPI }> = ({ personalKP
             <YAxis />
             <Tooltip />
             <Bar dataKey="tickets" fill="#3b82f6" name="Tickets Created" />
-            <Line type="monotone" dataKey="target" stroke="#ef4444" strokeWidth={2} name="Target" dot={false} />
+            <Line
+              type="monotone"
+              dataKey="target"
+              stroke="#ef4444"
+              strokeWidth={2}
+              name="Target"
+              dot={false}
+            />
           </BarChart>
         </ResponsiveContainer>
       </CardContent>
@@ -301,9 +401,13 @@ const PersonalKPISection: React.FC<{ personalKPI: PersonalKPI }> = ({ personalKP
             <div>
               <div className="flex items-center space-x-2 mb-2">
                 <Clock className="h-5 w-5 text-blue-600" />
-                <span className="text-sm font-medium text-gray-600">Downtime Avoidance</span>
+                <span className="text-sm font-medium text-gray-600">
+                  Downtime Avoidance
+                </span>
               </div>
-              <div className="text-2xl font-bold text-blue-600">{formatHours(personalKPI.downtimeAvoidance.thisPeriod)}</div>
+              <div className="text-2xl font-bold text-blue-600">
+                {formatHours(personalKPI.downtimeAvoidance.thisPeriod)}
+              </div>
               <div className="text-sm text-gray-500">
                 This Period • #{personalKPI.downtimeAvoidance.ranking} Ranking
               </div>
@@ -321,9 +425,13 @@ const PersonalKPISection: React.FC<{ personalKPI: PersonalKPI }> = ({ personalKP
             <div>
               <div className="flex items-center space-x-2 mb-2">
                 <DollarSign className="h-5 w-5 text-green-600" />
-                <span className="text-sm font-medium text-gray-600">Cost Avoidance</span>
+                <span className="text-sm font-medium text-gray-600">
+                  Cost Avoidance
+                </span>
               </div>
-              <div className="text-2xl font-bold text-green-600">{formatCurrency(personalKPI.costAvoidance.thisPeriod)}</div>
+              <div className="text-2xl font-bold text-green-600">
+                {formatCurrency(personalKPI.costAvoidance.thisPeriod)}
+              </div>
               <div className="text-sm text-gray-500">
                 This Period • #{personalKPI.costAvoidance.ranking} Ranking
               </div>
@@ -341,10 +449,13 @@ const PersonalKPISection: React.FC<{ personalKPI: PersonalKPI }> = ({ personalKP
             <div>
               <div className="flex items-center space-x-2 mb-2">
                 <Ticket className="h-5 w-5 text-orange-600" />
-                <span className="text-sm font-medium text-gray-600">Ticket Performance</span>
+                <span className="text-sm font-medium text-gray-600">
+                  Ticket Performance
+                </span>
               </div>
               <div className="text-2xl font-bold text-orange-600">
-                {personalKPI.ticketStats.closedCount}/{personalKPI.ticketStats.openCount}
+                {personalKPI.ticketStats.closedCount}/
+                {personalKPI.ticketStats.openCount}
               </div>
               <div className="text-sm text-gray-500">
                 Closed/Open • #{personalKPI.ticketStats.ranking} Ranking
@@ -376,11 +487,15 @@ const HomePage: React.FC = () => {
         if (response.success) {
           setPendingTickets(response.data);
         } else {
-          setError('Failed to fetch pending tickets');
+          setError("Failed to fetch pending tickets");
         }
       } catch (err) {
-        console.error('Error fetching pending tickets:', err);
-        setError(err instanceof Error ? err.message : 'Failed to fetch pending tickets');
+        console.error("Error fetching pending tickets:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to fetch pending tickets",
+        );
       } finally {
         setLoading(false);
       }
@@ -392,30 +507,36 @@ const HomePage: React.FC = () => {
   const quickActions = useMemo<QuickAction[]>(
     () => [
       {
-        title: 'Create Ticket',
-        description: 'Report a new issue or request',
+        title: "Create Ticket",
+        description: "Report a new issue or request",
         icon: <Ticket className="h-6 w-6" />,
-        onClick: () => navigate('/tickets/create'),
-        color: 'bg-blue-500 hover:bg-blue-600',
+        onClick: () => navigate("/tickets/create"),
+        color: "bg-blue-500 hover:bg-blue-600",
       },
       {
-        title: 'View Tickets',
-        description: 'Check your ticket status',
+        title: "View Tickets",
+        description: "Check your ticket status",
         icon: <FileText className="h-6 w-6" />,
-        onClick: () => navigate('/tickets'),
-        color: 'bg-green-500 hover:bg-green-600',
+        onClick: () => navigate("/tickets"),
+        color: "bg-green-500 hover:bg-green-600",
       },
     ],
     [navigate],
   );
 
-  const subtitleSource = user as unknown as { title?: string; departmentName?: string } | undefined;
+  const subtitleSource = user as unknown as
+    | { title?: string; departmentName?: string }
+    | undefined;
   const userTitle = subtitleSource?.title;
-  const departmentName = subtitleSource?.departmentName ?? 'Department';
-  const subtitle = userTitle ? `${userTitle} • ${departmentName}` : departmentName;
+  const departmentName = subtitleSource?.departmentName ?? "Department";
+  const subtitle = userTitle
+    ? `${userTitle} • ${departmentName}`
+    : departmentName;
   const uploadsBase = useMemo(() => getUploadsBase(API_BASE_URL), []);
-  const avatarSrc = user?.avatarUrl ? `${uploadsBase}${user.avatarUrl}` : undefined;
-  const avatarInitials = `${user?.firstName?.[0] ?? ''}${user?.lastName?.[0] ?? ''}`;
+  const avatarSrc = user?.avatarUrl
+    ? `${uploadsBase}${user.avatarUrl}`
+    : undefined;
+  const avatarInitials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`;
 
   const handleTicketClick = (ticketId: number) => {
     navigate(`/tickets/${ticketId}`);
@@ -427,7 +548,9 @@ const HomePage: React.FC = () => {
         <div className="flex items-center space-x-4">
           <Avatar className="h-16 w-16">
             {avatarSrc ? <AvatarImage src={avatarSrc} alt="avatar" /> : null}
-            <AvatarFallback className="text-lg">{avatarInitials}</AvatarFallback>
+            <AvatarFallback className="text-lg">
+              {avatarInitials}
+            </AvatarFallback>
           </Avatar>
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
@@ -436,34 +559,37 @@ const HomePage: React.FC = () => {
             <p className="text-gray-600 mt-1">{subtitle}</p>
           </div>
         </div>
-        <div className="flex items-center space-x-2">
+        {/* <div className="flex items-center space-x-2">
           <Button
             variant="outline"
             size="sm"
-            onClick={() => navigate('/profile')}
+            onClick={() => navigate("/profile")}
             className="flex items-center space-x-2"
           >
             <Settings className="h-4 w-4" />
             <span>Profile</span>
           </Button>
-        </div>
+        </div> */}
       </div>
 
-       <Tabs defaultValue="quick-actions" className="space-y-6">
-         <TabsList className="grid w-full grid-cols-3">
-           <TabsTrigger value="quick-actions" className="flex items-center space-x-2">
-             <TrendingUp className="h-4 w-4" />
-             <span>Quick Actions</span>
-           </TabsTrigger>
-           <TabsTrigger value="personal" className="flex items-center space-x-2">
-             <User className="h-4 w-4" />
-             <span>Personal</span>
-           </TabsTrigger>
-           <TabsTrigger value="team" className="flex items-center space-x-2">
-             <Users className="h-4 w-4" />
-             <span>Team</span>
-           </TabsTrigger>
-         </TabsList>
+      <Tabs defaultValue="quick-actions" className="space-y-6">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger
+            value="quick-actions"
+            className="flex items-center space-x-2"
+          >
+            <TrendingUp className="h-4 w-4" />
+            <span>Quick Actions</span>
+          </TabsTrigger>
+          <TabsTrigger value="personal" className="flex items-center space-x-2">
+            <User className="h-4 w-4" />
+            <span>Personal</span>
+          </TabsTrigger>
+          <TabsTrigger value="team" className="flex items-center space-x-2">
+            <Users className="h-4 w-4" />
+            <span>Team</span>
+          </TabsTrigger>
+        </TabsList>
 
         <TabsContent value="quick-actions" className="space-y-6">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -471,11 +597,11 @@ const HomePage: React.FC = () => {
               <QuickActionsSection actions={quickActions} />
             </div>
             <div className="lg:col-span-2">
-              <PendingTicketsSection 
-                tickets={pendingTickets} 
-                loading={loading} 
-                error={error} 
-                onTicketClick={handleTicketClick} 
+              <PendingTicketsSection
+                tickets={pendingTickets}
+                loading={loading}
+                error={error}
+                onTicketClick={handleTicketClick}
               />
             </div>
           </div>
@@ -485,16 +611,18 @@ const HomePage: React.FC = () => {
           <PersonalKPISection personalKPI={personalKPI} />
         </TabsContent>
 
-         <TabsContent value="team">
-           <Card>
-             <CardHeader>
-               <CardTitle>Team Performance</CardTitle>
-             </CardHeader>
-             <CardContent>
-               <p className="text-gray-500">Team performance metrics coming soon...</p>
-             </CardContent>
-           </Card>
-         </TabsContent>
+        <TabsContent value="team">
+          <Card>
+            <CardHeader>
+              <CardTitle>Team Performance</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-gray-500">
+                Team performance metrics coming soon...
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
       </Tabs>
     </div>
   );

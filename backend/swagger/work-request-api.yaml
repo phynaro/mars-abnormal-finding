@@ -3358,6 +3358,1278 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
+  # ========== ADMINISTRATION ENDPOINTS ==========
+  /administration/plants:
+    get:
+      tags:
+        - Administration
+      summary: Get all plants
+      description: Retrieve a list of all plants
+      operationId: getPlants
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of plants retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Plant'
+                  count:
+                    type: integer
+                    example: 5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Administration
+      summary: Create a new plant
+      description: Create a new plant with the provided information
+      operationId: createPlant
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - code
+              properties:
+                name:
+                  type: string
+                  example: "Main Plant"
+                description:
+                  type: string
+                  example: "Primary manufacturing facility"
+                code:
+                  type: string
+                  example: "MP001"
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Plant created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                  message:
+                    type: string
+                    example: "Plant created successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/plants/{id}:
+    get:
+      tags:
+        - Administration
+      summary: Get plant by ID
+      description: Retrieve a specific plant by its ID
+      operationId: getPlantById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Plant ID
+      responses:
+        '200':
+          description: Plant retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Plant'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Administration
+      summary: Update plant
+      description: Update an existing plant
+      operationId: updatePlant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Plant ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - code
+              properties:
+                name:
+                  type: string
+                  example: "Main Plant Updated"
+                description:
+                  type: string
+                  example: "Updated primary manufacturing facility"
+                code:
+                  type: string
+                  example: "MP001"
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Plant updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Plant updated successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Administration
+      summary: Delete plant
+      description: Delete a plant (only if no areas exist)
+      operationId: deletePlant
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Plant ID
+      responses:
+        '200':
+          description: Plant deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Plant deleted successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/areas:
+    get:
+      tags:
+        - Administration
+      summary: Get all areas
+      description: Retrieve a list of all areas, optionally filtered by plant
+      operationId: getAreas
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: plant_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by plant ID
+      responses:
+        '200':
+          description: List of areas retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Area'
+                  count:
+                    type: integer
+                    example: 8
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Administration
+      summary: Create a new area
+      description: Create a new area with the provided information
+      operationId: createArea
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - plant_id
+                - name
+                - code
+              properties:
+                plant_id:
+                  type: integer
+                  example: 1
+                name:
+                  type: string
+                  example: "Production Area A"
+                description:
+                  type: string
+                  example: "Main production area"
+                code:
+                  type: string
+                  example: "PA001"
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Area created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                  message:
+                    type: string
+                    example: "Area created successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/areas/{id}:
+    get:
+      tags:
+        - Administration
+      summary: Get area by ID
+      description: Retrieve a specific area by its ID
+      operationId: getAreaById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Area ID
+      responses:
+        '200':
+          description: Area retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Area'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Administration
+      summary: Update area
+      description: Update an existing area
+      operationId: updateArea
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Area ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - plant_id
+                - name
+                - code
+              properties:
+                plant_id:
+                  type: integer
+                  example: 1
+                name:
+                  type: string
+                  example: "Production Area A Updated"
+                description:
+                  type: string
+                  example: "Updated main production area"
+                code:
+                  type: string
+                  example: "PA001"
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Area updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Area updated successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Administration
+      summary: Delete area
+      description: Delete an area (only if no lines exist)
+      operationId: deleteArea
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Area ID
+      responses:
+        '200':
+          description: Area deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Area deleted successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/lines:
+    get:
+      tags:
+        - Administration
+      summary: Get all lines
+      description: Retrieve a list of all lines, optionally filtered by plant or area
+      operationId: getLines
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: plant_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by plant ID
+        - name: area_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by area ID
+      responses:
+        '200':
+          description: List of lines retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Line'
+                  count:
+                    type: integer
+                    example: 9
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Administration
+      summary: Create a new line
+      description: Create a new line with the provided information
+      operationId: createLine
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - plant_id
+                - area_id
+                - name
+                - code
+              properties:
+                plant_id:
+                  type: integer
+                  example: 1
+                area_id:
+                  type: integer
+                  example: 1
+                name:
+                  type: string
+                  example: "Line 1"
+                description:
+                  type: string
+                  example: "Main production line"
+                code:
+                  type: string
+                  example: "L001"
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Line created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                  message:
+                    type: string
+                    example: "Line created successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/lines/{id}:
+    get:
+      tags:
+        - Administration
+      summary: Get line by ID
+      description: Retrieve a specific line by its ID
+      operationId: getLineById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Line ID
+      responses:
+        '200':
+          description: Line retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Line'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Administration
+      summary: Update line
+      description: Update an existing line
+      operationId: updateLine
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Line ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - plant_id
+                - area_id
+                - name
+                - code
+              properties:
+                plant_id:
+                  type: integer
+                  example: 1
+                area_id:
+                  type: integer
+                  example: 1
+                name:
+                  type: string
+                  example: "Line 1 Updated"
+                description:
+                  type: string
+                  example: "Updated main production line"
+                code:
+                  type: string
+                  example: "L001"
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Line updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Line updated successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Administration
+      summary: Delete line
+      description: Delete a line (only if no machines exist)
+      operationId: deleteLine
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Line ID
+      responses:
+        '200':
+          description: Line deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Line deleted successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/machines:
+    get:
+      tags:
+        - Administration
+      summary: Get all machines
+      description: Retrieve a list of all machines, optionally filtered by line, area, or plant
+      operationId: getMachines
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: line_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by line ID
+        - name: area_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by area ID
+        - name: plant_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by plant ID
+      responses:
+        '200':
+          description: List of machines retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Machine'
+                  count:
+                    type: integer
+                    example: 9
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Administration
+      summary: Create a new machine
+      description: Create a new machine with the provided information
+      operationId: createMachine
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - line_id
+                - name
+                - code
+                - machine_number
+              properties:
+                line_id:
+                  type: integer
+                  example: 1
+                name:
+                  type: string
+                  example: "Machine 1"
+                description:
+                  type: string
+                  example: "Main production machine"
+                code:
+                  type: string
+                  example: "M001"
+                machine_number:
+                  type: integer
+                  example: 1
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Machine created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                  message:
+                    type: string
+                    example: "Machine created successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/machines/{id}:
+    get:
+      tags:
+        - Administration
+      summary: Get machine by ID
+      description: Retrieve a specific machine by its ID
+      operationId: getMachineById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Machine ID
+      responses:
+        '200':
+          description: Machine retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Machine'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Administration
+      summary: Update machine
+      description: Update an existing machine
+      operationId: updateMachine
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Machine ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - line_id
+                - name
+                - code
+                - machine_number
+              properties:
+                line_id:
+                  type: integer
+                  example: 1
+                name:
+                  type: string
+                  example: "Machine 1 Updated"
+                description:
+                  type: string
+                  example: "Updated main production machine"
+                code:
+                  type: string
+                  example: "M001"
+                machine_number:
+                  type: integer
+                  example: 1
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Machine updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Machine updated successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Administration
+      summary: Delete machine
+      description: Delete a machine
+      operationId: deleteMachine
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Machine ID
+      responses:
+        '200':
+          description: Machine deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Machine deleted successfully"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/ticket-approvals:
+    get:
+      tags:
+        - Administration
+      summary: Get all ticket approvals
+      description: Retrieve a list of all ticket approvals, optionally filtered by area or person
+      operationId: getTicketApprovals
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: area_id
+          in: query
+          schema:
+            type: integer
+          description: Filter by area ID
+        - name: personno
+          in: query
+          schema:
+            type: integer
+          description: Filter by person number
+      responses:
+        '200':
+          description: List of ticket approvals retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TicketApproval'
+                  count:
+                    type: integer
+                    example: 7
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    post:
+      tags:
+        - Administration
+      summary: Create a new ticket approval
+      description: Create a new ticket approval with the provided information
+      operationId: createTicketApproval
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - personno
+                - area_id
+                - approval_level
+              properties:
+                personno:
+                  type: integer
+                  example: 12345
+                area_id:
+                  type: integer
+                  example: 1
+                approval_level:
+                  type: integer
+                  example: 1
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '201':
+          description: Ticket approval created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      id:
+                        type: integer
+                        example: 1
+                  message:
+                    type: string
+                    example: "Ticket approval created successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/ticket-approvals/{id}:
+    get:
+      tags:
+        - Administration
+      summary: Get ticket approval by ID
+      description: Retrieve a specific ticket approval by its ID
+      operationId: getTicketApprovalById
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Ticket approval ID
+      responses:
+        '200':
+          description: Ticket approval retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TicketApproval'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    put:
+      tags:
+        - Administration
+      summary: Update ticket approval
+      description: Update an existing ticket approval
+      operationId: updateTicketApproval
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Ticket approval ID
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - personno
+                - area_id
+                - approval_level
+              properties:
+                personno:
+                  type: integer
+                  example: 12345
+                area_id:
+                  type: integer
+                  example: 1
+                approval_level:
+                  type: integer
+                  example: 1
+                is_active:
+                  type: boolean
+                  example: true
+      responses:
+        '200':
+          description: Ticket approval updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Ticket approval updated successfully"
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+    delete:
+      tags:
+        - Administration
+      summary: Delete ticket approval
+      description: Delete a ticket approval
+      operationId: deleteTicketApproval
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Ticket approval ID
+      responses:
+        '200':
+          description: Ticket approval deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Ticket approval deleted successfully"
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /administration/lookup:
+    get:
+      tags:
+        - Administration
+      summary: Get lookup data
+      description: Retrieve lookup data for dropdowns (plants, areas, lines)
+      operationId: getLookupData
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Lookup data retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      plants:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Plant'
+                      areas:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Area'
+                      lines:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Line'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  # Person Search Route
+  /administration/persons/search:
+    get:
+      tags:
+        - Administration
+      summary: Search persons
+      description: Search for persons by name, code, or person number
+      operationId: searchPersons
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          description: Search term for person name, code, or number
+          required: false
+          schema:
+            type: string
+            example: "John"
+        - name: limit
+          in: query
+          description: Maximum number of results to return
+          required: false
+          schema:
+            type: integer
+            default: 20
+            example: 10
+      responses:
+        '200':
+          description: Persons found successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Person'
+                  count:
+                    type: integer
+                    example: 5
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
 components:
   securitySchemes:
     bearerAuth:
@@ -4836,6 +6108,277 @@ components:
           type: boolean
           example: false
 
+    # Administration Models
+    Plant:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Plant ID
+          example: 1
+        name:
+          type: string
+          description: Plant name
+          example: "Main Plant"
+        description:
+          type: string
+          description: Plant description
+          example: "Primary manufacturing facility"
+        code:
+          type: string
+          description: Plant code
+          example: "MP001"
+        is_active:
+          type: boolean
+          description: Whether the plant is active
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2024-01-15T10:30:00Z"
+
+    Area:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Area ID
+          example: 1
+        plant_id:
+          type: integer
+          description: Parent plant ID
+          example: 1
+        name:
+          type: string
+          description: Area name
+          example: "Production Area A"
+        description:
+          type: string
+          description: Area description
+          example: "Main production area"
+        code:
+          type: string
+          description: Area code
+          example: "PA001"
+        is_active:
+          type: boolean
+          description: Whether the area is active
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2024-01-15T10:30:00Z"
+        plant_name:
+          type: string
+          description: Parent plant name
+          example: "Main Plant"
+
+    Line:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Line ID
+          example: 1
+        plant_id:
+          type: integer
+          description: Parent plant ID
+          example: 1
+        area_id:
+          type: integer
+          description: Parent area ID
+          example: 1
+        name:
+          type: string
+          description: Line name
+          example: "Line 1"
+        description:
+          type: string
+          description: Line description
+          example: "Main production line"
+        code:
+          type: string
+          description: Line code
+          example: "L001"
+        is_active:
+          type: boolean
+          description: Whether the line is active
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2024-01-15T10:30:00Z"
+        plant_name:
+          type: string
+          description: Parent plant name
+          example: "Main Plant"
+        area_name:
+          type: string
+          description: Parent area name
+          example: "Production Area A"
+
+    Machine:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Machine ID
+          example: 1
+        line_id:
+          type: integer
+          description: Parent line ID
+          example: 1
+        name:
+          type: string
+          description: Machine name
+          example: "Machine 1"
+        description:
+          type: string
+          description: Machine description
+          example: "Main production machine"
+        code:
+          type: string
+          description: Machine code
+          example: "M001"
+        machine_number:
+          type: integer
+          description: Machine number
+          example: 1
+        is_active:
+          type: boolean
+          description: Whether the machine is active
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2024-01-15T10:30:00Z"
+        line_name:
+          type: string
+          description: Parent line name
+          example: "Line 1"
+        area_name:
+          type: string
+          description: Parent area name
+          example: "Production Area A"
+        plant_name:
+          type: string
+          description: Parent plant name
+          example: "Main Plant"
+
+    TicketApproval:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Ticket approval ID
+          example: 1
+        personno:
+          type: integer
+          description: Person number
+          example: 12345
+        area_id:
+          type: integer
+          description: Area ID
+          example: 1
+        approval_level:
+          type: integer
+          description: Approval level (1-3)
+          example: 1
+        is_active:
+          type: boolean
+          description: Whether the approval is active
+          example: true
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2024-01-15T10:30:00Z"
+        area_name:
+          type: string
+          description: Area name
+          example: "Production Area A"
+        plant_name:
+          type: string
+          description: Plant name
+          example: "Main Plant"
+        person_name:
+          type: string
+          description: Person name (from Person table)
+          example: "John Doe"
+        firstname:
+          type: string
+          description: Person first name
+          example: "John"
+        lastname:
+          type: string
+          description: Person last name
+          example: "Doe"
+        personcode:
+          type: string
+          description: Person code
+          example: "EMP001"
+
+    Person:
+      type: object
+      properties:
+        PERSONNO:
+          type: integer
+          description: Person number
+          example: 12345
+        PERSON_NAME:
+          type: string
+          description: Full person name
+          example: "John Doe"
+        FIRSTNAME:
+          type: string
+          description: First name
+          example: "John"
+        LASTNAME:
+          type: string
+          description: Last name
+          example: "Doe"
+        PERSONCODE:
+          type: string
+          description: Person code
+          example: "EMP001"
+        EMAIL:
+          type: string
+          description: Email address
+          example: "john.doe@company.com"
+        PHONE:
+          type: string
+          description: Phone number
+          example: "+1234567890"
+
     # Common Error Responses
     ErrorResponse:
       type: object
@@ -4915,3 +6458,5 @@ tags:
     description: Dashboard analytics and reporting operations
   - name: Tickets
     description: Ticket management and workflow operations
+  - name: Administration
+    description: Plant, Area, Line, Machine, and Ticket Approval management operations

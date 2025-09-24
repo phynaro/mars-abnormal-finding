@@ -38,6 +38,7 @@ const validatePUCODE = (pucode) => {
     };
 };
 const lineService = require('../services/lineService');
+const abnFlexService = require('../services/abnormalFindingFlexService');
 const fs = require('fs');
 const path = require('path');
 
@@ -69,6 +70,25 @@ const mapImagesToLinePayload = (records = [], baseUrl = getBaseUrl()) =>
         url: `${baseUrl}${img.image_url}`,
         filename: img.image_name,
     }));
+
+// Helper function to get hero image from ticket images
+const getHeroImageUrl = (images, imageType = 'before') => {
+    if (!images || images.length === 0) return null;
+    
+    // For ticket images array with full URLs
+    if (images[0]?.url) {
+        return images[0].url;
+    }
+    
+    // For raw database records
+    const baseUrl = getBaseUrl();
+    const heroImage = images[0];
+    if (heroImage?.image_url) {
+        return `${baseUrl}${heroImage.image_url}`;
+    }
+    
+    return null;
+};
 
 // Generate unique ticket number in format TKT-YYYYMMDD-Case number
 const generateTicketNumber = async (pool) => {
@@ -148,7 +168,8 @@ const createTicket = async (req, res) => {
             cost_avoidance,
             downtime_avoidance_hours,
             failure_mode_id,
-            suggested_assignee_id
+            suggested_assignee_id,
+            scheduled_complete
         } = req.body;
 
         const reported_by = req.user.id; // From auth middleware
@@ -201,6 +222,7 @@ const createTicket = async (req, res) => {
             .input('failure_mode_id', sql.Int, failure_mode_id || 0)
             .input('reported_by', sql.Int, reported_by)
             .input('assigned_to', sql.Int, validatedAssigneeId)
+            .input('scheduled_complete', sql.DateTime2, scheduled_complete)
             .execute('sp_CreateTicketWithPUCODE');
 
         const ticketResult = result.recordset[0];
@@ -668,14 +690,43 @@ const updateTicket = async (req, res) => {
                         
                         const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
                         
-                        const flexMsg = lineService.buildTicketStatusUpdateFlexMessage(
-                            ticketData, 
-                            oldStatus, 
-                            updateData.status, 
-                            changedByName, 
-                            ticketImages
-                        );
-                        await lineService.pushToUser(reporter.LineID, flexMsg);
+                        // Determine state based on new status
+                        let abnState;
+                        switch (updateData.status) {
+                            case 'accepted': case 'in_progress':
+                                abnState = abnFlexService.AbnCaseState.ACCEPTED;
+                                break;
+                            case 'completed':
+                                abnState = abnFlexService.AbnCaseState.COMPLETED;
+                                break;
+                            case 'rejected_final':
+                                abnState = abnFlexService.AbnCaseState.REJECT_FINAL;
+                                break;
+                            case 'rejected_pending_l3_review':
+                                abnState = abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
+                                break;
+                            case 'escalated':
+                                abnState = abnFlexService.AbnCaseState.ESCALATED;
+                                break;
+                            case 'closed':
+                                abnState = abnFlexService.AbnCaseState.CLOSED;
+                                break;
+                            case 'reopened_in_progress':
+                                abnState = abnFlexService.AbnCaseState.REOPENED;
+                                break;
+                            default:
+                                abnState = abnFlexService.AbnCaseState.CREATED;
+                        }
+                        
+                        const flexMsg = abnFlexService.buildAbnFlexMinimal(abnState, {
+                            caseNo: ticketData.ticket_number,
+                            assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                            problem: ticketData.title || "No description",
+                            actionBy: changedByName,
+                            comment: updateData.status_notes || `สถานะเปลี่ยนจาก ${oldStatus} เป็น ${updateData.status}`,
+                            detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                        });
+                        await abnFlexService.pushToUser(reporter.LineID, flexMsg);
                     }
                 } catch (lineErr) {
                     console.error('Failed to send LINE status update notification:', lineErr);
@@ -805,12 +856,15 @@ const assignTicket = async (req, res) => {
                     
                     const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
                     
-                    const flexMsg = lineService.buildTicketAssignedFlexMessage(
-                        ticketData, 
-                        assigneeDisplayName, 
-                        ticketImages
-                    );
-                    await lineService.pushToUser(assignee.LineID, flexMsg);
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REASSIGNED, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: assigneeDisplayName,
+                        comment: notes || "งานได้รับการมอบหมายให้คุณแล้ว",
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(assignee.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE assignment notification:', lineErr);
@@ -1058,9 +1112,17 @@ const deleteTicketImage = async (req, res) => {
 const acceptTicket = async (req, res) => {
     try {
         const { id } = req.params;
-        const { notes } = req.body;
+        const { notes, scheduled_complete } = req.body;
         const accepted_by = req.user.id;
         const pool = await sql.connect(dbConfig);
+
+        // Validate required fields
+        if (!scheduled_complete) {
+            return res.status(400).json({
+                success: false,
+                message: 'Scheduled completion date is required'
+            });
+        }
 
         // Get current ticket status
         const currentTicket = await pool.request()
@@ -1099,12 +1161,14 @@ const acceptTicket = async (req, res) => {
             .input('status', sql.VarChar(50), newStatus)
             .input('assigned_to', sql.Int, accepted_by)
             .input('accepted_by', sql.Int, accepted_by)
+            .input('scheduled_complete', sql.DateTime2, scheduled_complete)
             .query(`
                 UPDATE Tickets 
                 SET status = @status, 
                     assigned_to = @assigned_to, 
                     accepted_at = GETDATE(),
                     accepted_by = @accepted_by,
+                    scheduled_complete = @scheduled_complete,
                     updated_at = GETDATE()
                 WHERE id = @id
             `);
@@ -1172,12 +1236,19 @@ const acceptTicket = async (req, res) => {
                     //     filename: img.image_name
                     // }));
                     
-                    const flexMsg = lineService.buildTicketAcceptedFlexMessage(
-                        ticketData, 
-                        acceptorName, 
-                       // ticketImages
-                    );
-                    await lineService.pushToUser(reporter.LineID, flexMsg);
+                    // NEW: Using clean abnormal finding flex service
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ACCEPTED, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: acceptorName,
+                        comment: notes || `งานได้รับการยอมรับแล้ว โดย ${acceptorName}`,
+                        extraKVs: scheduled_complete ? [
+                            { label: "Scheduled Complete", value: new Date(scheduled_complete).toLocaleDateString('th-TH') }
+                        ] : [],
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE acceptance notification:', lineErr);
@@ -1342,12 +1413,20 @@ const rejectTicket = async (req, res) => {
             // LINE notification to reporter
             try {
                 if (reporter?.LineID) {
-                    const flexMsg = lineService.buildTicketRejectedFlexMessageSimple(
-                        ticketData, 
-                        rejectorName, 
-                        rejection_reason
-                    );
-                    await lineService.pushToUser(reporter.LineID, flexMsg);
+                    // Determine rejection state based on user level
+                    const rejectionState = (ticket.user_approval_level || 0) >= 3 
+                        ? abnFlexService.AbnCaseState.REJECT_FINAL 
+                        : abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
+                    
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(rejectionState, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: rejectorName,
+                        comment: rejection_reason || "งานถูกปฏิเสธ",
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE rejection notification to reporter:', lineErr);
@@ -1356,12 +1435,20 @@ const rejectTicket = async (req, res) => {
             // LINE notification to assignee (if exists)
             try {
                 if (assignee?.LineID && assignee.PERSON_NAME) {
-                    const flexMsg = lineService.buildTicketRejectedFlexMessageSimple(
-                        ticketData, 
-                        rejectorName, 
-                        rejection_reason
-                    );
-                    await lineService.pushToUser(assignee.LineID, flexMsg);
+                    // Determine rejection state based on user level
+                    const rejectionState = (ticket.user_approval_level || 0) >= 3 
+                        ? abnFlexService.AbnCaseState.REJECT_FINAL 
+                        : abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
+                    
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(rejectionState, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: rejectorName,
+                        comment: rejection_reason || "งานถูกปฏิเสธ",
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(assignee.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE rejection notification to assignee:', lineErr);
@@ -1498,27 +1585,35 @@ const completeJob = async (req, res) => {
             // LINE notification
             try {
                 if (reporter?.LineID) {
-                    // Get ticket images for FLEX message
+                    // Get ticket images for FLEX message (after images for completion)
                     const imagesResult = await pool.request()
                         .input('ticket_id', sql.Int, id)
                         .query(`
-                            SELECT image_url, image_name 
+                            SELECT image_url, image_name, image_type
                             FROM TicketImages 
-                            WHERE ticket_id = @ticket_id AND image_type = 'after'
+                            WHERE ticket_id = @ticket_id 
                             ORDER BY uploaded_at ASC
                         `);
                     
-                    const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
+                    // Get hero image from "after" images, fallback to any image
+                    const afterImages = imagesResult.recordset.filter(img => img.image_type === 'after');
+                    const heroImageUrl = getHeroImageUrl(afterImages.length > 0 ? afterImages : imagesResult.recordset);
                     
-                    const flexMsg = lineService.buildJobCompletedFlexMessage(
-                        ticketData, 
-                        completerName, 
-                        completion_notes, 
-                        downtime_avoidance_hours,
-                        cost_avoidance,
-                        ticketImages
-                    );
-                    await lineService.pushToUser(reporter.LineID, flexMsg);
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.COMPLETED, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: completerName,
+                        comment: completion_notes || "งานเสร็จสมบูรณ์แล้ว",
+                        heroImageUrl: heroImageUrl,
+                        extraKVs: [
+                            { label: "Cost Avoidance", value: cost_avoidance ? `${cost_avoidance.toLocaleString()} บาท` : "-" },
+                            { label: "Downtime Avoidance", value: downtime_avoidance_hours ? `${downtime_avoidance_hours} ชั่วโมง` : "-" },
+                            { label: "Failure Mode", value: ticketData.FailureModeName || "-" }
+                        ],
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE completion notification:', lineErr);
@@ -1684,25 +1779,37 @@ const escalateTicket = async (req, res) => {
                 const sentToUsers = new Set();
                 
                 if (escalatedTo?.LineID) {
-                    const flexMsg = lineService.buildTicketEscalatedFlexMessageSimple(
-                        ticketData, 
-                        escalatorName, 
-                        escalation_reason,
-                        images
-                    );
-                    await lineService.pushToUser(escalatedTo.LineID, flexMsg);
+                    // Get hero image from before images
+                    const heroImageUrl = getHeroImageUrl(images);
+                    
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ESCALATED, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: escalatorName,
+                        comment: escalation_reason || "งานถูกส่งต่อให้ L3 พิจารณา",
+                        heroImageUrl: heroImageUrl,
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(escalatedTo.LineID, flexMsg);
                     sentToUsers.add(escalatedTo.LineID);
                 }
                 
                 // Only send to reporter if they haven't already received a notification
                 if (reporter?.LineID && !sentToUsers.has(reporter.LineID)) {
-                    const flexMsg = lineService.buildTicketEscalatedFlexMessageSimple(
-                        ticketData, 
-                        escalatorName, 
-                        escalation_reason,
-                        images
-                    );
-                    await lineService.pushToUser(reporter.LineID, flexMsg);
+                    // Get hero image from before images
+                    const heroImageUrl = getHeroImageUrl(images);
+                    
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ESCALATED, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: escalatorName,
+                        comment: escalation_reason || "งานของคุณถูกส่งต่อให้ L3 พิจารณา",
+                        heroImageUrl: heroImageUrl,
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE escalation notification:', lineErr);
@@ -1831,12 +1938,18 @@ const closeTicket = async (req, res) => {
             // LINE notification
             try {
                 if (assignee?.LineID) {
-                    const flexMsg = lineService.buildTicketClosedFlexMessageSimple(
-                        ticketData, 
-                        closerName, 
-                        satisfaction_rating
-                    );
-                    await lineService.pushToUser(assignee.LineID, flexMsg);
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CLOSED, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: closerName,
+                        comment: close_reason || "เคสถูกปิดโดยผู้ร้องขอ",
+                        extraKVs: [
+                            { label: "Satisfaction Rating", value: satisfaction_rating ? `${satisfaction_rating}/5 ดาว` : "ไม่ระบุ" }
+                        ],
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(assignee.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE closure notification:', lineErr);
@@ -2006,13 +2119,15 @@ const reassignTicket = async (req, res) => {
                     
                     const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
                     
-                    const flexMsg = lineService.buildTicketReassignedFlexMessage(
-                        ticketData, 
-                        reassignerName, 
-                        reassignment_reason, 
-                        ticketImages
-                    );
-                    await lineService.pushToUser(assigneeLineID, flexMsg);
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REASSIGNED, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: reassignerName,
+                        comment: reassignment_reason || "งานได้รับการมอบหมายใหม่ให้คุณ",
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(assigneeLineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE reassignment notification:', lineErr);
@@ -2105,11 +2220,11 @@ const sendDelayedTicketNotification = async (ticketId) => {
         
         const ticket = ticketResult.recordset[0];
         
-        // Get all ticket images
+        // Get all ticket images (before images for hero)
         const imagesResult = await pool.request()
             .input('ticket_id', sql.Int, ticketId)
             .query(`
-                SELECT image_url, image_name 
+                SELECT image_url, image_name, image_type
                 FROM TicketImages 
                 WHERE ticket_id = @ticket_id 
                 ORDER BY uploaded_at ASC
@@ -2119,14 +2234,27 @@ const sendDelayedTicketNotification = async (ticketId) => {
         const baseUrl = getBaseUrl();
         const ticketImages = mapImagesToLinePayload(imagesResult.recordset, baseUrl);
         
-        // For development/testing, allow local images
-        const allowLocalImages = process.env.NODE_ENV === 'development' || process.env.ALLOW_LOCAL_IMAGES === 'true';
+        // Get hero image (first "before" image or first image if no "before" type)
+        const beforeImages = imagesResult.recordset.filter(img => img.image_type === 'before');
+        const heroImageUrl = getHeroImageUrl(beforeImages.length > 0 ? beforeImages : imagesResult.recordset);
         
         // 1. Send LINE notification to requester (reporter)
         if (ticket.reporter_line_id) {
             try {
-                const flexMsg = lineService.buildTicketCreatedFlexMessage(ticket, ticket.reporter_name, ticketImages, { allowLocalImages });
-                await lineService.pushToUser(ticket.reporter_line_id, flexMsg);
+                const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CREATED, {
+                    caseNo: ticket.ticket_number,
+                    assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
+                    problem: ticket.title || "No description",
+                    actionBy: ticket.reporter_name,
+                    comment: "เคสใหม่ รอการยอมรับจาก L2",
+                    heroImageUrl: heroImageUrl,
+                    extraKVs: [
+                        { label: "Priority", value: ticket.priority || "normal" },
+                        { label: "Severity", value: ticket.severity_level || "medium" }
+                    ],
+                    detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticket.id}`
+                });
+                await abnFlexService.pushToUser(ticket.reporter_line_id, flexMsg);
                 console.log(`LINE notification sent to requester for ticket ${ticketId}`);
             } catch (reporterLineErr) {
                 console.error(`Failed to send LINE notification to requester for ticket ${ticketId}:`, reporterLineErr);
@@ -2146,8 +2274,20 @@ const sendDelayedTicketNotification = async (ticketId) => {
             }
             
             try {
-                const flexMsg = lineService.buildTicketCreatedFlexMessage(ticket, ticket.reporter_name, ticketImages, { allowLocalImages });
-                await lineService.pushToUser(user.LineID, flexMsg);
+                const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CREATED, {
+                    caseNo: ticket.ticket_number,
+                    assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
+                    problem: ticket.title || "No description",
+                    actionBy: ticket.reporter_name,
+                    comment: "เคสใหม่ รอการยอมรับจาก L2",
+                    heroImageUrl: heroImageUrl,
+                    extraKVs: [
+                        { label: "Priority", value: ticket.priority || "normal" },
+                        { label: "Severity", value: ticket.severity_level || "medium" }
+                    ],
+                    detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticket.id}`
+                });
+                await abnFlexService.pushToUser(user.LineID, flexMsg);
                 console.log(`LINE notification sent to L2 user ${user.PERSON_NAME} (${user.PERSONNO}) for ticket ${ticketId}`);
             } catch (l2UserLineErr) {
                 console.error(`Failed to send LINE notification to L2 user ${user.PERSON_NAME} for ticket ${ticketId}:`, l2UserLineErr);
@@ -2161,15 +2301,21 @@ const sendDelayedTicketNotification = async (ticketId) => {
             
             if (!isAssigneeInL2Users) {
                 try {
-                    const flexMsg = lineService.buildTicketCreatedFlexMessage(ticket, ticket.reporter_name, ticketImages, { allowLocalImages });
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CREATED, {
+                        caseNo: ticket.ticket_number,
+                        assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
+                        problem: ticket.title || "No description",
+                        actionBy: ticket.reporter_name,
+                        comment: "เคสใหม่ - คุณได้รับมอบหมายงานนี้แล้ว",
+                        heroImageUrl: heroImageUrl,
+                        extraKVs: [
+                            { label: "Priority", value: ticket.priority || "normal" },
+                            { label: "Severity", value: ticket.severity_level || "medium" }
+                        ],
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticket.id}`
+                    });
                     
-                    // Log detailed image status for debugging
-                    if (ticketImages.length > 0) {
-                        const debugInfo = lineService.debugImageAccessibility(ticketImages);
-                        console.log(`Delayed LINE notification for ticket ${ticketId}:`, JSON.stringify(debugInfo, null, 2));
-                    }
-                    
-                    await lineService.pushToUser(ticket.assignee_line_id, flexMsg);
+                    await abnFlexService.pushToUser(ticket.assignee_line_id, flexMsg);
                     console.log(`LINE notification sent to pre-assigned user for ticket ${ticketId}`);
                     
                 } catch (assigneeLineErr) {
@@ -2406,13 +2552,15 @@ const reopenTicket = async (req, res) => {
                     
                     const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
                     
-                    const flexMsg = lineService.buildTicketReopenedFlexMessage(
-                        ticketData, 
-                        reopenerName, 
-                        reopen_reason, 
-                        ticketImages
-                    );
-                    await lineService.pushToUser(assignee.LineID, flexMsg);
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REOPENED, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: reopenerName,
+                        comment: reopen_reason || "งานถูกเปิดใหม่ กรุณาดำเนินการต่อ",
+                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                    });
+                    await abnFlexService.pushToUser(assignee.LineID, flexMsg);
                 }
             } catch (lineErr) {
                 console.error('Failed to send LINE reopen notification:', lineErr);

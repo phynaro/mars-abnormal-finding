@@ -65,14 +65,14 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
         </div>
         <div className="flex flex-col items-center py-3 gap-2">
           {/* Settings shortcut */}
-          <Tooltip>
+          {/* <Tooltip>
             <TooltipTrigger asChild>
               <button className="flex h-10 w-10 items-center justify-center rounded-md hover:bg-primary-foreground/10" onClick={() => navigate('/settings')}>
                 <SettingsIcon className="h-5 w-5" />
               </button>
             </TooltipTrigger>
             <TooltipContent side="right">Settings</TooltipContent>
-          </Tooltip>
+          </Tooltip> */}
           {/* Theme toggle */}
           <Tooltip>
             <TooltipTrigger asChild>

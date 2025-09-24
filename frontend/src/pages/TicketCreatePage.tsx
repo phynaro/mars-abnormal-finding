@@ -8,37 +8,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/useToast';
-import { Search, Filter, Upload, X } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 import authService from '@/services/authService';
 
-// Hierarchy data types
-interface Plant {
-  id: number;
-  name: string;
-  code: string;
-}
-
-interface Area {
-  id: number;
-  name: string;
-  code: string;
-  plant_id: number;
-}
-
-interface Line {
-  id: number;
-  name: string;
-  code: string;
-  area_id: number;
-}
-
-interface Machine {
-  id: number;
-  name: string;
-  code: string;
-  line_id: number;
-  machine_number: number;
-}
+// Machine data type from PU table
 
 interface PUCODEResult {
   PUCODE: string;
@@ -76,31 +49,14 @@ const TicketCreatePage: React.FC = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  // PUCODE hierarchy state
-  const [pucodeMode, setPucodeMode] = useState<'search' | 'filter'>('search');
-  const [pucodeSearchQuery, setPucodeSearchQuery] = useState('');
-  const [pucodeSearchResults, setPucodeSearchResults] = useState<PUCODEResult[]>([]);
-  const [pucodeSearchLoading, setPucodeSearchLoading] = useState(false);
-  const [pucodeSearchDropdownOpen, setPucodeSearchDropdownOpen] = useState(false);
-  
-  // Hierarchy filter state
-  const [selectedPlant, setSelectedPlant] = useState<Plant | null>(null);
-  const [selectedArea, setSelectedArea] = useState<Area | null>(null);
-  const [selectedLine, setSelectedLine] = useState<Line | null>(null);
-  const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
-  
-  // Hierarchy data
-  const [plants, setPlants] = useState<Plant[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [lines, setLines] = useState<Line[]>([]);
-  const [machines, setMachines] = useState<Machine[]>([]);
-  
-  // Loading states
-  const [plantsLoading, setPlantsLoading] = useState(false);
-  const [areasLoading, setAreasLoading] = useState(false);
-  const [linesLoading, setLinesLoading] = useState(false);
-  const [machinesLoading, setMachinesLoading] = useState(false);
+  // Machine selection state - simplified approach
+  const [machineSearchQuery, setMachineSearchQuery] = useState('');
+  const [machineSearchResults, setMachineSearchResults] = useState<PUCODEResult[]>([]);
+  const [machineSearchLoading, setMachineSearchLoading] = useState(false);
+  const [machineSearchDropdownOpen, setMachineSearchDropdownOpen] = useState(false);
+  const [selectedMachine, setSelectedMachine] = useState<PUCODEResult | null>(null);
 
   // Generate previews and revoke URLs on unmount/change
   const previews = useMemo(() => selectedFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [selectedFiles]);
@@ -198,274 +154,89 @@ const TicketCreatePage: React.FC = () => {
     e.target.value = '';
   };
 
-  // API functions for hierarchy data
-  const fetchPlants = async () => {
-    try {
-      setPlantsLoading(true);
-      const response = await fetch(`${API_BASE_URL}/hierarchy/plants`, {
-        headers: authService.getAuthHeaders()
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const text = await response.text();
-        console.error('Non-JSON response:', text);
-        throw new Error('Server returned non-JSON response. Please check authentication.');
-      }
-      
-      const data = await response.json();
-      if (data.success) {
-        setPlants(data.data || []);
-      } else {
-        console.error('API error:', data.message);
-        toast({
-          title: 'Error',
-          description: data.message || 'Failed to fetch plants',
-          variant: 'destructive'
-        });
-      }
-    } catch (error) {
-      console.error('Error fetching plants:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to fetch plants. Please check your authentication.',
-        variant: 'destructive'
-      });
-    } finally {
-      setPlantsLoading(false);
-    }
-  };
-
-  const fetchAreas = async (plantId: number) => {
-    try {
-      setAreasLoading(true);
-      const response = await fetch(`${API_BASE_URL}/hierarchy/plants/${plantId}/areas`, {
-        headers: authService.getAuthHeaders()
-      });
-      const data = await response.json();
-      if (data.success) {
-        setAreas(data.data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching areas:', error);
-    } finally {
-      setAreasLoading(false);
-    }
-  };
-
-  const fetchLines = async (areaId: number) => {
-    try {
-      setLinesLoading(true);
-      const response = await fetch(`${API_BASE_URL}/hierarchy/areas/${areaId}/lines`, {
-        headers: authService.getAuthHeaders()
-      });
-      const data = await response.json();
-      if (data.success) {
-        setLines(data.data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching lines:', error);
-    } finally {
-      setLinesLoading(false);
-    }
-  };
-
-  const fetchMachines = async (lineId: number) => {
-    try {
-      setMachinesLoading(true);
-      const response = await fetch(`${API_BASE_URL}/hierarchy/lines/${lineId}/machines`, {
-        headers: authService.getAuthHeaders()
-      });
-      const data = await response.json();
-      if (data.success) {
-        setMachines(data.data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching machines:', error);
-    } finally {
-      setMachinesLoading(false);
-    }
-  };
-
-  const searchPUCODE = async (query: string) => {
+  // Simplified machine search function
+  const searchMachines = async (query: string) => {
     if (query.length < 2) {
-      setPucodeSearchResults([]);
+      setMachineSearchResults([]);
       return;
     }
 
     try {
-      setPucodeSearchLoading(true);
+      setMachineSearchLoading(true);
       const response = await fetch(`${API_BASE_URL}/hierarchy/pucode/search?search=${encodeURIComponent(query)}`, {
         headers: authService.getAuthHeaders()
       });
       const data = await response.json();
       if (data.success) {
-        setPucodeSearchResults(data.data || []);
+        setMachineSearchResults(data.data || []);
       }
     } catch (error) {
-      console.error('Error searching PUCODE:', error);
-    } finally {
-      setPucodeSearchLoading(false);
-    }
-  };
-
-  const generatePUCODE = async (plantId: number, areaId: number, lineId: number, machineId: number) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/hierarchy/pucode/generate`, {
-        method: 'POST',
-        headers: authService.getAuthHeaders(),
-        body: JSON.stringify({ plantId, areaId, lineId, machineId })
+      console.error('Error searching machines:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to search machines. Please try again.',
+        variant: 'destructive'
       });
-      const data = await response.json();
-      if (data.success) {
-        return data.data.pucode;
-      }
-    } catch (error) {
-      console.error('Error generating PUCODE:', error);
+    } finally {
+      setMachineSearchLoading(false);
     }
-    return null;
   };
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = 'Title is required';
     if (!formData.description.trim()) newErrors.description = 'Description is required';
-    if (!formData.pucode?.trim()) newErrors.pucode = 'PUCODE is required';
+    if (!selectedMachine) newErrors.machine = 'Please select a machine';
     if (selectedFiles.length === 0) newErrors.files = 'At least one attachment is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  // Fetch plants on component mount
-  useEffect(() => {
-    // Check if user is authenticated before fetching data
-    const token = authService.getToken();
-    console.log('Authentication check:', { 
-      hasToken: !!token, 
-      tokenLength: token?.length,
-      apiBaseUrl: API_BASE_URL 
-    });
-    
-    if (token) {
-      fetchPlants();
-    } else {
-      console.warn('No authentication token found. User may need to log in.');
-      toast({
-        title: 'Authentication Required',
-        description: 'Please log in to access PUCODE selection features.',
-        variant: 'destructive'
-      });
-    }
-  }, []);
-
-  // Fetch areas when plant is selected
-  useEffect(() => {
-    if (selectedPlant) {
-      fetchAreas(selectedPlant.id);
-      // Reset dependent selections
-      setSelectedArea(null);
-      setSelectedLine(null);
-      setSelectedMachine(null);
-      setAreas([]);
-      setLines([]);
-      setMachines([]);
-    }
-  }, [selectedPlant]);
-
-  // Fetch lines when area is selected
-  useEffect(() => {
-    if (selectedArea) {
-      fetchLines(selectedArea.id);
-      // Reset dependent selections
-      setSelectedLine(null);
-      setSelectedMachine(null);
-      setLines([]);
-      setMachines([]);
-    }
-  }, [selectedArea]);
-
-  // Fetch machines when line is selected
-  useEffect(() => {
-    if (selectedLine) {
-      fetchMachines(selectedLine.id);
-      // Reset dependent selections
-      setSelectedMachine(null);
-      setMachines([]);
-    }
-  }, [selectedLine]);
-
-  // Search PUCODE with debounce
+  // Search machines with debounce
   useEffect(() => {
     const t = setTimeout(async () => {
-      if (pucodeMode === 'search' && pucodeSearchQuery.length >= 2) {
-        await searchPUCODE(pucodeSearchQuery);
+      if (machineSearchQuery.length >= 2) {
+        await searchMachines(machineSearchQuery);
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [pucodeSearchQuery, pucodeMode]);
+  }, [machineSearchQuery]);
 
-  // Generate PUCODE when all hierarchy selections are made
+  // Click outside handler to close dropdown
   useEffect(() => {
-    const generatePucodeFromHierarchy = async () => {
-      if (selectedPlant && selectedArea && selectedLine && selectedMachine) {
-        const pucode = await generatePUCODE(selectedPlant.id, selectedArea.id, selectedLine.id, selectedMachine.id);
-        if (pucode) {
-          handleInputChange('pucode', pucode);
-        }
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      const dropdown = target.closest('.search-dropdown');
+      
+      if (searchInputRef.current && !searchInputRef.current.contains(target) && !dropdown) {
+        setMachineSearchDropdownOpen(false);
       }
     };
-    generatePucodeFromHierarchy();
-  }, [selectedPlant, selectedArea, selectedLine, selectedMachine]);
 
-  // PUCODE selection handlers
-  const onSelectPUCODE = (pucode: PUCODEResult) => {
-    handleInputChange('pucode', pucode.PUCODE);
-    handleInputChange('pu_id', pucode.PUNO);
-    setPucodeSearchQuery(pucode.PUCODE);
-    setPucodeSearchDropdownOpen(false);
-  };
+    if (machineSearchDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
 
-  const onSelectPlant = (plant: Plant) => {
-    setSelectedPlant(plant);
-  };
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [machineSearchDropdownOpen]);
 
-  const onSelectArea = (area: Area) => {
-    setSelectedArea(area);
-  };
-
-  const onSelectLine = (line: Line) => {
-    setSelectedLine(line);
-  };
-
-  const onSelectMachine = (machine: Machine) => {
+  // Machine selection handlers
+  const onSelectMachine = (machine: PUCODEResult) => {
     setSelectedMachine(machine);
+    handleInputChange('pucode', machine.PUCODE);
+    handleInputChange('pu_id', machine.PUNO);
+    setMachineSearchQuery(machine.PUCODE);
+    setMachineSearchDropdownOpen(false);
   };
 
-  const clearHierarchySelection = () => {
-    setSelectedPlant(null);
-    setSelectedArea(null);
-    setSelectedLine(null);
+  const clearMachineSelection = () => {
     setSelectedMachine(null);
-    setAreas([]);
-    setLines([]);
-    setMachines([]);
+    setMachineSearchQuery('');
+    setMachineSearchResults([]);
     handleInputChange('pucode', '');
     handleInputChange('pu_id', undefined);
-  };
-
-  const switchPucodeMode = (mode: 'search' | 'filter') => {
-    setPucodeMode(mode);
-    if (mode === 'search') {
-      clearHierarchySelection();
-    } else {
-      setPucodeSearchQuery('');
-      setPucodeSearchResults([]);
-      setPucodeSearchDropdownOpen(false);
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -552,204 +323,82 @@ const TicketCreatePage: React.FC = () => {
           <form ref={formRef} onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-2 lg:gap-x-10">
             {/* LEFT COLUMN: Machine Selection & Attachments */}
             <div className="space-y-6">
-              {/* Machine Selection */}
+              {/* Simplified Machine Selection */}
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="pucode" className="text-base font-semibold">What machine is affected? *</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant={pucodeMode === 'search' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => switchPucodeMode('search')}
-                    >
-                      <Search className="w-4 h-4 mr-1" />
-                      Search
-                    </Button>
-                    <Button
-                      type="button"
-                      variant={pucodeMode === 'filter' ? 'default' : 'outline'}
-                      size="sm"
-                      onClick={() => switchPucodeMode('filter')}
-                    >
-                      <Filter className="w-4 h-4 mr-1" />
-                      Filter
-                    </Button>
-                  </div>
-                </div>
-
-                {pucodeMode === 'search' ? (
-                  <div className="space-y-3">
-                    <div className="relative">
-                      <Input
-                        id="pucode"
-                        value={pucodeSearchQuery}
-                        onChange={(e) => {
-                          setPucodeSearchQuery(e.target.value);
-                          setPucodeSearchDropdownOpen(true);
-                        }}
-                        onFocus={() => setPucodeSearchDropdownOpen(true)}
-                        placeholder="Search PUCODE (e.g., PLANT-AREA-LINE-MACHINE-NUMBER)"
-                        className={errors.pucode ? 'border-red-500' : ''}
-                      />
-                      {pucodeSearchDropdownOpen && pucodeSearchResults.length > 0 && (
-                        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
-                          {pucodeSearchLoading ? (
-                            <div className="p-3 text-sm text-gray-500">Searching...</div>
-                          ) : (
-                            pucodeSearchResults.map((result, idx) => (
-                              <button
-                                type="button"
-                                key={idx}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
-                                onClick={() => onSelectPUCODE(result)}
-                              >
-                                <div className="font-medium">{result.PUCODE}</div>
-                                <div className="text-xs text-gray-500">{result.PUDESC}</div>
-                                <div className="text-xs text-gray-400">
-                                  {result.PLANT} → {result.AREA} → {result.LINE} → {result.MACHINE} → {result.NUMBER}
-                                </div>
-                              </button>
-                            ))
-                          )}
-                        </div>
-                      )}
-                    </div>
+                <Label htmlFor="machine-search" className="text-base font-semibold">What machine is affected? *</Label>
+                
+                <div className="space-y-3">
+                  <div className="relative">
                     <Input
-                      value={formData.pucode || ''}
-                      onChange={(e) => handleInputChange('pucode', e.target.value)}
-                      placeholder="Or enter PUCODE directly (PLANT-AREA-LINE-MACHINE-NUMBER)"
-                      className={errors.pucode ? 'border-red-500' : ''}
+                      ref={searchInputRef}
+                      id="machine-search"
+                      value={machineSearchQuery}
+                      onChange={(e) => {
+                        setMachineSearchQuery(e.target.value);
+                        setMachineSearchDropdownOpen(true);
+                      }}
+                      onFocus={() => setMachineSearchDropdownOpen(true)}
+                      placeholder="Search by machine name, PUCODE (Plant-Area-Line-Machine-Number), or description..."
+                      className={errors.machine ? 'border-red-500' : ''}
                     />
-                    <p className="text-xs text-gray-500">
-                      Enter PUCODE in format: PLANT-AREA-LINE-MACHINE-NUMBER
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {/* Hierarchy Filters */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      {/* Plant Selection */}
-                      <div className="space-y-2 sm:col-span-1">
-                        <Label>Plant</Label>
-                        <Select
-                          value={selectedPlant?.id.toString() || ''}
-                          onValueChange={(value) => {
-                            const plant = plants.find(p => p.id.toString() === value);
-                            if (plant) onSelectPlant(plant);
-                          }}
-                          disabled={plantsLoading}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={plantsLoading ? "Loading..." : "Select Plant"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {plants.map((plant) => (
-                              <SelectItem key={plant.id} value={plant.id.toString()}>
-                                {plant.name} ({plant.code})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Area Selection */}
-                      <div className="space-y-2 sm:col-span-1">
-                        <Label>Area</Label>
-                        <Select
-                          value={selectedArea?.id.toString() || ''}
-                          onValueChange={(value) => {
-                            const area = areas.find(a => a.id.toString() === value);
-                            if (area) onSelectArea(area);
-                          }}
-                          disabled={!selectedPlant || areasLoading}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={areasLoading ? "Loading..." : !selectedPlant ? "Select Plant first" : "Select Area"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {areas.map((area) => (
-                              <SelectItem key={area.id} value={area.id.toString()}>
-                                {area.name} ({area.code})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Line Selection */}
-                      <div className="space-y-2 sm:col-span-1">
-                        <Label>Line</Label>
-                        <Select
-                          value={selectedLine?.id.toString() || ''}
-                          onValueChange={(value) => {
-                            const line = lines.find(l => l.id.toString() === value);
-                            if (line) onSelectLine(line);
-                          }}
-                          disabled={!selectedArea || linesLoading}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={linesLoading ? "Loading..." : !selectedArea ? "Select Area first" : "Select Line"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {lines.map((line) => (
-                              <SelectItem key={line.id} value={line.id.toString()}>
-                                {line.name} ({line.code})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      {/* Machine Selection */}
-                      <div className="space-y-2 sm:col-span-1">
-                        <Label>Machine</Label>
-                        <Select
-                          value={selectedMachine?.id.toString() || ''}
-                          onValueChange={(value) => {
-                            const machine = machines.find(m => m.id.toString() === value);
-                            if (machine) onSelectMachine(machine);
-                          }}
-                          disabled={!selectedLine || machinesLoading}
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder={machinesLoading ? "Loading..." : !selectedLine ? "Select Line first" : "Select Machine"} />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {machines.map((machine) => (
-                              <SelectItem key={machine.id} value={machine.id.toString()}>
-                                {machine.name} ({machine.code}-{machine.machine_number})
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                    </div>
-
-                    {/* Generated PUCODE Display */}
-                    {formData.pucode && (
-                      <div className="p-3 bg-green-50 border border-green-200 rounded-md">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-green-800">Generated PUCODE:</p>
-                            <p className="text-lg font-mono text-green-900">{formData.pucode}</p>
-                          </div>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={clearHierarchySelection}
-                          >
-                            <X className="w-4 h-4" />
-                          </Button>
-                        </div>
+                    {machineSearchDropdownOpen && machineSearchResults.length > 0 && (
+                      <div className="search-dropdown absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+                        {machineSearchLoading ? (
+                          <div className="p-3 text-sm text-gray-500">Searching...</div>
+                        ) : (
+                          machineSearchResults.map((result, idx) => (
+                            <button
+                              type="button"
+                              key={idx}
+                              className="w-full text-left px-3 py-3 text-sm hover:bg-accent hover:text-accent-foreground border-b last:border-b-0"
+                              onClick={() => onSelectMachine(result)}
+                            >
+                              <div className="font-medium text-base">{result.PUCODE}</div>
+                              <div className="text-sm text-gray-600 mt-1">{result.PUDESC}</div>
+                              <div className="text-xs text-gray-400 mt-1">
+                                {result.PLANT} → {result.AREA} → {result.LINE} → {result.MACHINE} → {result.NUMBER}
+                              </div>
+                            </button>
+                          ))
+                        )}
                       </div>
                     )}
                   </div>
-                )}
+                  
+                  {/* Selected Machine Display */}
+                  {selectedMachine && (
+                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <p className="text-sm font-medium text-green-800">Selected Machine</p>
+                          </div>
+                          <p className="text-lg font-mono text-green-900 mb-1">{selectedMachine.PUCODE}</p>
+                          <p className="text-sm text-green-700 mb-2">{selectedMachine.PUDESC}</p>
+                          <div className="text-xs text-green-600">
+                            {selectedMachine.PLANT} → {selectedMachine.AREA} → {selectedMachine.LINE} → {selectedMachine.MACHINE} → {selectedMachine.NUMBER}
+                          </div>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={clearMachineSelection}
+                          className="text-green-600 hover:text-green-700"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <p className="text-xs text-gray-500">
+                    Type at least 2 characters to search. Only 5-section PUCODEs (Plant-Area-Line-Machine-Number) are shown for abnormal findings.
+                  </p>
+                </div>
 
-                {errors.pucode && <p className="text-sm text-red-500">{errors.pucode}</p>}
+                {errors.machine && <p className="text-sm text-red-500">{errors.machine}</p>}
               </div>
 
               {/* Attach images (before) */}

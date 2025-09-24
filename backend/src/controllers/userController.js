@@ -35,6 +35,7 @@ const userController = {
               EMAIL = COALESCE(@email, EMAIL),
               PHONE = COALESCE(@phone, PHONE),
               TITLE = COALESCE(@title, TITLE),
+              PERSON_NAME = COALESCE(@firstName, FIRSTNAME) + ' ' + COALESCE(@lastName, LASTNAME),
               UPDATEDATE = CONVERT(NVARCHAR(8), GETDATE(), 112),
               UPDATEUSER = @personNo
           WHERE PERSONNO = @personNo

@@ -18,6 +18,8 @@ import DashboardSparePartPage from './pages/dashboard/DashboardSparePartPage';
 import DashboardBacklogPage from './pages/dashboard/DashboardBacklogPage';
 import DashboardBacklogDetailPage from './pages/dashboard/DashboardBacklogDetailPage';
 import AbnormalReportDashboardV2Page from './pages/dashboard/AbnormalReportDashboardV2Page';
+import UserActivityChartPage from './pages/charts/UserActivityChartPage';
+import TargetManagementPage from './pages/TargetManagementPage';
 import UserManagementPage from './pages/UserManagementPage';
 import RoleManagementPage from './pages/RoleManagementPage';
 // Removed old machine pages from menu in favor of Assets
@@ -52,6 +54,11 @@ import ProductionUnitPage from './pages/ProductionUnitPage';
 import EquipmentPage from './pages/EquipmentPage';
 import AssetHierarchyPage from './pages/AssetHierarchyPage';
 import WorkflowTypesPage from './pages/WorkflowTypesPage';
+import PlantManagementPage from './pages/PlantManagementPage';
+import AreaManagementPage from './pages/AreaManagementPage';
+import LineManagementPage from './pages/LineManagementPage';
+import MachineManagementPage from './pages/MachineManagementPage';
+import TicketApprovalManagementPage from './pages/TicketApprovalManagementPage';
 
 // Main App Component with Routing
 const AppContent: React.FC = () => {
@@ -129,6 +136,13 @@ const AppContent: React.FC = () => {
           </PublicRoute>
         } />
         
+        {/* Standalone Chart Routes (No Layout) */}
+        <Route path="/charts/user-activity" element={
+          <ProtectedRoute>
+            <UserActivityChartPage />
+          </ProtectedRoute>
+        } />
+        
         {/* Protected Routes */}
         <Route path="/" element={
           <ProtectedRoute>
@@ -150,6 +164,7 @@ const AppContent: React.FC = () => {
           <Route path="dashboard/backlog" element={<DashboardBacklogPage />} />
           <Route path="dashboard/backlog/department/:deptCode" element={<DashboardBacklogDetailPage />} />
           <Route path="dashboard/backlog/user/:personName" element={<DashboardBacklogDetailPage />} />
+          <Route path="dashboard/targets" element={<TargetManagementPage />} />
           
           {/* Maintenance Routes */}
           <Route path="maintenance" element={<WorkOrdersPage />} />
@@ -186,6 +201,11 @@ const AppContent: React.FC = () => {
           <Route path="assets/production-units" element={<ProductionUnitPage />} />
           <Route path="assets/equipment" element={<EquipmentPage />} />
           <Route path="assets/hierarchy" element={<AssetHierarchyPage />} />
+          <Route path="assets/plants" element={<PlantManagementPage />} />
+          <Route path="assets/areas" element={<AreaManagementPage />} />
+          <Route path="assets/lines" element={<LineManagementPage />} />
+          <Route path="assets/machines" element={<MachineManagementPage />} />
+          <Route path="assets/ticket-approvals" element={<TicketApprovalManagementPage />} />
 
           {/* Spare Part (Inventory) */}
           <Route path="spare" element={<InventoryOverviewPage />} />

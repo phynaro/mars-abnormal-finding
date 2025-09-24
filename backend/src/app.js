@@ -109,6 +109,8 @@ const workflowRoutes = require('./routes/workflow');
 const dashboardRoutes = require('./routes/dashboard');
 const backlogRoutes = require('./routes/backlog');
 const hierarchyRoutes = require('./routes/hierarchy');
+const administrationRoutes = require('./routes/administration');
+const targetRoutes = require('./routes/target');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -125,6 +127,8 @@ app.use('/api/workflow', workflowRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/backlog', backlogRoutes);
 app.use('/api/hierarchy', hierarchyRoutes);
+app.use('/api/administration', administrationRoutes);
+app.use('/api/targets', targetRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

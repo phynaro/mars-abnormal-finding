@@ -3,6 +3,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend,
   ComposedChart, AreaChart, Area, Line, LabelList
@@ -12,9 +14,9 @@ import 'react-calendar-heatmap/dist/styles.css';
 import { 
   TrendingUp, TrendingDown, Clock, DollarSign, 
   AlertTriangle, CheckCircle, User, Award,
-  BarChart3
+  BarChart3, Filter
 } from 'lucide-react';
-import dashboardService, { type AbnormalFindingKPIResponse, type AreaData } from '@/services/dashboardService';
+import dashboardService, { type AbnormalFindingKPIResponse, type AreaData, type TicketsCountPerPeriodResponse, type AreaActivityResponse, type UserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse } from '@/services/dashboardService';
 import { KPITileSkeleton } from '@/components/ui/kpi-tile-skeleton';
 import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
 
@@ -137,11 +139,24 @@ const SVGAvatar: React.FC<{
   y: number;
   size: number;
   user: any;
-}> = ({ x, y, size, user }) => {
+  clipPrefix?: string;
+}> = ({ x, y, size, user, clipPrefix = '' }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
   
-  const clipId = `clip-avatar-${user.id}`;
+  // Add timeout to handle slow-loading images
+  useEffect(() => {
+    if (user.avatar && !imageLoaded && !imageError) {
+      const timeout = setTimeout(() => {
+        setImageError(true);
+      }, 3000); // 3 second timeout
+      
+      return () => clearTimeout(timeout);
+    }
+  }, [user.avatar, imageLoaded, imageError]);
+  
+  
+  const clipId = `clip-avatar-${clipPrefix}${user.id}`;
   const cx = x + size / 2;
   const cy = y + size / 2;
 
@@ -149,7 +164,7 @@ const SVGAvatar: React.FC<{
     <g>
       {/* Define circular clip path */}
       <defs>
-        <clipPath id={clipId}>
+        <clipPath id={clipId} clipPathUnits="userSpaceOnUse">
           <circle cx={cx} cy={cy} r={size / 2} />
         </clipPath>
       </defs>
@@ -162,8 +177,8 @@ const SVGAvatar: React.FC<{
         strokeWidth="1"
       />
       
-      {/* Initials text (hidden when image loads) */}
-      {!imageLoaded && (
+      {/* Initials text (show when image not loaded or on error) */}
+      {(!imageLoaded || imageError) && (
         <text
           x={cx} y={cy}
           textAnchor="middle"
@@ -197,6 +212,21 @@ const SVGAvatar: React.FC<{
         />
       )}
       
+      {/* Show initials text when image fails to load */}
+      {imageError && (
+        <text
+          x={cx} y={cy}
+          textAnchor="middle"
+          dominantBaseline="middle"
+          fill="white"
+          fontSize={Math.max(8, size / 3)}
+          fontWeight="600"
+          fontFamily="system-ui, -apple-system, sans-serif"
+        >
+          {user.initials}
+        </text>
+      )}
+      
       {/* Subtle border ring */}
       <circle
         cx={cx} cy={cy} r={size / 2}
@@ -209,7 +239,7 @@ const SVGAvatar: React.FC<{
 };
 
 // SVG-based avatar label component for horizontal bars
-const AvatarLabel = ({ data, maxAvatar = 28 }: { data: any[], maxAvatar?: number }) => {
+const AvatarLabel = ({ data, maxAvatar = 28, clipPrefix = '' }: { data: any[], maxAvatar?: number, clipPrefix?: string }) => {
   return (props: any) => {
     const { x, y, width, height, index } = props;
     const row = data[index];
@@ -229,7 +259,8 @@ const AvatarLabel = ({ data, maxAvatar = 28 }: { data: any[], maxAvatar?: number
         x={avatarX} 
         y={avatarY} 
         size={size} 
-        user={row} 
+        user={row}
+        clipPrefix={clipPrefix}
       />
     );
   };
@@ -242,6 +273,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const [areaFilter, setAreaFilter] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedPeriod, setSelectedPeriod] = useState<number>(1);
+  const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
 
   // API State
   const [kpiData, setKpiData] = useState<AbnormalFindingKPIResponse['data'] | null>(null);
@@ -249,6 +281,46 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [areas, setAreas] = useState<AreaData[]>([]);
   const [areasLoading, setAreasLoading] = useState<boolean>(false);
+  const [participationData, setParticipationData] = useState<TicketsCountPerPeriodResponse['data']['participationData']>([]);
+  const [participationLoading, setParticipationLoading] = useState<boolean>(false);
+  const [areaActivityData, setAreaActivityData] = useState<AreaActivityResponse['data']['areaActivityData']>([]);
+  const [areaActivityLoading, setAreaActivityLoading] = useState<boolean>(false);
+  const [userActivityData, setUserActivityData] = useState<UserActivityResponse['data']['userActivityData']>([]);
+  const [userActivityLoading, setUserActivityLoading] = useState<boolean>(false);
+  const [calendarHeatmapData, setCalendarHeatmapData] = useState<CalendarHeatmapResponse['data']['calendarData']>([]);
+  const [calendarHeatmapLoading, setCalendarHeatmapLoading] = useState<boolean>(false);
+  const [downtimeTrendData, setDowntimeTrendData] = useState<DowntimeAvoidanceTrendResponse['data']['downtimeTrendData']>([]);
+  const [downtimeTrendLoading, setDowntimeTrendLoading] = useState<boolean>(false);
+  const [downtimeTrendAreas, setDowntimeTrendAreas] = useState<string[]>([]);
+  const [costAvoidanceData, setCostAvoidanceData] = useState<CostAvoidanceResponse['data']['costAvoidanceData']>([]);
+  const [costAvoidanceLoading, setCostAvoidanceLoading] = useState<boolean>(false);
+  const [downtimeImpactData, setDowntimeImpactData] = useState<DowntimeImpactLeaderboardResponse['data']['downtimeImpactData']>([]);
+  const [downtimeImpactLoading, setDowntimeImpactLoading] = useState<boolean>(false);
+  const [costImpactData, setCostImpactData] = useState<CostImpactLeaderboardResponse['data']['costImpactData']>([]);
+  const [costImpactLoading, setCostImpactLoading] = useState<boolean>(false);
+  const [downtimeImpactReporterData, setDowntimeImpactReporterData] = useState<DowntimeImpactReporterLeaderboardResponse['data']['downtimeImpactReporterData']>([]);
+  const [downtimeImpactReporterLoading, setDowntimeImpactReporterLoading] = useState<boolean>(false);
+
+  const [costImpactReporterData, setCostImpactReporterData] = useState<CostImpactReporterLeaderboardResponse['data']['costImpactReporterData']>([]);
+  const [costImpactReporterLoading, setCostImpactReporterLoading] = useState<boolean>(false);
+
+  const [downtimeByFailureModeData, setDowntimeByFailureModeData] = useState<DowntimeByFailureModeResponse['data']['downtimeByFailureModeData']>([]);
+  const [downtimeByFailureModeLoading, setDowntimeByFailureModeLoading] = useState<boolean>(false);
+
+  const [costByFailureModeData, setCostByFailureModeData] = useState<CostByFailureModeResponse['data']['costByFailureModeData']>([]);
+  const [costByFailureModeLoading, setCostByFailureModeLoading] = useState<boolean>(false);
+
+  const [resolveDurationByAreaData, setResolveDurationByAreaData] = useState<TicketResolveDurationByAreaResponse['data']['resolveDurationByAreaData']>([]);
+  const [resolveDurationByAreaLoading, setResolveDurationByAreaLoading] = useState<boolean>(false);
+
+  const [resolveDurationByUserData, setResolveDurationByUserData] = useState<TicketResolveDurationByUserResponse['data']['resolveDurationByUserData']>([]);
+  const [resolveDurationByUserLoading, setResolveDurationByUserLoading] = useState<boolean>(false);
+
+  const [ontimeRateByAreaData, setOntimeRateByAreaData] = useState<OntimeRateByAreaResponse['data']['ontimeRateByAreaData']>([]);
+  const [ontimeRateByAreaLoading, setOntimeRateByAreaLoading] = useState<boolean>(false);
+
+  const [ontimeRateByUserData, setOntimeRateByUserData] = useState<OntimeRateByUserResponse['data']['ontimeRateByUserData']>([]);
+  const [ontimeRateByUserLoading, setOntimeRateByUserLoading] = useState<boolean>(false);
 
   // Minimum loading time to prevent UI blinking (in milliseconds)
   const MIN_LOADING_TIME = 800;
@@ -256,6 +328,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   // Helper function to construct avatar URL
   const getAvatarUrl = useCallback((avatarUrl?: string) => {
     if (!avatarUrl) return undefined;
+    
+    // If it's already an absolute URL, return as is
+    if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
+      return avatarUrl;
+    }
+    
+    // If it's a relative URL, construct the full URL
     const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
     const uploadsBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
     return `${uploadsBase}${avatarUrl}`;
@@ -362,6 +441,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   };
 
+
   // Fetch KPI data
   const fetchKPIData = useCallback(async () => {
     try {
@@ -400,15 +480,552 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   }, [timeFilter, areaFilter, selectedYear, selectedPeriod, MIN_LOADING_TIME]);
 
+  // Fetch participation data
+  const fetchParticipationData = useCallback(async () => {
+    try {
+      setParticipationLoading(true);
+      
+      const params = {
+        year: selectedYear,
+        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+      };
+      
+      const response = await dashboardService.getTicketsCountPerPeriod(params);
+      setParticipationData(response.data.participationData);
+      
+    } catch (err: any) {
+      console.error('Error fetching participation data:', err);
+      // Set fallback data if API fails
+      setParticipationData([]);
+    } finally {
+      setParticipationLoading(false);
+    }
+  }, [selectedYear, areaFilter]);
+
+  // Fetch area activity data
+  const fetchAreaActivityData = useCallback(async () => {
+    try {
+      setAreaActivityLoading(true);
+      
+      const params = {
+        year: selectedYear
+      };
+      
+      const response = await dashboardService.getAreaActivityData(params);
+      setAreaActivityData(response.data.areaActivityData);
+      
+    } catch (err: any) {
+      console.error('Error fetching area activity data:', err);
+      // Set fallback data if API fails
+      setAreaActivityData([]);
+    } finally {
+      setAreaActivityLoading(false);
+    }
+  }, [selectedYear]);
+
+  // Fetch user activity data
+  const fetchUserActivityData = useCallback(async () => {
+    try {
+      setUserActivityLoading(true);
+      
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+      };
+      
+      const response = await dashboardService.getUserActivityData(params);
+      setUserActivityData(response.data.userActivityData);
+      
+    } catch (err: any) {
+      console.error('Error fetching user activity data:', err);
+      // Set fallback data if API fails
+      setUserActivityData([]);
+    } finally {
+      setUserActivityLoading(false);
+    }
+  }, [timeFilter, areaFilter, selectedYear, selectedPeriod]);
+
+  // Fetch calendar heatmap data
+  const fetchCalendarHeatmapData = useCallback(async () => {
+    try {
+      setCalendarHeatmapLoading(true);
+      
+      // Calculate the year based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
+      
+      
+      const params = {
+        year: yearFromDateRange,
+        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+      };
+
+      const response = await dashboardService.getCalendarHeatmapData(params);
+      
+      if (response.success) {
+        setCalendarHeatmapData(response.data.calendarData);
+      }
+    } catch (error) {
+      console.error('Error fetching calendar heatmap data:', error);
+      setCalendarHeatmapData([]);
+    } finally {
+      setCalendarHeatmapLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+
+  // Fetch downtime avoidance trend data
+  const fetchDowntimeTrendData = useCallback(async () => {
+    try {
+      setDowntimeTrendLoading(true);
+      
+      // Calculate the year based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
+      
+      const params = {
+        year: yearFromDateRange
+      };
+
+      const response = await dashboardService.getDowntimeAvoidanceTrend(params);
+      
+      if (response.success) {
+        setDowntimeTrendData(response.data.downtimeTrendData);
+        setDowntimeTrendAreas(response.data.summary.areas);
+      }
+    } catch (error) {
+      console.error('Error fetching downtime trend data:', error);
+      setDowntimeTrendData([]);
+    } finally {
+      setDowntimeTrendLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod]);
+
+  // Fetch cost avoidance data
+  const fetchCostAvoidanceData = useCallback(async () => {
+    try {
+      setCostAvoidanceLoading(true);
+      
+      // Calculate the year based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
+      
+      const params = {
+        year: yearFromDateRange,
+        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+      };
+
+      const response = await dashboardService.getCostAvoidanceData(params);
+      
+      if (response.success) {
+        setCostAvoidanceData(response.data.costAvoidanceData);
+      }
+    } catch (error) {
+      console.error('Error fetching cost avoidance data:', error);
+      setCostAvoidanceData([]);
+    } finally {
+      setCostAvoidanceLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+
+  // Fetch downtime impact leaderboard data
+  const fetchDowntimeImpactData = useCallback(async () => {
+    try {
+      setDowntimeImpactLoading(true);
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
+      };
+
+      const response = await dashboardService.getDowntimeImpactLeaderboard(params);
+      
+      if (response.success) {
+        setDowntimeImpactData(response.data.downtimeImpactData);
+      }
+    } catch (error) {
+      console.error('Error fetching downtime impact data:', error);
+      setDowntimeImpactData([]);
+    } finally {
+      setDowntimeImpactLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod]);
+
+  // Fetch cost impact leaderboard data
+  const fetchCostImpactData = useCallback(async () => {
+    try {
+      setCostImpactLoading(true);
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
+      };
+
+      const response = await dashboardService.getCostImpactLeaderboard(params);
+      
+      if (response.success) {
+        setCostImpactData(response.data.costImpactData);
+      }
+    } catch (error) {
+      console.error('Error fetching cost impact data:', error);
+      setCostImpactData([]);
+    } finally {
+      setCostImpactLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod]);
+
+  // Fetch Ontime Rate by Area Data
+  const fetchOntimeRateByAreaData = useCallback(async () => {
+    try {
+      setOntimeRateByAreaLoading(true);
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
+      };
+
+      const response = await dashboardService.getOntimeRateByArea(params);
+      
+      if (response.success) {
+        setOntimeRateByAreaData(response.data.ontimeRateByAreaData);
+      }
+    } catch (error) {
+      console.error('Error fetching ontime rate by area data:', error);
+      setOntimeRateByAreaData([]);
+    } finally {
+      setOntimeRateByAreaLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod]);
+
+  // Fetch Ontime Rate by User Data
+  const fetchOntimeRateByUserData = useCallback(async () => {
+    try {
+      setOntimeRateByUserLoading(true);
+      
+      // Validate areaFilter is a valid number
+      const areaId = parseInt(areaFilter);
+      if (isNaN(areaId) || areaFilter === 'all') {
+        setOntimeRateByUserData([]);
+        return;
+      }
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        area_id: areaId
+      };
+
+      const response = await dashboardService.getOntimeRateByUser(params);
+      
+      if (response.success) {
+        setOntimeRateByUserData(response.data.ontimeRateByUserData);
+      }
+    } catch (error) {
+      console.error('Error fetching ontime rate by user data:', error);
+      setOntimeRateByUserData([]);
+    } finally {
+      setOntimeRateByUserLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+
+  // Fetch Ticket Resolve Duration by User Data
+  const fetchResolveDurationByUserData = useCallback(async () => {
+    try {
+      setResolveDurationByUserLoading(true);
+      
+      // Validate areaFilter is a valid number
+      const areaId = parseInt(areaFilter);
+      if (isNaN(areaId) || areaFilter === 'all') {
+        setResolveDurationByUserData([]);
+        return;
+      }
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        area_id: areaId
+      };
+
+      const response = await dashboardService.getTicketResolveDurationByUser(params);
+      
+      if (response.success) {
+        setResolveDurationByUserData(response.data.resolveDurationByUserData);
+      }
+    } catch (error) {
+      console.error('Error fetching resolve duration by user data:', error);
+      setResolveDurationByUserData([]);
+    } finally {
+      setResolveDurationByUserLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+
+  // Fetch Ticket Resolve Duration by Area Data
+  const fetchResolveDurationByAreaData = useCallback(async () => {
+    try {
+      setResolveDurationByAreaLoading(true);
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
+      };
+
+      const response = await dashboardService.getTicketResolveDurationByArea(params);
+      
+      if (response.success) {
+        setResolveDurationByAreaData(response.data.resolveDurationByAreaData);
+      }
+    } catch (error) {
+      console.error('Error fetching resolve duration by area data:', error);
+      setResolveDurationByAreaData([]);
+    } finally {
+      setResolveDurationByAreaLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod]);
+
+  // Fetch Cost Impact by Failure Mode Data
+  const fetchCostByFailureModeData = useCallback(async () => {
+    try {
+      setCostByFailureModeLoading(true);
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+      };
+
+      const response = await dashboardService.getCostImpactByFailureMode(params);
+      
+      if (response.success) {
+        setCostByFailureModeData(response.data.costByFailureModeData);
+      }
+    } catch (error) {
+      console.error('Error fetching cost by failure mode data:', error);
+      setCostByFailureModeData([]);
+    } finally {
+      setCostByFailureModeLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+
+  // Fetch Downtime Impact by Failure Mode Data
+  const fetchDowntimeByFailureModeData = useCallback(async () => {
+    try {
+      setDowntimeByFailureModeLoading(true);
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+      };
+
+      const response = await dashboardService.getDowntimeImpactByFailureMode(params);
+      
+      if (response.success) {
+        setDowntimeByFailureModeData(response.data.downtimeByFailureModeData);
+      }
+    } catch (error) {
+      console.error('Error fetching downtime by failure mode data:', error);
+      setDowntimeByFailureModeData([]);
+    } finally {
+      setDowntimeByFailureModeLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+
+  // Fetch Cost Impact Reporter Data
+  const fetchCostImpactReporterData = useCallback(async () => {
+    try {
+      setCostImpactReporterLoading(true);
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+      };
+
+      const response = await dashboardService.getCostImpactReporterLeaderboard(params);
+      
+      if (response.success) {
+        setCostImpactReporterData(response.data.costImpactReporterData);
+      }
+    } catch (error) {
+      console.error('Error fetching cost impact reporter data:', error);
+      setCostImpactReporterData([]);
+    } finally {
+      setCostImpactReporterLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+
+  // Fetch downtime impact reporter leaderboard data
+  const fetchDowntimeImpactReporterData = useCallback(async () => {
+    try {
+      setDowntimeImpactReporterLoading(true);
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+      };
+
+      const response = await dashboardService.getDowntimeImpactReporterLeaderboard(params);
+      
+      if (response.success) {
+        setDowntimeImpactReporterData(response.data.downtimeImpactReporterData);
+      }
+    } catch (error) {
+      console.error('Error fetching downtime impact reporter data:', error);
+      setDowntimeImpactReporterData([]);
+    } finally {
+      setDowntimeImpactReporterLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+
   // Fetch areas on component mount
   useEffect(() => {
     fetchAreas();
+    fetchParticipationData();
+    fetchAreaActivityData();
+    fetchUserActivityData();
+    fetchCalendarHeatmapData();
+    fetchDowntimeTrendData();
+    fetchCostAvoidanceData();
+    fetchDowntimeImpactData();
+    fetchCostImpactData();
+    fetchDowntimeImpactReporterData();
+    fetchCostImpactReporterData();
+    fetchDowntimeByFailureModeData();
+    fetchCostByFailureModeData();
+    fetchResolveDurationByAreaData();
+    fetchResolveDurationByUserData();
+    fetchOntimeRateByAreaData();
+    fetchOntimeRateByUserData();
   }, []);
 
   // Fetch data when filters change
   useEffect(() => {
     fetchKPIData();
-  }, [timeFilter, areaFilter, selectedYear, selectedPeriod, fetchKPIData]);
+    fetchUserActivityData();
+  }, [timeFilter, areaFilter, selectedYear, selectedPeriod, fetchKPIData, fetchUserActivityData]);
+
+  // Fetch calendar heatmap data when time filter, year, or area changes
+  useEffect(() => {
+    fetchCalendarHeatmapData();
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchCalendarHeatmapData]);
+
+  // Fetch downtime trend data when time filter or year changes (not affected by area filter)
+  useEffect(() => {
+    fetchDowntimeTrendData();
+  }, [timeFilter, selectedYear, selectedPeriod, fetchDowntimeTrendData]);
+
+  // Fetch cost avoidance data when time filter, year, or area changes
+  useEffect(() => {
+    fetchCostAvoidanceData();
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchCostAvoidanceData]);
+
+  // Fetch downtime impact data when time filter or period changes (not affected by area filter)
+  useEffect(() => {
+    fetchDowntimeImpactData();
+  }, [timeFilter, selectedYear, selectedPeriod, fetchDowntimeImpactData]);
+
+  // Fetch cost impact data when time filter or period changes (not affected by area filter)
+  useEffect(() => {
+    fetchCostImpactData();
+  }, [timeFilter, selectedYear, selectedPeriod, fetchCostImpactData]);
+
+  // Fetch downtime impact reporter data when time filter, period, or area changes
+  useEffect(() => {
+    fetchDowntimeImpactReporterData();
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchDowntimeImpactReporterData]);
+
+  // Fetch cost impact reporter data when time filter, period, or area changes
+  useEffect(() => {
+    fetchCostImpactReporterData();
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchCostImpactReporterData]);
+
+  // Fetch downtime by failure mode data when time filter, period, or area changes
+  useEffect(() => {
+    fetchDowntimeByFailureModeData();
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchDowntimeByFailureModeData]);
+
+  // Fetch cost by failure mode data when time filter, period, or area changes
+  useEffect(() => {
+    fetchCostByFailureModeData();
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchCostByFailureModeData]);
+
+  // Fetch resolve duration by area data when time filter or period changes (only when "All Area" is selected)
+  useEffect(() => {
+    if (areaFilter === 'all') {
+      fetchResolveDurationByAreaData();
+    } else {
+      setResolveDurationByAreaData([]);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchResolveDurationByAreaData]);
+
+  // Fetch resolve duration by user data when time filter, period, or area changes (only when specific area is selected)
+  useEffect(() => {
+    if (areaFilter !== 'all') {
+      fetchResolveDurationByUserData();
+    } else {
+      setResolveDurationByUserData([]);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchResolveDurationByUserData]);
+
+  // Fetch ontime rate by area data when time filter or period changes (only when "All Area" is selected)
+  useEffect(() => {
+    if (areaFilter === 'all') {
+      fetchOntimeRateByAreaData();
+    } else {
+      setOntimeRateByAreaData([]);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchOntimeRateByAreaData]);
+
+  // Fetch ontime rate by user data when time filter, period, or area changes (only when specific area is selected)
+  useEffect(() => {
+    if (areaFilter !== 'all') {
+      fetchOntimeRateByUserData();
+    } else {
+      setOntimeRateByUserData([]);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchOntimeRateByUserData]);
+
+  // Fetch participation data when year or area changes
+  useEffect(() => {
+    fetchParticipationData();
+  }, [selectedYear, areaFilter, fetchParticipationData]);
+
+  // Fetch area activity data when year changes (not affected by area filter)
+  useEffect(() => {
+    fetchAreaActivityData();
+  }, [selectedYear, fetchAreaActivityData]);
 
   // KPI Tiles - Dynamic data from API
   const kpiTiles: KPITile[] = useMemo(() => {
@@ -420,7 +1037,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     const { kpis, summary } = kpiData;
     return [
       {
-        title: 'Total Tickets (This Period)',
+        title: 'Total Tickets',
         value: kpis.totalTicketsThisPeriod,
         change: summary.comparisonMetrics.ticketGrowthRate.percentage,
         changeDescription: summary.comparisonMetrics.ticketGrowthRate.description,
@@ -429,7 +1046,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         color: 'text-blue-600 dark:text-blue-400'
       },
       {
-        title: 'Closed Tickets (This Period)',
+        title: 'Closed Tickets',
         value: kpis.closedTicketsThisPeriod,
         change: summary.comparisonMetrics.closureRateImprovement.percentage,
         changeDescription: summary.comparisonMetrics.closureRateImprovement.description,
@@ -438,7 +1055,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         color: 'text-green-600 dark:text-green-400'
       },
       {
-        title: 'Pending Tickets (This Period)',
+        title: 'Pending Tickets',
         value: kpis.pendingTicketsThisPeriod,
         change: kpis.pendingTicketsLastPeriod > 0 
           ? ((kpis.pendingTicketsThisPeriod - kpis.pendingTicketsLastPeriod) / kpis.pendingTicketsLastPeriod) * 100
@@ -512,121 +1129,194 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     ];
   }, [kpiData, getAvatarUrl]);
 
-  // Participation Charts Mock Data
-  const participationData = useMemo(() => {
-    const periods = Array.from({ length: 12 }, (_, i) => `P${i + 1}`);
-    return periods.map(period => ({
-      period,
-      tickets: Math.floor(Math.random() * 50) + 20,
-      target: 30,
-      uniqueReporters: Math.floor(Math.random() * 15) + 5,
-      coverageRate: Math.floor(Math.random() * 40) + 60
-    }));
-  }, []);
-
-  const areaActivityData = areas.map(area => ({
-    area,
-    tickets: Math.floor(Math.random() * 100) + 20
-  })).sort((a, b) => b.tickets - a.tickets);
-
-  const userActivityData = [
-    { id: 'js', user: 'John Smith', tickets: 45, initials: 'JS', bgColor: '#3b82f6', avatar: '/avatars/john.jpg' },
-    { id: 'sj', user: 'Sarah Johnson', tickets: 38, initials: 'SJ', bgColor: '#8b5cf6', avatar: '/avatars/sarah.jpeg' },
-    { id: 'mc', user: 'Mike Chen', tickets: 32, initials: 'MC', bgColor: '#10b981', avatar: '/avatars/mike.jpg' },
-    { id: 'lw', user: 'Lisa Wang', tickets: 28, initials: 'LW', bgColor: '#ec4899', avatar: '/avatars/lisa.jpg' },
-    { id: 'dk', user: 'David Kim', tickets: 25, initials: 'DK', bgColor: '#f97316', avatar: '/avatars/david.jpg' },
-    { id: 'ed', user: 'Emma Davis', tickets: 22, initials: 'ED', bgColor: '#14b8a6', avatar: '/avatars/emma.jpg' },
-    { id: 'tw', user: 'Tom Wilson', tickets: 19, initials: 'TW', bgColor: '#6366f1', avatar: '/avatars/tom.jpg' },
-    { id: 'ab', user: 'Anna Brown', tickets: 17, initials: 'AB', bgColor: '#ef4444', avatar: '/avatars/anna.jpg' },
-    { id: 'cl', user: 'Chris Lee', tickets: 15, initials: 'CL', bgColor: '#eab308', avatar: '/avatars/chris.jpg' },
-    { id: 'mg', user: 'Maria Garcia', tickets: 13, initials: 'MG', bgColor: '#06b6d4', avatar: '/avatars/maria.jpg' }
-  ];
-
-  // Impact and Value Charts Mock Data
-  const downtimeTrendData = useMemo(() => {
-    const periods = Array.from({ length: 12 }, (_, i) => `P${i + 1}`);
-    return periods.map(period => ({
-      period,
-      'Line A': Math.floor(Math.random() * 200) + 100,
-      'Line B': Math.floor(Math.random() * 150) + 80,
-      'Warehouse': Math.floor(Math.random() * 100) + 50,
-      'Utilities': Math.floor(Math.random() * 80) + 30
-    }));
-  }, []);
-
-  const costAvoidanceData = useMemo(() => {
-    const periods = Array.from({ length: 12 }, (_, i) => `P${i + 1}`);
-    return periods.map(period => ({
-      period,
-      costAvoidance: Math.floor(Math.random() * 500000) + 200000,
-      costPerCase: Math.floor(Math.random() * 50000) + 20000
-    }));
-  }, []);
-
-  const downtimeImpactByArea = areas.map(area => ({
-    area,
-    hours: Math.floor(Math.random() * 500) + 100
-  })).sort((a, b) => b.hours - a.hours);
-
-  const costImpactByArea = areas.map(area => ({
-    area,
-    cost: Math.floor(Math.random() * 1000000) + 200000
-  })).sort((a, b) => b.cost - a.cost);
-
-  const downtimeImpactByReporter = userActivityData.slice(0, 10).map(user => ({
-    id: user.id,
-    reporter: user.user,
-    hours: Math.floor(Math.random() * 200) + 50,
-    initials: user.initials,
-    bgColor: user.bgColor,
-    avatar: user.avatar
-  })).sort((a, b) => b.hours - a.hours);
-
-  const costImpactByReporter = userActivityData.slice(0, 10).map(user => ({
-    id: user.id,
-    reporter: user.user,
-    cost: Math.floor(Math.random() * 500000) + 100000,
-    initials: user.initials,
-    bgColor: user.bgColor,
-    avatar: user.avatar
-  })).sort((a, b) => b.cost - a.cost);
-
-  const failureModes = ['Electrical', 'Mechanical', 'Hydraulic', 'Pneumatic', 'Software', 'Environmental'];
-  const downtimeByFailureMode = failureModes.map(mode => ({
-    mode,
-    downtime: Math.floor(Math.random() * 300) + 50
-  })).sort((a, b) => b.downtime - a.downtime);
-
-  const costByFailureMode = failureModes.map(mode => ({
-    mode,
-    cost: Math.floor(Math.random() * 400000) + 100000
-  })).sort((a, b) => b.cost - a.cost);
-
-  // Speed Charts Mock Data
-  const resolveDurationData = areas.map(area => ({
-    area,
-    avgHours: Math.floor(Math.random() * 48) + 8
-  })).sort((a, b) => b.avgHours - a.avgHours);
-
-  const closureRateData = areas.map(area => ({
-    area,
-    closureRate: Math.floor(Math.random() * 30) + 70
-  })).sort((a, b) => b.closureRate - a.closureRate);
-
-  // Calendar Heatmap Mock Data (for whole year)
-  const calendarData = useMemo(() => {
-    const data = [];
-    const startDate = new Date(selectedYear, 0, 1); // January 1st of selected year
-    const endDate = new Date(selectedYear, 11, 31); // December 31st of selected year
-    
-    for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
-      data.push({
-        date: d.toISOString().split('T')[0],
-        count: Math.floor(Math.random() * 20) // Random ticket count 0-19 for 10 levels
-      });
+  // Participation Charts - Use real API data
+  const participationChartData = useMemo(() => {
+    // If we have API data, use it; otherwise return empty array for loading state
+    if (participationData.length > 0) {
+      return participationData;
     }
-    return data;
-  }, [selectedYear]);
+    
+    // Fallback: create empty data structure for loading state
+    return Array.from({ length: 13 }, (_, i) => ({
+      period: `P${i + 1}`,
+      tickets: 0,
+      target: 30,
+      uniqueReporters: 0,
+      coverageRate: 0
+    }));
+  }, [participationData]);
+
+  // Area Activity Data - Use real API data
+  const areaActivityChartData = useMemo(() => {
+    // If we have API data, transform it for the chart; otherwise return empty array for loading state
+    if (areaActivityData.length > 0) {
+      return areaActivityData.map(item => ({
+        area: item.area_name,
+        tickets: item.tickets
+      })).sort((a, b) => b.tickets - a.tickets);
+    }
+    
+    // Fallback: return empty array for loading state
+    return [];
+  }, [areaActivityData]);
+
+  // User Activity Data - Use real API data
+  const userActivityChartData = useMemo(() => {
+    // If we have API data, transform it for the chart; otherwise return empty array for loading state
+    if (userActivityData.length > 0) {
+      return userActivityData.map(item => ({
+        ...item,
+        avatar: getAvatarUrl(item.avatar)
+      }));
+    }
+    
+    // Fallback: return empty array for loading state
+    return [];
+  }, [userActivityData, getAvatarUrl]);
+
+  // Impact and Value Charts Data (from API)
+  const downtimeTrendChartData = useMemo(() => {
+    return downtimeTrendData;
+  }, [downtimeTrendData]);
+
+  const costAvoidanceChartData = useMemo(() => {
+    return costAvoidanceData;
+  }, [costAvoidanceData]);
+
+  const downtimeImpactChartData = useMemo(() => {
+    return downtimeImpactData;
+  }, [downtimeImpactData]);
+
+  const costImpactChartData = useMemo(() => {
+    return costImpactData;
+  }, [costImpactData]);
+
+  const downtimeImpactReporterChartData = useMemo(() => {
+    // If we have API data, transform it for the chart; otherwise return empty array for loading state
+    if (downtimeImpactReporterData.length > 0) {
+      return downtimeImpactReporterData.map(item => ({
+        ...item,
+        avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
+      }));
+    }
+    
+    // Fallback: return empty array for loading state
+    return [];
+  }, [downtimeImpactReporterData, getAvatarUrl]);
+
+  const costImpactReporterChartData = useMemo(() => {
+    // If we have API data, transform it for the chart; otherwise return empty array for loading state
+    if (costImpactReporterData.length > 0) {
+      return costImpactReporterData.map(item => ({
+        ...item,
+        avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
+      }));
+    }
+    
+    // Fallback: return empty array for loading state
+    return [];
+  }, [costImpactReporterData, getAvatarUrl]);
+
+  const downtimeByFailureModeChartData = useMemo(() => {
+    return downtimeByFailureModeData;
+  }, [downtimeByFailureModeData]);
+
+  const costByFailureModeChartData = useMemo(() => {
+    return costByFailureModeData;
+  }, [costByFailureModeData]);
+
+  const resolveDurationByAreaChartData = useMemo(() => {
+    return resolveDurationByAreaData;
+  }, [resolveDurationByAreaData]);
+
+  const resolveDurationByUserChartData = useMemo(() => {
+    // If we have API data, transform it for the chart; otherwise return empty array for loading state
+    if (resolveDurationByUserData.length > 0) {
+      return resolveDurationByUserData.map(item => ({
+        ...item,
+        avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
+      }));
+    }
+    
+    // Fallback: return empty array for loading state
+    return [];
+  }, [resolveDurationByUserData, getAvatarUrl]);
+
+  const ontimeRateByAreaChartData = useMemo(() => {
+    return ontimeRateByAreaData;
+  }, [ontimeRateByAreaData]);
+
+  const ontimeRateByUserChartData = useMemo(() => {
+    // If we have API data, transform it for the chart; otherwise return empty array for loading state
+    if (ontimeRateByUserData.length > 0) {
+      return ontimeRateByUserData.map(item => ({
+        ...item,
+        avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
+      }));
+    }
+    
+    // Fallback: return empty array for loading state
+    return [];
+  }, [ontimeRateByUserData, getAvatarUrl]);
+
+  // Pad the axis domain so avatars rendered as labels have enough room and are not clipped
+  const downtimeImpactReporterXAxisDomain = useMemo<[number | 'auto', number | 'auto']>(() => {
+    if (downtimeImpactReporterChartData.length === 0) {
+      return [0, 'auto'];
+    }
+
+    const maxHours = Math.max(
+      ...downtimeImpactReporterChartData.map(item => (typeof item.hours === 'number' ? item.hours : 0))
+    );
+
+    if (!Number.isFinite(maxHours) || maxHours <= 0) {
+      return [0, 'auto'];
+    }
+
+    const buffer = Math.max(5, Math.ceil(maxHours * 0.2));
+    return [0, maxHours + buffer];
+  }, [downtimeImpactReporterChartData]);
+
+  // Pad the axis domain for cost impact reporter chart to provide more room for cost values
+  const costImpactReporterXAxisDomain = useMemo<[number | 'auto', number | 'auto']>(() => {
+    if (costImpactReporterChartData.length === 0) {
+      return [0, 'auto'];
+    }
+
+    const maxCost = Math.max(
+      ...costImpactReporterChartData.map(item => (typeof item.cost === 'number' ? item.cost : 0))
+    );
+
+    if (!Number.isFinite(maxCost) || maxCost <= 0) {
+      return [0, 'auto'];
+    }
+
+    const buffer = Math.max(50000, Math.ceil(maxCost * 0.3)); // Larger buffer for cost values
+    return [0, maxCost + buffer];
+  }, [costImpactReporterChartData]);
+
+  // Remove mock data - now using real API data via costImpactReporterChartData
+
+  // Remove mock data - now using real API data via downtimeByFailureModeChartData
+
+  // Remove mock data - now using real API data via downtimeByFailureModeChartData
+
+  // Remove mock data - now using real API data via costByFailureModeChartData
+
+  // Remove mock data - now using real API data via resolveDurationByAreaChartData
+
+  // Remove mock data - now using real API data via ontimeRateByAreaChartData and ontimeRateByUserChartData
+
+  // Calendar Heatmap Data (from API)
+  const calendarData = useMemo(() => {
+    return calendarHeatmapData;
+  }, [calendarHeatmapData]);
+
+  // Calculate the year for calendar heatmap title based on time filter
+  const calendarHeatmapYear = useMemo(() => {
+    const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+    return parseInt(dateRange.startDate.split('-')[0]);
+  }, [timeFilter, selectedYear, selectedPeriod]);
 
   return (
     <div className="space-y-6 p-6">
@@ -683,89 +1373,98 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Abnormal Report Dashboard V2</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Abnormal Report Dashboard</h1>
           <p className="text-muted-foreground">
             Enhanced abnormal finding reporting and analytics dashboard
           </p>
         </div>
+        <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
+          <DialogTrigger asChild>
+            <Button variant="outline" className="flex items-center gap-2">
+              <Filter className="h-4 w-4" />
+              Filters
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Global Filters
+              </DialogTitle>
+            </DialogHeader>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Time Range</label>
+                <Select value={timeFilter} onValueChange={setTimeFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select time range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="this-year">This Year</SelectItem>
+                    <SelectItem value="last-year">Last Year</SelectItem>
+                    <SelectItem value="this-period">This Period</SelectItem>
+                    <SelectItem value="select-period">Select Period</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {timeFilter === 'select-period' && (
+                <>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Year</label>
+                    <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="2022">2022</SelectItem>
+                        <SelectItem value="2023">2023</SelectItem>
+                        <SelectItem value="2024">2024</SelectItem>
+                        <SelectItem value="2025">2025</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Period</label>
+                    <Select value={selectedPeriod.toString()} onValueChange={(value) => setSelectedPeriod(parseInt(value))}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Array.from({ length: 13 }, (_, i) => (
+                          <SelectItem key={i + 1} value={(i + 1).toString()}>P{i + 1}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </>
+              )}
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Area</label>
+                <Select value={areaFilter} onValueChange={setAreaFilter}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={areasLoading ? "Loading areas..." : "Select area"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Areas</SelectItem>
+                    {areas.map(area => (
+                      <SelectItem key={area.id} value={area.id.toString()}>
+                        {area.name} {area.plant_name && `(${area.plant_name})`}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-4 border-t">
+              <Button variant="outline" onClick={() => setIsFilterModalOpen(false)}>
+                Close
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
-
-      {/* Global Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Global Filters
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Time Range</label>
-              <Select value={timeFilter} onValueChange={setTimeFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select time range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="this-year">This Year</SelectItem>
-                  <SelectItem value="last-year">Last Year</SelectItem>
-                  <SelectItem value="this-period">This Period</SelectItem>
-                  <SelectItem value="select-period">Select Period</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            {timeFilter === 'select-period' && (
-              <>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Year</label>
-                  <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2022">2022</SelectItem>
-                      <SelectItem value="2023">2023</SelectItem>
-                      <SelectItem value="2024">2024</SelectItem>
-                      <SelectItem value="2025">2025</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-medium">Period</label>
-                  <Select value={selectedPeriod.toString()} onValueChange={(value) => setSelectedPeriod(parseInt(value))}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: 13 }, (_, i) => (
-                        <SelectItem key={i + 1} value={(i + 1).toString()}>P{i + 1}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </>
-            )}
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Area</label>
-              <Select value={areaFilter} onValueChange={setAreaFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder={areasLoading ? "Loading areas..." : "Select area"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Areas</SelectItem>
-                  {areas.map(area => (
-                    <SelectItem key={area.id} value={area.id.toString()}>
-                      {area.name} {area.plant_name && `(${area.plant_name})`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Error Message */}
       {error && (
@@ -869,7 +1568,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </Avatar>
                   <div>
                     <p className="font-medium">{topPerformers[0]?.name || 'No Data'}</p>
-                    <p className="text-sm text-muted-foreground">{topPerformers[0]?.department || 'Reporter'}</p>
                     <p className="text-lg font-bold text-blue-600">{topPerformers[0]?.value || '0 tickets'}</p>
                   </div>
                 </div>
@@ -891,7 +1589,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </Avatar>
                   <div>
                     <p className="font-medium">{topPerformers[1]?.name || 'No Data'}</p>
-                    <p className="text-sm text-muted-foreground">{topPerformers[1]?.department || 'Cost Saver'}</p>
                     <p className="text-lg font-bold text-emerald-600">{topPerformers[1]?.value || '฿0 saved'}</p>
                   </div>
                 </div>
@@ -913,7 +1610,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </Avatar>
                   <div>
                     <p className="font-medium">{topPerformers[2]?.name || 'No Data'}</p>
-                    <p className="text-sm text-muted-foreground">{topPerformers[2]?.department || 'Downtime Saver'}</p>
                     <p className="text-lg font-bold text-purple-600">{topPerformers[2]?.value || '0 hrs saved'}</p>
                   </div>
                 </div>
@@ -934,17 +1630,23 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Total Tickets Count Per Period</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={participationData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="period" />
-                  <YAxis />
-                  <RechartsTooltip />
-                  <Legend />
-                  <Bar dataKey="tickets" fill="#8884d8" name="Tickets" />
-                  <Line type="monotone" dataKey="target" stroke="#82ca9d" name="Target" />
-                </ComposedChart>
-              </ResponsiveContainer>
+              {participationLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={participationChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="period" />
+                    <YAxis />
+                    <RechartsTooltip />
+                    <Legend />
+                    <Bar dataKey="tickets" fill="#8884d8" name="Tickets" />
+                    <Line type="monotone" dataKey="target" stroke="#82ca9d" name="Target" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
@@ -954,18 +1656,24 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Unique Reporter & Coverage Rate</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={participationData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="period" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <RechartsTooltip />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="uniqueReporters" fill="#8884d8" name="Unique Reporters" />
-                  <Bar yAxisId="right" dataKey="coverageRate" fill="#82ca9d" name="Coverage Rate (%)" />
-                </BarChart>
-              </ResponsiveContainer>
+              {participationLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={participationChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="period" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <RechartsTooltip />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="uniqueReporters" fill="#8884d8" name="Unique Reporters" />
+                    <Bar yAxisId="right" dataKey="coverageRate" fill="#82ca9d" name="Coverage Rate (%)" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -974,81 +1682,104 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Who Active (Area) */}
           <Card>
             <CardHeader>
-              <CardTitle>Who Active (Area)</CardTitle>
+              <CardTitle>Who Active (Area) - Top 10</CardTitle>
             </CardHeader>
             <CardContent>
-              {/* Method 1: Increased height from 300 to 400 */}
-              <ResponsiveContainer width="100%" height={400}>
-                <BarChart 
-                  data={areaActivityData} 
-                  layout="vertical" 
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                  barCategoryGap={6} // More space between bars
-                  barSize={35} // Taller bars
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis dataKey="area" type="category" width={80} />
-                  <RechartsTooltip />
-                  <Bar dataKey="tickets" fill="#8884d8" />
-                </BarChart>
-              </ResponsiveContainer>
+              {areaActivityLoading ? (
+                <div className="flex items-center justify-center h-[400px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(300, areaActivityChartData.length * 40 + 60)}>
+                  <BarChart 
+                    data={areaActivityChartData} 
+                    layout="vertical" 
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    barCategoryGap={6} // More space between bars
+                    barSize={35} // Taller bars
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis dataKey="area" type="category" width={80} />
+                    <RechartsTooltip />
+                    <Bar dataKey="tickets" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
           {/* Who Active (User) */}
-          <Card>
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => {
+            const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+            const params = new URLSearchParams({
+              startDate: dateRange.startDate,
+              endDate: dateRange.endDate,
+              area_id: areaFilter
+            });
+            window.open(`/charts/user-activity?${params.toString()}`, '_blank');
+          }}>
             <CardHeader>
-              <CardTitle>Who Active (User) - Top 10</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <span>Who Active (User) - Top 10</span>
+                <div className="text-sm text-muted-foreground hover:text-blue-600 transition-colors">
+                  Click to expand →
+                </div>
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              {/* SVG-based avatar implementation */}
-              <ResponsiveContainer width="100%" height={Math.max(400, userActivityData.length * 48 + 40)}>
-                <BarChart 
-                  data={userActivityData} 
-                  layout="vertical" 
-                  margin={{ top: 12, right: 64, left: 20, bottom: 12 }}
-                  barCategoryGap={6}
-                >
-                  <CartesianGrid horizontal vertical={false} strokeDasharray="3 3" />
-                  <XAxis 
-                    type="number" 
-                    domain={[0, 'dataMax + 5']}
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false} 
-                  />
-                  <YAxis 
-                    dataKey="user" 
-                    type="category" 
-                    width={110}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <RechartsTooltip 
-                    content={<UserTooltip />}
-                    cursor={{ fillOpacity: 0.06 }}
-                  />
-                  <Bar 
-                    dataKey="tickets" 
-                    fill="#82ca9d"
-                    radius={[0, 8, 8, 0]} // rounded bar end
-                    isAnimationActive
-                    animationBegin={0}
-                    animationDuration={800}
+              {userActivityLoading ? (
+                <div className="flex items-center justify-center h-[400px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(400, userActivityChartData.length * 48 + 40)}>
+                  <BarChart 
+                    data={userActivityChartData} 
+                    layout="vertical" 
+                    margin={{ top: 12, right: 80, left: 20, bottom: 12 }}
+                    barCategoryGap={6}
                   >
-                    {/* Value label at end (before avatar) */}
-                    <LabelList
-                      dataKey="tickets"
-                      position="right"
-                      offset={36} // leave room for avatar
-                      style={{ fill: "#555", fontWeight: 600 }}
+                    <CartesianGrid horizontal vertical={false} strokeDasharray="3 3" />
+                    <XAxis 
+                      type="number" 
+                      domain={[0, 'dataMax + 5']}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false} 
                     />
-                    {/* Avatar at bar end */}
-                    <LabelList content={AvatarLabel({ data: userActivityData, maxAvatar: 36 })} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                    <YAxis 
+                      dataKey="user" 
+                      type="category" 
+                      width={110}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <RechartsTooltip 
+                      content={<UserTooltip />}
+                      cursor={{ fillOpacity: 0.06 }}
+                    />
+                    <Bar 
+                      dataKey="tickets" 
+                      fill="#82ca9d"
+                      radius={[0, 8, 8, 0]} // rounded bar end
+                      isAnimationActive
+                      animationBegin={0}
+                      animationDuration={800}
+                    >
+                      {/* Value label at end (before avatar) */}
+                      <LabelList
+                        dataKey="tickets"
+                        position="right"
+                        offset={50} // Increased offset to prevent overlap with avatar
+                        style={{ fill: "#555", fontWeight: 600 }}
+                      />
+                      {/* Avatar at bar end */}
+                      <LabelList content={AvatarLabel({ data: userActivityChartData, maxAvatar: 36, clipPrefix: 'user-activity-' })} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -1056,39 +1787,45 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         {/* When Active - Calendar Heatmap */}
         <Card>
           <CardHeader>
-            <CardTitle>When Active - Calendar Heatmap ({selectedYear})</CardTitle>
+            <CardTitle>When Active - Calendar Heatmap ({calendarHeatmapYear})</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="calendar-heatmap-container">
-              <CalendarHeatmap
-                startDate={new Date(selectedYear, 0, 1)}
-                endDate={new Date(selectedYear, 11, 31)}
-                values={calendarData}
-                classForValue={(value) => {
-                  if (!value) {
-                    return 'color-empty';
-                  }
-                  if (value.count <= 1) return 'color-scale-1';
-                  if (value.count <= 3) return 'color-scale-2';
-                  if (value.count <= 5) return 'color-scale-3';
-                  if (value.count <= 7) return 'color-scale-4';
-                  if (value.count <= 9) return 'color-scale-5';
-                  if (value.count <= 11) return 'color-scale-6';
-                  if (value.count <= 13) return 'color-scale-7';
-                  if (value.count <= 15) return 'color-scale-8';
-                  if (value.count <= 17) return 'color-scale-9';
-                  return 'color-scale-10';
-                }}
-                titleForValue={(value) => value ? `${value.date}: ${value.count} tickets` : 'No data'}
-                showWeekdayLabels={true}
-                showMonthLabels={true}
-                onClick={(value) => {
-                  if (value) {
-                    console.log(`Clicked on ${value.date}: ${value.count} tickets`);
-                  }
-                }}
-              />
-            </div>
+            {calendarHeatmapLoading ? (
+              <div className="flex items-center justify-center h-[200px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : (
+              <div className="calendar-heatmap-container">
+                <CalendarHeatmap
+                  startDate={new Date(calendarHeatmapYear, 0, 1)}
+                  endDate={new Date(calendarHeatmapYear, 11, 31)}
+                  values={calendarData}
+                  classForValue={(value) => {
+                    if (!value) {
+                      return 'color-empty';
+                    }
+                    if (value.count <= 1) return 'color-scale-1';
+                    if (value.count <= 3) return 'color-scale-2';
+                    if (value.count <= 5) return 'color-scale-3';
+                    if (value.count <= 7) return 'color-scale-4';
+                    if (value.count <= 9) return 'color-scale-5';
+                    if (value.count <= 11) return 'color-scale-6';
+                    if (value.count <= 13) return 'color-scale-7';
+                    if (value.count <= 15) return 'color-scale-8';
+                    if (value.count <= 17) return 'color-scale-9';
+                    return 'color-scale-10';
+                  }}
+                  titleForValue={(value) => value ? `${value.date}: ${value.count} tickets` : 'No data'}
+                  showWeekdayLabels={true}
+                  showMonthLabels={true}
+                  onClick={(value) => {
+                    if (value) {
+                      console.log(`Clicked on ${value.date}: ${value.count} tickets`);
+                    }
+                  }}
+                />
+              </div>
+            )}
             {/* <div className="flex items-center justify-center mt-4 space-x-4 text-sm">
               <span>Less</span>
               <div className="flex space-x-1">
@@ -1121,19 +1858,35 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Downtime Avoidance Trend</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={downtimeTrendData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="period" />
-                  <YAxis />
-                  <RechartsTooltip />
-                  <Legend />
-                  <Area type="monotone" dataKey="Line A" stackId="1" stroke="#8884d8" fill="#8884d8" />
-                  <Area type="monotone" dataKey="Line B" stackId="1" stroke="#82ca9d" fill="#82ca9d" />
-                  <Area type="monotone" dataKey="Warehouse" stackId="1" stroke="#ffc658" fill="#ffc658" />
-                  <Area type="monotone" dataKey="Utilities" stackId="1" stroke="#ff7300" fill="#ff7300" />
-                </AreaChart>
-              </ResponsiveContainer>
+              {downtimeTrendLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <AreaChart data={downtimeTrendChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="period" />
+                    <YAxis />
+                    <RechartsTooltip />
+                    <Legend />
+                    {downtimeTrendAreas.map((area, index) => {
+                      const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#8dd1e1', '#d084d0', '#87d068', '#ffc0cb'];
+                      const color = colors[index % colors.length];
+                      return (
+                        <Area 
+                          key={area}
+                          type="monotone" 
+                          dataKey={area} 
+                          stackId="1" 
+                          stroke={color} 
+                          fill={color} 
+                        />
+                      );
+                    })}
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
@@ -1143,18 +1896,24 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Cost Avoidance</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <ComposedChart data={costAvoidanceData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="period" />
-                  <YAxis yAxisId="left" />
-                  <YAxis yAxisId="right" orientation="right" />
-                  <RechartsTooltip />
-                  <Legend />
-                  <Bar yAxisId="left" dataKey="costAvoidance" fill="#8884d8" name="Cost Avoidance (THB)" />
-                  <Line yAxisId="right" type="monotone" dataKey="costPerCase" stroke="#82ca9d" name="Cost per Case (THB/Case)" />
-                </ComposedChart>
-              </ResponsiveContainer>
+              {costAvoidanceLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={costAvoidanceChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="period" />
+                    <YAxis yAxisId="left" />
+                    <YAxis yAxisId="right" orientation="right" />
+                    <RechartsTooltip />
+                    <Legend />
+                    <Bar yAxisId="left" dataKey="costAvoidance" fill="#8884d8" name="Cost Avoidance (THB)" />
+                    <Line yAxisId="right" type="monotone" dataKey="costPerCase" stroke="#82ca9d" name="Cost per Case (THB/Case)" />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -1166,15 +1925,21 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Downtime Impact Leaderboard (Area)</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={downtimeImpactByArea} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis dataKey="area" type="category" width={80} />
-                  <RechartsTooltip />
-                  <Bar dataKey="hours" fill="#8884d8" />
-                </BarChart>
-              </ResponsiveContainer>
+              {downtimeImpactLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={downtimeImpactChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis dataKey="area" type="category" width={80} />
+                    <RechartsTooltip />
+                    <Bar dataKey="hours" fill="#8884d8" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
@@ -1184,15 +1949,21 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Cost Impact Leaderboard (Area)</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={costImpactByArea} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis dataKey="area" type="category" width={80} />
-                  <RechartsTooltip />
-                  <Bar dataKey="cost" fill="#82ca9d" />
-                </BarChart>
-              </ResponsiveContainer>
+              {costImpactLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={costImpactChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis dataKey="area" type="category" width={80} />
+                    <RechartsTooltip />
+                    <Bar dataKey="cost" fill="#82ca9d" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -1204,50 +1975,56 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Downtime Impact Leaderboard (Reporter) - Top 10</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={Math.max(400, downtimeImpactByReporter.length * 48 + 40)}>
-                <BarChart 
-                  data={downtimeImpactByReporter} 
-                  layout="vertical" 
-                  margin={{ top: 12, right: 64, left: 20, bottom: 12 }}
-                  barCategoryGap={6}
-                >
-                  <CartesianGrid horizontal vertical={false} strokeDasharray="3 3" />
-                  <XAxis 
-                    type="number" 
-                    domain={[0, 'dataMax + 5']}
-                    tickLine={false}
-                    axisLine={false}
-                    allowDecimals={false} 
-                  />
-                  <YAxis 
-                    dataKey="reporter" 
-                    type="category" 
-                    width={110}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <RechartsTooltip 
-                    content={<DowntimeTooltip />}
-                    cursor={{ fillOpacity: 0.06 }}
-                  />
-                  <Bar 
-                    dataKey="hours" 
-                    fill="#8884d8"
-                    radius={[0, 8, 8, 0]}
-                    isAnimationActive
-                    animationBegin={0}
-                    animationDuration={800}
+              {downtimeImpactReporterLoading ? (
+                <div className="flex items-center justify-center h-[400px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(400, downtimeImpactReporterChartData.length * 48 + 40)}>
+                  <BarChart 
+                    data={downtimeImpactReporterChartData} 
+                    layout="vertical" 
+                    margin={{ top: 12, right: 80, left: 20, bottom: 12 }}
+                    barCategoryGap={6}
                   >
-                    <LabelList
-                      dataKey="hours"
-                      position="right"
-                      offset={36}
-                      style={{ fill: "#555", fontWeight: 600 }}
+                    <CartesianGrid horizontal vertical={false} strokeDasharray="3 3" />
+                    <XAxis 
+                      type="number" 
+                      domain={downtimeImpactReporterXAxisDomain}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false} 
                     />
-                    <LabelList content={AvatarLabel({ data: downtimeImpactByReporter, maxAvatar: 28 })} />
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
+                    <YAxis 
+                      dataKey="reporter" 
+                      type="category" 
+                      width={110}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <RechartsTooltip 
+                      content={<DowntimeTooltip />}
+                      cursor={{ fillOpacity: 0.06 }}
+                    />
+                    <Bar 
+                      dataKey="hours" 
+                      fill="#8884d8"
+                      radius={[0, 8, 8, 0]}
+                      isAnimationActive
+                      animationBegin={0}
+                      animationDuration={800}
+                    >
+                      <LabelList
+                        dataKey="hours"
+                        position="right"
+                        offset={50}
+                        style={{ fill: "#555", fontWeight: 600 }}
+                      />
+                      <LabelList content={AvatarLabel({ data: downtimeImpactReporterChartData, maxAvatar: 36, clipPrefix: 'downtime-impact-' })} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
@@ -1257,17 +2034,22 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Cost Impact Leaderboard (Reporter) - Top 10</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={Math.max(400, costImpactByReporter.length * 48 + 40)}>
-                <BarChart 
-                  data={costImpactByReporter} 
-                  layout="vertical" 
-                  margin={{ top: 12, right: 64, left: 20, bottom: 12 }}
-                  barCategoryGap={6}
-                >
+              {costImpactReporterLoading ? (
+                <div className="flex items-center justify-center h-[400px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(400, costImpactReporterChartData.length * 48 + 40)}>
+                  <BarChart 
+                    data={costImpactReporterChartData} 
+                    layout="vertical" 
+                    margin={{ top: 12, right: 120, left: 20, bottom: 12 }}
+                    barCategoryGap={6}
+                  >
                   <CartesianGrid horizontal vertical={false} strokeDasharray="3 3" />
                   <XAxis 
                     type="number" 
-                    domain={[0, 'dataMax + 50000']}
+                    domain={costImpactReporterXAxisDomain}
                     tickLine={false}
                     axisLine={false}
                     allowDecimals={false}
@@ -1292,17 +2074,18 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     animationBegin={0}
                     animationDuration={800}
                   >
-                    <LabelList
+                    <LabelList 
                       dataKey="cost"
                       position="right"
-                      offset={36}
+                      offset={70}
                       style={{ fill: "#555", fontWeight: 600 }}
                       formatter={(value: any) => `฿${(Number(value) / 1000).toFixed(0)}K`}
                     />
-                    <LabelList content={AvatarLabel({ data: costImpactByReporter, maxAvatar: 28 })} />
+                    <LabelList content={AvatarLabel({ data: costImpactReporterChartData, maxAvatar: 28, clipPrefix: 'cost-impact-reporter-' })} />
                   </Bar>
                 </BarChart>
               </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -1314,15 +2097,65 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Downtime Impact by Failure Mode</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={downtimeByFailureMode}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mode" />
-                  <YAxis />
-                  <RechartsTooltip />
-                  <Bar dataKey="downtime" fill="#8884d8" />
-                </BarChart>
-              </ResponsiveContainer>
+              {downtimeByFailureModeLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={downtimeByFailureModeChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="failureModeCode" 
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                      interval={0}
+                    />
+                    <YAxis 
+                      yAxisId="downtime"
+                      orientation="left"
+                      label={{ value: 'Downtime Hours', angle: -90, position: 'insideLeft' }}
+                    />
+                    <YAxis 
+                      yAxisId="cases"
+                      orientation="right"
+                      label={{ value: 'Case Count', angle: 90, position: 'insideRight' }}
+                    />
+                    <RechartsTooltip 
+                      formatter={(value, name) => {
+                        if (name === 'downtime') {
+                          return [`${value} hours`, 'Downtime Hours'];
+                        } else if (name === 'caseCount') {
+                          return [`${value} cases`, 'Case Count'];
+                        }
+                        return [value, name];
+                      }}
+                      labelFormatter={(label, payload) => {
+                        if (payload && payload[0] && payload[0].payload) {
+                          return payload[0].payload.failureModeName;
+                        }
+                        return label;
+                      }}
+                    />
+                    <Legend />
+                    <Bar 
+                      yAxisId="downtime"
+                      dataKey="downtime" 
+                      fill="#8884d8" 
+                      name="Downtime Hours"
+                    />
+                    <Line 
+                      yAxisId="cases"
+                      type="monotone" 
+                      dataKey="caseCount" 
+                      stroke="#82ca9d" 
+                      strokeWidth={3}
+                      name="Case Count"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
 
@@ -1332,15 +2165,68 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardTitle>Cost Impact by Failure Mode</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={costByFailureMode}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="mode" />
-                  <YAxis />
-                  <RechartsTooltip />
-                  <Bar dataKey="cost" fill="#82ca9d" />
-                </BarChart>
-              </ResponsiveContainer>
+              {costByFailureModeLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <ComposedChart data={costByFailureModeChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis 
+                      dataKey="failureModeCode" 
+                      angle={-45}
+                      textAnchor="end"
+                      height={100}
+                      interval={0}
+                    />
+                    <YAxis 
+                      yAxisId="cost"
+                      orientation="left"
+                      label={{ value: 'Cost Avoidance (฿)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+                      tickFormatter={(value) => `฿${(value / 1000).toFixed(0)}K`}
+                      width={80}
+                    />
+                    <YAxis 
+                      yAxisId="cases"
+                      orientation="right"
+                      label={{ value: 'Case Count', angle: 90, position: 'insideRight', style: { textAnchor: 'middle' } }}
+                      width={60}
+                    />
+                    <RechartsTooltip 
+                      formatter={(value, name) => {
+                        if (name === 'cost') {
+                          return [`฿${Number(value).toLocaleString()}`, 'Cost Avoidance'];
+                        } else if (name === 'caseCount') {
+                          return [`${value} cases`, 'Case Count'];
+                        }
+                        return [value, name];
+                      }}
+                      labelFormatter={(label, payload) => {
+                        if (payload && payload[0] && payload[0].payload) {
+                          return payload[0].payload.failureModeName;
+                        }
+                        return label;
+                      }}
+                    />
+                    <Legend />
+                    <Bar 
+                      yAxisId="cost"
+                      dataKey="cost" 
+                      fill="#82ca9d" 
+                      name="Cost Avoidance"
+                    />
+                    <Line 
+                      yAxisId="cases"
+                      type="monotone" 
+                      dataKey="caseCount" 
+                      stroke="#8884d8" 
+                      strokeWidth={3}
+                      name="Case Count"
+                    />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -1352,40 +2238,224 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Ticket Average Resolve Duration */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Ticket Average Resolve Duration/Case</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={resolveDurationData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis dataKey="area" type="category" width={80} />
-                  <RechartsTooltip />
-                  <Bar dataKey="avgHours" fill="#8884d8" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          {areaFilter === 'all' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ticket Average Resolve Duration/Case</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {resolveDurationByAreaLoading ? (
+                  <div className="flex items-center justify-center h-[300px]">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={resolveDurationByAreaChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        type="number" 
+                        allowDecimals={false}
+                        label={{ value: 'Hours', position: 'insideBottom', offset: -5 }}
+                        tickFormatter={(value) => `${value}h`}
+                      />
+                      <YAxis 
+                        dataKey="areaCode" 
+                        type="category" 
+                        width={80}
+                      />
+                      <RechartsTooltip 
+                        formatter={(value, name) => {
+                          if (name === 'avgResolveHours') {
+                            return [`${value} hours`, 'Average Resolve Time'];
+                          } else if (name === 'ticketCount') {
+                            return [`${value} tickets`, 'Ticket Count'];
+                          }
+                          return [value, name];
+                        }}
+                        labelFormatter={(label) => `Area: ${label}`}
+                      />
+                      <Legend />
+                      <Bar 
+                        dataKey="avgResolveHours" 
+                        fill="#8884d8" 
+                        name="Average Resolve Time"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          )}
 
-          {/* Closure Rate */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Closure Rate</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={closureRateData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis dataKey="area" type="category" width={80} />
-                  <RechartsTooltip />
-                  <Bar dataKey="closureRate" fill="#82ca9d" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
+          {/* Ticket Average Resolve Duration by User */}
+          {areaFilter !== 'all' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ticket Average Resolve Duration/Case (By User)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {resolveDurationByUserLoading ? (
+                  <div className="flex items-center justify-center h-[400px]">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={Math.max(400, resolveDurationByUserChartData.length * 48 + 40)}>
+                    <BarChart 
+                      data={resolveDurationByUserChartData} 
+                      layout="vertical" 
+                      margin={{ top: 20, right: 120, left: 20, bottom: 5 }}
+                      barCategoryGap={6}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        type="number" 
+                        allowDecimals={false}
+                        label={{ value: 'Hours', position: 'insideBottom', offset: -5 }}
+                        tickFormatter={(value) => `${value}h`}
+                      />
+                      <YAxis 
+                        dataKey="userName" 
+                        type="category" 
+                        width={80}
+                      />
+                      <RechartsTooltip 
+                        formatter={(value, name) => {
+                          if (name === 'avgResolveHours') {
+                            return [`${value} hours`, 'Average Resolve Time'];
+                          } else if (name === 'ticketCount') {
+                            return [`${value} tickets`, 'Ticket Count'];
+                          }
+                          return [value, name];
+                        }}
+                        labelFormatter={(label) => `User: ${label}`}
+                      />
+                      <Legend />
+                      <Bar 
+                        dataKey="avgResolveHours" 
+                        fill="#8884d8" 
+                        name="Average Resolve Time"
+                      >
+                        <LabelList content={AvatarLabel({ data: resolveDurationByUserChartData, maxAvatar: 28, clipPrefix: "resolve-duration-user-" })} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Ontime Rate by Area */}
+          {areaFilter === 'all' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ontime Rate (By Area)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {ontimeRateByAreaLoading ? (
+                  <div className="flex items-center justify-center h-[300px]">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={ontimeRateByAreaChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        type="number" 
+                        allowDecimals={false}
+                        label={{ value: 'Percentage (%)', position: 'insideBottom', offset: -5 }}
+                        tickFormatter={(value) => `${value}%`}
+                        domain={[0, 100]}
+                      />
+                      <YAxis 
+                        dataKey="areaCode" 
+                        type="category" 
+                        width={80}
+                      />
+                      <RechartsTooltip 
+                        formatter={(value, name) => {
+                          if (name === 'ontimeRate') {
+                            return [`${value}%`, 'Ontime Rate'];
+                          } else if (name === 'totalCompleted') {
+                            return [`${value} tickets`, 'Total Completed'];
+                          } else if (name === 'ontimeCompleted') {
+                            return [`${value} tickets`, 'Ontime Completed'];
+                          }
+                          return [value, name];
+                        }}
+                        labelFormatter={(label) => `Area: ${label}`}
+                      />
+                      <Legend />
+                      <Bar 
+                        dataKey="ontimeRate" 
+                        fill="#82ca9d" 
+                        name="Ontime Rate"
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Ontime Rate by User */}
+          {areaFilter !== 'all' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Ontime Rate (By User)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {ontimeRateByUserLoading ? (
+                  <div className="flex items-center justify-center h-[400px]">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={Math.max(400, ontimeRateByUserChartData.length * 48 + 40)}>
+                    <BarChart 
+                      data={ontimeRateByUserChartData} 
+                      layout="vertical" 
+                      margin={{ top: 20, right: 120, left: 20, bottom: 5 }}
+                      barCategoryGap={6}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis 
+                        type="number" 
+                        allowDecimals={false}
+                        label={{ value: 'Percentage (%)', position: 'insideBottom', offset: -5 }}
+                        tickFormatter={(value) => `${value}%`}
+                        domain={[0, 100]}
+                      />
+                      <YAxis 
+                        dataKey="userName" 
+                        type="category" 
+                        width={80}
+                      />
+                      <RechartsTooltip 
+                        formatter={(value, name) => {
+                          if (name === 'ontimeRate') {
+                            return [`${value}%`, 'Ontime Rate'];
+                          } else if (name === 'totalCompleted') {
+                            return [`${value} tickets`, 'Total Completed'];
+                          } else if (name === 'ontimeCompleted') {
+                            return [`${value} tickets`, 'Ontime Completed'];
+                          }
+                          return [value, name];
+                        }}
+                        labelFormatter={(label) => `User: ${label}`}
+                      />
+                      <Legend />
+                      <Bar 
+                        dataKey="ontimeRate" 
+                        fill="#82ca9d" 
+                        name="Ontime Rate"
+                      >
+                        <LabelList content={AvatarLabel({ data: ontimeRateByUserChartData, maxAvatar: 28, clipPrefix: "ontime-rate-user-" })} />
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          )}
         </div>
       </div>
     </div>

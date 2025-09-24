@@ -15,37 +15,34 @@ import {
 import ToastStack from '@/components/ui/toast-stack';
 import { useToast } from '@/hooks/useToast';
 import administrationService, {
-  type Machine,
+  type Line,
   type Plant,
   type Area,
-  type Line,
 } from '@/services/administrationService';
 import { Plus, Edit, Trash2, Eye, Search } from 'lucide-react';
 
 type ViewMode = 'list' | 'create' | 'edit' | 'view';
 
-const MachineManagementPage: React.FC = () => {
+const LineManagementPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [machines, setMachines] = useState<Machine[]>([]);
+  const [lines, setLines] = useState<Line[]>([]);
   const [plants, setPlants] = useState<Plant[]>([]);
   const [areas, setAreas] = useState<Area[]>([]);
-  const [lines, setLines] = useState<Line[]>([]);
-  const [selectedMachine, setSelectedMachine] = useState<Machine | null>(null);
+  const [selectedLine, setSelectedLine] = useState<Line | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterPlant, setFilterPlant] = useState<string>('all');
   const [filterArea, setFilterArea] = useState<string>('all');
-  const [filterLine, setFilterLine] = useState<string>('all');
   const [filterActive, setFilterActive] = useState<string>('all');
   const { toast, toasts, removeToast } = useToast();
 
   // Form state
   const [formData, setFormData] = useState({
-    line_id: '',
+    plant_id: '',
+    area_id: '',
     name: '',
     description: '',
     code: '',
-    machine_number: '',
     is_active: true,
   });
 
@@ -56,14 +53,13 @@ const MachineManagementPage: React.FC = () => {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [machinesData, lookupData] = await Promise.all([
-        administrationService.machine.getAll(),
+      const [linesData, lookupData] = await Promise.all([
+        administrationService.line.getAll(),
         administrationService.lookup.getLookupData(),
       ]);
-      setMachines(machinesData);
+      setLines(linesData);
       setPlants(lookupData.plants);
       setAreas(lookupData.areas);
-      setLines(lookupData.lines);
     } catch (error) {
       toast({
         title: 'Error',
@@ -76,43 +72,43 @@ const MachineManagementPage: React.FC = () => {
   };
 
   const handleCreate = () => {
-    setSelectedMachine(null);
+    setSelectedLine(null);
     setFormData({
-      line_id: '',
+      plant_id: '',
+      area_id: '',
       name: '',
       description: '',
       code: '',
-      machine_number: '',
       is_active: true,
     });
     setViewMode('create');
   };
 
-  const handleEdit = (machine: Machine) => {
-    setSelectedMachine(machine);
+  const handleEdit = (line: Line) => {
+    setSelectedLine(line);
     setFormData({
-      line_id: machine.line_id.toString(),
-      name: machine.name,
-      description: machine.description || '',
-      code: machine.code,
-      machine_number: machine.machine_number.toString(),
-      is_active: machine.is_active,
+      plant_id: line.plant_id.toString(),
+      area_id: line.area_id.toString(),
+      name: line.name,
+      description: line.description || '',
+      code: line.code,
+      is_active: line.is_active,
     });
     setViewMode('edit');
   };
 
-  const handleView = (machine: Machine) => {
-    setSelectedMachine(machine);
+  const handleView = (line: Line) => {
+    setSelectedLine(line);
     setViewMode('view');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.line_id || !formData.machine_number) {
+    if (!formData.plant_id || !formData.area_id) {
       toast({
         title: 'Error',
-        description: 'Please select a line and enter machine number',
+        description: 'Please select both plant and area',
         variant: 'destructive',
       });
       return;
@@ -123,24 +119,23 @@ const MachineManagementPage: React.FC = () => {
 
       const submitData = {
         ...formData,
-        line_id: parseInt(formData.line_id),
-        machine_number: parseInt(formData.machine_number),
+        plant_id: parseInt(formData.plant_id),
+        area_id: parseInt(formData.area_id),
       };
 
       if (viewMode === 'create') {
-        await administrationService.machine.create(submitData);
+        await administrationService.line.create(submitData);
         toast({
           title: 'Success',
-          description: 'Machine created successfully',
+          description: 'Line created successfully',
+          variant: 'default',
         });
-      } else if (viewMode === 'edit' && selectedMachine) {
-        await administrationService.machine.update(
-          selectedMachine.id,
-          submitData,
-        );
+      } else if (viewMode === 'edit' && selectedLine) {
+        await administrationService.line.update(selectedLine.id, submitData);
         toast({
           title: 'Success',
-          description: 'Machine updated successfully',
+          description: 'Line updated successfully',
+          variant: 'default',
         });
       }
 
@@ -149,7 +144,7 @@ const MachineManagementPage: React.FC = () => {
     } catch (error: any) {
       toast({
         title: 'Error',
-        description: error.message || 'Failed to save machine',
+        description: error.message || 'Failed to save line',
         variant: 'destructive',
       });
     } finally {
@@ -157,61 +152,50 @@ const MachineManagementPage: React.FC = () => {
     }
   };
 
-  const handleDelete = async (machine: Machine) => {
-    if (
-      !confirm(`Are you sure you want to delete machine "${machine.name}"?`)
-    ) {
+  const handleDelete = async (line: Line) => {
+    if (!confirm(`Are you sure you want to delete line "${line.name}"?`)) {
       return;
     }
 
-    // Use setTimeout to prevent blocking the UI thread
-    setTimeout(async () => {
-      try {
-        setLoading(true);
-        await administrationService.machine.delete(machine.id);
-        toast({
-          title: 'Success',
-          description: 'Machine deleted successfully',
-        });
-        await loadData();
-      } catch (error: any) {
-        toast({
-          title: 'Error',
-          description: error.message || 'Failed to delete machine',
-          variant: 'destructive',
-        });
-      } finally {
-        setLoading(false);
-      }
-    }, 0);
+    try {
+      setLoading(true);
+      await administrationService.line.delete(line.id);
+      toast({
+        title: 'Success',
+        description: 'Line deleted successfully',
+        variant: 'default',
+      });
+      await loadData();
+    } catch (error: any) {
+      toast({
+        title: 'Error',
+        description: error.message || 'Failed to delete line',
+        variant: 'destructive',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const filteredMachines = machines.filter((machine) => {
+  const filteredLines = lines.filter((line) => {
     const matchesSearch =
-      machine.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      machine.code.toLowerCase().includes(searchTerm.toLowerCase());
+      line.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      line.code.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesPlant =
-      filterPlant === 'all' ||
-      machine.plant_name ===
-        plants.find((p) => p.id.toString() === filterPlant)?.name;
+      filterPlant === 'all' || line.plant_id.toString() === filterPlant;
     const matchesArea =
-      filterArea === 'all' ||
-      machine.area_name ===
-        areas.find((a) => a.id.toString() === filterArea)?.name;
-    const matchesLine =
-      filterLine === 'all' || machine.line_id.toString() === filterLine;
+      filterArea === 'all' || line.area_id.toString() === filterArea;
     const matchesActive =
       filterActive === 'all' ||
-      (filterActive === 'active' && machine.is_active) ||
-      (filterActive === 'inactive' && !machine.is_active);
-    return (
-      matchesSearch &&
-      matchesPlant &&
-      matchesArea &&
-      matchesLine &&
-      matchesActive
-    );
+      (filterActive === 'active' && line.is_active) ||
+      (filterActive === 'inactive' && !line.is_active);
+    return matchesSearch && matchesPlant && matchesArea && matchesActive;
   });
+
+  const filteredAreas = areas.filter(
+    (area) =>
+      !formData.plant_id || area.plant_id.toString() === formData.plant_id,
+  );
 
   if (viewMode === 'create' || viewMode === 'edit') {
     return (
@@ -221,28 +205,55 @@ const MachineManagementPage: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle>
-                  {viewMode === 'create'
-                    ? 'Create New Machine'
-                    : 'Edit Machine'}
+                  {viewMode === 'create' ? 'Create New Line' : 'Edit Line'}
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label htmlFor="line_id">Line *</Label>
+                    <Label htmlFor="plant_id">Plant *</Label>
                     <Select
-                      value={formData.line_id}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, line_id: value })
-                      }
+                      value={formData.plant_id}
+                      onValueChange={(value) => {
+                        setFormData({
+                          ...formData,
+                          plant_id: value,
+                          area_id: '',
+                        });
+                      }}
                     >
                       <SelectTrigger>
-                        <SelectValue placeholder="Select a line" />
+                        <SelectValue placeholder="Select a plant" />
                       </SelectTrigger>
                       <SelectContent>
-                        {lines.map((line) => (
-                          <SelectItem key={line.id} value={line.id.toString()}>
-                            {line.plant_name} → {line.area_name} → {line.name}
+                        {plants.map((plant) => (
+                          <SelectItem
+                            key={plant.id}
+                            value={plant.id.toString()}
+                          >
+                            {plant.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div>
+                    <Label htmlFor="area_id">Area *</Label>
+                    <Select
+                      value={formData.area_id}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, area_id: value })
+                      }
+                      disabled={!formData.plant_id}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select an area" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {filteredAreas.map((area) => (
+                          <SelectItem key={area.id} value={area.id.toString()}>
+                            {area.name}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -268,22 +279,6 @@ const MachineManagementPage: React.FC = () => {
                       value={formData.code}
                       onChange={(e) =>
                         setFormData({ ...formData, code: e.target.value })
-                      }
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label htmlFor="machine_number">Machine Number *</Label>
-                    <Input
-                      id="machine_number"
-                      type="number"
-                      value={formData.machine_number}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          machine_number: e.target.value,
-                        })
                       }
                       required
                     />
@@ -351,10 +346,9 @@ const MachineManagementPage: React.FC = () => {
     );
   }
 
-  if (viewMode === 'view' && selectedMachine) {
-    const line = lines.find((l) => l.id === selectedMachine.line_id);
-    const area = areas.find((a) => a.id === line?.area_id);
-    const plant = plants.find((p) => p.id === line?.plant_id);
+  if (viewMode === 'view' && selectedLine) {
+    const plant = plants.find((p) => p.id === selectedLine.plant_id);
+    const area = areas.find((a) => a.id === selectedLine.area_id);
 
     return (
       <>
@@ -362,28 +356,21 @@ const MachineManagementPage: React.FC = () => {
           <div className="max-w-2xl mx-auto">
             <Card>
               <CardHeader>
-                <CardTitle>Machine Details</CardTitle>
+                <CardTitle>Line Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
                   <Label className="text-sm font-medium text-gray-500">
                     Name
                   </Label>
-                  <p className="text-lg">{selectedMachine.name}</p>
+                  <p className="text-lg">{selectedLine.name}</p>
                 </div>
 
                 <div>
                   <Label className="text-sm font-medium text-gray-500">
                     Code
                   </Label>
-                  <p className="text-lg">{selectedMachine.code}</p>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">
-                    Machine Number
-                  </Label>
-                  <p className="text-lg">{selectedMachine.machine_number}</p>
+                  <p className="text-lg">{selectedLine.code}</p>
                 </div>
 
                 <div>
@@ -402,17 +389,10 @@ const MachineManagementPage: React.FC = () => {
 
                 <div>
                   <Label className="text-sm font-medium text-gray-500">
-                    Line
-                  </Label>
-                  <p className="text-lg">{line?.name || 'Unknown'}</p>
-                </div>
-
-                <div>
-                  <Label className="text-sm font-medium text-gray-500">
                     Description
                   </Label>
                   <p className="text-lg">
-                    {selectedMachine.description || 'No description'}
+                    {selectedLine.description || 'No description'}
                   </p>
                 </div>
 
@@ -421,11 +401,9 @@ const MachineManagementPage: React.FC = () => {
                     Status
                   </Label>
                   <Badge
-                    variant={
-                      selectedMachine.is_active ? 'default' : 'secondary'
-                    }
+                    variant={selectedLine.is_active ? 'default' : 'secondary'}
                   >
-                    {selectedMachine.is_active ? 'Active' : 'Inactive'}
+                    {selectedLine.is_active ? 'Active' : 'Inactive'}
                   </Badge>
                 </div>
 
@@ -434,7 +412,7 @@ const MachineManagementPage: React.FC = () => {
                     Created
                   </Label>
                   <p className="text-lg">
-                    {new Date(selectedMachine.created_at).toLocaleDateString()}
+                    {new Date(selectedLine.created_at).toLocaleDateString()}
                   </p>
                 </div>
 
@@ -443,12 +421,12 @@ const MachineManagementPage: React.FC = () => {
                     Last Updated
                   </Label>
                   <p className="text-lg">
-                    {new Date(selectedMachine.updated_at).toLocaleDateString()}
+                    {new Date(selectedLine.updated_at).toLocaleDateString()}
                   </p>
                 </div>
 
                 <div className="flex gap-2 pt-4">
-                  <Button onClick={() => handleEdit(selectedMachine)}>
+                  <Button onClick={() => handleEdit(selectedLine)}>
                     <Edit className="w-4 h-4 mr-2" />
                     Edit
                   </Button>
@@ -469,10 +447,10 @@ const MachineManagementPage: React.FC = () => {
     <>
       <div className="container mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold">Machine Management</h1>
+          <h1 className="text-3xl font-bold">Line Management</h1>
           <Button onClick={handleCreate}>
             <Plus className="w-4 h-4 mr-2" />
-            Add Machine
+            Add Line
           </Button>
         </div>
 
@@ -483,7 +461,7 @@ const MachineManagementPage: React.FC = () => {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                   <Input
-                    placeholder="Search machines..."
+                    placeholder="Search lines..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="pl-10"
@@ -516,19 +494,6 @@ const MachineManagementPage: React.FC = () => {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={filterLine} onValueChange={setFilterLine}>
-                <SelectTrigger className="w-40">
-                  <SelectValue placeholder="All Lines" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Lines</SelectItem>
-                  {lines.map((line) => (
-                    <SelectItem key={line.id} value={line.id.toString()}>
-                      {line.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
               <Select value={filterActive} onValueChange={setFilterActive}>
                 <SelectTrigger className="w-40">
                   <SelectValue />
@@ -548,38 +513,33 @@ const MachineManagementPage: React.FC = () => {
               <>
                 {/* Mobile Card View */}
                 <div className="space-y-4 md:hidden">
-                  {filteredMachines.map((machine) => {
-                    const line = lines.find((l) => l.id === machine.line_id);
-                    const area = areas.find((a) => a.id === line?.area_id);
-                    const plant = plants.find((p) => p.id === line?.plant_id);
+                  {filteredLines.map((line) => {
+                    const plant = plants.find((p) => p.id === line.plant_id);
+                    const area = areas.find((a) => a.id === line.area_id);
                     return (
                       <div
-                        key={machine.id}
+                        key={line.id}
                         className="flex items-center justify-between p-4 border rounded-lg"
                       >
                         <div className="flex-1">
                           <div className="flex items-center gap-3">
-                            <h3 className="font-semibold">{machine.name}</h3>
+                            <h3 className="font-semibold">{line.name}</h3>
                             <Badge
-                              variant={
-                                machine.is_active ? 'default' : 'secondary'
-                              }
+                              variant={line.is_active ? 'default' : 'secondary'}
                             >
-                              {machine.is_active ? 'Active' : 'Inactive'}
+                              {line.is_active ? 'Active' : 'Inactive'}
                             </Badge>
                           </div>
                           <p className="text-sm text-gray-500">
-                            Code: {machine.code} | Machine #:{' '}
-                            {machine.machine_number}
+                            Code: {line.code}
                           </p>
                           <p className="text-sm text-gray-500">
-                            {plant?.name || 'Unknown'} →{' '}
-                            {area?.name || 'Unknown'} →{' '}
-                            {line?.name || 'Unknown'}
+                            Plant: {plant?.name || 'Unknown'} → Area:{' '}
+                            {area?.name || 'Unknown'}
                           </p>
-                          {machine.description && (
+                          {line.description && (
                             <p className="text-sm text-gray-600 mt-1">
-                              {machine.description}
+                              {line.description}
                             </p>
                           )}
                         </div>
@@ -587,21 +547,21 @@ const MachineManagementPage: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleView(machine)}
+                            onClick={() => handleView(line)}
                           >
                             <Eye className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleEdit(machine)}
+                            onClick={() => handleEdit(line)}
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDelete(machine)}
+                            onClick={() => handleDelete(line)}
                             className="text-red-600 hover:text-red-700"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -610,9 +570,9 @@ const MachineManagementPage: React.FC = () => {
                       </div>
                     );
                   })}
-                  {filteredMachines.length === 0 && (
+                  {filteredLines.length === 0 && (
                     <div className="text-center py-8 text-gray-500">
-                      No machines found
+                      No lines found
                     </div>
                   )}
                 </div>
@@ -624,10 +584,8 @@ const MachineManagementPage: React.FC = () => {
                       <tr className="border-b">
                         <th className="text-left p-3 font-medium">Name</th>
                         <th className="text-left p-3 font-medium">Code</th>
-                        <th className="text-left p-3 font-medium">Machine #</th>
                         <th className="text-left p-3 font-medium">Plant</th>
                         <th className="text-left p-3 font-medium">Area</th>
-                        <th className="text-left p-3 font-medium">Line</th>
                         <th className="text-left p-3 font-medium">
                           Description
                         </th>
@@ -637,31 +595,23 @@ const MachineManagementPage: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredMachines.map((machine) => {
-                        const line = lines.find(
-                          (l) => l.id === machine.line_id,
-                        );
-                        const area = areas.find((a) => a.id === line?.area_id);
+                      {filteredLines.map((line) => {
                         const plant = plants.find(
-                          (p) => p.id === line?.plant_id,
+                          (p) => p.id === line.plant_id,
                         );
+                        const area = areas.find((a) => a.id === line.area_id);
                         return (
                           <tr
-                            key={machine.id}
+                            key={line.id}
                             className="border-b hover:bg-gray-50"
                           >
                             <td className="p-3">
-                              <div className="font-medium">{machine.name}</div>
+                              <div className="font-medium">{line.name}</div>
                             </td>
                             <td className="p-3">
                               <code className="bg-gray-100 px-2 py-1 rounded text-sm">
-                                {machine.code}
+                                {line.code}
                               </code>
-                            </td>
-                            <td className="p-3">
-                              <div className="text-sm">
-                                {machine.machine_number}
-                              </div>
                             </td>
                             <td className="p-3">
                               <div className="text-sm">
@@ -674,29 +624,22 @@ const MachineManagementPage: React.FC = () => {
                               </div>
                             </td>
                             <td className="p-3">
-                              <div className="text-sm">
-                                {line?.name || 'Unknown'}
-                              </div>
-                            </td>
-                            <td className="p-3">
                               <div className="text-sm text-gray-600 max-w-xs truncate">
-                                {machine.description || 'No description'}
+                                {line.description || 'No description'}
                               </div>
                             </td>
                             <td className="p-3">
                               <Badge
                                 variant={
-                                  machine.is_active ? 'default' : 'secondary'
+                                  line.is_active ? 'default' : 'secondary'
                                 }
                               >
-                                {machine.is_active ? 'Active' : 'Inactive'}
+                                {line.is_active ? 'Active' : 'Inactive'}
                               </Badge>
                             </td>
                             <td className="p-3">
                               <div className="text-sm text-gray-500">
-                                {new Date(
-                                  machine.created_at,
-                                ).toLocaleDateString()}
+                                {new Date(line.created_at).toLocaleDateString()}
                               </div>
                             </td>
                             <td className="p-3">
@@ -704,21 +647,21 @@ const MachineManagementPage: React.FC = () => {
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleView(machine)}
+                                  onClick={() => handleView(line)}
                                 >
                                   <Eye className="w-4 h-4" />
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleEdit(machine)}
+                                  onClick={() => handleEdit(line)}
                                 >
                                   <Edit className="w-4 h-4" />
                                 </Button>
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  onClick={() => handleDelete(machine)}
+                                  onClick={() => handleDelete(line)}
                                   className="text-red-600 hover:text-red-700"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -728,13 +671,13 @@ const MachineManagementPage: React.FC = () => {
                           </tr>
                         );
                       })}
-                      {filteredMachines.length === 0 && (
+                      {filteredLines.length === 0 && (
                         <tr>
                           <td
-                            colSpan={10}
+                            colSpan={8}
                             className="text-center py-8 text-gray-500"
                           >
-                            No machines found
+                            No lines found
                           </td>
                         </tr>
                       )}
@@ -751,4 +694,4 @@ const MachineManagementPage: React.FC = () => {
   );
 };
 
-export default MachineManagementPage;
+export default LineManagementPage;

@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { ticketService } from '@/services/ticketService';
-import type { Ticket } from '@/services/ticketService';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
-import { PageHeader } from '@/components/common/PageHeader';
+import React, { useState, useEffect, useRef } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { ticketService } from "@/services/ticketService";
+import type { Ticket } from "@/services/ticketService";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
+import { LoadingSpinner } from "@/components/common/LoadingSpinner";
+import { PageHeader } from "@/components/common/PageHeader";
 import {
   ArrowLeft,
   AlertTriangle,
@@ -26,15 +26,26 @@ import {
   Circle,
   Play,
   UserPlus,
-} from 'lucide-react';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
-import { Textarea } from '@/components/ui/textarea';
-import { useAuth } from '@/contexts/AuthContext';
-import authService from '@/services/authService';
-import { formatTimelineTime, formatCommentTime } from '@/utils/timezone';
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { useAuth } from "@/contexts/AuthContext";
+import authService from "@/services/authService";
+import { formatTimelineTime, formatCommentTime } from "@/utils/timezone";
+import {
+  getTicketPriorityClass,
+  getTicketSeverityClass,
+  getTicketStatusClass,
+} from "@/utils/ticketBadgeStyles";
 
 const TicketDetailsPage: React.FC = () => {
   const { ticketId } = useParams<{ ticketId: string }>();
@@ -47,48 +58,63 @@ const TicketDetailsPage: React.FC = () => {
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [dragTarget, setDragTarget] = useState<'before' | 'after' | null>(null);
+  const [dragTarget, setDragTarget] = useState<"before" | "after" | null>(null);
   const [, setProgressMap] = useState<Record<number, number>>({});
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const { user } = useAuth();
   // Action modal hooks must be declared before any early returns
-  type ActionType = 'accept' | 'reject' | 'complete' | 'escalate' | 'close' | 'reopen' | 'reassign';
+  type ActionType =
+    | "accept"
+    | "reject"
+    | "complete"
+    | "escalate"
+    | "close"
+    | "reopen"
+    | "reassign";
   const [actionOpen, setActionOpen] = useState(false);
-  const [actionType, setActionType] = useState<ActionType>('accept');
-  const [actionComment, setActionComment] = useState('');
-  const [commentText, setCommentText] = useState('');
-  const [actionNumber, setActionNumber] = useState('');
-  const [actionExtraId, setActionExtraId] = useState('');
+  const [actionType, setActionType] = useState<ActionType>("accept");
+  const [actionComment, setActionComment] = useState("");
+  const [commentText, setCommentText] = useState("");
+  const [actionNumber, setActionNumber] = useState("");
+  const [actionExtraId, setActionExtraId] = useState("");
   const [acting, setActing] = useState(false);
-  
+  const [scheduledComplete, setScheduledComplete] = useState("");
+
   // Additional state for complete action
-  const [downtimeAvoidance, setDowntimeAvoidance] = useState('1');
-  const [costAvoidance, setCostAvoidance] = useState('10000');
-  const [failureModeId, setFailureModeId] = useState('');
-  const [failureModes, setFailureModes] = useState<Array<{ id: number; code: string; name: string }>>([]);
-  
+  const [downtimeAvoidance, setDowntimeAvoidance] = useState("1");
+  const [costAvoidance, setCostAvoidance] = useState("10000");
+  const [failureModeId, setFailureModeId] = useState("");
+  const [failureModes, setFailureModes] = useState<
+    Array<{ id: number; code: string; name: string }>
+  >([]);
+
   // Use area-specific approval levels instead of global permission levels
-  const isCreator = ticket?.user_relationship === 'creator';
-  const isApprover = ticket?.user_relationship === 'approver';
+  const isCreator = ticket?.user_relationship === "creator";
+  const isApprover = ticket?.user_relationship === "approver";
   const userApprovalLevel = ticket?.user_approval_level || 0;
   const isL2Plus = userApprovalLevel >= 2;
   const isL3Plus = userApprovalLevel >= 3;
-  
+
   // Check if current user is the assigned person for this ticket
   const isAssignedUser = ticket?.assigned_to === user?.id;
 
   // Reassign modal helper state (loaded regardless of status to keep hook order stable)
-  const [assigneeQuery, setAssigneeQuery] = useState('');
+  const [assigneeQuery, setAssigneeQuery] = useState("");
   const [assigneeDropdownOpen, setAssigneeDropdownOpen] = useState(false);
-  const [assignees, setAssignees] = useState<Array<{ id: number; name: string; email?: string }>>([]);
+  const [assignees, setAssignees] = useState<
+    Array<{ id: number; name: string; email?: string }>
+  >([]);
   const [assigneesLoading, setAssigneesLoading] = useState(false);
+
+  // Ref for assignee dropdown to handle click outside
+  const assigneeDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (ticketId) {
       fetchTicketDetails();
     } else {
-      setError('No ticket ID provided');
+      setError("No ticket ID provided");
       setLoading(false);
     }
   }, [ticketId]);
@@ -102,7 +128,7 @@ const TicketDetailsPage: React.FC = () => {
           setFailureModes(response.data);
         }
       } catch (err) {
-        console.error('Error loading failure modes:', err);
+        console.error("Error loading failure modes:", err);
       }
     };
     loadFailureModes();
@@ -115,18 +141,20 @@ const TicketDetailsPage: React.FC = () => {
       if (response.success) {
         setTicket(response.data);
       } else {
-        setError('Failed to fetch ticket details');
+        setError("Failed to fetch ticket details");
       }
     } catch (err) {
-      console.error('Error fetching ticket:', err);
-      setError('An error occurred while fetching ticket details');
+      console.error("Error fetching ticket:", err);
+      setError("An error occurred while fetching ticket details");
     } finally {
       setLoading(false);
     }
   };
 
-  const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
-  const uploadsBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
+  const apiBase = (
+    import.meta.env.VITE_API_URL || "http://localhost:3001/api"
+  ).replace(/\/$/, "");
+  const uploadsBase = apiBase.endsWith("/api") ? apiBase.slice(0, -4) : apiBase;
   // Load assignees on query change (keep hooks consistent regardless of visibility)
   useEffect(() => {
     let cancelled = false;
@@ -134,8 +162,12 @@ const TicketDetailsPage: React.FC = () => {
       try {
         setAssigneesLoading(true);
         // For escalate action, only show L3 users; for reassign, show L2+ users
-        const escalationOnly = actionType === 'escalate';
-        const res = await ticketService.getAvailableAssignees(assigneeQuery || undefined, ticket?.id, escalationOnly);
+        const escalationOnly = actionType === "escalate";
+        const res = await ticketService.getAvailableAssignees(
+          assigneeQuery || undefined,
+          ticket?.id,
+          escalationOnly,
+        );
         if (!cancelled) setAssignees(res.data || []);
       } catch (e) {
         if (!cancelled) setAssignees([]);
@@ -143,46 +175,75 @@ const TicketDetailsPage: React.FC = () => {
         if (!cancelled) setAssigneesLoading(false);
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [assigneeQuery, ticket?.id, actionType]);
 
+  // Handle click outside assignee dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (assigneeDropdownRef.current && !assigneeDropdownRef.current.contains(event.target as Node)) {
+        setAssigneeDropdownOpen(false);
+      }
+    };
+
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setAssigneeDropdownOpen(false);
+      }
+    };
+
+    if (assigneeDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [assigneeDropdownOpen]);
+
   // Upload with per-file progress using XMLHttpRequest
-  const handleImageUpload = async (imageType: 'before' | 'after') => {
+  const handleImageUpload = async (imageType: "before" | "after") => {
     if (!ticket) return;
-    const selectedFiles = imageType === 'before' ? beforeFiles : afterFiles;
+    const selectedFiles = imageType === "before" ? beforeFiles : afterFiles;
     if (selectedFiles.length === 0) return;
     setUploading(true);
     setProgressMap({});
     try {
       const token = authService.getToken();
-      if (!token) throw new Error('Not authenticated');
+      if (!token) throw new Error("Not authenticated");
 
       // Upload files sequentially to get per-file progress
       for (let i = 0; i < selectedFiles.length; i++) {
         const file = selectedFiles[i];
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
-          xhr.open('POST', `${apiBase}/tickets/${ticket.id}/images`);
-          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+          xhr.open("POST", `${apiBase}/tickets/${ticket.id}/images`);
+          xhr.setRequestHeader("Authorization", `Bearer ${token}`);
           const form = new FormData();
-          form.append('image', file);
-          form.append('image_type', imageType);
-          form.append('image_name', file.name);
+          form.append("image", file);
+          form.append("image_type", imageType);
+          form.append("image_name", file.name);
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
               const percent = Math.round((e.loaded / e.total) * 100);
               setProgressMap((prev) => ({ ...prev, [i]: percent }));
             }
           };
-          xhr.onerror = () => reject(new Error('Network error during upload'));
+          xhr.onerror = () => reject(new Error("Network error during upload"));
           xhr.onload = () => {
             if (xhr.status >= 200 && xhr.status < 300) {
               setProgressMap((prev) => ({ ...prev, [i]: 100 }));
               resolve();
             } else {
               try {
-                const res = JSON.parse(xhr.responseText || '{}');
-                reject(new Error(res.message || `Upload failed (${xhr.status})`));
+                const res = JSON.parse(xhr.responseText || "{}");
+                reject(
+                  new Error(res.message || `Upload failed (${xhr.status})`),
+                );
               } catch {
                 reject(new Error(`Upload failed (${xhr.status})`));
               }
@@ -192,21 +253,22 @@ const TicketDetailsPage: React.FC = () => {
         });
       }
       await fetchTicketDetails();
-      if (imageType === 'before') setBeforeFiles([]);
-      if (imageType === 'after') setAfterFiles([]);
+      if (imageType === "before") setBeforeFiles([]);
+      if (imageType === "after") setAfterFiles([]);
     } catch (e) {
-      console.error('Upload failed:', e);
-      alert(e instanceof Error ? e.message : 'Upload failed');
+      console.error("Upload failed:", e);
+      alert(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDragOver = (target: 'before' | 'after') => (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-    setDragTarget(target);
-  };
+  const handleDragOver =
+    (target: "before" | "after") => (e: React.DragEvent) => {
+      e.preventDefault();
+      setIsDragOver(true);
+      setDragTarget(target);
+    };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
@@ -214,43 +276,16 @@ const TicketDetailsPage: React.FC = () => {
     setDragTarget(null);
   };
 
-  const handleDrop = (target: 'before' | 'after') => (e: React.DragEvent) => {
+  const handleDrop = (target: "before" | "after") => (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     setDragTarget(null);
-    const files = Array.from(e.dataTransfer.files || []).filter((f) => f.type.startsWith('image/'));
+    const files = Array.from(e.dataTransfer.files || []).filter((f) =>
+      f.type.startsWith("image/"),
+    );
     if (files.length) {
-      if (target === 'before') setBeforeFiles(files);
-      if (target === 'after') setAfterFiles(files);
-    }
-  };
-
-  const getPriorityColor = (priority: string) => {
-    switch (priority?.toLowerCase()) {
-      case 'high': return 'bg-red-100 text-red-800 border-red-200';
-      case 'medium': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'low': return 'bg-green-100 text-green-800 border-green-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const getSeverityColor = (severity: string) => {
-    switch (severity?.toLowerCase()) {
-      case 'critical': return 'bg-red-600 text-white';
-      case 'high': return 'bg-orange-600 text-white';
-      case 'medium': return 'bg-yellow-600 text-white';
-      case 'low': return 'bg-blue-600 text-white';
-      default: return 'bg-gray-600 text-white';
-    }
-  };
-
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case 'open': return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'in_progress': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'resolved': return 'bg-green-100 text-green-800 border-green-200';
-      case 'closed': return 'bg-gray-100 text-gray-800 border-gray-200';
-      default: return 'bg-gray-100 text-gray-800 border-gray-200';
+      if (target === "before") setBeforeFiles(files);
+      if (target === "after") setAfterFiles(files);
     }
   };
 
@@ -263,9 +298,13 @@ const TicketDetailsPage: React.FC = () => {
       <div className="container mx-auto px-4 py-8">
         <div className="text-center">
           <AlertTriangle className="mx-auto h-12 w-12 text-red-500 mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">Ticket Not Found</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">{error || 'The requested ticket could not be found.'}</p>
-          <Button onClick={() => navigate('/tickets')} variant="outline">
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+            Ticket Not Found
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {error || "The requested ticket could not be found."}
+          </p>
+          <Button onClick={() => navigate("/tickets")} variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back to Tickets
           </Button>
@@ -275,37 +314,43 @@ const TicketDetailsPage: React.FC = () => {
   }
 
   // Derived helpers
-  const isRejected = ticket?.status === 'rejected_final' || ticket?.status === 'rejected_pending_l3_review';
-  const isClosed = ticket?.status === 'closed';
+  const isRejected =
+    ticket?.status === "rejected_final" ||
+    ticket?.status === "rejected_pending_l3_review";
+  const isClosed = ticket?.status === "closed";
   const uploadAllowed = !(isClosed || isRejected);
 
   const showAfterSection = ticket?.status
-    ? !['open', 'rejected_pending_l3_review', 'rejected_final'].includes(ticket.status)
+    ? !["open", "rejected_pending_l3_review", "rejected_final"].includes(
+        ticket.status,
+      )
     : false;
-  const beforeImages = ticket?.images?.filter((img) => img.image_type === 'before') || [];
-  const afterImages = ticket?.images?.filter((img) => img.image_type === 'after') || [];
+  const beforeImages =
+    ticket?.images?.filter((img) => img.image_type === "before") || [];
+  const afterImages =
+    ticket?.images?.filter((img) => img.image_type === "after") || [];
   const locationHierarchy = ticket
     ? [
-        { label: 'Plant', value: ticket.plant_name },
-        { label: 'Area', value: ticket.area_name },
-        { label: 'Line', value: ticket.line_name },
+        { label: "Plant", value: ticket.plant_name },
+        { label: "Area", value: ticket.area_name },
+        { label: "Line", value: ticket.line_name },
         {
-          label: 'Machine',
+          label: "Machine",
           value: ticket.machine_name
-            ? `${ticket.machine_name}${ticket.machine_number ? ` (#${ticket.machine_number})` : ''}`
+            ? `${ticket.machine_name}${ticket.machine_number ? ` (#${ticket.machine_number})` : ""}`
             : undefined,
         },
       ].filter((item) => Boolean(item.value))
     : [];
 
   const renderImageCard = (
-    img: NonNullable<Ticket['images']>[number],
-    accent: 'before' | 'after',
+    img: NonNullable<Ticket["images"]>[number],
+    accent: "before" | "after",
   ) => {
     const accentClasses =
-      accent === 'before'
-        ? 'border-red-200/70 ring-red-100/50 hover:ring-2 dark:border-red-500/60 dark:ring-red-900/40'
-        : 'border-emerald-200/70 ring-emerald-100/50 hover:ring-2 dark:border-emerald-500/60 dark:ring-emerald-900/40';
+      accent === "before"
+        ? "border-red-200/70 ring-red-100/50 hover:ring-2 dark:border-red-500/60 dark:ring-red-900/40"
+        : "border-emerald-200/70 ring-emerald-100/50 hover:ring-2 dark:border-emerald-500/60 dark:ring-emerald-900/40";
 
     return (
       <div
@@ -336,7 +381,9 @@ const TicketDetailsPage: React.FC = () => {
                 await ticketService.deleteTicketImage(ticket!.id, img.id);
                 await fetchTicketDetails();
               } catch (e) {
-                alert(e instanceof Error ? e.message : 'Failed to delete image');
+                alert(
+                  e instanceof Error ? e.message : "Failed to delete image",
+                );
               }
             }}
           >
@@ -351,13 +398,14 @@ const TicketDetailsPage: React.FC = () => {
 
   const openAction = (type: ActionType) => {
     setActionType(type);
-    setActionComment('');
-    setActionNumber('');
-    setActionExtraId('');
+    setActionComment("");
+    setActionNumber("");
+    setActionExtraId("");
+    setScheduledComplete("");
     // Reset complete action fields to defaults
-    setDowntimeAvoidance('1');
-    setCostAvoidance('10000');
-    setFailureModeId('');
+    setDowntimeAvoidance("1");
+    setCostAvoidance("10000");
+    setFailureModeId("");
     setActionOpen(true);
   };
 
@@ -366,50 +414,90 @@ const TicketDetailsPage: React.FC = () => {
     setActing(true);
     try {
       switch (actionType) {
-        case 'accept':
-          await ticketService.acceptTicket(ticket.id, actionComment || undefined);
+        case "accept":
+          if (!scheduledComplete) {
+            throw new Error("Scheduled completion date is required");
+          }
+          await ticketService.acceptTicket(
+            ticket.id,
+            actionComment || undefined,
+            new Date(scheduledComplete + 'T23:59:59').toISOString(),
+          );
           break;
-        case 'reject':
-          await ticketService.rejectTicket(ticket.id, actionComment || 'Rejected', true);
+        case "reject":
+          if (!actionComment || actionComment.trim() === "") {
+            throw new Error("Rejection reason is required");
+          }
+          await ticketService.rejectTicket(
+            ticket.id,
+            actionComment || "Rejected",
+            true,
+          );
           break;
-        case 'complete': {
+        case "complete": {
           // Validate required fields
           if (!downtimeAvoidance || !costAvoidance || !failureModeId) {
-            throw new Error('All fields are required: Downtime Avoidance, Cost Avoidance, and Failure Mode');
+            throw new Error(
+              "All fields are required: Downtime Avoidance, Cost Avoidance, and Failure Mode",
+            );
           }
-          
+
           const downtimeAvoidanceHours = parseFloat(downtimeAvoidance);
           const costAvoidanceAmount = parseFloat(costAvoidance);
           const failureMode = parseInt(failureModeId, 10);
-          
-          await ticketService.completeTicket(ticket.id, actionComment || undefined, downtimeAvoidanceHours, costAvoidanceAmount, failureMode);
+
+          await ticketService.completeTicket(
+            ticket.id,
+            actionComment || undefined,
+            downtimeAvoidanceHours,
+            costAvoidanceAmount,
+            failureMode,
+          );
           break;
         }
-        case 'escalate': {
-          const toId = parseInt(actionExtraId || '0', 10);
-          if (!toId) throw new Error('Please select an L3 user from the dropdown list');
-          await ticketService.escalateTicket(ticket.id, actionComment || 'Escalated', toId);
+        case "escalate": {
+          const toId = parseInt(actionExtraId || "0", 10);
+          if (!toId)
+            throw new Error("Please select an L3 user from the dropdown list");
+          await ticketService.escalateTicket(
+            ticket.id,
+            actionComment || "Escalated",
+            toId,
+          );
           break;
         }
-        case 'close': {
-          const rating = actionNumber !== '' ? parseInt(actionNumber, 10) : undefined;
-          await ticketService.closeTicket(ticket.id, actionComment || 'Closed', rating);
+        case "close": {
+          const rating =
+            actionNumber !== "" ? parseInt(actionNumber, 10) : undefined;
+          await ticketService.closeTicket(
+            ticket.id,
+            actionComment || "Closed",
+            rating,
+          );
           break;
         }
-        case 'reopen':
-          await ticketService.reopenTicket(ticket.id, actionComment || 'Reopened');
+        case "reopen":
+          await ticketService.reopenTicket(
+            ticket.id,
+            actionComment || "Reopened",
+          );
           break;
-        case 'reassign': {
-          const toId = parseInt(actionExtraId || '0', 10);
-          if (!toId) throw new Error('Please select a new assignee from the dropdown list');
-          await ticketService.reassignTicket(ticket.id, toId, actionComment || undefined);
+        case "reassign": {
+          const toId = parseInt(actionExtraId || "0", 10);
+          if (!toId)
+            throw new Error("Please select a new assignee from the dropdown list");
+          await ticketService.reassignTicket(
+            ticket.id,
+            toId,
+            actionComment || undefined,
+          );
           break;
         }
       }
       await fetchTicketDetails();
       setActionOpen(false);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Action failed');
+      alert(err instanceof Error ? err.message : "Action failed");
     } finally {
       setActing(false);
     }
@@ -420,52 +508,83 @@ const TicketDetailsPage: React.FC = () => {
       <PageHeader
         title={`Ticket #${ticket.ticket_number}`}
         showBackButton={true}
-        onBack={() => navigate('/tickets')}
+        onBack={() => navigate("/tickets")}
         rightContent={
           <>
             {/* Accept button - Only assigned L2 user can accept open tickets */}
-            {isL2Plus && (isAssignedUser|| ticket.assigned_to == null) && ticket.status === 'open' && (
-              <Button onClick={() => openAction('accept')}>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Accept
-              </Button>
-            )}
+            {isL2Plus &&
+              (isAssignedUser || ticket.assigned_to == null) &&
+              ticket.status === "open" && (
+                <Button onClick={() => openAction("accept")}>
+                  <CheckCircle2 className="mr-2 h-4 w-4" /> Accept
+                </Button>
+              )}
             {/* L3 Accept button - Only L3 can override L2 rejections */}
-            {isL3Plus && ticket.status === 'rejected_pending_l3_review' && (
-              <Button onClick={() => openAction('accept')}>
+            {isL3Plus && ticket.status === "rejected_pending_l3_review" && (
+              <Button onClick={() => openAction("accept")}>
                 <CheckCircle2 className="mr-2 h-4 w-4" /> Override & Accept
               </Button>
             )}
             {/* Reject button - L2 can reject open tickets, L3 can reject tickets in any status except rejected_final and closed */}
-            {isL2Plus && !isL3Plus && ticket.status === 'open' && (
-              <Button variant="destructive" onClick={() => openAction('reject')}>
+            {isL2Plus && !isL3Plus && ticket.status === "open" && (
+              <Button
+                variant="destructive"
+                onClick={() => openAction("reject")}
+              >
                 <XCircle className="mr-2 h-4 w-4" /> Reject
               </Button>
             )}
             {/* L3 Reject button - Only L3 can reject tickets in any status except rejected_final and closed */}
-            {isL3Plus && ticket.status !== 'rejected_final' && ticket.status !== 'closed' && (
-              <Button variant="destructive" onClick={() => openAction('reject')}>
-                <XCircle className="mr-2 h-4 w-4" /> 
-                {ticket.status === 'rejected_pending_l3_review' ? 'Final Reject' : 'Reject'}
-              </Button>
-            )}
+            {isL3Plus &&
+              ticket.status !== "rejected_final" &&
+              ticket.status !== "closed" && (
+                <Button
+                  variant="destructive"
+                  onClick={() => openAction("reject")}
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  {ticket.status === "rejected_pending_l3_review"
+                    ? "Final Reject"
+                    : "Reject"}
+                </Button>
+              )}
             {/* Complete and Escalate buttons - Only assigned L2 user can complete/escalate when ticket is in-progress or reopened_in_progress */}
-            {isL2Plus && isAssignedUser && (ticket.status === 'in_progress' || ticket.status === 'reopened_in_progress') && (
-              <>
-                <Button onClick={() => openAction('complete')}>Complete</Button>
-                <Button variant="outline" onClick={() => openAction('escalate')}>Escalate</Button>
-              </>
-            )}
+            {isL2Plus &&
+              isAssignedUser &&
+              (ticket.status === "in_progress" ||
+                ticket.status === "reopened_in_progress") && (
+                <>
+                  <Button onClick={() => openAction("complete")}>
+                    Complete
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => openAction("escalate")}
+                  >
+                    Escalate
+                  </Button>
+                </>
+              )}
             {/* Close/Reopen buttons - Creator can close/reopen when ticket is completed */}
-            {isCreator && ticket.status === 'completed' && (
+            {isCreator && ticket.status === "completed" && (
               <>
-                <Button onClick={() => openAction('close')}>Close</Button>
-                <Button variant="outline" onClick={() => openAction('reopen')}>Reopen</Button>
+                <Button onClick={() => openAction("close")}>Close</Button>
+                <Button variant="outline" onClick={() => openAction("reopen")}>
+                  Reopen
+                </Button>
               </>
             )}
             {/* L3 Reassign button - L3 can reassign tickets in any status except rejected_final and closed */}
-            {isL3Plus && ticket.status !== 'rejected_final' && ticket.status !== 'closed' && (
-              <Button variant="outline" onClick={() => openAction('reassign')}>Reassign</Button>
-            )}
+            {isL3Plus &&
+              ticket.status !== "rejected_final" &&
+              ticket.status !== "closed" && (
+                <Button
+                  variant="outline"
+                  onClick={() => openAction("reassign")}
+                >
+                  Reassign
+                </Button>
+              )}
           </>
         }
       />
@@ -482,9 +601,9 @@ const TicketDetailsPage: React.FC = () => {
             <CardContent className="space-y-6">
               <section
                 className={`rounded-lg border-2 p-4 shadow-sm transition-colors ${
-                  isDragOver && dragTarget === 'before'
-                    ? 'border-red-400 bg-red-50/80 dark:border-red-500 dark:bg-red-950/40'
-                    : 'border-red-200/80 bg-red-50/40 dark:border-red-500/60 dark:bg-red-950/20'
+                  isDragOver && dragTarget === "before"
+                    ? "border-red-400 bg-red-50/80 dark:border-red-500 dark:bg-red-950/40"
+                    : "border-red-200/80 bg-red-50/40 dark:border-red-500/60 dark:bg-red-950/20"
                 }`}
               >
                 <div className="flex items-center justify-between gap-2">
@@ -493,13 +612,14 @@ const TicketDetailsPage: React.FC = () => {
                     <span>Before</span>
                   </div>
                   <Badge className="border-red-200 bg-white/70 text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
-                    {beforeImages.length} photo{beforeImages.length === 1 ? '' : 's'}
+                    {beforeImages.length} photo
+                    {beforeImages.length === 1 ? "" : "s"}
                   </Badge>
                 </div>
 
                 <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                   {beforeImages.length > 0 ? (
-                    beforeImages.map((img) => renderImageCard(img, 'before'))
+                    beforeImages.map((img) => renderImageCard(img, "before"))
                   ) : (
                     <div className="col-span-full rounded-md border border-dashed border-red-200/70 bg-white/60 px-3 py-6 text-sm text-red-700 dark:border-red-500/50 dark:bg-transparent dark:text-red-200">
                       No before images uploaded yet.
@@ -510,29 +630,48 @@ const TicketDetailsPage: React.FC = () => {
                 {uploadAllowed && (
                   <div
                     className={`mt-4 rounded-md border border-dashed px-4 py-3 text-center text-sm transition-colors ${
-                      isDragOver && dragTarget === 'before'
-                        ? 'border-red-400 bg-white/60 dark:border-red-500'
-                        : 'border-red-200/80 bg-white/40 dark:border-red-500/50 dark:bg-transparent'
+                      isDragOver && dragTarget === "before"
+                        ? "border-red-400 bg-white/60 dark:border-red-500"
+                        : "border-red-200/80 bg-white/40 dark:border-red-500/50 dark:bg-transparent"
                     }`}
-                    onDragOver={handleDragOver('before')}
+                    onDragOver={handleDragOver("before")}
                     onDragLeave={handleDragLeave}
-                    onDrop={handleDrop('before')}
+                    onDrop={handleDrop("before")}
                   >
-                    <p className="font-medium text-red-700 dark:text-red-200">Add problem evidence</p>
-                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Drag & drop or choose files to upload.</p>
+                    <p className="font-medium text-red-700 dark:text-red-200">
+                      Add problem evidence
+                    </p>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      Drag & drop or choose files to upload.
+                    </p>
                     <Input
                       className="mt-3"
                       type="file"
                       accept="image/*"
                       multiple
-                      onChange={(e) => setBeforeFiles(Array.from(e.target.files || []))}
+                      onChange={(e) =>
+                        setBeforeFiles(Array.from(e.target.files || []))
+                      }
                     />
                     <div className="mt-3 flex flex-wrap justify-end gap-2">
-                      <Button size="sm" disabled={beforeFiles.length === 0 || uploading} onClick={() => handleImageUpload('before')}>
-                        {uploading ? 'Uploading...' : beforeFiles.length > 1 ? `Upload ${beforeFiles.length} images` : 'Upload image'}
+                      <Button
+                        size="sm"
+                        disabled={beforeFiles.length === 0 || uploading}
+                        onClick={() => handleImageUpload("before")}
+                      >
+                        {uploading
+                          ? "Uploading..."
+                          : beforeFiles.length > 1
+                            ? `Upload ${beforeFiles.length} images`
+                            : "Upload image"}
                       </Button>
                       {beforeFiles.length > 0 && (
-                        <Button variant="outline" size="sm" onClick={() => setBeforeFiles([])} disabled={uploading}>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setBeforeFiles([])}
+                          disabled={uploading}
+                        >
                           Clear
                         </Button>
                       )}
@@ -541,16 +680,18 @@ const TicketDetailsPage: React.FC = () => {
                 )}
 
                 {!uploadAllowed && (
-                  <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">Upload disabled for closed or rejected tickets.</p>
+                  <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                    Upload disabled for closed or rejected tickets.
+                  </p>
                 )}
               </section>
 
               {showAfterSection ? (
                 <section
                   className={`rounded-lg border-2 p-4 shadow-sm transition-colors ${
-                    isDragOver && dragTarget === 'after'
-                      ? 'border-emerald-400 bg-emerald-50/80 dark:border-emerald-500 dark:bg-emerald-950/40'
-                      : 'border-emerald-200/80 bg-emerald-50/40 dark:border-emerald-500/60 dark:bg-emerald-950/20'
+                    isDragOver && dragTarget === "after"
+                      ? "border-emerald-400 bg-emerald-50/80 dark:border-emerald-500 dark:bg-emerald-950/40"
+                      : "border-emerald-200/80 bg-emerald-50/40 dark:border-emerald-500/60 dark:bg-emerald-950/20"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -559,13 +700,14 @@ const TicketDetailsPage: React.FC = () => {
                       <span>After</span>
                     </div>
                     <Badge className="border-emerald-200 bg-white/70 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-200">
-                      {afterImages.length} photo{afterImages.length === 1 ? '' : 's'}
+                      {afterImages.length} photo
+                      {afterImages.length === 1 ? "" : "s"}
                     </Badge>
                   </div>
 
                   <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
                     {afterImages.length > 0 ? (
-                      afterImages.map((img) => renderImageCard(img, 'after'))
+                      afterImages.map((img) => renderImageCard(img, "after"))
                     ) : (
                       <div className="col-span-full rounded-md border border-dashed border-emerald-200/70 bg-white/60 px-3 py-6 text-sm text-emerald-700 dark:border-emerald-500/50 dark:bg-transparent dark:text-emerald-200">
                         No after images uploaded yet.
@@ -576,29 +718,48 @@ const TicketDetailsPage: React.FC = () => {
                   {uploadAllowed && (
                     <div
                       className={`mt-4 rounded-md border border-dashed px-4 py-3 text-center text-sm transition-colors ${
-                        isDragOver && dragTarget === 'after'
-                          ? 'border-emerald-400 bg-white/60 dark:border-emerald-500'
-                          : 'border-emerald-200/80 bg-white/40 dark:border-emerald-500/50 dark:bg-transparent'
+                        isDragOver && dragTarget === "after"
+                          ? "border-emerald-400 bg-white/60 dark:border-emerald-500"
+                          : "border-emerald-200/80 bg-white/40 dark:border-emerald-500/50 dark:bg-transparent"
                       }`}
-                      onDragOver={handleDragOver('after')}
+                      onDragOver={handleDragOver("after")}
                       onDragLeave={handleDragLeave}
-                      onDrop={handleDrop('after')}
+                      onDrop={handleDrop("after")}
                     >
-                      <p className="font-medium text-emerald-700 dark:text-emerald-200">Share improvement results</p>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Drag & drop or choose files to upload.</p>
+                      <p className="font-medium text-emerald-700 dark:text-emerald-200">
+                        Share improvement results
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Drag & drop or choose files to upload.
+                      </p>
                       <Input
                         className="mt-3"
                         type="file"
                         accept="image/*"
                         multiple
-                        onChange={(e) => setAfterFiles(Array.from(e.target.files || []))}
+                        onChange={(e) =>
+                          setAfterFiles(Array.from(e.target.files || []))
+                        }
                       />
                       <div className="mt-3 flex flex-wrap justify-end gap-2">
-                        <Button size="sm" disabled={afterFiles.length === 0 || uploading} onClick={() => handleImageUpload('after')}>
-                          {uploading ? 'Uploading...' : afterFiles.length > 1 ? `Upload ${afterFiles.length} images` : 'Upload image'}
+                        <Button
+                          size="sm"
+                          disabled={afterFiles.length === 0 || uploading}
+                          onClick={() => handleImageUpload("after")}
+                        >
+                          {uploading
+                            ? "Uploading..."
+                            : afterFiles.length > 1
+                              ? `Upload ${afterFiles.length} images`
+                              : "Upload image"}
                         </Button>
                         {afterFiles.length > 0 && (
-                          <Button variant="outline" size="sm" onClick={() => setAfterFiles([])} disabled={uploading}>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setAfterFiles([])}
+                            disabled={uploading}
+                          >
                             Clear
                           </Button>
                         )}
@@ -607,12 +768,15 @@ const TicketDetailsPage: React.FC = () => {
                   )}
 
                   {!uploadAllowed && (
-                    <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">Upload disabled for closed or rejected tickets.</p>
+                    <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                      Upload disabled for closed or rejected tickets.
+                    </p>
                   )}
                 </section>
               ) : (
                 <div className="rounded-lg border border-dashed border-emerald-200/80 bg-emerald-50/40 p-4 text-sm text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-950/20 dark:text-emerald-200">
-                  After gallery will unlock once this ticket is accepted or moves to in-progress.
+                  After gallery will unlock once this ticket is accepted or
+                  moves to in-progress.
                 </div>
               )}
             </CardContent>
@@ -622,7 +786,7 @@ const TicketDetailsPage: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5" />
-                Comments {ticket.comments ? `(${ticket.comments.length})` : ''}
+                Comments {ticket.comments ? `(${ticket.comments.length})` : ""}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -642,7 +806,7 @@ const TicketDetailsPage: React.FC = () => {
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => setCommentText('')}
+                        onClick={() => setCommentText("")}
                       >
                         Clear
                       </Button>
@@ -656,10 +820,14 @@ const TicketDetailsPage: React.FC = () => {
                           const text = commentText.trim();
                           if (!text) return;
                           await ticketService.addComment(ticket.id, text);
-                          setCommentText('');
+                          setCommentText("");
                           await fetchTicketDetails();
                         } catch (err) {
-                          alert(err instanceof Error ? err.message : 'Failed to add comment');
+                          alert(
+                            err instanceof Error
+                              ? err.message
+                              : "Failed to add comment",
+                          );
                         }
                       }}
                     >
@@ -672,22 +840,31 @@ const TicketDetailsPage: React.FC = () => {
               {ticket.comments && ticket.comments.length > 0 ? (
                 <div className="space-y-4">
                   {ticket.comments.map((comment, index) => {
-                    const isStatusChange = comment.comment?.startsWith('Status changed from');
-                    const userInitials = comment.user_name 
-                      ? `${comment.user_name.split(' ')[0]?.[0] || ''}${comment.user_name.split(' ')[1]?.[0] || ''}`
+                    const isStatusChange = comment.comment?.startsWith(
+                      "Status changed from",
+                    );
+                    const userInitials = comment.user_name
+                      ? `${comment.user_name.split(" ")[0]?.[0] || ""}${comment.user_name.split(" ")[1]?.[0] || ""}`
                       : `U${comment.user_id}`;
-                    
-                    const avatarSrc = comment.user_avatar_url ? `${uploadsBase}${comment.user_avatar_url}` : undefined;
-                    
+
+                    const avatarSrc = comment.user_avatar_url
+                      ? `${uploadsBase}${comment.user_avatar_url}`
+                      : undefined;
+
                     return (
-                      <div key={index} className={`rounded-md border p-4 ${
-                        isStatusChange 
-                          ? 'border-green-200/60 bg-green-50/40 dark:border-green-500/30 dark:bg-green-950/20'
-                          : 'border-blue-200/60 bg-blue-50/40 dark:border-blue-500/30 dark:bg-blue-950/20'
-                      }`}>
+                      <div
+                        key={index}
+                        className={`rounded-md border p-4 ${
+                          isStatusChange
+                            ? "border-green-200/60 bg-green-50/40 dark:border-green-500/30 dark:bg-green-950/20"
+                            : "border-blue-200/60 bg-blue-50/40 dark:border-blue-500/30 dark:bg-blue-950/20"
+                        }`}
+                      >
                         <div className="mb-2 flex items-center gap-3">
                           <Avatar className="h-8 w-8">
-                            {avatarSrc ? <AvatarImage src={avatarSrc} alt="avatar" /> : null}
+                            {avatarSrc ? (
+                              <AvatarImage src={avatarSrc} alt="avatar" />
+                            ) : null}
                             <AvatarFallback className="text-xs font-medium text-gray-600 dark:text-gray-300">
                               {userInitials}
                             </AvatarFallback>
@@ -701,11 +878,13 @@ const TicketDetailsPage: React.FC = () => {
                             </span>
                           </div>
                         </div>
-                        <p className={`text-sm ${
-                          isStatusChange 
-                            ? 'text-green-700 dark:text-green-300 font-medium'
-                            : 'text-gray-700 dark:text-gray-300'
-                        }`}>
+                        <p
+                          className={`text-sm ${
+                            isStatusChange
+                              ? "text-green-700 dark:text-green-300 font-medium"
+                              : "text-gray-700 dark:text-gray-300"
+                          }`}
+                        >
                           {comment.comment}
                         </p>
                       </div>
@@ -713,7 +892,9 @@ const TicketDetailsPage: React.FC = () => {
                   })}
                 </div>
               ) : (
-                <p className="text-sm text-gray-600 dark:text-gray-400">No comments yet.</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  No comments yet.
+                </p>
               )}
             </CardContent>
           </Card>
@@ -726,61 +907,107 @@ const TicketDetailsPage: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-6 text-sm">
               <div>
-                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Title</p>
-                <p className="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">{ticket.title}</p>
+                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Title
+                </p>
+                <p className="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">
+                  {ticket.title}
+                </p>
               </div>
               <div>
-                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Description</p>
-                <p className="mt-1 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{ticket.description}</p>
+                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Description
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
+                  {ticket.description}
+                </p>
               </div>
               {ticket.pucode && (
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">PUCODE</p>
-                  <p className="mt-1 font-mono text-sm text-gray-900 dark:text-gray-100">{ticket.pucode}</p>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    PUCODE
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-gray-900 dark:text-gray-100">
+                    {ticket.pucode}
+                  </p>
                 </div>
               )}
 
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Status</p>
-                  <Badge className={`mt-1 ${getStatusColor(ticket.status)}`}>
-                    {ticket.status?.replace('_', ' ').toUpperCase()}
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Status
+                  </p>
+                  <Badge
+                    className={`mt-1 ${getTicketStatusClass(ticket.status)}`}
+                  >
+                    {ticket.status?.replace("_", " ").toUpperCase()}
                   </Badge>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Priority</p>
-                  <Badge className={`mt-1 ${getPriorityColor(ticket.priority)}`}>
-                    {ticket.priority?.toUpperCase() || 'N/A'}
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Priority
+                  </p>
+                  <Badge
+                    className={`mt-1 ${getTicketPriorityClass(ticket.priority)}`}
+                  >
+                    {ticket.priority?.toUpperCase() || "N/A"}
                   </Badge>
                 </div>
                 <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Severity</p>
-                  <Badge className={`mt-1 ${getSeverityColor(ticket.severity_level)}`}>
-                    {ticket.severity_level?.toUpperCase() || 'N/A'}
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Severity
+                  </p>
+                  <Badge
+                    className={`mt-1 ${getTicketSeverityClass(ticket.severity_level)}`}
+                  >
+                    {ticket.severity_level?.toUpperCase() || "N/A"}
                   </Badge>
                 </div>
               </div>
 
               <dl className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Reporter</dt>
-                  <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">{ticket.reporter_name}</dd>
+                  <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Reporter
+                  </dt>
+                  <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                    {ticket.reporter_name}
+                  </dd>
                 </div>
                 {ticket.assignee_name && (
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Assigned To</dt>
-                    <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">{ticket.assignee_name}</dd>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Assigned To
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                      {ticket.assignee_name}
+                    </dd>
                   </div>
                 )}
                 <div>
-                  <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Created</dt>
+                  <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Created
+                  </dt>
                   <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                    {formatCommentTime(ticket.created_at).split(' ')[0]}
+                    {formatCommentTime(ticket.created_at).split(" ")[0]}
                   </dd>
                 </div>
+                {ticket.scheduled_complete && (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Scheduled Complete
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                      {new Date(ticket.scheduled_complete).toLocaleDateString('th-TH')}
+                    </dd>
+                  </div>
+                )}
                 {ticket.cost_avoidance && (
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Cost Avoidance</dt>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Cost Avoidance
+                    </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                       ${ticket.cost_avoidance.toFixed(2)}
                     </dd>
@@ -788,7 +1015,9 @@ const TicketDetailsPage: React.FC = () => {
                 )}
                 {ticket.downtime_avoidance_hours && (
                   <div>
-                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Downtime Avoidance</dt>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Downtime Avoidance
+                    </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                       {ticket.downtime_avoidance_hours} hours
                     </dd>
@@ -797,7 +1026,9 @@ const TicketDetailsPage: React.FC = () => {
               </dl>
 
               <div>
-                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Location</p>
+                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Location
+                </p>
                 {locationHierarchy.length > 0 ? (
                   <div className="mt-2 grid gap-2">
                     {locationHierarchy.map((item) => (
@@ -805,13 +1036,19 @@ const TicketDetailsPage: React.FC = () => {
                         key={item.label}
                         className="flex items-center justify-between rounded-md border border-gray-200/60 px-3 py-2 text-sm dark:border-gray-700"
                       >
-                        <span className="font-medium text-gray-600 dark:text-gray-300">{item.label}</span>
-                        <span className="text-gray-900 dark:text-gray-100">{item.value}</span>
+                        <span className="font-medium text-gray-600 dark:text-gray-300">
+                          {item.label}
+                        </span>
+                        <span className="text-gray-900 dark:text-gray-100">
+                          {item.value}
+                        </span>
                       </div>
                     ))}
                   </div>
                 ) : (
-                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">No location details recorded.</p>
+                  <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                    No location details recorded.
+                  </p>
                 )}
               </div>
             </CardContent>
@@ -831,7 +1068,17 @@ const TicketDetailsPage: React.FC = () => {
                   // Create a comprehensive timeline by combining all events
                   const timelineEvents: Array<{
                     id: string;
-                    type: 'created' | 'status_change' | 'assignment' | 'accepted' | 'rejected' | 'completed' | 'escalated' | 'closed' | 'reopened' | 'l3_override';
+                    type:
+                      | "created"
+                      | "status_change"
+                      | "assignment"
+                      | "accepted"
+                      | "rejected"
+                      | "completed"
+                      | "escalated"
+                      | "closed"
+                      | "reopened"
+                      | "l3_override";
                     timestamp: string;
                     title: string;
                     description: string;
@@ -842,58 +1089,88 @@ const TicketDetailsPage: React.FC = () => {
 
                   // Add ticket creation event
                   timelineEvents.push({
-                    id: 'created',
-                    type: 'created',
+                    id: "created",
+                    type: "created",
                     timestamp: ticket.created_at,
-                    title: 'Ticket Created',
+                    title: "Ticket Created",
                     description: `by ${ticket.reporter_name}`,
                     icon: <Plus className="h-4 w-4" />,
-                    iconBg: 'bg-blue-100 dark:bg-blue-900',
-                    iconColor: 'text-blue-600 dark:text-blue-400'
+                    iconBg: "bg-blue-100 dark:bg-blue-900",
+                    iconColor: "text-blue-600 dark:text-blue-400",
                   });
 
                   // Add all events from status history (including assignments)
-                  if (ticket.status_history && ticket.status_history.length > 0) {
+                  if (
+                    ticket.status_history &&
+                    ticket.status_history.length > 0
+                  ) {
                     ticket.status_history.forEach((statusChange) => {
                       const getStatusIcon = (status: string) => {
                         switch (status.toLowerCase()) {
-                          case 'open': return <Plus className="h-4 w-4" />;
-                          case 'in_progress': return <Play className="h-4 w-4" />;
-                          case 'completed': return <CheckCircle className="h-4 w-4" />;
-                          case 'closed': return <Lock className="h-4 w-4" />;
-                          case 'rejected': return <X className="h-4 w-4" />;
-                          case 'escalated': return <AlertTriangle className="h-4 w-4" />;
-                          case 'reopened': return <RefreshCw className="h-4 w-4" />;
-                          case 'assigned': return <UserPlus className="h-4 w-4" />;
-                          default: return <Circle className="h-4 w-4" />;
+                          case "open":
+                            return <Plus className="h-4 w-4" />;
+                          case "in_progress":
+                            return <Play className="h-4 w-4" />;
+                          case "completed":
+                            return <CheckCircle className="h-4 w-4" />;
+                          case "closed":
+                            return <Lock className="h-4 w-4" />;
+                          case "rejected":
+                            return <X className="h-4 w-4" />;
+                          case "escalated":
+                            return <AlertTriangle className="h-4 w-4" />;
+                          case "reopened":
+                            return <RefreshCw className="h-4 w-4" />;
+                          case "assigned":
+                            return <UserPlus className="h-4 w-4" />;
+                          default:
+                            return <Circle className="h-4 w-4" />;
                         }
                       };
 
                       const getStatusIconBg = (status: string) => {
                         switch (status.toLowerCase()) {
-                          case 'open': return 'bg-blue-100 dark:bg-blue-900';
-                          case 'in_progress': return 'bg-yellow-100 dark:bg-yellow-900';
-                          case 'completed': return 'bg-emerald-100 dark:bg-emerald-900';
-                          case 'closed': return 'bg-gray-100 dark:bg-gray-800';
-                          case 'rejected': return 'bg-red-100 dark:bg-red-900';
-                          case 'escalated': return 'bg-orange-100 dark:bg-orange-900';
-                          case 'reopened': return 'bg-yellow-100 dark:bg-yellow-900';
-                          case 'assigned': return 'bg-indigo-100 dark:bg-indigo-900';
-                          default: return 'bg-gray-100 dark:bg-gray-800';
+                          case "open":
+                            return "bg-blue-100 dark:bg-blue-900";
+                          case "in_progress":
+                            return "bg-yellow-100 dark:bg-yellow-900";
+                          case "completed":
+                            return "bg-emerald-100 dark:bg-emerald-900";
+                          case "closed":
+                            return "bg-gray-100 dark:bg-gray-800";
+                          case "rejected":
+                            return "bg-red-100 dark:bg-red-900";
+                          case "escalated":
+                            return "bg-orange-100 dark:bg-orange-900";
+                          case "reopened":
+                            return "bg-yellow-100 dark:bg-yellow-900";
+                          case "assigned":
+                            return "bg-indigo-100 dark:bg-indigo-900";
+                          default:
+                            return "bg-gray-100 dark:bg-gray-800";
                         }
                       };
 
                       const getStatusIconColor = (status: string) => {
                         switch (status.toLowerCase()) {
-                          case 'open': return 'text-blue-600 dark:text-blue-400';
-                          case 'in_progress': return 'text-yellow-600 dark:text-yellow-400';
-                          case 'completed': return 'text-emerald-600 dark:text-emerald-400';
-                          case 'closed': return 'text-gray-600 dark:text-gray-400';
-                          case 'rejected': return 'text-red-600 dark:text-red-400';
-                          case 'escalated': return 'text-orange-600 dark:text-orange-400';
-                          case 'reopened': return 'text-yellow-600 dark:text-yellow-400';
-                          case 'assigned': return 'text-indigo-600 dark:text-indigo-400';
-                          default: return 'text-gray-600 dark:text-gray-400';
+                          case "open":
+                            return "text-blue-600 dark:text-blue-400";
+                          case "in_progress":
+                            return "text-yellow-600 dark:text-yellow-400";
+                          case "completed":
+                            return "text-emerald-600 dark:text-emerald-400";
+                          case "closed":
+                            return "text-gray-600 dark:text-gray-400";
+                          case "rejected":
+                            return "text-red-600 dark:text-red-400";
+                          case "escalated":
+                            return "text-orange-600 dark:text-orange-400";
+                          case "reopened":
+                            return "text-yellow-600 dark:text-yellow-400";
+                          case "assigned":
+                            return "text-indigo-600 dark:text-indigo-400";
+                          default:
+                            return "text-gray-600 dark:text-gray-400";
                         }
                       };
 
@@ -901,41 +1178,54 @@ const TicketDetailsPage: React.FC = () => {
                       let title: string;
                       let description: string;
 
-                      if (statusChange.new_status === 'assigned' && statusChange.to_user_name) {
-                        title = 'Ticket Assigned';
+                      if (
+                        statusChange.new_status === "assigned" &&
+                        statusChange.to_user_name
+                      ) {
+                        title = "Ticket Assigned";
                         description = `to ${statusChange.to_user_name} by ${statusChange.changed_by_name}`;
                       } else {
-                        title = `Status Changed to ${statusChange.new_status.replace('_', ' ').toUpperCase()}`;
+                        title = `Status Changed to ${statusChange.new_status.replace("_", " ").toUpperCase()}`;
                         description = `by ${statusChange.changed_by_name}`;
                       }
 
                       timelineEvents.push({
                         id: `status-${statusChange.id}`,
-                        type: statusChange.new_status === 'assigned' ? 'assignment' : 'status_change',
+                        type:
+                          statusChange.new_status === "assigned"
+                            ? "assignment"
+                            : "status_change",
                         timestamp: statusChange.changed_at,
                         title,
                         description,
                         icon: getStatusIcon(statusChange.new_status),
                         iconBg: getStatusIconBg(statusChange.new_status),
-                        iconColor: getStatusIconColor(statusChange.new_status)
+                        iconColor: getStatusIconColor(statusChange.new_status),
                       });
                     });
                   }
 
                   // Sort events by timestamp
-                  timelineEvents.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+                  timelineEvents.sort(
+                    (a, b) =>
+                      new Date(a.timestamp).getTime() -
+                      new Date(b.timestamp).getTime(),
+                  );
 
                   return timelineEvents.map((event) => (
                     <div key={event.id} className="flex items-center gap-3">
-                      <div className={`flex h-8 w-8 items-center justify-center rounded-full ${event.iconBg}`}>
-                        <span className={event.iconColor}>
-                          {event.icon}
-                        </span>
+                      <div
+                        className={`flex h-8 w-8 items-center justify-center rounded-full ${event.iconBg}`}
+                      >
+                        <span className={event.iconColor}>{event.icon}</span>
                       </div>
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{event.title}</p>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {event.title}
+                        </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatTimelineTime(event.timestamp)} - {event.description}
+                          {formatTimelineTime(event.timestamp)} -{" "}
+                          {event.description}
                         </p>
                       </div>
                     </div>
@@ -944,7 +1234,6 @@ const TicketDetailsPage: React.FC = () => {
               </div>
             </CardContent>
           </Card>
-
         </div>
       </div>
 
@@ -961,13 +1250,23 @@ const TicketDetailsPage: React.FC = () => {
               <div className="flex justify-between mt-2">
                 <Button
                   variant="outline"
-                  onClick={() => setLightboxIndex((prev) => (prev - 1 + ticket.images!.length) % ticket.images!.length)}
+                  onClick={() =>
+                    setLightboxIndex(
+                      (prev) =>
+                        (prev - 1 + ticket.images!.length) %
+                        ticket.images!.length,
+                    )
+                  }
                 >
                   Prev
                 </Button>
                 <Button
                   variant="outline"
-                  onClick={() => setLightboxIndex((prev) => (prev + 1) % ticket.images!.length)}
+                  onClick={() =>
+                    setLightboxIndex(
+                      (prev) => (prev + 1) % ticket.images!.length,
+                    )
+                  }
                 >
                   Next
                 </Button>
@@ -981,38 +1280,74 @@ const TicketDetailsPage: React.FC = () => {
       <Dialog open={actionOpen} onOpenChange={setActionOpen}>
         <DialogContent className="max-w-lg">
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold capitalize">{actionType.replace('_', ' ')}</h3>
+            <h3 className="text-lg font-semibold capitalize">
+              {actionType.replace("_", " ")}
+            </h3>
             <div className="space-y-2">
-              <Label>{actionType === 'reject' ? 'Rejection Reason' : actionType === 'close' ? 'Close Reason' : actionType === 'reopen' ? 'Reopen Reason' : 'Notes'}</Label>
-              <Textarea rows={3} value={actionComment} onChange={(e) => setActionComment(e.target.value)} />
+              <Label>
+                {actionType === "reject"
+                  ? "Rejection Reason *"
+                  : actionType === "close"
+                    ? "Close Reason"
+                    : actionType === "reopen"
+                      ? "Reopen Reason"
+                      : "Notes"}
+              </Label>
+              <Textarea
+                rows={3}
+                value={actionComment}
+                onChange={(e) => setActionComment(e.target.value)}
+                required={actionType === "reject"}
+              />
+              {actionType === "reject" && !actionComment && (
+                <p className="text-xs text-red-500">Rejection reason is required</p>
+              )}
             </div>
-            {actionType === 'complete' && (
+            {actionType === "accept" && (
+              <div className="space-y-2">
+                <Label>Scheduled Complete Date *</Label>
+                <Input
+                  type="date"
+                  value={scheduledComplete}
+                  onChange={(e) => setScheduledComplete(e.target.value)}
+                  required
+                />
+                {!scheduledComplete && (
+                  <p className="text-xs text-red-500">Scheduled completion date is required</p>
+                )}
+              </div>
+            )}
+            {actionType === "complete" && (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <Label>Downtime Avoidance (hours) *</Label>
-                  <Input 
-                    type="number" 
-                    step="0.5" 
-                    min="0" 
-                    value={downtimeAvoidance} 
+                  <Input
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    value={downtimeAvoidance}
                     onChange={(e) => setDowntimeAvoidance(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Cost Avoidance (THB) *</Label>
-                  <Input 
-                    type="number" 
-                    step="0.01" 
-                    min="0" 
-                    value={costAvoidance} 
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={costAvoidance}
                     onChange={(e) => setCostAvoidance(e.target.value)}
                     required
                   />
                 </div>
                 <div className="space-y-2">
                   <Label>Failure Mode *</Label>
-                  <Select value={failureModeId} onValueChange={setFailureModeId} required>
+                  <Select
+                    value={failureModeId}
+                    onValueChange={setFailureModeId}
+                    required
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select failure mode" />
                     </SelectTrigger>
@@ -1027,75 +1362,113 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {actionType === 'close' && (
+            {actionType === "close" && (
               <div className="space-y-2">
                 <Label>Satisfaction Rating (1-5)</Label>
-                <Input type="number" min="1" max="5" value={actionNumber} onChange={(e) => setActionNumber(e.target.value)} />
+                <Input
+                  type="number"
+                  min="1"
+                  max="5"
+                  value={actionNumber}
+                  onChange={(e) => setActionNumber(e.target.value)}
+                />
               </div>
             )}
-            {actionType === 'reassign' && (
+            {actionType === "reassign" && (
               <div className="space-y-2">
-                <Label>New Assignee</Label>
-                <div className="relative">
+                <Label>New Assignee *</Label>
+                <div className="relative" ref={assigneeDropdownRef}>
                   <Input
                     value={assigneeQuery}
-                    onChange={(e) => { setAssigneeQuery(e.target.value); setAssigneeDropdownOpen(true); }}
+                    onChange={(e) => {
+                      setAssigneeQuery(e.target.value);
+                      setAssigneeDropdownOpen(true);
+                    }}
                     onFocus={() => setAssigneeDropdownOpen(true)}
                     placeholder="Search L2/L3 user by name/email"
+                    required
                   />
                   {assigneeDropdownOpen && (
                     <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
                       {assigneesLoading ? (
-                        <div className="p-3 text-sm text-gray-500">Searching…</div>
+                        <div className="p-3 text-sm text-gray-500">
+                          Searching…
+                        </div>
                       ) : assignees.length === 0 ? (
-                        <div className="p-3 text-sm text-gray-500">No users found</div>
+                        <div className="p-3 text-sm text-gray-500">
+                          No users found
+                        </div>
                       ) : (
                         assignees.map((u) => (
                           <button
                             type="button"
                             key={u.id}
                             className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
-                            onClick={() => { setActionExtraId(String(u.id)); setAssigneeQuery(u.name); setAssigneeDropdownOpen(false); }}
+                            onClick={() => {
+                              setActionExtraId(String(u.id));
+                              setAssigneeQuery(u.name);
+                              setAssigneeDropdownOpen(false);
+                            }}
                           >
                             <div className="font-medium">{u.name}</div>
-                            <div className="text-xs text-gray-500">{u.email}</div>
+                            <div className="text-xs text-gray-500">
+                              {u.email}
+                            </div>
                           </button>
                         ))
                       )}
                     </div>
                   )}
                 </div>
+                {!actionExtraId && (
+                  <p className="text-xs text-red-500">Please select a new assignee</p>
+                )}
                 {actionExtraId && (
-                  <div className="text-xs text-gray-600">Selected user ID: {actionExtraId}</div>
+                  <div className="text-xs text-gray-600">
+                    Selected user ID: {actionExtraId}
+                  </div>
                 )}
               </div>
             )}
-            {actionType === 'escalate' && (
+            {actionType === "escalate" && (
               <div className="space-y-2">
                 <Label>Escalate To L3 User</Label>
                 <div className="relative">
                   <Input
                     value={assigneeQuery}
-                    onChange={(e) => { setAssigneeQuery(e.target.value); setAssigneeDropdownOpen(true); }}
+                    onChange={(e) => {
+                      setAssigneeQuery(e.target.value);
+                      setAssigneeDropdownOpen(true);
+                    }}
                     onFocus={() => setAssigneeDropdownOpen(true)}
                     placeholder="Search L3 user by name/email"
                   />
                   {assigneeDropdownOpen && (
                     <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
                       {assigneesLoading ? (
-                        <div className="p-3 text-sm text-gray-500">Searching…</div>
+                        <div className="p-3 text-sm text-gray-500">
+                          Searching…
+                        </div>
                       ) : assignees.length === 0 ? (
-                        <div className="p-3 text-sm text-gray-500">No L3 users found</div>
+                        <div className="p-3 text-sm text-gray-500">
+                          No L3 users found
+                        </div>
                       ) : (
                         assignees.map((u) => (
                           <button
                             type="button"
                             key={u.id}
                             className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
-                            onClick={() => { setActionExtraId(String(u.id)); setAssigneeQuery(u.name); setAssigneeDropdownOpen(false); }}
+                            onClick={() => {
+                              setActionExtraId(String(u.id));
+                              setAssigneeQuery(u.name);
+                              setAssigneeDropdownOpen(false);
+                            }}
                           >
                             <div className="font-medium">{u.name}</div>
-                            <div className="text-xs text-gray-500">{u.email}</div>
+                            <div className="text-xs text-gray-500">
+                              {u.email}
+                            </div>
                           </button>
                         ))
                       )}
@@ -1103,18 +1476,39 @@ const TicketDetailsPage: React.FC = () => {
                   )}
                 </div>
                 {actionExtraId && (
-                  <div className="text-xs text-gray-600">Selected L3 user ID: {actionExtraId}</div>
+                  <div className="text-xs text-gray-600">
+                    Selected L3 user ID: {actionExtraId}
+                  </div>
                 )}
               </div>
             )}
-            {actionType === 'reject' && (
+            {actionType === "reject" && (
               <div className="text-sm text-gray-600">
-                {userApprovalLevel >= 3 ? 'This will be a final rejection.' : 'This rejection will be sent to L3 for review.'}
+                {userApprovalLevel >= 3
+                  ? "This will be a final rejection."
+                  : "This rejection will be sent to L3 for review."}
               </div>
             )}
             <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setActionOpen(false)} disabled={acting}>Cancel</Button>
-              <Button onClick={performAction} disabled={acting || (actionType === 'reassign' && !actionExtraId) || (actionType === 'escalate' && !actionExtraId)}>{acting ? 'Working…' : 'Confirm'}</Button>
+              <Button
+                variant="outline"
+                onClick={() => setActionOpen(false)}
+                disabled={acting}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={performAction}
+                disabled={
+                  acting ||
+                  (actionType === "accept" && !scheduledComplete) ||
+                  (actionType === "reject" && (!actionComment || actionComment.trim() === "")) ||
+                  (actionType === "reassign" && !actionExtraId) ||
+                  (actionType === "escalate" && !actionExtraId)
+                }
+              >
+                {acting ? "Working…" : "Confirm"}
+              </Button>
             </div>
           </div>
         </DialogContent>

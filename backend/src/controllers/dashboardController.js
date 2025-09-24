@@ -1161,6 +1161,1540 @@ async function getPeriodInfo(pool) {
 }
 
 /**
+ * Get Tickets Count Per Period
+ * Returns ticket counts grouped by period with target data for participation charts
+ */
+exports.getTicketsCountPerPeriod = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      year = new Date().getFullYear(),
+      area_id
+    } = req.query;
+
+    // Build WHERE clause for tickets
+    let ticketsWhereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)}`;
+    
+    if (area_id && area_id !== 'all') {
+      ticketsWhereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    }
+
+    // Get tickets count per period
+    const ticketsQuery = `
+      SELECT 
+        CASE 
+          WHEN MONTH(t.created_at) = 1 THEN 'P1'
+          WHEN MONTH(t.created_at) = 2 THEN 'P2'
+          WHEN MONTH(t.created_at) = 3 THEN 'P3'
+          WHEN MONTH(t.created_at) = 4 THEN 'P4'
+          WHEN MONTH(t.created_at) = 5 THEN 'P5'
+          WHEN MONTH(t.created_at) = 6 THEN 'P6'
+          WHEN MONTH(t.created_at) = 7 THEN 'P7'
+          WHEN MONTH(t.created_at) = 8 THEN 'P8'
+          WHEN MONTH(t.created_at) = 9 THEN 'P9'
+          WHEN MONTH(t.created_at) = 10 THEN 'P10'
+          WHEN MONTH(t.created_at) = 11 THEN 'P11'
+          WHEN MONTH(t.created_at) = 12 THEN 'P12'
+          ELSE 'P13'
+        END as period,
+        COUNT(*) as tickets,
+        COUNT(DISTINCT t.reported_by) as uniqueReporters
+      FROM Tickets t
+      ${ticketsWhereClause}
+      GROUP BY 
+        CASE 
+          WHEN MONTH(t.created_at) = 1 THEN 'P1'
+          WHEN MONTH(t.created_at) = 2 THEN 'P2'
+          WHEN MONTH(t.created_at) = 3 THEN 'P3'
+          WHEN MONTH(t.created_at) = 4 THEN 'P4'
+          WHEN MONTH(t.created_at) = 5 THEN 'P5'
+          WHEN MONTH(t.created_at) = 6 THEN 'P6'
+          WHEN MONTH(t.created_at) = 7 THEN 'P7'
+          WHEN MONTH(t.created_at) = 8 THEN 'P8'
+          WHEN MONTH(t.created_at) = 9 THEN 'P9'
+          WHEN MONTH(t.created_at) = 10 THEN 'P10'
+          WHEN MONTH(t.created_at) = 11 THEN 'P11'
+          WHEN MONTH(t.created_at) = 12 THEN 'P12'
+          ELSE 'P13'
+        END
+      ORDER BY period
+    `;
+
+    // Get targets for the same year and area
+    let targetsWhereClause = `WHERE t.year = ${parseInt(year)} AND t.type = 'open case'`;
+    
+    if (area_id && area_id !== 'all') {
+      // Get area code from area_id
+      const areaQuery = `SELECT code FROM Area WHERE id = ${parseInt(area_id)}`;
+      const areaResult = await pool.request().query(areaQuery);
+      
+      if (areaResult.recordset.length > 0) {
+        const areaCode = areaResult.recordset[0].code;
+        targetsWhereClause += ` AND t.area = '${areaCode}'`;
+      }
+    }
+
+    const targetsQuery = `
+      SELECT 
+        t.period,
+        t.target_value,
+        t.unit
+      FROM dbo.Target t
+      ${targetsWhereClause}
+      ORDER BY t.period
+    `;
+
+    // Execute queries
+    const [ticketsResult, targetsResult] = await Promise.all([
+      pool.request().query(ticketsQuery),
+      pool.request().query(targetsQuery)
+    ]);
+
+    // Create a map of all periods (P1-P13)
+    const allPeriods = Array.from({ length: 13 }, (_, i) => `P${i + 1}`);
+    
+    // Create maps for easy lookup
+    const ticketsMap = {};
+    ticketsResult.recordset.forEach(row => {
+      ticketsMap[row.period] = {
+        tickets: row.tickets,
+        uniqueReporters: row.uniqueReporters
+      };
+    });
+
+    const targetsMap = {};
+    targetsResult.recordset.forEach(row => {
+      targetsMap[row.period] = row.target_value;
+    });
+
+    // Build the response data
+    const participationData = allPeriods.map(period => {
+      const ticketsData = ticketsMap[period] || { tickets: 0, uniqueReporters: 0 };
+      const targetValue = targetsMap[period] || 30; // Default fallback target
+      
+      // Calculate coverage rate (unique reporters / target * 100, capped at 100%)
+      const coverageRate = targetValue > 0 ? Math.min(100, Math.round((ticketsData.uniqueReporters / targetValue) * 100)) : 0;
+
+      return {
+        period,
+        tickets: ticketsData.tickets,
+        target: Math.round(targetValue),
+        uniqueReporters: ticketsData.uniqueReporters,
+        coverageRate
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        participationData,
+        summary: {
+          totalTickets: participationData.reduce((sum, item) => sum + item.tickets, 0),
+          totalUniqueReporters: Math.max(...participationData.map(item => item.uniqueReporters)),
+          averageTarget: Math.round(participationData.reduce((sum, item) => sum + item.target, 0) / participationData.length),
+          appliedFilters: {
+            year: parseInt(year),
+            area_id: area_id ? parseInt(area_id) : null
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getTicketsCountPerPeriod:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Area Activity Data
+ * Returns ticket counts grouped by area for the "Who Active (Area)" chart
+ * This chart is not affected by area filter - shows all areas
+ */
+exports.getAreaActivityData = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      year = new Date().getFullYear()
+    } = req.query;
+
+    // Get ticket counts by area for the specified year
+    const areaActivityQuery = `
+      SELECT TOP 10
+        a.id as area_id,
+        a.name as area_name,
+        a.code as area_code,
+        COUNT(t.id) as ticket_count
+      FROM Area a
+      INNER JOIN Tickets t ON a.id = t.area_id 
+        AND YEAR(t.created_at) = ${parseInt(year)}
+      WHERE a.is_active = 1
+      GROUP BY a.id, a.name, a.code
+      HAVING COUNT(t.id) > 0
+      ORDER BY ticket_count DESC, a.name ASC
+    `;
+
+    const result = await pool.request().query(areaActivityQuery);
+    
+    // Transform the data for frontend consumption
+    const areaActivityData = result.recordset.map(row => ({
+      area_id: row.area_id,
+      area_name: row.area_name,
+      area_code: row.area_code,
+      tickets: row.ticket_count
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        areaActivityData,
+        summary: {
+          totalAreas: areaActivityData.length,
+          totalTickets: areaActivityData.reduce((sum, item) => sum + item.tickets, 0),
+          averageTicketsPerArea: areaActivityData.length > 0 
+            ? Math.round(areaActivityData.reduce((sum, item) => sum + item.tickets, 0) / areaActivityData.length)
+            : 0,
+          appliedFilters: {
+            year: parseInt(year)
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getAreaActivityData:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get User Activity Data
+ * Returns ticket counts grouped by user for the "Who Active (User)" chart
+ * This chart is affected by time range and area filters
+ */
+exports.getUserActivityData = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate,
+      area_id
+    } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Convert dates to proper format for SQL queries
+    const formatDateForSQL = (dateStr) => {
+      return dateStr.replace(/-/g, '');
+    };
+
+    const startDateFormatted = formatDateForSQL(startDate);
+    const endDateFormatted = formatDateForSQL(endDate);
+
+    // Build WHERE clause for tickets
+    let whereClause = `WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'`;
+    
+    if (area_id && area_id !== 'all') {
+      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    }
+
+    // Get ticket counts by user for the specified time range and area
+    const userActivityQuery = `
+      SELECT TOP 10
+        t.reported_by as user_id,
+        p.PERSON_NAME as user_name,
+        u.AvatarUrl as avatar_url,
+        COUNT(t.id) as ticket_count
+      FROM Tickets t
+      INNER JOIN Person p ON t.reported_by = p.PERSONNO
+      LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+      ${whereClause}
+      GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
+      HAVING COUNT(t.id) > 0
+      ORDER BY ticket_count DESC, p.PERSON_NAME ASC
+    `;
+
+    const result = await pool.request().query(userActivityQuery);
+    
+    // Transform the data for frontend consumption
+    const userActivityData = result.recordset.map((row, index) => {
+      // Generate initials from user name
+      const initials = row.user_name 
+        ? row.user_name.split(' ').map(n => n[0]).join('').toUpperCase()
+        : 'U' + row.user_id;
+      
+      // Generate background color based on index for consistency
+      const colors = [
+        '#3b82f6', '#8b5cf6', '#10b981', '#ec4899', '#f97316',
+        '#14b8a6', '#6366f1', '#ef4444', '#eab308', '#06b6d4'
+      ];
+      const bgColor = colors[index % colors.length];
+
+      return {
+        id: row.user_id.toString(),
+        user: row.user_name || `User ${row.user_id}`,
+        tickets: row.ticket_count,
+        initials: initials,
+        bgColor: bgColor,
+        avatar: row.avatar_url
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        userActivityData,
+        summary: {
+          totalUsers: userActivityData.length,
+          totalTickets: userActivityData.reduce((sum, item) => sum + item.tickets, 0),
+          averageTicketsPerUser: userActivityData.length > 0 
+            ? Math.round(userActivityData.reduce((sum, item) => sum + item.tickets, 0) / userActivityData.length)
+            : 0,
+          appliedFilters: {
+            startDate,
+            endDate,
+            area_id: area_id ? parseInt(area_id) : null
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getUserActivityData:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Downtime Avoidance Trend Data
+ * Returns downtime avoidance data by period and area
+ * This chart is affected by year filter only (not area filter)
+ */
+exports.getDowntimeAvoidanceTrend = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      year = new Date().getFullYear()
+    } = req.query;
+
+    // Get downtime avoidance data by period and area for the specified year
+    const downtimeQuery = `
+      SELECT 
+        CASE 
+          WHEN MONTH(t.created_at) = 1 THEN 'P1'
+          WHEN MONTH(t.created_at) = 2 THEN 'P2'
+          WHEN MONTH(t.created_at) = 3 THEN 'P3'
+          WHEN MONTH(t.created_at) = 4 THEN 'P4'
+          WHEN MONTH(t.created_at) = 5 THEN 'P5'
+          WHEN MONTH(t.created_at) = 6 THEN 'P6'
+          WHEN MONTH(t.created_at) = 7 THEN 'P7'
+          WHEN MONTH(t.created_at) = 8 THEN 'P8'
+          WHEN MONTH(t.created_at) = 9 THEN 'P9'
+          WHEN MONTH(t.created_at) = 10 THEN 'P10'
+          WHEN MONTH(t.created_at) = 11 THEN 'P11'
+          WHEN MONTH(t.created_at) = 12 THEN 'P12'
+          ELSE 'P13'
+        END as period,
+        CONCAT(p.code, '-', a.code) as area_display_name,
+        COUNT(t.id) as ticket_count,
+        SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+      FROM Tickets t
+      INNER JOIN Area a ON t.area_id = a.id
+      INNER JOIN Plant p ON a.plant_id = p.id
+      WHERE YEAR(t.created_at) = ${parseInt(year)}
+        AND t.status IN ('closed', 'resolved')
+      GROUP BY 
+        CASE 
+          WHEN MONTH(t.created_at) = 1 THEN 'P1'
+          WHEN MONTH(t.created_at) = 2 THEN 'P2'
+          WHEN MONTH(t.created_at) = 3 THEN 'P3'
+          WHEN MONTH(t.created_at) = 4 THEN 'P4'
+          WHEN MONTH(t.created_at) = 5 THEN 'P5'
+          WHEN MONTH(t.created_at) = 6 THEN 'P6'
+          WHEN MONTH(t.created_at) = 7 THEN 'P7'
+          WHEN MONTH(t.created_at) = 8 THEN 'P8'
+          WHEN MONTH(t.created_at) = 9 THEN 'P9'
+          WHEN MONTH(t.created_at) = 10 THEN 'P10'
+          WHEN MONTH(t.created_at) = 11 THEN 'P11'
+          WHEN MONTH(t.created_at) = 12 THEN 'P12'
+          ELSE 'P13'
+        END,
+        CONCAT(p.code, '-', a.code)
+      ORDER BY period, area_display_name
+    `;
+
+    const result = await pool.request().query(downtimeQuery);
+    
+    // Create a map of data by period and area
+    const dataMap = {};
+    result.recordset.forEach(row => {
+      if (!dataMap[row.period]) {
+        dataMap[row.period] = {};
+      }
+      dataMap[row.period][row.area_display_name] = {
+        ticket_count: row.ticket_count,
+        downtime_hours: row.total_downtime_hours
+      };
+    });
+
+    // Get all unique areas from the data
+    const allAreas = new Set();
+    result.recordset.forEach(row => {
+      allAreas.add(row.area_display_name);
+    });
+    const sortedAreas = Array.from(allAreas).sort();
+
+    // Generate data for all periods (P1-P12) with all areas
+    const periods = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12'];
+    const downtimeTrendData = periods.map(period => {
+      const periodData = { period };
+      
+      // Add data for each area (use 0 if no data)
+      sortedAreas.forEach(area => {
+        const areaData = dataMap[period]?.[area];
+        periodData[area] = areaData ? areaData.downtime_hours : 0;
+      });
+      
+      return periodData;
+    });
+
+    res.json({
+      success: true,
+      data: {
+        downtimeTrendData,
+        summary: {
+          totalPeriods: downtimeTrendData.length,
+          totalAreas: sortedAreas.length,
+          areas: sortedAreas,
+          appliedFilters: {
+            year: parseInt(year)
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getDowntimeAvoidanceTrend:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Cost Avoidance Data
+ * Returns cost avoidance data by period
+ * This chart is affected by area filter and year filter
+ */
+exports.getCostAvoidanceData = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      year = new Date().getFullYear(),
+      area_id
+    } = req.query;
+
+    // Build WHERE clause based on filters
+    let whereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)} AND t.status IN ('closed', 'resolved')`;
+    if (area_id && area_id !== 'all') {
+      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    }
+
+    // Get cost avoidance data by period for the specified year and area
+    const costAvoidanceQuery = `
+      SELECT 
+        CASE 
+          WHEN MONTH(t.created_at) = 1 THEN 'P1'
+          WHEN MONTH(t.created_at) = 2 THEN 'P2'
+          WHEN MONTH(t.created_at) = 3 THEN 'P3'
+          WHEN MONTH(t.created_at) = 4 THEN 'P4'
+          WHEN MONTH(t.created_at) = 5 THEN 'P5'
+          WHEN MONTH(t.created_at) = 6 THEN 'P6'
+          WHEN MONTH(t.created_at) = 7 THEN 'P7'
+          WHEN MONTH(t.created_at) = 8 THEN 'P8'
+          WHEN MONTH(t.created_at) = 9 THEN 'P9'
+          WHEN MONTH(t.created_at) = 10 THEN 'P10'
+          WHEN MONTH(t.created_at) = 11 THEN 'P11'
+          WHEN MONTH(t.created_at) = 12 THEN 'P12'
+          ELSE 'P13'
+        END as period,
+        COUNT(t.id) as ticket_count,
+        SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance,
+        AVG(ISNULL(t.cost_avoidance, 0)) as avg_cost_per_case
+      FROM Tickets t
+      ${whereClause}
+      GROUP BY 
+        CASE 
+          WHEN MONTH(t.created_at) = 1 THEN 'P1'
+          WHEN MONTH(t.created_at) = 2 THEN 'P2'
+          WHEN MONTH(t.created_at) = 3 THEN 'P3'
+          WHEN MONTH(t.created_at) = 4 THEN 'P4'
+          WHEN MONTH(t.created_at) = 5 THEN 'P5'
+          WHEN MONTH(t.created_at) = 6 THEN 'P6'
+          WHEN MONTH(t.created_at) = 7 THEN 'P7'
+          WHEN MONTH(t.created_at) = 8 THEN 'P8'
+          WHEN MONTH(t.created_at) = 9 THEN 'P9'
+          WHEN MONTH(t.created_at) = 10 THEN 'P10'
+          WHEN MONTH(t.created_at) = 11 THEN 'P11'
+          WHEN MONTH(t.created_at) = 12 THEN 'P12'
+          ELSE 'P13'
+        END
+      ORDER BY period
+    `;
+
+    const result = await pool.request().query(costAvoidanceQuery);
+    
+    // Create a map of data by period
+    const dataMap = {};
+    result.recordset.forEach(row => {
+      dataMap[row.period] = {
+        ticket_count: row.ticket_count,
+        total_cost_avoidance: row.total_cost_avoidance,
+        avg_cost_per_case: row.avg_cost_per_case
+      };
+    });
+
+    // Generate data for all periods (P1-P12)
+    const periods = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12'];
+    const costAvoidanceData = periods.map(period => {
+      const periodData = dataMap[period];
+      return {
+        period,
+        costAvoidance: periodData ? periodData.total_cost_avoidance : 0,
+        costPerCase: periodData ? periodData.avg_cost_per_case : 0,
+        ticketCount: periodData ? periodData.ticket_count : 0
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        costAvoidanceData,
+        summary: {
+          totalPeriods: costAvoidanceData.length,
+          totalCostAvoidance: costAvoidanceData.reduce((sum, item) => sum + item.costAvoidance, 0),
+          totalTickets: costAvoidanceData.reduce((sum, item) => sum + item.ticketCount, 0),
+          appliedFilters: {
+            year: parseInt(year),
+            area_id: area_id ? parseInt(area_id) : null
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getCostAvoidanceData:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Downtime Impact Leaderboard Data
+ * Returns top 10 areas ranked by downtime impact
+ * This chart is NOT affected by area filter, but affected by selected period
+ */
+exports.getDowntimeImpactLeaderboard = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate
+    } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Get downtime impact data by area for the specified period
+    const downtimeImpactQuery = `
+      SELECT TOP 10
+        CONCAT(p.code, '-', a.code) as area_display_name,
+        COUNT(t.id) as ticket_count,
+        SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+      FROM Tickets t
+      INNER JOIN Area a ON t.area_id = a.id
+      INNER JOIN Plant p ON a.plant_id = p.id
+      WHERE t.created_at >= '${startDate}' 
+        AND t.created_at <= '${endDate}'
+        AND t.status IN ('closed', 'resolved')
+      GROUP BY CONCAT(p.code, '-', a.code)
+      HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
+      ORDER BY total_downtime_hours DESC
+    `;
+
+    const result = await pool.request().query(downtimeImpactQuery);
+    
+    // Transform data for the chart
+    const downtimeImpactData = result.recordset.map(row => ({
+      area: row.area_display_name,
+      hours: row.total_downtime_hours,
+      ticketCount: row.ticket_count
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        downtimeImpactData,
+        summary: {
+          totalAreas: downtimeImpactData.length,
+          totalDowntimeHours: downtimeImpactData.reduce((sum, item) => sum + item.hours, 0),
+          totalTickets: downtimeImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
+          appliedFilters: {
+            startDate,
+            endDate
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getDowntimeImpactLeaderboard:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Cost Impact Leaderboard Data
+ * Returns top 10 areas ranked by cost impact
+ * This chart is NOT affected by area filter, but affected by selected period
+ */
+exports.getCostImpactLeaderboard = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate
+    } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Get cost impact data by area for the specified period
+    const costImpactQuery = `
+      SELECT TOP 10
+        CONCAT(p.code, '-', a.code) as area_display_name,
+        COUNT(t.id) as ticket_count,
+        SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
+      FROM Tickets t
+      INNER JOIN Area a ON t.area_id = a.id
+      INNER JOIN Plant p ON a.plant_id = p.id
+      WHERE t.created_at >= '${startDate}' 
+        AND t.created_at <= '${endDate}'
+        AND t.status IN ('closed', 'resolved')
+      GROUP BY CONCAT(p.code, '-', a.code)
+      HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
+      ORDER BY total_cost_avoidance DESC
+    `;
+
+    const result = await pool.request().query(costImpactQuery);
+    
+    // Transform data for the chart
+    const costImpactData = result.recordset.map(row => ({
+      area: row.area_display_name,
+      cost: row.total_cost_avoidance,
+      ticketCount: row.ticket_count
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        costImpactData,
+        summary: {
+          totalAreas: costImpactData.length,
+          totalCostAvoidance: costImpactData.reduce((sum, item) => sum + item.cost, 0),
+          totalTickets: costImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
+          appliedFilters: {
+            startDate,
+            endDate
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getCostImpactLeaderboard:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Ontime Rate by Area Data
+ * Returns percentage of tickets completed on time (completed_at < scheduled_complete)
+ * Grouped by area using plant-area code format
+ * Sorted from max to min (best performance first)
+ * Only shown when "All Area" is selected
+ */
+exports.getOntimeRateByArea = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate
+    } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Get ontime rate data by area for the specified period
+    const ontimeRateByAreaQuery = `
+      SELECT 
+        CONCAT(p.code, '-', a.code) as area_code,
+        COUNT(t.id) as total_completed,
+        COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
+        CASE 
+          WHEN COUNT(t.id) > 0 THEN 
+            ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
+          ELSE 0 
+        END as ontime_rate_percentage
+      FROM Tickets t
+      LEFT JOIN Area a ON t.area_id = a.id
+      LEFT JOIN Plant p ON a.plant_id = p.id
+      WHERE t.created_at >= '${startDate}' 
+        AND t.created_at <= '${endDate}' 
+        AND t.status = 'closed' 
+        AND t.completed_at IS NOT NULL
+        AND t.scheduled_complete IS NOT NULL
+        AND a.code IS NOT NULL 
+        AND p.code IS NOT NULL
+      GROUP BY p.code, a.code
+      HAVING COUNT(t.id) > 0
+      ORDER BY ontime_rate_percentage DESC
+    `;
+
+    const result = await pool.request().query(ontimeRateByAreaQuery);
+    
+    // Transform data for the chart
+    const ontimeRateByAreaData = result.recordset.map(row => ({
+      areaCode: row.area_code,
+      ontimeRate: row.ontime_rate_percentage,
+      totalCompleted: row.total_completed,
+      ontimeCompleted: row.ontime_completed
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        ontimeRateByAreaData,
+        summary: {
+          totalAreas: ontimeRateByAreaData.length,
+          totalCompleted: ontimeRateByAreaData.reduce((sum, item) => sum + item.totalCompleted, 0),
+          totalOntimeCompleted: ontimeRateByAreaData.reduce((sum, item) => sum + item.ontimeCompleted, 0),
+          overallOntimeRate: ontimeRateByAreaData.length > 0 
+            ? Math.round((ontimeRateByAreaData.reduce((sum, item) => sum + item.ontimeCompleted, 0) / ontimeRateByAreaData.reduce((sum, item) => sum + item.totalCompleted, 0)) * 10000) / 100
+            : 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getOntimeRateByArea:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Ontime Rate by User Data
+ * Returns percentage of tickets completed on time (completed_at < scheduled_complete)
+ * Grouped by user with avatar support
+ * Sorted from max to min (best performance first)
+ * Only shown when specific area is selected
+ */
+exports.getOntimeRateByUser = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate,
+      area_id
+    } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate || !area_id || area_id === 'all') {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate, endDate, and area_id (not "all") are required'
+      });
+    }
+
+    // Get ontime rate data by user for the specified period and area
+    const ontimeRateByUserQuery = `
+      SELECT 
+        t.completed_by as user_id,
+        p.PERSON_NAME as user_name,
+        u.AvatarUrl as avatar_url,
+        COUNT(t.id) as total_completed,
+        COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
+        CASE 
+          WHEN COUNT(t.id) > 0 THEN 
+            ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
+          ELSE 0 
+        END as ontime_rate_percentage
+      FROM Tickets t
+      INNER JOIN Person p ON t.completed_by = p.PERSONNO
+      LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+      WHERE t.created_at >= '${startDate}' 
+        AND t.created_at <= '${endDate}' 
+        AND t.status = 'closed' 
+        AND t.completed_at IS NOT NULL
+        AND t.scheduled_complete IS NOT NULL
+        AND t.area_id = ${parseInt(area_id)}
+        AND t.completed_by IS NOT NULL
+      GROUP BY t.completed_by, p.PERSON_NAME, u.AvatarUrl
+      HAVING COUNT(t.id) > 0
+      ORDER BY ontime_rate_percentage DESC
+    `;
+
+    const result = await pool.request().query(ontimeRateByUserQuery);
+    
+    // Transform data for the chart
+    const ontimeRateByUserData = result.recordset.map((row, index) => {
+      // Generate initials from user name
+      const initials = row.user_name 
+        ? row.user_name.split(' ').map(n => n[0]).join('').toUpperCase()
+        : 'U' + row.user_id;
+      
+      // Generate background color based on index for consistency
+      const colors = [
+        '#3b82f6', '#8b5cf6', '#10b981', '#ec4899', '#f97316',
+        '#14b8a6', '#6366f1', '#ef4444', '#eab308', '#06b6d4'
+      ];
+      const bgColor = colors[index % colors.length];
+
+      return {
+        id: row.user_id.toString(),
+        userName: row.user_name || `User ${row.user_id}`,
+        initials: initials,
+        bgColor: bgColor,
+        avatar: row.avatar_url,
+        ontimeRate: row.ontime_rate_percentage,
+        totalCompleted: row.total_completed,
+        ontimeCompleted: row.ontime_completed
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ontimeRateByUserData,
+        summary: {
+          totalUsers: ontimeRateByUserData.length,
+          totalCompleted: ontimeRateByUserData.reduce((sum, item) => sum + item.totalCompleted, 0),
+          totalOntimeCompleted: ontimeRateByUserData.reduce((sum, item) => sum + item.ontimeCompleted, 0),
+          overallOntimeRate: ontimeRateByUserData.length > 0 
+            ? Math.round((ontimeRateByUserData.reduce((sum, item) => sum + item.ontimeCompleted, 0) / ontimeRateByUserData.reduce((sum, item) => sum + item.totalCompleted, 0)) * 10000) / 100
+            : 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getOntimeRateByUser:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Ticket Average Resolve Duration by User Data
+ * Returns average resolve time from created_at to completed_at for closed tickets
+ * Grouped by user with avatar support
+ * Sorted from min to max (best performance first)
+ * Only shown when specific area is selected
+ */
+exports.getTicketResolveDurationByUser = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate,
+      area_id
+    } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate || !area_id || area_id === 'all') {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate, endDate, and area_id (not "all") are required'
+      });
+    }
+
+    // Get ticket resolve duration data by user for the specified period and area
+    const resolveDurationByUserQuery = `
+      SELECT 
+        t.completed_by as user_id,
+        p.PERSON_NAME as user_name,
+        u.AvatarUrl as avatar_url,
+        COUNT(t.id) as ticket_count,
+        AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
+      FROM Tickets t
+      INNER JOIN Person p ON t.completed_by = p.PERSONNO
+      LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+      WHERE t.created_at >= '${startDate}' 
+        AND t.created_at <= '${endDate}' 
+        AND t.status = 'closed' 
+        AND t.completed_at IS NOT NULL
+        AND t.area_id = ${parseInt(area_id)}
+        AND t.completed_by IS NOT NULL
+      GROUP BY t.completed_by, p.PERSON_NAME, u.AvatarUrl
+      HAVING COUNT(t.id) > 0
+      ORDER BY avg_resolve_hours ASC
+    `;
+
+    const result = await pool.request().query(resolveDurationByUserQuery);
+    
+    // Transform data for the chart
+    const resolveDurationByUserData = result.recordset.map((row, index) => {
+      // Generate initials from user name
+      const initials = row.user_name 
+        ? row.user_name.split(' ').map(n => n[0]).join('').toUpperCase()
+        : 'U' + row.user_id;
+      
+      // Generate background color based on index for consistency
+      const colors = [
+        '#3b82f6', '#8b5cf6', '#10b981', '#ec4899', '#f97316',
+        '#14b8a6', '#6366f1', '#ef4444', '#eab308', '#06b6d4'
+      ];
+      const bgColor = colors[index % colors.length];
+
+      return {
+        id: row.user_id.toString(),
+        userName: row.user_name || `User ${row.user_id}`,
+        initials: initials,
+        bgColor: bgColor,
+        avatar: row.avatar_url,
+        avgResolveHours: Math.round(row.avg_resolve_hours * 100) / 100, // Round to 2 decimal places
+        ticketCount: row.ticket_count
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        resolveDurationByUserData,
+        summary: {
+          totalUsers: resolveDurationByUserData.length,
+          totalTickets: resolveDurationByUserData.reduce((sum, item) => sum + item.ticketCount, 0),
+          overallAvgResolveHours: resolveDurationByUserData.length > 0 
+            ? Math.round((resolveDurationByUserData.reduce((sum, item) => sum + (item.avgResolveHours * item.ticketCount), 0) / resolveDurationByUserData.reduce((sum, item) => sum + item.ticketCount, 0)) * 100) / 100
+            : 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getTicketResolveDurationByUser:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Ticket Average Resolve Duration by Area Data
+ * Returns average resolve time from created_at to completed_at for closed tickets
+ * Grouped by area using plant-area code format
+ * Sorted from min to max (best performance first)
+ * Only shown when "All Area" is selected
+ */
+exports.getTicketResolveDurationByArea = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate
+    } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Get ticket resolve duration data by area for the specified period
+    const resolveDurationByAreaQuery = `
+      SELECT 
+        CONCAT(p.code, '-', a.code) as area_code,
+        COUNT(t.id) as ticket_count,
+        AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
+      FROM Tickets t
+      LEFT JOIN Area a ON t.area_id = a.id
+      LEFT JOIN Plant p ON a.plant_id = p.id
+      WHERE t.created_at >= '${startDate}' 
+        AND t.created_at <= '${endDate}' 
+        AND t.status = 'closed' 
+        AND t.completed_at IS NOT NULL
+        AND a.code IS NOT NULL 
+        AND p.code IS NOT NULL
+      GROUP BY p.code, a.code
+      HAVING COUNT(t.id) > 0
+      ORDER BY avg_resolve_hours ASC
+    `;
+
+    const result = await pool.request().query(resolveDurationByAreaQuery);
+    
+    // Transform data for the chart
+    const resolveDurationByAreaData = result.recordset.map(row => ({
+      areaCode: row.area_code,
+      avgResolveHours: Math.round(row.avg_resolve_hours * 100) / 100, // Round to 2 decimal places
+      ticketCount: row.ticket_count
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        resolveDurationByAreaData,
+        summary: {
+          totalAreas: resolveDurationByAreaData.length,
+          totalTickets: resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0),
+          overallAvgResolveHours: resolveDurationByAreaData.length > 0 
+            ? Math.round((resolveDurationByAreaData.reduce((sum, item) => sum + (item.avgResolveHours * item.ticketCount), 0) / resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0)) * 100) / 100
+            : 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getTicketResolveDurationByArea:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Cost Impact by Failure Mode Data
+ * Returns cost impact data grouped by failure mode
+ * This chart is affected by area filter and exact time range
+ * Sorted by cost accumulation (max to min)
+ */
+exports.getCostImpactByFailureMode = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate,
+      area_id
+    } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Build WHERE clause for tickets
+    let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
+    if (area_id && area_id !== 'all') {
+      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    }
+
+    // Get cost impact data by failure mode for the specified period and area
+    const costByFailureModeQuery = `
+      SELECT 
+        fm.FailureModeCode as failure_mode_code,
+        fm.FailureModeName as failure_mode_name,
+        COUNT(t.id) as case_count,
+        SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
+      FROM Tickets t
+      LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo
+      ${whereClause}
+      GROUP BY fm.FailureModeCode, fm.FailureModeName
+      HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
+      ORDER BY total_cost_avoidance DESC
+    `;
+
+    const result = await pool.request().query(costByFailureModeQuery);
+    
+    // Transform data for the chart
+    const costByFailureModeData = result.recordset.map(row => ({
+      failureModeCode: row.failure_mode_code || 'UNKNOWN',
+      failureModeName: row.failure_mode_name || 'Unknown',
+      cost: row.total_cost_avoidance,
+      caseCount: row.case_count
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        costByFailureModeData,
+        summary: {
+          totalFailureModes: costByFailureModeData.length,
+          totalCostAvoidance: costByFailureModeData.reduce((sum, item) => sum + item.cost, 0),
+          totalCases: costByFailureModeData.reduce((sum, item) => sum + item.caseCount, 0),
+          averageCostPerMode: costByFailureModeData.length > 0 
+            ? costByFailureModeData.reduce((sum, item) => sum + item.cost, 0) / costByFailureModeData.length 
+            : 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getCostImpactByFailureMode:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Downtime Impact by Failure Mode Data
+ * Returns downtime impact data grouped by failure mode
+ * This chart is affected by area filter and exact time range
+ * Sorted by downtime accumulation (max to min)
+ */
+exports.getDowntimeImpactByFailureMode = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate,
+      area_id
+    } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Build WHERE clause for tickets
+    let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
+    if (area_id && area_id !== 'all') {
+      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    }
+
+    // Get downtime impact data by failure mode for the specified period and area
+    const downtimeByFailureModeQuery = `
+      SELECT 
+        fm.FailureModeCode as failure_mode_code,
+        fm.FailureModeName as failure_mode_name,
+        COUNT(t.id) as case_count,
+        SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+      FROM Tickets t
+      LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo
+      ${whereClause}
+      GROUP BY fm.FailureModeCode, fm.FailureModeName
+      HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
+      ORDER BY total_downtime_hours DESC
+    `;
+
+    const result = await pool.request().query(downtimeByFailureModeQuery);
+    
+    // Transform data for the chart
+    const downtimeByFailureModeData = result.recordset.map(row => ({
+      failureModeCode: row.failure_mode_code || 'UNKNOWN',
+      failureModeName: row.failure_mode_name || 'Unknown',
+      downtime: row.total_downtime_hours,
+      caseCount: row.case_count
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        downtimeByFailureModeData,
+        summary: {
+          totalFailureModes: downtimeByFailureModeData.length,
+          totalDowntimeHours: downtimeByFailureModeData.reduce((sum, item) => sum + item.downtime, 0),
+          totalCases: downtimeByFailureModeData.reduce((sum, item) => sum + item.caseCount, 0),
+          averageDowntimePerMode: downtimeByFailureModeData.length > 0 
+            ? downtimeByFailureModeData.reduce((sum, item) => sum + item.downtime, 0) / downtimeByFailureModeData.length 
+            : 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getDowntimeImpactByFailureMode:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Cost Impact Reporter Leaderboard Data
+ * Returns top 10 users ranked by cost impact
+ * This chart is affected by time range and area filters
+ */
+exports.getCostImpactReporterLeaderboard = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate,
+      area_id
+    } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Build WHERE clause for tickets
+    let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
+    if (area_id && area_id !== 'all') {
+      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    }
+
+    // Get cost impact data by reporter for the specified period and area
+    const costImpactReporterQuery = `
+      SELECT TOP 10
+        t.reported_by as user_id,
+        p.PERSON_NAME as user_name,
+        u.AvatarUrl as avatar_url,
+        COUNT(t.id) as ticket_count,
+        SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
+      FROM Tickets t
+      INNER JOIN Person p ON t.reported_by = p.PERSONNO
+      LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+      ${whereClause}
+      GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
+      HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
+      ORDER BY total_cost_avoidance DESC
+    `;
+
+    const result = await pool.request().query(costImpactReporterQuery);
+    
+    // Transform data for the chart
+    const costImpactReporterData = result.recordset.map((row, index) => {
+      // Generate initials from user name
+      const initials = row.user_name 
+        ? row.user_name.split(' ').map(n => n[0]).join('').toUpperCase()
+        : 'U' + row.user_id;
+      
+      // Generate background color based on index for consistency
+      const colors = [
+        '#3b82f6', '#8b5cf6', '#10b981', '#ec4899', '#f97316',
+        '#14b8a6', '#6366f1', '#ef4444', '#eab308', '#06b6d4'
+      ];
+      const bgColor = colors[index % colors.length];
+
+      return {
+        id: row.user_id.toString(),
+        reporter: row.user_name || `User ${row.user_id}`,
+        cost: row.total_cost_avoidance,
+        initials: initials,
+        bgColor: bgColor,
+        avatar: row.avatar_url,
+        ticketCount: row.ticket_count
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        costImpactReporterData,
+        summary: {
+          totalUsers: costImpactReporterData.length,
+          totalCostAvoidance: costImpactReporterData.reduce((sum, item) => sum + item.cost, 0),
+          averageCostPerUser: costImpactReporterData.length > 0 
+            ? costImpactReporterData.reduce((sum, item) => sum + item.cost, 0) / costImpactReporterData.length 
+            : 0
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getCostImpactReporterLeaderboard:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Downtime Impact Reporter Leaderboard Data
+ * Returns top 10 users ranked by downtime impact
+ * This chart is affected by both time range and area filter
+ */
+exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate,
+      area_id
+    } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Build WHERE clause based on filters
+    let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
+    if (area_id && area_id !== 'all') {
+      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    }
+
+    // Get downtime impact data by reporter for the specified period and area
+    const downtimeImpactReporterQuery = `
+      SELECT TOP 10
+        t.reported_by as user_id,
+        p.PERSON_NAME as user_name,
+        u.AvatarUrl as avatar_url,
+        COUNT(t.id) as ticket_count,
+        SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+      FROM Tickets t
+      INNER JOIN Person p ON t.reported_by = p.PERSONNO
+      LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+      ${whereClause}
+      GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
+      HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
+      ORDER BY total_downtime_hours DESC
+    `;
+
+    const result = await pool.request().query(downtimeImpactReporterQuery);
+    
+    // Transform data for the chart
+    const downtimeImpactReporterData = result.recordset.map((row, index) => {
+      // Generate initials from user name
+      const initials = row.user_name 
+        ? row.user_name.split(' ').map(n => n[0]).join('').toUpperCase()
+        : 'U' + row.user_id;
+      
+      // Generate background color based on index for consistency
+      const colors = [
+        '#3b82f6', '#8b5cf6', '#10b981', '#ec4899', '#f97316',
+        '#14b8a6', '#6366f1', '#ef4444', '#eab308', '#06b6d4'
+      ];
+      const bgColor = colors[index % colors.length];
+
+      return {
+        id: row.user_id.toString(),
+        reporter: row.user_name || `User ${row.user_id}`,
+        hours: row.total_downtime_hours,
+        initials: initials,
+        bgColor: bgColor,
+        avatar: row.avatar_url,
+        ticketCount: row.ticket_count
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        downtimeImpactReporterData,
+        summary: {
+          totalUsers: downtimeImpactReporterData.length,
+          totalDowntimeHours: downtimeImpactReporterData.reduce((sum, item) => sum + item.hours, 0),
+          totalTickets: downtimeImpactReporterData.reduce((sum, item) => sum + item.ticketCount, 0),
+          appliedFilters: {
+            startDate,
+            endDate,
+            area_id: area_id ? parseInt(area_id) : null
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getDowntimeImpactReporterLeaderboard:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Calendar Heatmap Data
+ * Returns ticket counts by date for the calendar heatmap
+ * This chart is affected by area filter and year (from time filter)
+ */
+exports.getCalendarHeatmapData = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      year = new Date().getFullYear(),
+      area_id
+    } = req.query;
+
+    // Build WHERE clause for tickets
+    let whereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)}`;
+    
+    if (area_id && area_id !== 'all') {
+      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    }
+
+    // Get ticket counts by date for the specified year and area
+    const calendarQuery = `
+      SELECT 
+        CAST(t.created_at AS DATE) as date,
+        COUNT(t.id) as count
+      FROM Tickets t
+      ${whereClause}
+      GROUP BY CAST(t.created_at AS DATE)
+      ORDER BY date
+    `;
+
+    const result = await pool.request().query(calendarQuery);
+    
+    
+    // Create a map of existing data
+    const dataMap = {};
+    result.recordset.forEach(row => {
+      // Convert the date to ISO string format for consistent matching
+      const dateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+      dataMap[dateStr] = row.count;
+    });
+    
+
+    // Generate data for the entire year (including days with 0 tickets)
+    const calendarData = [];
+    const startDate = new Date(Date.UTC(parseInt(year), 0, 1)); // January 1st UTC
+    const endDate = new Date(Date.UTC(parseInt(year), 11, 31)); // December 31st UTC
+    
+    
+    // Use a more reliable date iteration method
+    let currentDate = new Date(startDate);
+    while (currentDate <= endDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      const count = dataMap[dateStr] || 0;
+      
+      
+      calendarData.push({
+        date: dateStr,
+        count: count
+      });
+      // Move to next day
+      currentDate = new Date(currentDate.getTime() + 24 * 60 * 60 * 1000);
+    }
+
+
+    res.json({
+      success: true,
+      data: {
+        calendarData,
+        summary: {
+          totalDays: calendarData.length,
+          daysWithTickets: calendarData.filter(item => item.count > 0).length,
+          totalTickets: calendarData.reduce((sum, item) => sum + item.count, 0),
+          maxTicketsPerDay: calendarData.length > 0 ? Math.max(...calendarData.map(item => item.count)) : 0,
+          appliedFilters: {
+            year: parseInt(year),
+            area_id: area_id ? parseInt(area_id) : null
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getCalendarHeatmapData:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Get Abnormal Finding Dashboard KPIs
  * Returns comprehensive KPIs for abnormal finding tickets with comparison data
  */

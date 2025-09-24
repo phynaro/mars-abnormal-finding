@@ -23,6 +23,7 @@ export interface Ticket {
   updated_at: string;
   resolved_at?: string;
   closed_at?: string;
+  scheduled_complete?: string;
   // Workflow tracking fields
   accepted_at?: string;
   accepted_by?: number;
@@ -116,6 +117,7 @@ export interface CreateTicketRequest {
   severity_level?: 'low' | 'medium' | 'high' | 'critical';
   priority?: 'low' | 'normal' | 'high' | 'urgent';
   suggested_assignee_id?: number;
+  scheduled_complete?: string;
 }
 
 export interface UpdateTicketRequest {
@@ -481,12 +483,12 @@ class TicketService {
   }
 
   // Workflow actions
-  async acceptTicket(id: number, notes?: string): Promise<{ success: boolean; message: string }> {
+  async acceptTicket(id: number, notes?: string, scheduled_complete?: string): Promise<{ success: boolean; message: string }> {
     const headers = await this.getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/accept`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ notes })
+      body: JSON.stringify({ notes, scheduled_complete })
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to accept ticket');
