@@ -1,5 +1,5 @@
 # Dockerfile for Frontend (Production)
-FROM node:18-alpine as build
+FROM node:22-alpine as build
 
 WORKDIR /app
 
