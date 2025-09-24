@@ -15,6 +15,9 @@ COPY . .
 # Copy environment file
 COPY env.production .env
 
+# Set environment variable for build
+ENV VITE_API_URL=https://4eec5e8fde9e.ngrok-free.app/api
+
 # Build the application
 RUN npm run build
 
