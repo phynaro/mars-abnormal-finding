@@ -471,7 +471,7 @@ const PersonalKPISection: React.FC<{ personalKPI: PersonalKPI }> = ({
 );
 
 const HomePage: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [personalKPI] = useState<PersonalKPI>(mockPersonalKPI);
   const [pendingTickets, setPendingTickets] = useState<APIPendingTicket[]>([]);
@@ -481,6 +481,12 @@ const HomePage: React.FC = () => {
   // Fetch pending tickets on component mount
   useEffect(() => {
     const fetchPendingTickets = async () => {
+      // Only fetch if user is authenticated
+      if (!isAuthenticated || !user) {
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
         const response = await ticketService.getUserPendingTickets();
@@ -502,7 +508,7 @@ const HomePage: React.FC = () => {
     };
 
     fetchPendingTickets();
-  }, []);
+  }, [isAuthenticated, user]);
 
   const quickActions = useMemo<QuickAction[]>(
     () => [
