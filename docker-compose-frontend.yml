@@ -6,7 +6,7 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        - VITE_API_URL=https://96f6316bf908.ngrok-free.app/api
+        - VITE_API_URL=https://api.trazor.cloud/api
         - VITE_LIFF_ID=2007697113-EWn7vw08
     ports:
       - "80:80"
