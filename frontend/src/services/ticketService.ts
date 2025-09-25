@@ -593,6 +593,59 @@ class TicketService {
     return result;
   }
 
+  async getUserTicketCountPerPeriod(params: {
+    year: number;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{ success: boolean; data: Array<{ period: string; tickets: number; target: number }> }> {
+    const headers = await this.getAuthHeaders();
+    const url = new URL(`${API_BASE_URL}/tickets/user/count-per-period`);
+    url.searchParams.set('year', params.year.toString());
+    if (params.startDate) url.searchParams.set('startDate', params.startDate);
+    if (params.endDate) url.searchParams.set('endDate', params.endDate);
+    
+    const res = await fetch(url.toString(), { headers });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Failed to fetch user ticket count per period');
+    return result;
+  }
+
+  async getUserCompletedTicketCountPerPeriod(params: {
+    year: number;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<{ success: boolean; data: Array<{ period: string; tickets: number; target: number }> }> {
+    const headers = await this.getAuthHeaders();
+    const url = new URL(`${API_BASE_URL}/tickets/user/completed-count-per-period`);
+    url.searchParams.set('year', params.year.toString());
+    if (params.startDate) url.searchParams.set('startDate', params.startDate);
+    if (params.endDate) url.searchParams.set('endDate', params.endDate);
+    
+    const res = await fetch(url.toString(), { headers });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Failed to fetch user completed ticket count per period');
+    return result;
+  }
+
+  async getPersonalKPIData(params: {
+    startDate: string;
+    endDate: string;
+    compare_startDate: string;
+    compare_endDate: string;
+  }): Promise<{ success: boolean; data: any }> {
+    const headers = await this.getAuthHeaders();
+    const url = new URL(`${API_BASE_URL}/tickets/user/personal-kpi`);
+    url.searchParams.set('startDate', params.startDate);
+    url.searchParams.set('endDate', params.endDate);
+    url.searchParams.set('compare_startDate', params.compare_startDate);
+    url.searchParams.set('compare_endDate', params.compare_endDate);
+    
+    const res = await fetch(url.toString(), { headers });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Failed to fetch personal KPI data');
+    return result;
+  }
+
   async getFailureModes(): Promise<{ success: boolean; data: FailureMode[] }> {
     const headers = await this.getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/failure-modes`, { headers });

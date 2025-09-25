@@ -12,7 +12,8 @@ import {
   Layers,
   Cpu,
   UserCheck,
-  Target
+  Target,
+  Settings
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -41,12 +42,12 @@ export const menuItems: MenuItem[] = [
     children: [
      // { id: 'dashboard-abnormal', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal', permissionLevel: 1 },
       { id: 'dashboard-abnormal-v2', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal-v2', permissionLevel: 1 },
-      { id: 'dashboard-backlog', label: 'Backlog', icon: <FileText className="h-4 w-4" />, path: '/dashboard/backlog', permissionLevel: 1 },
-      { id: 'dashboard-maintenance-kpi', label: 'Maintenance KPI', icon: <BarChart3 className="h-4 w-4" />, path: '/dashboard/maintenance-kpi', permissionLevel: 1 },
-      { id: 'dashboard-preventive-maintenance', label: 'Preventive Maintenance', icon: <Clock className="h-4 w-4" />, path: '/dashboard/preventive-maintenance', permissionLevel: 1 },
-      { id: 'dashboard-calibration', label: 'Calibration', icon: <FileText className="h-4 w-4" />, path: '/dashboard/calibration', permissionLevel: 1 },
-      { id: 'dashboard-mcc', label: 'MCC', icon: <FileText className="h-4 w-4" />, path: '/dashboard/mcc', permissionLevel: 1 },
-      { id: 'dashboard-spare-part', label: 'Spare Part', icon: <Boxes className="h-4 w-4" />, path: '/dashboard/spare-part', permissionLevel: 1 },
+      // { id: 'dashboard-backlog', label: 'Backlog', icon: <FileText className="h-4 w-4" />, path: '/dashboard/backlog', permissionLevel: 1 },
+      // { id: 'dashboard-maintenance-kpi', label: 'Maintenance KPI', icon: <BarChart3 className="h-4 w-4" />, path: '/dashboard/maintenance-kpi', permissionLevel: 1 },
+      // { id: 'dashboard-preventive-maintenance', label: 'Preventive Maintenance', icon: <Clock className="h-4 w-4" />, path: '/dashboard/preventive-maintenance', permissionLevel: 1 },
+      // { id: 'dashboard-calibration', label: 'Calibration', icon: <FileText className="h-4 w-4" />, path: '/dashboard/calibration', permissionLevel: 1 },
+      // { id: 'dashboard-mcc', label: 'MCC', icon: <FileText className="h-4 w-4" />, path: '/dashboard/mcc', permissionLevel: 1 },
+      // { id: 'dashboard-spare-part', label: 'Spare Part', icon: <Boxes className="h-4 w-4" />, path: '/dashboard/spare-part', permissionLevel: 1 },
       { id: 'dashboard-targets', label: 'Target Management', icon: <Target className="h-4 w-4" />, path: '/dashboard/targets', permissionLevel: 1 },
     ]
   },
@@ -97,7 +98,7 @@ export const menuItems: MenuItem[] = [
   {
     id: 'assets',
     label: 'Assets',
-    icon: <FileText className="h-5 w-5" />,
+    icon: <Settings className="h-5 w-5" />,
     path: '/assets',
     permissionLevel: 1,
     children: [

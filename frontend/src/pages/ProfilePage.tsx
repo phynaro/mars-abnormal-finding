@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { FileUpload } from '@/components/ui/file-upload';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -175,7 +176,11 @@ const ProfilePage: React.FC = () => {
             <div className="space-y-2">
               <Label htmlFor="avatar">Change Profile Picture</Label>
               <div className="flex gap-2">
-                <Input id="avatar" type="file" accept="image/*" onChange={onSelectAvatar} />
+                <FileUpload 
+                  accept="image/*" 
+                  onChange={(files) => onSelectAvatar({ target: { files } } as any)} 
+                  placeholder="Choose File"
+                />
                 <Button onClick={uploadAvatar} disabled={!avatarFile || loading}>Upload</Button>
               </div>
             </div>

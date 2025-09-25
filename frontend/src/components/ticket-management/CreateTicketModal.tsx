@@ -9,6 +9,7 @@ import { Plus } from 'lucide-react';
 import { ticketService } from '@/services/ticketService';
 import type { CreateTicketRequest } from '@/services/ticketService';
 import { useToast } from '@/hooks/useToast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface CreateTicketModalProps {
   onTicketCreated: () => void;
@@ -22,6 +23,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   const [formData, setFormData] = useState<CreateTicketRequest>({
     title: '',
@@ -40,15 +42,15 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
     const newErrors: Record<string, string> = {};
 
     if (!formData.title.trim()) {
-      newErrors.title = 'Title is required';
+      newErrors.title = t('ticket.titleRequired');
     }
 
     if (!formData.description.trim()) {
-      newErrors.description = 'Description is required';
+      newErrors.description = t('ticket.descriptionRequired');
     }
 
     if (!formData.pucode?.trim()) {
-      newErrors.pucode = 'PUCODE is required';
+      newErrors.pucode = t('ticket.pucodeRequired');
     }
 
     setErrors(newErrors);
@@ -66,8 +68,8 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
     try {
       await ticketService.createTicket(formData);
       toast({
-        title: 'Success',
-        description: 'Ticket created successfully',
+        title: t('common.success'),
+        description: t('ticket.ticketCreatedSuccess'),
         variant: 'default'
       });
       
@@ -88,8 +90,8 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
       onTicketCreated();
     } catch (error) {
       toast({
-        title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to create ticket',
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('ticket.failedToCreateTicket'),
         variant: 'destructive'
       });
     } finally {
@@ -111,24 +113,24 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
         {trigger || (
           <Button>
             <Plus className="w-4 h-4 mr-2" />
-            Create Ticket
+            {t('ticket.create')}
           </Button>
         )}
       </DialogTrigger>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Report Abnormal Finding</DialogTitle>
+          <DialogTitle>{t('ticket.reportAbnormalFinding')}</DialogTitle>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Title */}
           <div className="space-y-2">
-            <Label htmlFor="title">Title *</Label>
+            <Label htmlFor="title">{t('ticket.title')} *</Label>
             <Input
               id="title"
               value={formData.title}
               onChange={(e) => handleInputChange('title', e.target.value)}
-              placeholder="Brief description of the abnormal finding"
+              placeholder={t('ticket.briefDescription')}
               className={errors.title ? 'border-red-500' : ''}
             />
             {errors.title && <p className="text-sm text-red-500">{errors.title}</p>}
@@ -136,12 +138,12 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
 
           {/* Description */}
           <div className="space-y-2">
-            <Label htmlFor="description">Description *</Label>
+            <Label htmlFor="description">{t('ticket.description')} *</Label>
             <Textarea
               id="description"
               value={formData.description}
               onChange={(e) => handleInputChange('description', e.target.value)}
-              placeholder="Detailed description of the abnormal finding, including symptoms and observations"
+              placeholder={t('ticket.detailedDescription')}
               rows={4}
               className={errors.description ? 'border-red-500' : ''}
             />
@@ -150,7 +152,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
 
           {/* PUCODE */}
           <div className="space-y-2">
-            <Label htmlFor="pucode">PUCODE *</Label>
+            <Label htmlFor="pucode">{t('ticket.pucode')} *</Label>
             <Input
               id="pucode"
               value={formData.pucode}
@@ -164,7 +166,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
           {/* Severity and Priority */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="severity_level">Severity Level</Label>
+              <Label htmlFor="severity_level">{t('ticket.severity')}</Label>
               <Select
                 value={formData.severity_level}
                 onValueChange={(value) => handleInputChange('severity_level', value)}
@@ -173,16 +175,16 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="low">{t('ticket.low')}</SelectItem>
+                  <SelectItem value="medium">{t('ticket.medium')}</SelectItem>
+                  <SelectItem value="high">{t('ticket.high')}</SelectItem>
+                  <SelectItem value="critical">{t('ticket.critical')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="priority">Priority</Label>
+              <Label htmlFor="priority">{t('ticket.priority')}</Label>
               <Select
                 value={formData.priority}
                 onValueChange={(value) => handleInputChange('priority', value)}
@@ -191,10 +193,10 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
+                  <SelectItem value="low">{t('ticket.low')}</SelectItem>
+                  <SelectItem value="normal">{t('ticket.normal')}</SelectItem>
+                  <SelectItem value="high">{t('ticket.high')}</SelectItem>
+                  <SelectItem value="urgent">{t('ticket.urgent')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -208,10 +210,10 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
               onClick={() => setOpen(false)}
               disabled={loading}
             >
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={loading}>
-              {loading ? 'Creating...' : 'Create Ticket'}
+              {loading ? t('common.loading') : t('ticket.create')}
             </Button>
           </div>
         </form>

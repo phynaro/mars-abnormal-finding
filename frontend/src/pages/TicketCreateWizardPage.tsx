@@ -3,10 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest } from '@/services/ticketService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FileUpload } from '@/components/ui/file-upload';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/useToast';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { X } from 'lucide-react';
 import authService from '@/services/authService';
 
@@ -41,6 +43,7 @@ const stepIllustrations: Record<StepKey, string> = {
 const TicketCreateWizardPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -199,10 +202,10 @@ const TicketCreateWizardPage: React.FC = () => {
           // Don't fail the ticket creation if notification fails
         }
       }
-      //toast({ title: 'Success', description: 'Ticket created successfully' });
+      //toast({ title: t('common.success'), description: t('ticket.ticketCreatedSuccess') });
       navigate(`/tickets/${ticketId}`);
     } catch (e) {
-      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to create ticket', variant: 'destructive' });
+      toast({ title: t('common.error'), description: e instanceof Error ? e.message : t('ticket.failedToCreateTicket'), variant: 'destructive' });
     } finally {
       setSubmitting(false);
       submittingRef.current = false;
@@ -226,7 +229,7 @@ const TicketCreateWizardPage: React.FC = () => {
     <div className="container mx-auto px-4 py-4 max-w-xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <Button variant="outline" onClick={() => navigate(-1)}>Back</Button>
+        <Button variant="outline" onClick={() => navigate(-1)}>{t('ticket.wizardBack')}</Button>
         <div className="text-sm text-gray-600 dark:text-gray-400">{currentIndex + 1} / {stepsOrder.length}</div>
       </div>
 
@@ -240,7 +243,7 @@ const TicketCreateWizardPage: React.FC = () => {
         {step === 'machine' && (
           <>
             <StepIllustration step="machine" />
-            <Label htmlFor="machine-search" className="text-base font-semibold">What machine is affected? *</Label>
+            <Label htmlFor="machine-search" className="text-base font-semibold">{t('ticket.wizardSelectMachine')} *</Label>
             
             <div className="space-y-3 mt-4">
               <div className="relative">
@@ -253,12 +256,12 @@ const TicketCreateWizardPage: React.FC = () => {
                     setMachineSearchDropdownOpen(true);
                   }}
                   onFocus={() => setMachineSearchDropdownOpen(true)}
-                  placeholder="Search by machine name, PUCODE (Plant-Area-Line-Machine-Number), or description..."
+                  placeholder={t('ticket.wizardSelectMachine')}
                 />
                 {machineSearchDropdownOpen && machineSearchResults.length > 0 && (
                   <div className="search-dropdown absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
                     {machineSearchLoading ? (
-                      <div className="p-3 text-sm text-gray-500">Searching...</div>
+                      <div className="p-3 text-sm text-gray-500">{t('common.loading')}</div>
                     ) : (
                       machineSearchResults.map((result, idx) => (
                         <button
@@ -312,16 +315,15 @@ const TicketCreateWizardPage: React.FC = () => {
         {step === 'images' && (
           <>
             <StepIllustration step="images" />
-            <Label htmlFor="img" className="text-base font-semibold">Add photos (before) *</Label>
+            <Label htmlFor="img" className="text-base font-semibold">{t('ticket.wizardUploadImages')} *</Label>
             <div className="mt-4">
-              <Input 
-                id="img" 
-                type="file" 
-                accept="image/*" 
-                multiple 
-                onChange={(e) => setBeforeFiles(Array.from(e.target.files || []))} 
-                className="mb-3" 
-              />
+            <FileUpload 
+              accept="image/*" 
+              multiple 
+              onChange={(files) => setBeforeFiles(Array.from(files || []))} 
+              className="mb-3"
+              placeholder={t('ticket.chooseFiles')}
+            />
               {beforeFiles.length > 0 && (
                 <div className="grid grid-cols-2 gap-3 mt-3">
                   {previews.map((p, idx) => (
@@ -339,7 +341,7 @@ const TicketCreateWizardPage: React.FC = () => {
                 </div>
               )}
               <p className="text-xs text-gray-500 mt-2">
-                At least one image is required. Upload photos showing the current state of the machine.
+                {t('ticket.wizardDragDropImages')}
               </p>
             </div>
           </>
@@ -348,16 +350,16 @@ const TicketCreateWizardPage: React.FC = () => {
         {step === 'title' && (
           <>
             <StepIllustration step="title" />
-            <Label htmlFor="title" className="text-base font-semibold">What's the problem title? *</Label>
+            <Label htmlFor="title" className="text-base font-semibold">{t('ticket.title')} *</Label>
             <Input 
               id="title" 
               value={title} 
               onChange={(e) => setTitle(e.target.value)} 
-              placeholder="e.g., Abnormal vibration detected" 
+              placeholder={t('ticket.briefDescription')} 
               className="mt-4" 
             />
             <p className="text-xs text-gray-500 mt-2">
-              Provide a clear, concise title describing the issue.
+              {t('ticket.briefDescription')}
             </p>
           </>
         )}
@@ -365,17 +367,17 @@ const TicketCreateWizardPage: React.FC = () => {
         {step === 'description' && (
           <>
             <StepIllustration step="description" />
-            <Label htmlFor="desc" className="text-base font-semibold">Describe what you observed *</Label>
+            <Label htmlFor="desc" className="text-base font-semibold">{t('ticket.description')} *</Label>
             <Textarea 
               id="desc" 
               value={description} 
               onChange={(e) => setDescription(e.target.value)} 
               rows={5} 
-              placeholder="Provide detailed description of the abnormal finding, symptoms, conditions, when it was noticed..." 
+              placeholder={t('ticket.detailedDescription')} 
               className="mt-4" 
             />
             <p className="text-xs text-gray-500 mt-2">
-              Include details about symptoms, when the issue was noticed, and any relevant conditions.
+              {t('ticket.detailedDescription')}
             </p>
           </>
         )}
@@ -385,31 +387,31 @@ const TicketCreateWizardPage: React.FC = () => {
             <StepIllustration step="severity_priority" />
             <div className="space-y-4">
               <div>
-                <Label className="text-base font-semibold">How severe is it?</Label>
+                <Label className="text-base font-semibold">{t('ticket.severity')}</Label>
                 <Select value={severity} onValueChange={(v) => setSeverity(v as any)}>
                   <SelectTrigger className="mt-2">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low - Minor issue</SelectItem>
-                    <SelectItem value="medium">Medium - Moderate impact</SelectItem>
-                    <SelectItem value="high">High - Significant impact</SelectItem>
-                    <SelectItem value="critical">Critical - Safety risk</SelectItem>
+                    <SelectItem value="low">{t('ticket.low')}</SelectItem>
+                    <SelectItem value="medium">{t('ticket.medium')}</SelectItem>
+                    <SelectItem value="high">{t('ticket.high')}</SelectItem>
+                    <SelectItem value="critical">{t('ticket.critical')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               
               <div>
-                <Label className="text-base font-semibold">How urgent is it?</Label>
+                <Label className="text-base font-semibold">{t('ticket.priority')}</Label>
                 <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
                   <SelectTrigger className="mt-2">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="low">Low - Can wait</SelectItem>
-                    <SelectItem value="normal">Normal - Standard priority</SelectItem>
-                    <SelectItem value="high">High - Needs attention soon</SelectItem>
-                    <SelectItem value="urgent">Urgent - Immediate action</SelectItem>
+                    <SelectItem value="low">{t('ticket.low')}</SelectItem>
+                    <SelectItem value="normal">{t('ticket.normal')}</SelectItem>
+                    <SelectItem value="high">{t('ticket.high')}</SelectItem>
+                    <SelectItem value="urgent">{t('ticket.urgent')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -423,27 +425,27 @@ const TicketCreateWizardPage: React.FC = () => {
             <div className="space-y-4">
               <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Machine:</span> 
+                  <span className="text-gray-500">{t('ticket.wizardSelectMachine')}:</span> 
                   <span className="font-medium font-mono">{selectedMachine?.PUCODE || '-'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Description:</span> 
+                  <span className="text-gray-500">{t('ticket.description')}:</span> 
                   <span className="font-medium">{selectedMachine?.PUDESC || '-'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Title:</span> 
+                  <span className="text-gray-500">{t('ticket.title')}:</span> 
                   <span className="font-medium">{title}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Severity:</span> 
+                  <span className="text-gray-500">{t('ticket.severity')}:</span> 
                   <span className="font-medium capitalize">{severity}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Priority:</span> 
+                  <span className="text-gray-500">{t('ticket.priority')}:</span> 
                   <span className="font-medium capitalize">{priority}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Images:</span> 
+                  <span className="text-gray-500">{t('ticket.wizardUploadImages')}:</span> 
                   <span className="font-medium">{beforeFiles.length} photo(s)</span>
                 </div>
               </div>
@@ -451,7 +453,7 @@ const TicketCreateWizardPage: React.FC = () => {
               {/* Image preview */}
               {beforeFiles.length > 0 && (
                 <div className="mt-4">
-                  <Label className="text-sm font-medium">Image Preview:</Label>
+                  <Label className="text-sm font-medium">{t('ticket.wizardImagePreview')}:</Label>
                   <div className="grid grid-cols-2 gap-2 mt-2">
                     {previews.map((p, idx) => (
                       <div key={idx} className="relative border rounded overflow-hidden">
@@ -468,11 +470,13 @@ const TicketCreateWizardPage: React.FC = () => {
 
       {/* Navigation */}
       <div className="mt-4 flex items-center justify-between">
-        <Button variant="outline" onClick={back} disabled={currentIndex === 0}>Back</Button>
+        <Button variant="outline" onClick={back} disabled={currentIndex === 0}>{t('ticket.wizardPrevious')}</Button>
         {step !== 'review' ? (
-          <Button onClick={next} disabled={!canNext()}>Next</Button>
+          <Button onClick={next} disabled={!canNext()}>{t('ticket.wizardNext')}</Button>
         ) : (
-          <Button onClick={submit} disabled={submitting || imagesUploading}>{submitting ? 'Creating…' : imagesUploading ? 'Uploading…' : 'Submit'}</Button>
+          <Button onClick={submit} disabled={submitting || imagesUploading}>
+            {submitting ? t('common.loading') : imagesUploading ? t('common.loading') : t('ticket.wizardFinish')}
+          </Button>
         )}
       </div>
     </div>

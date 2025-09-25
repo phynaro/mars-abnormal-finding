@@ -1787,7 +1787,7 @@ const escalateTicket = async (req, res) => {
                         assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
                         problem: ticketData.title || "No description",
                         actionBy: escalatorName,
-                        comment: escalation_reason || "งานถูกส่งต่อให้ L3 พิจารณา",
+                        comment: escalation_reason || "งานถูกส่งต่อให้หัวหน้างานพิจารณา",
                         heroImageUrl: heroImageUrl,
                         detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
                     });
@@ -1805,7 +1805,7 @@ const escalateTicket = async (req, res) => {
                         assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
                         problem: ticketData.title || "No description",
                         actionBy: escalatorName,
-                        comment: escalation_reason || "งานของคุณถูกส่งต่อให้ L3 พิจารณา",
+                        comment: escalation_reason || "งานของคุณถูกส่งต่อให้หัวหน้างานพิจารณา",
                         heroImageUrl: heroImageUrl,
                         detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
                     });
@@ -2246,7 +2246,7 @@ const sendDelayedTicketNotification = async (ticketId) => {
                     assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
                     problem: ticket.title || "No description",
                     actionBy: ticket.reporter_name,
-                    comment: "เคสใหม่ รอการยอมรับจาก L2",
+                    comment: "เคสใหม่ รอการยอมรับจากผู้รับผิดชอบ",
                     heroImageUrl: heroImageUrl,
                     extraKVs: [
                         { label: "Priority", value: ticket.priority || "normal" },
@@ -2279,7 +2279,7 @@ const sendDelayedTicketNotification = async (ticketId) => {
                     assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
                     problem: ticket.title || "No description",
                     actionBy: ticket.reporter_name,
-                    comment: "เคสใหม่ รอการยอมรับจาก L2",
+                    comment: "เคสใหม่ รอการยอมรับจากผู้รับผิดชอบ",
                     heroImageUrl: heroImageUrl,
                     extraKVs: [
                         { label: "Priority", value: ticket.priority || "normal" },
@@ -2773,6 +2773,525 @@ const getFailureModes = async (req, res) => {
     }
 };
 
+// Get user ticket count per period for personal dashboard
+const getUserTicketCountPerPeriod = async (req, res) => {
+    try {
+        const userId = req.user.id; // Get current user ID
+        
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID not found in token'
+            });
+        }
+
+        const {
+            year = new Date().getFullYear(),
+            startDate,
+            endDate
+        } = req.query;
+
+        const pool = await sql.connect(dbConfig);
+        
+        // Build WHERE clause for user's tickets
+        let whereClause = `WHERE t.reported_by = @userId AND YEAR(t.created_at) = @year`;
+        
+        // Add date range filter if provided
+        if (startDate && endDate) {
+            whereClause += ` AND t.created_at >= @startDate AND t.created_at <= @endDate`;
+        }
+        
+        // Exclude canceled tickets
+        whereClause += ` AND t.status != 'canceled'`;
+
+        // Get tickets count per period (monthly periods P1-P12)
+        const query = `
+            SELECT 
+                CASE 
+                    WHEN MONTH(t.created_at) = 1 THEN 'P1'
+                    WHEN MONTH(t.created_at) = 2 THEN 'P2'
+                    WHEN MONTH(t.created_at) = 3 THEN 'P3'
+                    WHEN MONTH(t.created_at) = 4 THEN 'P4'
+                    WHEN MONTH(t.created_at) = 5 THEN 'P5'
+                    WHEN MONTH(t.created_at) = 6 THEN 'P6'
+                    WHEN MONTH(t.created_at) = 7 THEN 'P7'
+                    WHEN MONTH(t.created_at) = 8 THEN 'P8'
+                    WHEN MONTH(t.created_at) = 9 THEN 'P9'
+                    WHEN MONTH(t.created_at) = 10 THEN 'P10'
+                    WHEN MONTH(t.created_at) = 11 THEN 'P11'
+                    WHEN MONTH(t.created_at) = 12 THEN 'P12'
+                    ELSE 'P13'
+                END as period,
+                COUNT(*) as tickets
+            FROM Tickets t
+            ${whereClause}
+            GROUP BY 
+                CASE 
+                    WHEN MONTH(t.created_at) = 1 THEN 'P1'
+                    WHEN MONTH(t.created_at) = 2 THEN 'P2'
+                    WHEN MONTH(t.created_at) = 3 THEN 'P3'
+                    WHEN MONTH(t.created_at) = 4 THEN 'P4'
+                    WHEN MONTH(t.created_at) = 5 THEN 'P5'
+                    WHEN MONTH(t.created_at) = 6 THEN 'P6'
+                    WHEN MONTH(t.created_at) = 7 THEN 'P7'
+                    WHEN MONTH(t.created_at) = 8 THEN 'P8'
+                    WHEN MONTH(t.created_at) = 9 THEN 'P9'
+                    WHEN MONTH(t.created_at) = 10 THEN 'P10'
+                    WHEN MONTH(t.created_at) = 11 THEN 'P11'
+                    WHEN MONTH(t.created_at) = 12 THEN 'P12'
+                    ELSE 'P13'
+                END
+            ORDER BY period
+        `;
+
+        // Build the request with parameters
+        let request = pool.request()
+            .input('userId', sql.Int, userId)
+            .input('year', sql.Int, parseInt(year));
+            
+        if (startDate && endDate) {
+            request = request
+                .input('startDate', sql.DateTime, new Date(startDate))
+                .input('endDate', sql.DateTime, new Date(endDate));
+        }
+
+        const result = await request.query(query);
+        
+        // Create a map of data by period
+        const dataMap = {};
+        result.recordset.forEach(row => {
+            dataMap[row.period] = row.tickets;
+        });
+
+        // Generate all periods P1-P13 and fill with data or 0
+        const allPeriods = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13'];
+        
+        const responseData = allPeriods.map(period => ({
+            period,
+            tickets: dataMap[period] || 0,
+            target: 15 // Mock target data as requested
+        }));
+
+        res.json({
+            success: true,
+            data: responseData
+        });
+
+    } catch (error) {
+        console.error('Error in getUserTicketCountPerPeriod:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
+// Get user completed ticket count per period for personal dashboard (L2+ users only)
+const getUserCompletedTicketCountPerPeriod = async (req, res) => {
+    try {
+        const userId = req.user.id; // Get current user ID
+        
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID not found in token'
+            });
+        }
+
+        const {
+            year = new Date().getFullYear(),
+            startDate,
+            endDate
+        } = req.query;
+
+        const pool = await sql.connect(dbConfig);
+        
+        // First, check if user has L2+ approval level in any area
+        const l2CheckQuery = `
+            SELECT COUNT(*) as l2_count
+            FROM TicketApproval ta
+            WHERE ta.personno = @userId 
+            AND ta.approval_level >= 2 
+            AND ta.is_active = 1
+        `;
+        
+        const l2Result = await pool.request()
+            .input('userId', sql.Int, userId)
+            .query(l2CheckQuery);
+        
+        if (l2Result.recordset[0].l2_count === 0) {
+            return res.status(403).json({
+                success: false,
+                message: 'Access denied. Requires L2+ approval level.'
+            });
+        }
+        
+        // Build WHERE clause for user's completed tickets
+        let whereClause = `WHERE t.completed_by = @userId AND YEAR(t.completed_at) = @year`;
+        
+        // Add date range filter if provided (based on completed_at)
+        if (startDate && endDate) {
+            whereClause += ` AND t.completed_at >= @startDate AND t.completed_at <= @endDate`;
+        }
+        
+        // Only include tickets with status "closed" or "completed"
+        whereClause += ` AND t.status IN ('closed', 'completed')`;
+
+        // Get completed tickets count per period (monthly periods P1-P12)
+        const query = `
+            SELECT 
+                CASE 
+                    WHEN MONTH(t.completed_at) = 1 THEN 'P1'
+                    WHEN MONTH(t.completed_at) = 2 THEN 'P2'
+                    WHEN MONTH(t.completed_at) = 3 THEN 'P3'
+                    WHEN MONTH(t.completed_at) = 4 THEN 'P4'
+                    WHEN MONTH(t.completed_at) = 5 THEN 'P5'
+                    WHEN MONTH(t.completed_at) = 6 THEN 'P6'
+                    WHEN MONTH(t.completed_at) = 7 THEN 'P7'
+                    WHEN MONTH(t.completed_at) = 8 THEN 'P8'
+                    WHEN MONTH(t.completed_at) = 9 THEN 'P9'
+                    WHEN MONTH(t.completed_at) = 10 THEN 'P10'
+                    WHEN MONTH(t.completed_at) = 11 THEN 'P11'
+                    WHEN MONTH(t.completed_at) = 12 THEN 'P12'
+                    ELSE 'P13'
+                END as period,
+                COUNT(*) as tickets
+            FROM Tickets t
+            ${whereClause}
+            GROUP BY 
+                CASE 
+                    WHEN MONTH(t.completed_at) = 1 THEN 'P1'
+                    WHEN MONTH(t.completed_at) = 2 THEN 'P2'
+                    WHEN MONTH(t.completed_at) = 3 THEN 'P3'
+                    WHEN MONTH(t.completed_at) = 4 THEN 'P4'
+                    WHEN MONTH(t.completed_at) = 5 THEN 'P5'
+                    WHEN MONTH(t.completed_at) = 6 THEN 'P6'
+                    WHEN MONTH(t.completed_at) = 7 THEN 'P7'
+                    WHEN MONTH(t.completed_at) = 8 THEN 'P8'
+                    WHEN MONTH(t.completed_at) = 9 THEN 'P9'
+                    WHEN MONTH(t.completed_at) = 10 THEN 'P10'
+                    WHEN MONTH(t.completed_at) = 11 THEN 'P11'
+                    WHEN MONTH(t.completed_at) = 12 THEN 'P12'
+                    ELSE 'P13'
+                END
+            ORDER BY period
+        `;
+
+        // Build the request with parameters
+        let request = pool.request()
+            .input('userId', sql.Int, userId)
+            .input('year', sql.Int, parseInt(year));
+            
+        if (startDate && endDate) {
+            request = request
+                .input('startDate', sql.DateTime, new Date(startDate))
+                .input('endDate', sql.DateTime, new Date(endDate));
+        }
+
+        const result = await request.query(query);
+        
+        // Create a map of data by period
+        const dataMap = {};
+        result.recordset.forEach(row => {
+            dataMap[row.period] = row.tickets;
+        });
+
+        // Generate all periods P1-P13 and fill with data or 0
+        const allPeriods = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13'];
+        
+        const responseData = allPeriods.map(period => ({
+            period,
+            tickets: dataMap[period] || 0,
+            target: 10 // Mock target data for completed tickets
+        }));
+
+        res.json({
+            success: true,
+            data: responseData
+        });
+
+    } catch (error) {
+        console.error('Error in getUserCompletedTicketCountPerPeriod:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
+// Get personal KPI data for personal dashboard (role-specific)
+const getPersonalKPIData = async (req, res) => {
+    try {
+        const userId = req.user.id; // Get current user ID
+        
+        if (!userId) {
+            return res.status(400).json({
+                success: false,
+                message: 'User ID not found in token'
+            });
+        }
+
+        const {
+            startDate,
+            endDate,
+            compare_startDate,
+            compare_endDate
+        } = req.query;
+
+        const pool = await sql.connect(dbConfig);
+        
+        // First, check if user has L2+ approval level in any area
+        const l2CheckQuery = `
+            SELECT COUNT(*) as l2_count
+            FROM TicketApproval ta
+            WHERE ta.personno = @userId 
+            AND ta.approval_level >= 2 
+            AND ta.is_active = 1
+        `;
+        
+        const l2Result = await pool.request()
+            .input('userId', sql.Int, userId)
+            .query(l2CheckQuery);
+        
+        const isL2Plus = l2Result.recordset[0].l2_count > 0;
+        
+        // Get current period data - REPORTER metrics (for all users)
+        const reporterMetricsQuery = `
+            SELECT 
+                COUNT(*) as totalReportsThisPeriod,
+                SUM(CASE WHEN status IN ('closed', 'completed') THEN 1 ELSE 0 END) as resolvedReportsThisPeriod,
+                SUM(CASE WHEN status NOT IN ('closed', 'completed', 'canceled') THEN 1 ELSE 0 END) as pendingReportsThisPeriod,
+                SUM(CASE WHEN status IN ('closed', 'completed') THEN 
+                    COALESCE(downtime_avoidance_hours, 0) 
+                ELSE 0 END) as downtimeAvoidedByReportsThisPeriod,
+                SUM(CASE WHEN status IN ('closed', 'completed') THEN 
+                    COALESCE(cost_avoidance, 0) 
+                ELSE 0 END) as costAvoidedByReportsThisPeriod
+            FROM Tickets t
+            WHERE t.reported_by = @userId
+            AND t.created_at >= @startDate 
+            AND t.created_at <= @endDate
+        `;
+
+        // Get comparison period data - REPORTER metrics
+        const reporterComparisonQuery = `
+            SELECT 
+                COUNT(*) as totalReportsLastPeriod,
+                SUM(CASE WHEN status IN ('closed', 'completed') THEN 1 ELSE 0 END) as resolvedReportsLastPeriod,
+                SUM(CASE WHEN status NOT IN ('closed', 'completed', 'canceled') THEN 1 ELSE 0 END) as pendingReportsLastPeriod,
+                SUM(CASE WHEN status IN ('closed', 'completed') THEN 
+                    COALESCE(downtime_avoidance_hours, 0) 
+                ELSE 0 END) as downtimeAvoidedByReportsLastPeriod,
+                SUM(CASE WHEN status IN ('closed', 'completed') THEN 
+                    COALESCE(cost_avoidance, 0) 
+                ELSE 0 END) as costAvoidedByReportsLastPeriod
+            FROM Tickets t
+            WHERE t.reported_by = @userId
+            AND t.created_at >= @compare_startDate 
+            AND t.created_at <= @compare_endDate
+        `;
+
+        // Execute reporter queries
+        const reporterCurrentResult = await pool.request()
+            .input('userId', sql.Int, userId)
+            .input('startDate', sql.DateTime, new Date(startDate))
+            .input('endDate', sql.DateTime, new Date(endDate))
+            .query(reporterMetricsQuery);
+
+        const reporterComparisonResult = await pool.request()
+            .input('userId', sql.Int, userId)
+            .input('compare_startDate', sql.DateTime, new Date(compare_startDate))
+            .input('compare_endDate', sql.DateTime, new Date(compare_endDate))
+            .query(reporterComparisonQuery);
+
+        const reporterCurrentData = reporterCurrentResult.recordset[0];
+        const reporterComparisonData = reporterComparisonResult.recordset[0];
+
+        let actionPersonData = null;
+        let actionPersonComparisonData = null;
+
+        // If L2+, get ACTION PERSON metrics
+        if (isL2Plus) {
+            const actionPersonMetricsQuery = `
+                SELECT 
+                    COUNT(*) as totalCasesFixedThisPeriod,
+                    SUM(CASE WHEN status IN ('closed', 'completed') THEN 
+                        COALESCE(downtime_avoidance_hours, 0) 
+                    ELSE 0 END) as downtimeAvoidedByFixesThisPeriod,
+                    SUM(CASE WHEN status IN ('closed', 'completed') THEN 
+                        COALESCE(cost_avoidance, 0) 
+                    ELSE 0 END) as costAvoidedByFixesThisPeriod
+                FROM Tickets t
+                WHERE t.completed_by = @userId
+                AND t.completed_at >= @startDate 
+                AND t.completed_at <= @endDate
+            `;
+
+            const actionPersonComparisonQuery = `
+                SELECT 
+                    COUNT(*) as totalCasesFixedLastPeriod,
+                    SUM(CASE WHEN status IN ('closed', 'completed') THEN 
+                        COALESCE(downtime_avoidance_hours, 0) 
+                    ELSE 0 END) as downtimeAvoidedByFixesLastPeriod,
+                    SUM(CASE WHEN status IN ('closed', 'completed') THEN 
+                        COALESCE(cost_avoidance, 0) 
+                    ELSE 0 END) as costAvoidedByFixesLastPeriod
+                FROM Tickets t
+                WHERE t.completed_by = @userId
+                AND t.completed_at >= @compare_startDate 
+                AND t.completed_at <= @compare_endDate
+            `;
+
+            const actionPersonCurrentResult = await pool.request()
+                .input('userId', sql.Int, userId)
+                .input('startDate', sql.DateTime, new Date(startDate))
+                .input('endDate', sql.DateTime, new Date(endDate))
+                .query(actionPersonMetricsQuery);
+
+            const actionPersonComparisonResult = await pool.request()
+                .input('userId', sql.Int, userId)
+                .input('compare_startDate', sql.DateTime, new Date(compare_startDate))
+                .input('compare_endDate', sql.DateTime, new Date(compare_endDate))
+                .query(actionPersonComparisonQuery);
+
+            actionPersonData = actionPersonCurrentResult.recordset[0];
+            actionPersonComparisonData = actionPersonComparisonResult.recordset[0];
+        }
+
+        // Calculate growth rates
+        const calculateGrowthRate = (current, previous) => {
+            if (previous === 0) {
+                return current > 0 ? 100 : 0;
+            }
+            return ((current - previous) / previous) * 100;
+        };
+
+        // Reporter growth rates
+        const reportGrowthRate = calculateGrowthRate(
+            reporterCurrentData.totalReportsThisPeriod, 
+            reporterComparisonData.totalReportsLastPeriod
+        );
+
+        const resolvedReportsGrowthRate = calculateGrowthRate(
+            reporterCurrentData.resolvedReportsThisPeriod, 
+            reporterComparisonData.resolvedReportsLastPeriod
+        );
+
+        const downtimeAvoidedByReportsGrowth = calculateGrowthRate(
+            reporterCurrentData.downtimeAvoidedByReportsThisPeriod, 
+            reporterComparisonData.downtimeAvoidedByReportsLastPeriod
+        );
+
+        const costAvoidedByReportsGrowth = calculateGrowthRate(
+            reporterCurrentData.costAvoidedByReportsThisPeriod, 
+            reporterComparisonData.costAvoidedByReportsLastPeriod
+        );
+
+        // Calculate impact score (combination of metrics)
+        const reporterImpactScore = Math.round(
+            (reporterCurrentData.resolvedReportsThisPeriod / Math.max(reporterCurrentData.totalReportsThisPeriod, 1)) * 100
+        );
+
+        let actionPersonGrowthRates = null;
+        let actionPersonImpactScore = null;
+
+        if (isL2Plus && actionPersonData) {
+            actionPersonGrowthRates = {
+                casesFixedGrowthRate: calculateGrowthRate(
+                    actionPersonData.totalCasesFixedThisPeriod, 
+                    actionPersonComparisonData.totalCasesFixedLastPeriod
+                ),
+                downtimeAvoidedByFixesGrowth: calculateGrowthRate(
+                    actionPersonData.downtimeAvoidedByFixesThisPeriod, 
+                    actionPersonComparisonData.downtimeAvoidedByFixesLastPeriod
+                ),
+                costAvoidedByFixesGrowth: calculateGrowthRate(
+                    actionPersonData.costAvoidedByFixesThisPeriod, 
+                    actionPersonComparisonData.costAvoidedByFixesLastPeriod
+                )
+            };
+
+            actionPersonImpactScore = Math.round(
+                (actionPersonData.totalCasesFixedThisPeriod / Math.max(reporterCurrentData.totalReportsThisPeriod, 1)) * 100
+            );
+        }
+
+        const response = {
+            success: true,
+            data: {
+                userRole: isL2Plus ? 'L2+' : 'L1',
+                reporterMetrics: {
+                    totalReportsThisPeriod: reporterCurrentData.totalReportsThisPeriod || 0,
+                    resolvedReportsThisPeriod: reporterCurrentData.resolvedReportsThisPeriod || 0,
+                    pendingReportsThisPeriod: reporterCurrentData.pendingReportsThisPeriod || 0,
+                    downtimeAvoidedByReportsThisPeriod: reporterCurrentData.downtimeAvoidedByReportsThisPeriod || 0,
+                    costAvoidedByReportsThisPeriod: reporterCurrentData.costAvoidedByReportsThisPeriod || 0,
+                    impactScore: reporterImpactScore
+                },
+                actionPersonMetrics: isL2Plus ? {
+                    totalCasesFixedThisPeriod: actionPersonData.totalCasesFixedThisPeriod || 0,
+                    downtimeAvoidedByFixesThisPeriod: actionPersonData.downtimeAvoidedByFixesThisPeriod || 0,
+                    costAvoidedByFixesThisPeriod: actionPersonData.costAvoidedByFixesThisPeriod || 0,
+                    impactScore: actionPersonImpactScore
+                } : null,
+                summary: {
+                    reporterComparisonMetrics: {
+                        reportGrowthRate: {
+                            percentage: reportGrowthRate,
+                            description: `${reportGrowthRate >= 0 ? '+' : ''}${reportGrowthRate.toFixed(1)}% from last period`,
+                            type: reportGrowthRate > 0 ? 'increase' : reportGrowthRate < 0 ? 'decrease' : 'no_change'
+                        },
+                        resolvedReportsGrowthRate: {
+                            percentage: resolvedReportsGrowthRate,
+                            description: `${resolvedReportsGrowthRate >= 0 ? '+' : ''}${resolvedReportsGrowthRate.toFixed(1)}% from last period`,
+                            type: resolvedReportsGrowthRate > 0 ? 'increase' : resolvedReportsGrowthRate < 0 ? 'decrease' : 'no_change'
+                        },
+                        downtimeAvoidedByReportsGrowth: {
+                            percentage: downtimeAvoidedByReportsGrowth,
+                            description: `${downtimeAvoidedByReportsGrowth >= 0 ? '+' : ''}${downtimeAvoidedByReportsGrowth.toFixed(1)}% from last period`,
+                            type: downtimeAvoidedByReportsGrowth > 0 ? 'increase' : downtimeAvoidedByReportsGrowth < 0 ? 'decrease' : 'no_change'
+                        },
+                        costAvoidedByReportsGrowth: {
+                            percentage: costAvoidedByReportsGrowth,
+                            description: `${costAvoidedByReportsGrowth >= 0 ? '+' : ''}${costAvoidedByReportsGrowth.toFixed(1)}% from last period`,
+                            type: costAvoidedByReportsGrowth > 0 ? 'increase' : costAvoidedByReportsGrowth < 0 ? 'decrease' : 'no_change'
+                        }
+                    },
+                    actionPersonComparisonMetrics: actionPersonGrowthRates ? {
+                        casesFixedGrowthRate: {
+                            percentage: actionPersonGrowthRates.casesFixedGrowthRate,
+                            description: `${actionPersonGrowthRates.casesFixedGrowthRate >= 0 ? '+' : ''}${actionPersonGrowthRates.casesFixedGrowthRate.toFixed(1)}% from last period`,
+                            type: actionPersonGrowthRates.casesFixedGrowthRate > 0 ? 'increase' : actionPersonGrowthRates.casesFixedGrowthRate < 0 ? 'decrease' : 'no_change'
+                        },
+                        downtimeAvoidedByFixesGrowth: {
+                            percentage: actionPersonGrowthRates.downtimeAvoidedByFixesGrowth,
+                            description: `${actionPersonGrowthRates.downtimeAvoidedByFixesGrowth >= 0 ? '+' : ''}${actionPersonGrowthRates.downtimeAvoidedByFixesGrowth.toFixed(1)}% from last period`,
+                            type: actionPersonGrowthRates.downtimeAvoidedByFixesGrowth > 0 ? 'increase' : actionPersonGrowthRates.downtimeAvoidedByFixesGrowth < 0 ? 'decrease' : 'no_change'
+                        },
+                        costAvoidedByFixesGrowth: {
+                            percentage: actionPersonGrowthRates.costAvoidedByFixesGrowth,
+                            description: `${actionPersonGrowthRates.costAvoidedByFixesGrowth >= 0 ? '+' : ''}${actionPersonGrowthRates.costAvoidedByFixesGrowth.toFixed(1)}% from last period`,
+                            type: actionPersonGrowthRates.costAvoidedByFixesGrowth > 0 ? 'increase' : actionPersonGrowthRates.costAvoidedByFixesGrowth < 0 ? 'decrease' : 'no_change'
+                        }
+                    } : null
+                }
+            }
+        };
+
+        res.json(response);
+
+    } catch (error) {
+        console.error('Error in getPersonalKPIData:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Internal server error',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     createTicket,
     getTickets,
@@ -2795,5 +3314,8 @@ module.exports = {
     getAvailableAssignees,
     sendDelayedTicketNotification,
     getUserPendingTickets,
+    getUserTicketCountPerPeriod,
+    getUserCompletedTicketCountPerPeriod,
+    getPersonalKPIData,
     triggerTicketNotification
 };

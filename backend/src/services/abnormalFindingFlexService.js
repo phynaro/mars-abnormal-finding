@@ -41,11 +41,11 @@ const stateColorMap = Object.freeze({
 const stateLabels = Object.freeze({
   [AbnCaseState.CREATED]: "สร้างเคสใหม่",
   [AbnCaseState.ACCEPTED]: "รับงาน",
-  [AbnCaseState.REJECT_TO_MANAGER]: "ปฏิเสธโดย L2",
+  [AbnCaseState.REJECT_TO_MANAGER]: "ปฏิเสธ รอการอนุมัติจากหัวหน้างาน",
   [AbnCaseState.REJECT_FINAL]: "ปฏิเสธขั้นสุดท้าย",
   [AbnCaseState.COMPLETED]: "เสร็จสิ้น",
   [AbnCaseState.REASSIGNED]: "มอบหมายใหม่",
-  [AbnCaseState.ESCALATED]: "ส่งต่อ L3",
+  [AbnCaseState.ESCALATED]: "ส่งต่อให้หัวหน้างาน",
   [AbnCaseState.CLOSED]: "ปิดเคส",
   [AbnCaseState.REOPENED]: "เปิดเคสใหม่",
 });
@@ -242,7 +242,7 @@ class AbnormalFindingFlexService {
         console.error(`Invalid LineID format: ${lineUserId}. Expected format: U followed by 32 characters.`);
         return { success: false, error: 'Invalid LineID format' };
       }
-
+      console.log('LINE push messages:', messages);
       // Ensure messages is an array
       const msgArray = Array.isArray(messages) ? messages : [messages];
       
@@ -255,7 +255,7 @@ class AbnormalFindingFlexService {
         to: lineUserId,
         messages: processedMessages,
       };
-
+      //console.log('LINE push payload:', payload);
       const res = await axios.post(
         `${this.apiBase}/push`,
         payload,

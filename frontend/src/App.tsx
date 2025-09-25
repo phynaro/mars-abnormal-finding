@@ -154,7 +154,7 @@ const AppContent: React.FC = () => {
           <Route index element={<Navigate to="/home" replace />} />
           <Route path="home" element={<HomePage />} />
           <Route path="dashboard" element={<Navigate to="/dashboard/abnormal" replace />} />
-          <Route path="dashboard/abnormal" element={<DashboardPage />} />
+          <Route path="dashboard/abnormal" element={<AbnormalReportDashboardV2Page />} />
           <Route path="dashboard/abnormal-v2" element={<AbnormalReportDashboardV2Page />} />
           <Route path="dashboard/maintenance-kpi" element={<DashboardMaintenanceKPIPage />} />
           <Route path="dashboard/preventive-maintenance" element={<DashboardPreventiveMaintenancePage />} />

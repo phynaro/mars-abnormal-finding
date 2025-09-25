@@ -38,7 +38,9 @@ import {
 } from "@/components/ui/select";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
+import { FileUpload } from "@/components/ui/file-upload";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import authService from "@/services/authService";
 import { formatTimelineTime, formatCommentTime } from "@/utils/timezone";
 import {
@@ -63,6 +65,7 @@ const TicketDetailsPage: React.FC = () => {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const { user } = useAuth();
+  const { t } = useLanguage();
   // Action modal hooks must be declared before any early returns
   type ActionType =
     | "accept"
@@ -141,11 +144,11 @@ const TicketDetailsPage: React.FC = () => {
       if (response.success) {
         setTicket(response.data);
       } else {
-        setError("Failed to fetch ticket details");
+        setError(t('ticket.failedToFetchTickets'));
       }
     } catch (err) {
       console.error("Error fetching ticket:", err);
-      setError("An error occurred while fetching ticket details");
+      setError(t('ticket.errorLoadingTickets'));
     } finally {
       setLoading(false);
     }
@@ -299,14 +302,14 @@ const TicketDetailsPage: React.FC = () => {
         <div className="text-center">
           <AlertTriangle className="mx-auto h-12 w-12 text-red-500 mb-4" />
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-            Ticket Not Found
+            {t('ticket.ticketNotFound')}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            {error || "The requested ticket could not be found."}
+            {error || t('ticket.ticketNotFoundDescription')}
           </p>
           <Button onClick={() => navigate("/tickets")} variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Tickets
+            {t('ticket.backToTickets')}
           </Button>
         </div>
       </div>
@@ -516,13 +519,13 @@ const TicketDetailsPage: React.FC = () => {
               (isAssignedUser || ticket.assigned_to == null) &&
               ticket.status === "open" && (
                 <Button onClick={() => openAction("accept")}>
-                  <CheckCircle2 className="mr-2 h-4 w-4" /> Accept
+                  <CheckCircle2 className="mr-2 h-4 w-4" /> {t('ticket.accept')}
                 </Button>
               )}
             {/* L3 Accept button - Only L3 can override L2 rejections */}
             {isL3Plus && ticket.status === "rejected_pending_l3_review" && (
               <Button onClick={() => openAction("accept")}>
-                <CheckCircle2 className="mr-2 h-4 w-4" /> Override & Accept
+                <CheckCircle2 className="mr-2 h-4 w-4" /> {t('ticket.overrideAccept')}
               </Button>
             )}
             {/* Reject button - L2 can reject open tickets, L3 can reject tickets in any status except rejected_final and closed */}
@@ -531,7 +534,7 @@ const TicketDetailsPage: React.FC = () => {
                 variant="destructive"
                 onClick={() => openAction("reject")}
               >
-                <XCircle className="mr-2 h-4 w-4" /> Reject
+                <XCircle className="mr-2 h-4 w-4" /> {t('ticket.reject')}
               </Button>
             )}
             {/* L3 Reject button - Only L3 can reject tickets in any status except rejected_final and closed */}
@@ -544,8 +547,8 @@ const TicketDetailsPage: React.FC = () => {
                 >
                   <XCircle className="mr-2 h-4 w-4" />
                   {ticket.status === "rejected_pending_l3_review"
-                    ? "Final Reject"
-                    : "Reject"}
+                    ? t('ticket.finalReject')
+                    : t('ticket.reject')}
                 </Button>
               )}
             {/* Complete and Escalate buttons - Only assigned L2 user can complete/escalate when ticket is in-progress or reopened_in_progress */}
@@ -555,22 +558,22 @@ const TicketDetailsPage: React.FC = () => {
                 ticket.status === "reopened_in_progress") && (
                 <>
                   <Button onClick={() => openAction("complete")}>
-                    Complete
+                    {t('ticket.complete')}
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => openAction("escalate")}
                   >
-                    Escalate
+                    {t('ticket.escalate')}
                   </Button>
                 </>
               )}
             {/* Close/Reopen buttons - Creator can close/reopen when ticket is completed */}
             {isCreator && ticket.status === "completed" && (
               <>
-                <Button onClick={() => openAction("close")}>Close</Button>
+                <Button onClick={() => openAction("close")}>{t('ticket.close')}</Button>
                 <Button variant="outline" onClick={() => openAction("reopen")}>
-                  Reopen
+                  {t('ticket.reopen')}
                 </Button>
               </>
             )}
@@ -582,7 +585,7 @@ const TicketDetailsPage: React.FC = () => {
                   variant="outline"
                   onClick={() => openAction("reassign")}
                 >
-                  Reassign
+                  {t('ticket.reassign')}
                 </Button>
               )}
           </>
@@ -595,7 +598,7 @@ const TicketDetailsPage: React.FC = () => {
             <CardHeader className="pb-4">
               <CardTitle className="flex items-center gap-2">
                 <Image className="h-5 w-5 text-red-500" />
-                Image Evidence
+                {t('ticket.imageEvidence')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -609,10 +612,10 @@ const TicketDetailsPage: React.FC = () => {
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm font-semibold text-red-700 dark:text-red-200">
                     <Image className="h-4 w-4" />
-                    <span>Before</span>
+                    <span>{t('ticket.before')}</span>
                   </div>
                   <Badge className="border-red-200 bg-white/70 text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
-                    {beforeImages.length} photo
+                    {beforeImages.length} {t('ticket.photo')}
                     {beforeImages.length === 1 ? "" : "s"}
                   </Badge>
                 </div>
@@ -622,7 +625,7 @@ const TicketDetailsPage: React.FC = () => {
                     beforeImages.map((img) => renderImageCard(img, "before"))
                   ) : (
                     <div className="col-span-full rounded-md border border-dashed border-red-200/70 bg-white/60 px-3 py-6 text-sm text-red-700 dark:border-red-500/50 dark:bg-transparent dark:text-red-200">
-                      No before images uploaded yet.
+                      {t('ticket.noBeforeImages')}
                     </div>
                   )}
                 </div>
@@ -639,19 +642,17 @@ const TicketDetailsPage: React.FC = () => {
                     onDrop={handleDrop("before")}
                   >
                     <p className="font-medium text-red-700 dark:text-red-200">
-                      Add problem evidence
+                      {t('ticket.addProblemEvidence')}
                     </p>
                     <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                      Drag & drop or choose files to upload.
+                      {t('ticket.dragDropOrChoose')}
                     </p>
-                    <Input
-                      className="mt-3"
-                      type="file"
+                    <FileUpload
                       accept="image/*"
                       multiple
-                      onChange={(e) =>
-                        setBeforeFiles(Array.from(e.target.files || []))
-                      }
+                      onChange={(files) => setBeforeFiles(Array.from(files || []))}
+                      className="mt-3"
+                      placeholder={t('ticket.chooseFiles')}
                     />
                     <div className="mt-3 flex flex-wrap justify-end gap-2">
                       <Button
@@ -660,10 +661,10 @@ const TicketDetailsPage: React.FC = () => {
                         onClick={() => handleImageUpload("before")}
                       >
                         {uploading
-                          ? "Uploading..."
+                          ? t('ticket.uploading')
                           : beforeFiles.length > 1
-                            ? `Upload ${beforeFiles.length} images`
-                            : "Upload image"}
+                            ? `${t('ticket.upload')} ${beforeFiles.length} ${t('ticket.images')}`
+                            : `${t('ticket.upload')} ${t('ticket.image')}`}
                       </Button>
                       {beforeFiles.length > 0 && (
                         <Button
@@ -672,7 +673,7 @@ const TicketDetailsPage: React.FC = () => {
                           onClick={() => setBeforeFiles([])}
                           disabled={uploading}
                         >
-                          Clear
+                          {t('common.clear')}
                         </Button>
                       )}
                     </div>
@@ -681,7 +682,7 @@ const TicketDetailsPage: React.FC = () => {
 
                 {!uploadAllowed && (
                   <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-                    Upload disabled for closed or rejected tickets.
+                    {t('ticket.uploadDisabled')}
                   </p>
                 )}
               </section>
@@ -697,10 +698,10 @@ const TicketDetailsPage: React.FC = () => {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2 text-sm font-semibold text-emerald-700 dark:text-emerald-200">
                       <Sparkles className="h-4 w-4" />
-                      <span>After</span>
+                      <span>{t('ticket.after')}</span>
                     </div>
                     <Badge className="border-emerald-200 bg-white/70 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-200">
-                      {afterImages.length} photo
+                      {afterImages.length} {t('ticket.photo')}
                       {afterImages.length === 1 ? "" : "s"}
                     </Badge>
                   </div>
@@ -710,7 +711,7 @@ const TicketDetailsPage: React.FC = () => {
                       afterImages.map((img) => renderImageCard(img, "after"))
                     ) : (
                       <div className="col-span-full rounded-md border border-dashed border-emerald-200/70 bg-white/60 px-3 py-6 text-sm text-emerald-700 dark:border-emerald-500/50 dark:bg-transparent dark:text-emerald-200">
-                        No after images uploaded yet.
+                        {t('ticket.noAfterImages')}
                       </div>
                     )}
                   </div>
@@ -727,19 +728,17 @@ const TicketDetailsPage: React.FC = () => {
                       onDrop={handleDrop("after")}
                     >
                       <p className="font-medium text-emerald-700 dark:text-emerald-200">
-                        Share improvement results
+                        {t('ticket.shareImprovementResults')}
                       </p>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                        Drag & drop or choose files to upload.
+                        {t('ticket.dragDropOrChoose')}
                       </p>
-                      <Input
-                        className="mt-3"
-                        type="file"
+                      <FileUpload
                         accept="image/*"
                         multiple
-                        onChange={(e) =>
-                          setAfterFiles(Array.from(e.target.files || []))
-                        }
+                        onChange={(files) => setAfterFiles(Array.from(files || []))}
+                        className="mt-3"
+                        placeholder={t('ticket.chooseFiles')}
                       />
                       <div className="mt-3 flex flex-wrap justify-end gap-2">
                         <Button
@@ -748,10 +747,10 @@ const TicketDetailsPage: React.FC = () => {
                           onClick={() => handleImageUpload("after")}
                         >
                           {uploading
-                            ? "Uploading..."
+                            ? t('ticket.uploading')
                             : afterFiles.length > 1
-                              ? `Upload ${afterFiles.length} images`
-                              : "Upload image"}
+                              ? `${t('ticket.upload')} ${afterFiles.length} ${t('ticket.images')}`
+                              : `${t('ticket.upload')} ${t('ticket.image')}`}
                         </Button>
                         {afterFiles.length > 0 && (
                           <Button
@@ -760,7 +759,7 @@ const TicketDetailsPage: React.FC = () => {
                             onClick={() => setAfterFiles([])}
                             disabled={uploading}
                           >
-                            Clear
+                            {t('common.clear')}
                           </Button>
                         )}
                       </div>
@@ -769,14 +768,13 @@ const TicketDetailsPage: React.FC = () => {
 
                   {!uploadAllowed && (
                     <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
-                      Upload disabled for closed or rejected tickets.
+                      {t('ticket.uploadDisabled')}
                     </p>
                   )}
                 </section>
               ) : (
                 <div className="rounded-lg border border-dashed border-emerald-200/80 bg-emerald-50/40 p-4 text-sm text-emerald-700 dark:border-emerald-500/50 dark:bg-emerald-950/20 dark:text-emerald-200">
-                  After gallery will unlock once this ticket is accepted or
-                  moves to in-progress.
+                  {t('ticket.afterGalleryUnlock')}
                 </div>
               )}
             </CardContent>
@@ -786,19 +784,19 @@ const TicketDetailsPage: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5" />
-                Comments {ticket.comments ? `(${ticket.comments.length})` : ""}
+                {t('ticket.comments')} {ticket.comments ? `(${ticket.comments.length})` : ""}
               </CardTitle>
             </CardHeader>
             <CardContent>
               {!isClosed && (
                 <div className="mb-6 space-y-3">
-                  <Label htmlFor="new-comment">Add Comment</Label>
+                  <Label htmlFor="new-comment">{t('ticket.addComment')}</Label>
                   <Textarea
                     id="new-comment"
                     rows={3}
                     value={commentText}
                     onChange={(e) => setCommentText(e.target.value)}
-                    placeholder="Share an update or ask a question..."
+                    placeholder={t('ticket.commentPlaceholder')}
                   />
                   <div className="flex justify-end gap-2">
                     {commentText.trim().length > 0 && (
@@ -808,7 +806,7 @@ const TicketDetailsPage: React.FC = () => {
                         size="sm"
                         onClick={() => setCommentText("")}
                       >
-                        Clear
+                        {t('common.clear')}
                       </Button>
                     )}
                     <Button
@@ -826,12 +824,12 @@ const TicketDetailsPage: React.FC = () => {
                           alert(
                             err instanceof Error
                               ? err.message
-                              : "Failed to add comment",
+                              : t('ticket.failedToAddComment'),
                           );
                         }
                       }}
                     >
-                      Post Comment
+                      {t('ticket.postComment')}
                     </Button>
                   </div>
                 </div>
@@ -893,7 +891,7 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
               ) : (
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  No comments yet.
+                  {t('ticket.noComments')}
                 </p>
               )}
             </CardContent>
@@ -903,12 +901,12 @@ const TicketDetailsPage: React.FC = () => {
         <div className="space-y-6 xl:col-span-5">
           <Card>
             <CardHeader>
-              <CardTitle>Ticket Information</CardTitle>
+              <CardTitle>{t('ticket.ticketInformation')}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-6 text-sm">
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Title
+                  {t('ticket.title')}
                 </p>
                 <p className="mt-1 text-base font-semibold text-gray-900 dark:text-gray-100">
                   {ticket.title}
@@ -916,7 +914,7 @@ const TicketDetailsPage: React.FC = () => {
               </div>
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Description
+                  {t('ticket.description')}
                 </p>
                 <p className="mt-1 text-sm leading-relaxed text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
                   {ticket.description}
@@ -936,7 +934,7 @@ const TicketDetailsPage: React.FC = () => {
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Status
+                    {t('ticket.status')}
                   </p>
                   <Badge
                     className={`mt-1 ${getTicketStatusClass(ticket.status)}`}
@@ -946,7 +944,7 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Priority
+                    {t('ticket.priority')}
                   </p>
                   <Badge
                     className={`mt-1 ${getTicketPriorityClass(ticket.priority)}`}
@@ -956,7 +954,7 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Severity
+                    {t('ticket.severity')}
                   </p>
                   <Badge
                     className={`mt-1 ${getTicketSeverityClass(ticket.severity_level)}`}
@@ -969,7 +967,7 @@ const TicketDetailsPage: React.FC = () => {
               <dl className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Reporter
+                    {t('ticket.reporter')}
                   </dt>
                   <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                     {ticket.reporter_name}
@@ -978,7 +976,7 @@ const TicketDetailsPage: React.FC = () => {
                 {ticket.assignee_name && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      Assigned To
+                      {t('ticket.assignedTo')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                       {ticket.assignee_name}
@@ -987,7 +985,7 @@ const TicketDetailsPage: React.FC = () => {
                 )}
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    Created
+                    {t('ticket.created')}
                   </dt>
                   <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                     {formatCommentTime(ticket.created_at).split(" ")[0]}
@@ -996,7 +994,7 @@ const TicketDetailsPage: React.FC = () => {
                 {ticket.scheduled_complete && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      Scheduled Complete
+                      {t('ticket.scheduledComplete')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                       {new Date(ticket.scheduled_complete).toLocaleDateString('th-TH')}
@@ -1006,7 +1004,7 @@ const TicketDetailsPage: React.FC = () => {
                 {ticket.cost_avoidance && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      Cost Avoidance
+                      {t('ticket.costAvoidance')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                       ${ticket.cost_avoidance.toFixed(2)}
@@ -1016,10 +1014,10 @@ const TicketDetailsPage: React.FC = () => {
                 {ticket.downtime_avoidance_hours && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      Downtime Avoidance
+                      {t('ticket.downtimeAvoidance')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                      {ticket.downtime_avoidance_hours} hours
+                      {ticket.downtime_avoidance_hours} {t('ticket.hours')}
                     </dd>
                   </div>
                 )}
@@ -1027,7 +1025,7 @@ const TicketDetailsPage: React.FC = () => {
 
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  Location
+                  {t('ticket.location')}
                 </p>
                 {locationHierarchy.length > 0 ? (
                   <div className="mt-2 grid gap-2">
@@ -1047,7 +1045,7 @@ const TicketDetailsPage: React.FC = () => {
                   </div>
                 ) : (
                   <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
-                    No location details recorded.
+                    {t('ticket.noLocationDetails')}
                   </p>
                 )}
               </div>
@@ -1059,7 +1057,7 @@ const TicketDetailsPage: React.FC = () => {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Clock className="h-5 w-5" />
-                Workflow Timeline
+                {t('ticket.workflowTimeline')}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -1092,8 +1090,8 @@ const TicketDetailsPage: React.FC = () => {
                     id: "created",
                     type: "created",
                     timestamp: ticket.created_at,
-                    title: "Ticket Created",
-                    description: `by ${ticket.reporter_name}`,
+                    title: t('ticket.ticketCreated'),
+                    description: `${t('ticket.by')} ${ticket.reporter_name}`,
                     icon: <Plus className="h-4 w-4" />,
                     iconBg: "bg-blue-100 dark:bg-blue-900",
                     iconColor: "text-blue-600 dark:text-blue-400",
@@ -1182,11 +1180,11 @@ const TicketDetailsPage: React.FC = () => {
                         statusChange.new_status === "assigned" &&
                         statusChange.to_user_name
                       ) {
-                        title = "Ticket Assigned";
-                        description = `to ${statusChange.to_user_name} by ${statusChange.changed_by_name}`;
+                        title = t('ticket.ticketAssigned');
+                        description = `${t('ticket.to')} ${statusChange.to_user_name} ${t('ticket.by')} ${statusChange.changed_by_name}`;
                       } else {
-                        title = `Status Changed to ${statusChange.new_status.replace("_", " ").toUpperCase()}`;
-                        description = `by ${statusChange.changed_by_name}`;
+                        title = `${t('ticket.statusChangedTo')} ${statusChange.new_status.replace("_", " ").toUpperCase()}`;
+                        description = `${t('ticket.by')} ${statusChange.changed_by_name}`;
                       }
 
                       timelineEvents.push({
@@ -1258,7 +1256,7 @@ const TicketDetailsPage: React.FC = () => {
                     )
                   }
                 >
-                  Prev
+                  {t('common.previous')}
                 </Button>
                 <Button
                   variant="outline"
@@ -1268,7 +1266,7 @@ const TicketDetailsPage: React.FC = () => {
                     )
                   }
                 >
-                  Next
+                  {t('common.next')}
                 </Button>
               </div>
             </div>
@@ -1286,12 +1284,12 @@ const TicketDetailsPage: React.FC = () => {
             <div className="space-y-2">
               <Label>
                 {actionType === "reject"
-                  ? "Rejection Reason *"
+                  ? t('ticket.rejectionReason')
                   : actionType === "close"
-                    ? "Close Reason"
+                    ? t('ticket.closeReason')
                     : actionType === "reopen"
-                      ? "Reopen Reason"
-                      : "Notes"}
+                      ? t('ticket.reopenReason')
+                      : t('ticket.notes')}
               </Label>
               <Textarea
                 rows={3}
@@ -1300,12 +1298,12 @@ const TicketDetailsPage: React.FC = () => {
                 required={actionType === "reject"}
               />
               {actionType === "reject" && !actionComment && (
-                <p className="text-xs text-red-500">Rejection reason is required</p>
+                <p className="text-xs text-red-500">{t('ticket.rejectionReasonRequired')}</p>
               )}
             </div>
             {actionType === "accept" && (
               <div className="space-y-2">
-                <Label>Scheduled Complete Date *</Label>
+                <Label>{t('ticket.scheduledCompleteDate')}</Label>
                 <Input
                   type="date"
                   value={scheduledComplete}
@@ -1313,14 +1311,14 @@ const TicketDetailsPage: React.FC = () => {
                   required
                 />
                 {!scheduledComplete && (
-                  <p className="text-xs text-red-500">Scheduled completion date is required</p>
+                  <p className="text-xs text-red-500">{t('ticket.scheduledCompleteDateRequired')}</p>
                 )}
               </div>
             )}
             {actionType === "complete" && (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Downtime Avoidance (hours) *</Label>
+                  <Label>{t('ticket.downtimeAvoidanceHours')}</Label>
                   <Input
                     type="number"
                     step="0.5"
@@ -1331,7 +1329,7 @@ const TicketDetailsPage: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Cost Avoidance (THB) *</Label>
+                  <Label>{t('ticket.costAvoidanceTHB')}</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -1342,14 +1340,14 @@ const TicketDetailsPage: React.FC = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Failure Mode *</Label>
+                  <Label>{t('ticket.failureMode')}</Label>
                   <Select
                     value={failureModeId}
                     onValueChange={setFailureModeId}
                     required
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select failure mode" />
+                      <SelectValue placeholder={t('ticket.selectFailureMode')} />
                     </SelectTrigger>
                     <SelectContent>
                       {failureModes.map((mode) => (
@@ -1364,7 +1362,7 @@ const TicketDetailsPage: React.FC = () => {
             )}
             {actionType === "close" && (
               <div className="space-y-2">
-                <Label>Satisfaction Rating (1-5)</Label>
+                <Label>{t('ticket.satisfactionRating')}</Label>
                 <Input
                   type="number"
                   min="1"
@@ -1376,7 +1374,7 @@ const TicketDetailsPage: React.FC = () => {
             )}
             {actionType === "reassign" && (
               <div className="space-y-2">
-                <Label>New Assignee *</Label>
+                <Label>{t('ticket.newAssignee')}</Label>
                 <div className="relative" ref={assigneeDropdownRef}>
                   <Input
                     value={assigneeQuery}
@@ -1385,18 +1383,18 @@ const TicketDetailsPage: React.FC = () => {
                       setAssigneeDropdownOpen(true);
                     }}
                     onFocus={() => setAssigneeDropdownOpen(true)}
-                    placeholder="Search L2/L3 user by name/email"
+                    placeholder={t('ticket.searchL2L3User')}
                     required
                   />
                   {assigneeDropdownOpen && (
                     <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
                       {assigneesLoading ? (
                         <div className="p-3 text-sm text-gray-500">
-                          Searching…
+                          {t('ticket.searching')}
                         </div>
                       ) : assignees.length === 0 ? (
                         <div className="p-3 text-sm text-gray-500">
-                          No users found
+                          {t('ticket.noUsersFound')}
                         </div>
                       ) : (
                         assignees.map((u) => (
@@ -1421,18 +1419,18 @@ const TicketDetailsPage: React.FC = () => {
                   )}
                 </div>
                 {!actionExtraId && (
-                  <p className="text-xs text-red-500">Please select a new assignee</p>
+                  <p className="text-xs text-red-500">{t('ticket.pleaseSelectNewAssignee')}</p>
                 )}
                 {actionExtraId && (
                   <div className="text-xs text-gray-600">
-                    Selected user ID: {actionExtraId}
+                    {t('ticket.selectedUserId')}: {actionExtraId}
                   </div>
                 )}
               </div>
             )}
             {actionType === "escalate" && (
               <div className="space-y-2">
-                <Label>Escalate To L3 User</Label>
+                <Label>{t('ticket.escalateToL3User')}</Label>
                 <div className="relative">
                   <Input
                     value={assigneeQuery}
@@ -1441,17 +1439,17 @@ const TicketDetailsPage: React.FC = () => {
                       setAssigneeDropdownOpen(true);
                     }}
                     onFocus={() => setAssigneeDropdownOpen(true)}
-                    placeholder="Search L3 user by name/email"
+                    placeholder={t('ticket.searchL3User')}
                   />
                   {assigneeDropdownOpen && (
                     <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
                       {assigneesLoading ? (
                         <div className="p-3 text-sm text-gray-500">
-                          Searching…
+                          {t('ticket.searching')}
                         </div>
                       ) : assignees.length === 0 ? (
                         <div className="p-3 text-sm text-gray-500">
-                          No L3 users found
+                          {t('ticket.noL3UsersFound')}
                         </div>
                       ) : (
                         assignees.map((u) => (
@@ -1477,7 +1475,7 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
                 {actionExtraId && (
                   <div className="text-xs text-gray-600">
-                    Selected L3 user ID: {actionExtraId}
+                    {t('ticket.selectedL3UserId')}: {actionExtraId}
                   </div>
                 )}
               </div>
@@ -1485,8 +1483,8 @@ const TicketDetailsPage: React.FC = () => {
             {actionType === "reject" && (
               <div className="text-sm text-gray-600">
                 {userApprovalLevel >= 3
-                  ? "This will be a final rejection."
-                  : "This rejection will be sent to L3 for review."}
+                  ? t('ticket.finalRejectionMessage')
+                  : t('ticket.rejectionL3ReviewMessage')}
               </div>
             )}
             <div className="flex justify-end gap-2">
@@ -1495,7 +1493,7 @@ const TicketDetailsPage: React.FC = () => {
                 onClick={() => setActionOpen(false)}
                 disabled={acting}
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 onClick={performAction}
@@ -1507,7 +1505,7 @@ const TicketDetailsPage: React.FC = () => {
                   (actionType === "escalate" && !actionExtraId)
                 }
               >
-                {acting ? "Working…" : "Confirm"}
+                {acting ? t('ticket.working') : t('common.confirm')}
               </Button>
             </div>
           </div>

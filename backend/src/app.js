@@ -113,6 +113,7 @@ const backlogRoutes = require('./routes/backlog');
 const hierarchyRoutes = require('./routes/hierarchy');
 const administrationRoutes = require('./routes/administration');
 const targetRoutes = require('./routes/target');
+const personalTargetRoutes = require('./routes/personalTarget');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -131,6 +132,7 @@ app.use('/api/backlog', backlogRoutes);
 app.use('/api/hierarchy', hierarchyRoutes);
 app.use('/api/administration', administrationRoutes);
 app.use('/api/targets', targetRoutes);
+app.use('/api/personal-targets', personalTargetRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

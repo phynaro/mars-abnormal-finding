@@ -16,6 +16,15 @@ router.get('/', requireFormPermission('TKT', 'view'), ticketController.getTicket
 // Get user-related pending tickets (requires TKT form view permission)
 router.get('/pending/user', requireFormPermission('TKT', 'view'), ticketController.getUserPendingTickets);
 
+// Get user ticket count per period for personal dashboard (requires TKT form view permission)
+router.get('/user/count-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserTicketCountPerPeriod);
+
+// Get user completed ticket count per period for personal dashboard (L2+ users only, requires TKT form view permission)
+router.get('/user/completed-count-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserCompletedTicketCountPerPeriod);
+
+// Get personal KPI data for personal dashboard (requires TKT form view permission)
+router.get('/user/personal-kpi', requireFormPermission('TKT', 'view'), ticketController.getPersonalKPIData);
+
 // Get failure modes (requires TKT form view permission)
 router.get('/failure-modes', requireFormPermission('TKT', 'view'), ticketController.getFailureModes);
 

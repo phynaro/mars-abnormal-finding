@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { UserPlus, Plus } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface ActionButton {
   label: string;
@@ -37,6 +38,8 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   showBackButton = false,
   onBack
 }) => {
+  const { t } = useLanguage();
+  
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-2">
@@ -47,13 +50,13 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
             onClick={onBack}
             className="flex items-center gap-2"
           >
-            ← Back
+            ← {t('common.back')}
           </Button>
         )}
         <div>
-          <h1 className="font-bold text-primary text-xl sm:text-3xl">{title}</h1>
+          <h1 className="font-bold text-xl sm:text-3xl">{title}</h1>
           {description && (
-            <p className="text-gray-600 mt-2 text-sm sm:text-base">{description}</p>
+            <p className="text-muted-foreground mt-2 text-sm sm:text-base">{description}</p>
           )}
         </div>
       </div>

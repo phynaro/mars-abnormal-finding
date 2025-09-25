@@ -19,6 +19,7 @@ import {
 import dashboardService, { type AbnormalFindingKPIResponse, type AreaData, type TicketsCountPerPeriodResponse, type AreaActivityResponse, type UserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse } from '@/services/dashboardService';
 import { KPITileSkeleton } from '@/components/ui/kpi-tile-skeleton';
 import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // Utility function for dynamic currency formatting
 const formatCurrencyDynamic = (amount: number): { display: string; tooltip: string } => {
@@ -268,6 +269,8 @@ const AvatarLabel = ({ data, maxAvatar = 28, clipPrefix = '' }: { data: any[], m
 
 
 const AbnormalReportDashboardV2Page: React.FC = () => {
+  const { t } = useLanguage();
+  
   // Global Filters
   const [timeFilter, setTimeFilter] = useState<string>('this-period');
   const [areaFilter, setAreaFilter] = useState<string>('all');
@@ -340,6 +343,34 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     return `${uploadsBase}${avatarUrl}`;
   }, []);
 
+  // Utility function to format date as YYYY-MM-DD in local timezone
+  const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Utility function to calculate period for a specific date (based on backend logic)
+  const calculatePeriodForDate = (date: Date, year: number) => {
+    const firstDayOfYear = new Date(year, 0, 1, 0, 0, 0, 0);
+    const firstSunday = new Date(firstDayOfYear);
+    
+    // Adjust to first Sunday
+    const dayOfWeek = firstDayOfYear.getDay();
+    const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+    firstSunday.setDate(firstDayOfYear.getDate() + daysToAdd);
+    
+    // Calculate period number (1-based)
+    const daysSinceFirstSunday = Math.floor((date.getTime() - firstSunday.getTime()) / (1000 * 60 * 60 * 24));
+    const periodNumber = Math.floor(daysSinceFirstSunday / 28) + 1;
+    
+    return {
+      period: periodNumber,
+      firstSunday
+    };
+  };
+
   // Utility function to get date range based on time filter
   const getDateRange = (timeFilter: string, year?: number, period?: number) => {
     const now = new Date();
@@ -347,37 +378,73 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     
     switch (timeFilter) {
       case 'this-year':
+        // For this-year, we need to find the first Sunday of the week containing New Year's Day
+        const newYearDay = new Date(currentYear, 0, 1); // January 1st
+        const firstSundayOfYear = new Date(newYearDay);
+        const dayOfWeek = newYearDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const daysToSubtract = dayOfWeek === 0 ? 0 : dayOfWeek; // Go back to Sunday
+        firstSundayOfYear.setDate(newYearDay.getDate() - daysToSubtract);
+        
+        // Calculate the end date (13 periods * 28 days = 364 days)
+        const yearEndDate = new Date(firstSundayOfYear);
+        yearEndDate.setDate(firstSundayOfYear.getDate() + 363); // 364 days - 1 (inclusive)
+        
         return {
-          startDate: `${currentYear}-01-01`,
-          endDate: `${currentYear}-12-31`,
+          startDate: formatLocalDate(firstSundayOfYear),
+          endDate: formatLocalDate(yearEndDate),
           compare_startDate: `${currentYear - 1}-01-01`,
           compare_endDate: `${currentYear - 1}-12-31`
         };
       case 'last-year':
+        // For last-year, we need to find the first Sunday of the week containing New Year's Day of the previous year
+        const lastYearNewYearDay = new Date(currentYear - 1, 0, 1); // January 1st of last year
+        const lastYearFirstSunday = new Date(lastYearNewYearDay);
+        const lastYearDayOfWeek = lastYearNewYearDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const lastYearDaysToSubtract = lastYearDayOfWeek === 0 ? 0 : lastYearDayOfWeek; // Go back to Sunday
+        lastYearFirstSunday.setDate(lastYearNewYearDay.getDate() - lastYearDaysToSubtract);
+        
+        // Calculate the end date (13 periods * 28 days = 364 days)
+        const lastYearEndDate = new Date(lastYearFirstSunday);
+        lastYearEndDate.setDate(lastYearFirstSunday.getDate() + 363); // 364 days - 1 (inclusive)
+        
         return {
-          startDate: `${currentYear - 1}-01-01`,
-          endDate: `${currentYear - 1}-12-31`,
+          startDate: formatLocalDate(lastYearFirstSunday),
+          endDate: formatLocalDate(lastYearEndDate),
           compare_startDate: `${currentYear - 2}-01-01`,
           compare_endDate: `${currentYear - 2}-12-31`
         };
       case 'this-period':
-        // For this-period, we'll use current month as a simple implementation
-        const currentMonth = now.getMonth() + 1;
-        const currentMonthStr = currentMonth.toString().padStart(2, '0');
-        const currentYearStr = now.getFullYear().toString();
+        // Calculate current 28-day period based on first Sunday of the year
+        const currentPeriodInfo = calculatePeriodForDate(now, currentYear);
+        const currentPeriod = currentPeriodInfo.period;
+        
+        // Calculate current period start and end dates
+        const currentPeriodStartDate = new Date(currentPeriodInfo.firstSunday);
+        currentPeriodStartDate.setDate(currentPeriodInfo.firstSunday.getDate() + (currentPeriod - 1) * 28);
+        
+        const currentPeriodEndDate = new Date(currentPeriodStartDate);
+        currentPeriodEndDate.setDate(currentPeriodStartDate.getDate() + 27); // 28 days - 1
+        
+        // Calculate previous period for comparison
+        const currentPrevPeriodStartDate = new Date(currentPeriodStartDate);
+        currentPrevPeriodStartDate.setDate(currentPeriodStartDate.getDate() - 28);
+        
+        const currentPrevPeriodEndDate = new Date(currentPrevPeriodStartDate);
+        currentPrevPeriodEndDate.setDate(currentPrevPeriodStartDate.getDate() + 27);
+        
         return {
-          startDate: `${currentYearStr}-${currentMonthStr}-01`,
-          endDate: `${currentYearStr}-${currentMonthStr}-${new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()}`,
-          compare_startDate: `${currentYearStr}-${(currentMonth - 1).toString().padStart(2, '0')}-01`,
-          compare_endDate: `${currentYearStr}-${(currentMonth - 1).toString().padStart(2, '0')}-${new Date(now.getFullYear(), now.getMonth(), 0).getDate()}`
+          startDate: formatLocalDate(currentPeriodStartDate),
+          endDate: formatLocalDate(currentPeriodEndDate),
+          compare_startDate: formatLocalDate(currentPrevPeriodStartDate),
+          compare_endDate: formatLocalDate(currentPrevPeriodEndDate)
         };
       case 'select-period':
         // For select-period, we'll use a simple 28-day period calculation
         const periodStart = new Date(currentYear, 0, 1);
         const firstSunday = new Date(periodStart);
-        const dayOfWeek = periodStart.getDay();
-        const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-        firstSunday.setDate(periodStart.getDate() + daysToAdd);
+        const selectPeriodDayOfWeek = periodStart.getDay();
+        const selectPeriodDaysToAdd = selectPeriodDayOfWeek === 0 ? 0 : 7 - selectPeriodDayOfWeek;
+        firstSunday.setDate(periodStart.getDate() + selectPeriodDaysToAdd);
         
         const periodStartDate = new Date(firstSunday);
         periodStartDate.setDate(firstSunday.getDate() + (period! - 1) * 28);
@@ -1037,7 +1104,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     const { kpis, summary } = kpiData;
     return [
       {
-        title: 'Total Tickets',
+        title: t('dashboard.totalTickets'),
         value: kpis.totalTicketsThisPeriod,
         change: summary.comparisonMetrics.ticketGrowthRate.percentage,
         changeDescription: summary.comparisonMetrics.ticketGrowthRate.description,
@@ -1046,7 +1113,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         color: 'text-blue-600 dark:text-blue-400'
       },
       {
-        title: 'Closed Tickets',
+        title: t('dashboard.closedTickets'),
         value: kpis.closedTicketsThisPeriod,
         change: summary.comparisonMetrics.closureRateImprovement.percentage,
         changeDescription: summary.comparisonMetrics.closureRateImprovement.description,
@@ -1055,17 +1122,17 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         color: 'text-green-600 dark:text-green-400'
       },
       {
-        title: 'Pending Tickets',
+        title: t('dashboard.pendingTickets'),
         value: kpis.pendingTicketsThisPeriod,
         change: kpis.pendingTicketsLastPeriod > 0 
           ? ((kpis.pendingTicketsThisPeriod - kpis.pendingTicketsLastPeriod) / kpis.pendingTicketsLastPeriod) * 100
           : kpis.pendingTicketsThisPeriod > 0 ? 100 : 0,
         changeDescription: kpis.pendingTicketsLastPeriod === 0 && kpis.pendingTicketsThisPeriod === 0 
-          ? 'No change (both periods had 0)' 
+          ? t('dashboard.noChange') + ' (both periods had 0)' 
           : kpis.pendingTicketsLastPeriod === 0 && kpis.pendingTicketsThisPeriod > 0
-          ? `New activity (0 → ${kpis.pendingTicketsThisPeriod})`
+          ? t('dashboard.newActivity') + ` (0 → ${kpis.pendingTicketsThisPeriod})`
           : kpis.pendingTicketsThisPeriod === 0 && kpis.pendingTicketsLastPeriod > 0
-          ? `Activity stopped (${kpis.pendingTicketsLastPeriod} → 0)`
+          ? t('dashboard.activityStopped') + ` (${kpis.pendingTicketsLastPeriod} → 0)`
           : `${((kpis.pendingTicketsThisPeriod - kpis.pendingTicketsLastPeriod) / kpis.pendingTicketsLastPeriod * 100).toFixed(1)}% change`,
         changeType: kpis.pendingTicketsLastPeriod === 0 && kpis.pendingTicketsThisPeriod === 0 
           ? 'no_change'
@@ -1078,8 +1145,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         color: 'text-orange-600 dark:text-orange-400'
       },
       {
-        title: 'Total Downtime Avoidance',
-        value: `${kpis.totalDowntimeAvoidanceThisPeriod.toFixed(1)} hrs`,
+        title: t('dashboard.totalDowntimeAvoidance'),
+        value: `${kpis.totalDowntimeAvoidanceThisPeriod.toFixed(1)} ${t('dashboard.hours')}`,
         change: summary.comparisonMetrics.downtimeAvoidanceGrowth.percentage,
         changeDescription: summary.comparisonMetrics.downtimeAvoidanceGrowth.description,
         changeType: summary.comparisonMetrics.downtimeAvoidanceGrowth.type,
@@ -1087,7 +1154,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         color: 'text-purple-600 dark:text-purple-400'
       },
       {
-        title: 'Total Cost Avoidance',
+        title: t('dashboard.totalCostAvoidance'),
         value: formatCurrencyDynamic(kpis.totalCostAvoidanceThisPeriod).display,
         tooltip: formatCurrencyDynamic(kpis.totalCostAvoidanceThisPeriod).tooltip,
         change: summary.comparisonMetrics.costAvoidanceGrowth.percentage,
@@ -1097,7 +1164,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         color: 'text-emerald-600 dark:text-emerald-400'
       }
     ];
-  }, [kpiData]);
+  }, [kpiData, t]);
 
   // Top Performers - Dynamic data from API
   const topPerformers: TopPerformer[] = useMemo(() => {
@@ -1109,25 +1176,25 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     const { topPerformers: apiTopPerformers } = kpiData;
     return [
       {
-        name: apiTopPerformers.topReporter?.personName || 'No Data',
-        value: apiTopPerformers.topReporter ? `${apiTopPerformers.topReporter.ticketCount} tickets` : '0 tickets',
-        department: 'Reporter',
+        name: apiTopPerformers.topReporter?.personName || t('dashboard.noData'),
+        value: apiTopPerformers.topReporter ? `${apiTopPerformers.topReporter.ticketCount} ${t('dashboard.tickets')}` : `0 ${t('dashboard.tickets')}`,
+        department: t('dashboard.topReporter'),
         avatar: getAvatarUrl(apiTopPerformers.topReporter?.avatarUrl)
       },
       {
-        name: apiTopPerformers.topCostSaver?.personName || 'No Data',
-        value: apiTopPerformers.topCostSaver ? `฿${(apiTopPerformers.topCostSaver.totalSavings! / 1000).toFixed(0)}K saved` : '฿0 saved',
-        department: 'Cost Saver',
+        name: apiTopPerformers.topCostSaver?.personName || t('dashboard.noData'),
+        value: apiTopPerformers.topCostSaver ? `฿${(apiTopPerformers.topCostSaver.totalSavings! / 1000).toFixed(0)}K ${t('dashboard.costAvoided')}` : `฿0 ${t('dashboard.costAvoided')}`,
+        department: t('dashboard.topCostSaver'),
         avatar: getAvatarUrl(apiTopPerformers.topCostSaver?.avatarUrl)
       },
       {
-        name: apiTopPerformers.topDowntimeSaver?.personName || 'No Data',
-        value: apiTopPerformers.topDowntimeSaver ? `${apiTopPerformers.topDowntimeSaver.totalDowntimeSaved!.toFixed(1)} hrs saved` : '0 hrs saved',
-        department: 'Downtime Saver',
+        name: apiTopPerformers.topDowntimeSaver?.personName || t('dashboard.noData'),
+        value: apiTopPerformers.topDowntimeSaver ? `${apiTopPerformers.topDowntimeSaver.totalDowntimeSaved!.toFixed(1)} ${t('dashboard.hoursSaved')}` : `0 ${t('dashboard.hoursSaved')}`,
+        department: t('dashboard.topDowntimeSaver'),
         avatar: getAvatarUrl(apiTopPerformers.topDowntimeSaver?.avatarUrl)
       }
     ];
-  }, [kpiData, getAvatarUrl]);
+  }, [kpiData, getAvatarUrl, t]);
 
   // Participation Charts - Use real API data
   const participationChartData = useMemo(() => {
@@ -1319,7 +1386,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   }, [timeFilter, selectedYear, selectedPeriod]);
 
   return (
-    <div className="space-y-6 p-6">
+    <div className="space-y-4 p-4">
       <style>{`
         .calendar-heatmap-container {
           overflow-x: auto;
@@ -1373,37 +1440,58 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Abnormal Report Dashboard</h1>
-          <p className="text-muted-foreground">
-            Enhanced abnormal finding reporting and analytics dashboard
-          </p>
+          <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.abnormalReport')}</h1>
         </div>
-        <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
-          <DialogTrigger asChild>
-            <Button variant="outline" className="flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              Filters
-            </Button>
-          </DialogTrigger>
+        <div className="flex items-center gap-3">
+          {/* Compact Date Range Display */}
+          <div className="text-sm">
+            <div className="flex items-center gap-2">
+              <span className="text-muted-foreground">{t('dashboard.range')}:</span>
+              <span className="text-foreground font-medium">
+                {(() => {
+                  const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+                  return `${dateRange.startDate} - ${dateRange.endDate}`;
+                })()}
+              </span>
+              {(timeFilter === 'this-period' || timeFilter === 'select-period') && (
+                <span className="text-xs text-muted-foreground">
+                  {timeFilter === 'this-period' 
+                    ? (() => {
+                        const currentPeriodInfo = calculatePeriodForDate(new Date(), selectedYear);
+                        return `P${currentPeriodInfo.period}`;
+                      })()
+                    : `P${selectedPeriod}`
+                  }
+                </span>
+              )}
+            </div>
+          </div>
+          <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline" className="flex items-center gap-2">
+                <Filter className="h-4 w-4" />
+                {t('dashboard.filters')}
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <BarChart3 className="h-5 w-5" />
-                Global Filters
+                {t('dashboard.globalFilters')}
               </DialogTitle>
             </DialogHeader>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
-                <label className="text-sm font-medium">Time Range</label>
+                <label className="text-sm font-medium">{t('dashboard.timeRange')}</label>
                 <Select value={timeFilter} onValueChange={setTimeFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select time range" />
+                    <SelectValue placeholder={t('dashboard.selectPeriod')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="this-year">This Year</SelectItem>
-                    <SelectItem value="last-year">Last Year</SelectItem>
-                    <SelectItem value="this-period">This Period</SelectItem>
-                    <SelectItem value="select-period">Select Period</SelectItem>
+                    <SelectItem value="this-year">{t('dashboard.thisYear')}</SelectItem>
+                    <SelectItem value="last-year">{t('dashboard.lastYear')}</SelectItem>
+                    <SelectItem value="this-period">{t('dashboard.thisPeriod')}</SelectItem>
+                    <SelectItem value="select-period">{t('dashboard.selectPeriod')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -1411,7 +1499,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               {timeFilter === 'select-period' && (
                 <>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Year</label>
+                    <label className="text-sm font-medium">{t('dashboard.year')}</label>
                     <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
                       <SelectTrigger>
                         <SelectValue />
@@ -1425,7 +1513,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     </Select>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-medium">Period</label>
+                    <label className="text-sm font-medium">{t('dashboard.period')}</label>
                     <Select value={selectedPeriod.toString()} onValueChange={(value) => setSelectedPeriod(parseInt(value))}>
                       <SelectTrigger>
                         <SelectValue />
@@ -1441,13 +1529,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Area</label>
+                <label className="text-sm font-medium">{t('dashboard.area')}</label>
                 <Select value={areaFilter} onValueChange={setAreaFilter}>
                   <SelectTrigger>
-                    <SelectValue placeholder={areasLoading ? "Loading areas..." : "Select area"} />
+                    <SelectValue placeholder={areasLoading ? t('dashboard.loadingAreas') : t('dashboard.area')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Areas</SelectItem>
+                    <SelectItem value="all">{t('dashboard.allAreas')}</SelectItem>
                     {areas.map(area => (
                       <SelectItem key={area.id} value={area.id.toString()}>
                         {area.name} {area.plant_name && `(${area.plant_name})`}
@@ -1459,11 +1547,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             </div>
             <div className="flex justify-end gap-2 pt-4 border-t">
               <Button variant="outline" onClick={() => setIsFilterModalOpen(false)}>
-                Close
+                {t('dashboard.close')}
               </Button>
             </div>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Error Message */}
@@ -1472,7 +1561,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           <CardContent className="p-4">
             <div className="flex items-center gap-2 text-red-800">
               <AlertTriangle className="h-4 w-4" />
-              <span className="font-medium">Error loading data:</span>
+              <span className="font-medium">{t('dashboard.errorLoadingData')}</span>
               <span>{error}</span>
             </div>
           </CardContent>
@@ -1487,7 +1576,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         ) : (
           kpiTiles.map((kpi, index) => (
             <Card key={index}>
-              <CardContent className="p-6">
+              <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">{kpi.title}</p>
@@ -1524,9 +1613,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                           kpi.changeType === 'no_change' ? 'text-gray-400' :
                           kpi.change > 0 ? 'text-green-500' : 'text-red-500'
                         }`}>
-                          {kpi.changeType === 'no_change' ? 'No change' :
-                           kpi.changeType === 'new_activity' ? 'New activity' :
-                           kpi.changeType === 'activity_stopped' ? 'Stopped' :
+                          {kpi.changeType === 'no_change' ? t('dashboard.noChange') :
+                           kpi.changeType === 'new_activity' ? t('dashboard.newActivity') :
+                           kpi.changeType === 'activity_stopped' ? t('dashboard.activityStopped') :
                            `${Math.abs(kpi.change).toFixed(1)}%`}
                         </span>
                       </div>
@@ -1557,7 +1646,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <User className="h-5 w-5" />
-                  Top Reporter
+                  {t('dashboard.topReporter')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1567,8 +1656,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <AvatarFallback>{topPerformers[0]?.name?.split(' ').map(n => n[0]).join('') || 'N/A'}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{topPerformers[0]?.name || 'No Data'}</p>
-                    <p className="text-lg font-bold text-blue-600">{topPerformers[0]?.value || '0 tickets'}</p>
+                    <p className="font-medium">{topPerformers[0]?.name || t('dashboard.noData')}</p>
+                    <p className="text-lg font-bold text-blue-600">{topPerformers[0]?.value || `0 ${t('dashboard.tickets')}`}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1578,7 +1667,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Award className="h-5 w-5" />
-                  Top Cost Saver
+                  {t('dashboard.topCostSaver')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1588,8 +1677,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <AvatarFallback>{topPerformers[1]?.name?.split(' ').map(n => n[0]).join('') || 'N/A'}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{topPerformers[1]?.name || 'No Data'}</p>
-                    <p className="text-lg font-bold text-emerald-600">{topPerformers[1]?.value || '฿0 saved'}</p>
+                    <p className="font-medium">{topPerformers[1]?.name || t('dashboard.noData')}</p>
+                    <p className="text-lg font-bold text-emerald-600">{topPerformers[1]?.value || `฿0 ${t('dashboard.costAvoided')}`}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1599,7 +1688,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="h-5 w-5" />
-                  Top Downtime Saver
+                  {t('dashboard.topDowntimeSaver')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -1609,8 +1698,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <AvatarFallback>{topPerformers[2]?.name?.split(' ').map(n => n[0]).join('') || 'N/A'}</AvatarFallback>
                   </Avatar>
                   <div>
-                    <p className="font-medium">{topPerformers[2]?.name || 'No Data'}</p>
-                    <p className="text-lg font-bold text-purple-600">{topPerformers[2]?.value || '0 hrs saved'}</p>
+                    <p className="font-medium">{topPerformers[2]?.name || t('dashboard.noData')}</p>
+                    <p className="text-lg font-bold text-purple-600">{topPerformers[2]?.value || `0 ${t('dashboard.hoursSaved')}`}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1621,13 +1710,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
       {/* Participation Charts */}
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Participation</h2>
+        <h2 className="text-2xl font-bold">{t('dashboard.participation')}</h2>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Total Tickets Count Per Period */}
           <Card>
             <CardHeader>
-              <CardTitle>Total Tickets Count Per Period</CardTitle>
+              <CardTitle>{t('dashboard.totalTicketsCountPerPeriod')}</CardTitle>
             </CardHeader>
             <CardContent>
               {participationLoading ? (
@@ -1642,8 +1731,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <YAxis />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar dataKey="tickets" fill="#8884d8" name="Tickets" />
-                    <Line type="monotone" dataKey="target" stroke="#82ca9d" name="Target" />
+                    <Bar dataKey="tickets" fill="#8884d8" name={t('dashboard.tickets')} />
+                    <Line type="monotone" dataKey="target" stroke="#82ca9d" name={t('dashboard.target')} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -1653,7 +1742,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Unique Reporter & Coverage Rate */}
           <Card>
             <CardHeader>
-              <CardTitle>Unique Reporter & Coverage Rate</CardTitle>
+              <CardTitle>{t('dashboard.uniqueReporterCoverageRate')}</CardTitle>
             </CardHeader>
             <CardContent>
               {participationLoading ? (
@@ -1669,8 +1758,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <YAxis yAxisId="right" orientation="right" />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar yAxisId="left" dataKey="uniqueReporters" fill="#8884d8" name="Unique Reporters" />
-                    <Bar yAxisId="right" dataKey="coverageRate" fill="#82ca9d" name="Coverage Rate (%)" />
+                    <Bar yAxisId="left" dataKey="uniqueReporters" fill="#8884d8" name={t('dashboard.uniqueReporters')} />
+                    <Bar yAxisId="right" dataKey="coverageRate" fill="#82ca9d" name={t('dashboard.coverageRate')} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -1682,7 +1771,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Who Active (Area) */}
           <Card>
             <CardHeader>
-              <CardTitle>Who Active (Area) - Top 10</CardTitle>
+              <CardTitle>{t('dashboard.whoActiveArea')}</CardTitle>
             </CardHeader>
             <CardContent>
               {areaActivityLoading ? (
@@ -1721,9 +1810,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           }}>
             <CardHeader>
               <CardTitle className="flex items-center justify-between">
-                <span>Who Active (User) - Top 10</span>
+                <span>{t('dashboard.whoActiveUser')}</span>
                 <div className="text-sm text-muted-foreground hover:text-blue-600 transition-colors">
-                  Click to expand →
+                  {t('dashboard.clickToExpand')}
                 </div>
               </CardTitle>
             </CardHeader>
@@ -1787,7 +1876,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         {/* When Active - Calendar Heatmap */}
         <Card>
           <CardHeader>
-            <CardTitle>When Active - Calendar Heatmap ({calendarHeatmapYear})</CardTitle>
+            <CardTitle>{t('dashboard.whenActive')} ({calendarHeatmapYear})</CardTitle>
           </CardHeader>
           <CardContent>
             {calendarHeatmapLoading ? (
@@ -1815,12 +1904,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     if (value.count <= 17) return 'color-scale-9';
                     return 'color-scale-10';
                   }}
-                  titleForValue={(value) => value ? `${value.date}: ${value.count} tickets` : 'No data'}
+                  titleForValue={(value) => value ? `${value.date}: ${value.count} ${t('dashboard.ticketsOnDate')}` : t('dashboard.noDataAvailable')}
                   showWeekdayLabels={true}
                   showMonthLabels={true}
                   onClick={(value) => {
                     if (value) {
-                      console.log(`Clicked on ${value.date}: ${value.count} tickets`);
+                      console.log(`${t('dashboard.clickedOn')} ${value.date}: ${value.count} ${t('dashboard.ticketsOnDate')}`);
                     }
                   }}
                 />
@@ -1849,13 +1938,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
       {/* Impact and Value Charts */}
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Impact and Value</h2>
+        <h2 className="text-2xl font-bold">{t('dashboard.impactAndValue')}</h2>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Downtime Avoidance Trend */}
           <Card>
             <CardHeader>
-              <CardTitle>Downtime Avoidance Trend</CardTitle>
+              <CardTitle>{t('dashboard.downtimeAvoidanceTrend')}</CardTitle>
             </CardHeader>
             <CardContent>
               {downtimeTrendLoading ? (
@@ -1893,7 +1982,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Cost Avoidance */}
           <Card>
             <CardHeader>
-              <CardTitle>Cost Avoidance</CardTitle>
+              <CardTitle>{t('dashboard.costAvoidance')}</CardTitle>
             </CardHeader>
             <CardContent>
               {costAvoidanceLoading ? (
@@ -1909,8 +1998,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <YAxis yAxisId="right" orientation="right" />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar yAxisId="left" dataKey="costAvoidance" fill="#8884d8" name="Cost Avoidance (THB)" />
-                    <Line yAxisId="right" type="monotone" dataKey="costPerCase" stroke="#82ca9d" name="Cost per Case (THB/Case)" />
+                    <Bar yAxisId="left" dataKey="costAvoidance" fill="#8884d8" name={t('dashboard.costAvoidanceTHB')} />
+                    <Line yAxisId="right" type="monotone" dataKey="costPerCase" stroke="#82ca9d" name={t('dashboard.costPerCase')} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -1922,7 +2011,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Downtime Impact Leaderboard (Area) */}
           <Card>
             <CardHeader>
-              <CardTitle>Downtime Impact Leaderboard (Area)</CardTitle>
+              <CardTitle>{t('dashboard.downtimeImpactLeaderboardArea')}</CardTitle>
             </CardHeader>
             <CardContent>
               {downtimeImpactLoading ? (
@@ -1946,7 +2035,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Cost Impact Leaderboard (Area) */}
           <Card>
             <CardHeader>
-              <CardTitle>Cost Impact Leaderboard (Area)</CardTitle>
+              <CardTitle>{t('dashboard.costImpactLeaderboardArea')}</CardTitle>
             </CardHeader>
             <CardContent>
               {costImpactLoading ? (
@@ -1972,7 +2061,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Downtime Impact Leaderboard (Reporter) */}
           <Card>
             <CardHeader>
-              <CardTitle>Downtime Impact Leaderboard (Reporter) - Top 10</CardTitle>
+              <CardTitle>{t('dashboard.downtimeImpactLeaderboardReporter')}</CardTitle>
             </CardHeader>
             <CardContent>
               {downtimeImpactReporterLoading ? (
@@ -2031,7 +2120,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Cost Impact Leaderboard (Reporter) */}
           <Card>
             <CardHeader>
-              <CardTitle>Cost Impact Leaderboard (Reporter) - Top 10</CardTitle>
+              <CardTitle>{t('dashboard.costImpactLeaderboardReporter')}</CardTitle>
             </CardHeader>
             <CardContent>
               {costImpactReporterLoading ? (
@@ -2094,7 +2183,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Downtime Impact by Failure Mode */}
           <Card>
             <CardHeader>
-              <CardTitle>Downtime Impact by Failure Mode</CardTitle>
+              <CardTitle>{t('dashboard.downtimeImpactByFailureMode')}</CardTitle>
             </CardHeader>
             <CardContent>
               {downtimeByFailureModeLoading ? (
@@ -2115,19 +2204,19 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <YAxis 
                       yAxisId="downtime"
                       orientation="left"
-                      label={{ value: 'Downtime Hours', angle: -90, position: 'insideLeft' }}
+                      label={{ value: t('dashboard.downtimeHours'), angle: -90, position: 'insideLeft' }}
                     />
                     <YAxis 
                       yAxisId="cases"
                       orientation="right"
-                      label={{ value: 'Case Count', angle: 90, position: 'insideRight' }}
+                      label={{ value: t('dashboard.caseCount'), angle: 90, position: 'insideRight' }}
                     />
                     <RechartsTooltip 
                       formatter={(value, name) => {
                         if (name === 'downtime') {
-                          return [`${value} hours`, 'Downtime Hours'];
+                          return [`${value} ${t('dashboard.hours')}`, t('dashboard.downtimeHours')];
                         } else if (name === 'caseCount') {
-                          return [`${value} cases`, 'Case Count'];
+                          return [`${value} ${t('dashboard.caseCount')}`, t('dashboard.caseCount')];
                         }
                         return [value, name];
                       }}
@@ -2143,7 +2232,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       yAxisId="downtime"
                       dataKey="downtime" 
                       fill="#8884d8" 
-                      name="Downtime Hours"
+                      name={t('dashboard.downtimeHours')}
                     />
                     <Line 
                       yAxisId="cases"
@@ -2151,7 +2240,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       dataKey="caseCount" 
                       stroke="#82ca9d" 
                       strokeWidth={3}
-                      name="Case Count"
+                      name={t('dashboard.caseCount')}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -2162,7 +2251,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {/* Cost Impact by Failure Mode */}
           <Card>
             <CardHeader>
-              <CardTitle>Cost Impact by Failure Mode</CardTitle>
+              <CardTitle>{t('dashboard.costImpactByFailureMode')}</CardTitle>
             </CardHeader>
             <CardContent>
               {costByFailureModeLoading ? (
@@ -2183,22 +2272,22 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <YAxis 
                       yAxisId="cost"
                       orientation="left"
-                      label={{ value: 'Cost Avoidance (฿)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
+                      label={{ value: t('dashboard.costAvoidanceTHB'), angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' } }}
                       tickFormatter={(value) => `฿${(value / 1000).toFixed(0)}K`}
                       width={80}
                     />
                     <YAxis 
                       yAxisId="cases"
                       orientation="right"
-                      label={{ value: 'Case Count', angle: 90, position: 'insideRight', style: { textAnchor: 'middle' } }}
+                      label={{ value: t('dashboard.caseCount'), angle: 90, position: 'insideRight', style: { textAnchor: 'middle' } }}
                       width={60}
                     />
                     <RechartsTooltip 
                       formatter={(value, name) => {
                         if (name === 'cost') {
-                          return [`฿${Number(value).toLocaleString()}`, 'Cost Avoidance'];
+                          return [`฿${Number(value).toLocaleString()}`, t('dashboard.costAvoidance')];
                         } else if (name === 'caseCount') {
-                          return [`${value} cases`, 'Case Count'];
+                          return [`${value} ${t('dashboard.caseCount')}`, t('dashboard.caseCount')];
                         }
                         return [value, name];
                       }}
@@ -2214,7 +2303,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       yAxisId="cost"
                       dataKey="cost" 
                       fill="#82ca9d" 
-                      name="Cost Avoidance"
+                      name={t('dashboard.costAvoidance')}
                     />
                     <Line 
                       yAxisId="cases"
@@ -2222,7 +2311,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       dataKey="caseCount" 
                       stroke="#8884d8" 
                       strokeWidth={3}
-                      name="Case Count"
+                      name={t('dashboard.caseCount')}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -2234,14 +2323,14 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
       {/* Speed Charts */}
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold">Speed</h2>
+        <h2 className="text-2xl font-bold">{t('dashboard.speed')}</h2>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Ticket Average Resolve Duration */}
           {areaFilter === 'all' && (
             <Card>
               <CardHeader>
-                <CardTitle>Ticket Average Resolve Duration/Case</CardTitle>
+                <CardTitle>{t('dashboard.ticketAverageResolveDuration')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {resolveDurationByAreaLoading ? (
@@ -2255,7 +2344,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: 'Hours', position: 'insideBottom', offset: -5 }}
+                        label={{ value: t('dashboard.hours'), position: 'insideBottom', offset: -5 }}
                         tickFormatter={(value) => `${value}h`}
                       />
                       <YAxis 
@@ -2266,9 +2355,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <RechartsTooltip 
                         formatter={(value, name) => {
                           if (name === 'avgResolveHours') {
-                            return [`${value} hours`, 'Average Resolve Time'];
+                            return [`${value} ${t('dashboard.hours')}`, t('dashboard.averageResolveTime')];
                           } else if (name === 'ticketCount') {
-                            return [`${value} tickets`, 'Ticket Count'];
+                            return [`${value} ${t('dashboard.tickets')}`, t('dashboard.ticketCount')];
                           }
                           return [value, name];
                         }}
@@ -2278,7 +2367,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <Bar 
                         dataKey="avgResolveHours" 
                         fill="#8884d8" 
-                        name="Average Resolve Time"
+                        name={t('dashboard.averageResolveTime')}
                       />
                     </BarChart>
                   </ResponsiveContainer>
@@ -2291,7 +2380,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {areaFilter !== 'all' && (
             <Card>
               <CardHeader>
-                <CardTitle>Ticket Average Resolve Duration/Case (By User)</CardTitle>
+                <CardTitle>{t('dashboard.ticketAverageResolveDurationByUser')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {resolveDurationByUserLoading ? (
@@ -2348,7 +2437,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {areaFilter === 'all' && (
             <Card>
               <CardHeader>
-                <CardTitle>Ontime Rate (By Area)</CardTitle>
+                <CardTitle>{t('dashboard.ontimeRateByArea')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {ontimeRateByAreaLoading ? (
@@ -2362,7 +2451,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: 'Percentage (%)', position: 'insideBottom', offset: -5 }}
+                        label={{ value: t('dashboard.percentage'), position: 'insideBottom', offset: -5 }}
                         tickFormatter={(value) => `${value}%`}
                         domain={[0, 100]}
                       />
@@ -2374,11 +2463,11 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <RechartsTooltip 
                         formatter={(value, name) => {
                           if (name === 'ontimeRate') {
-                            return [`${value}%`, 'Ontime Rate'];
+                            return [`${value}%`, t('dashboard.ontimeRate')];
                           } else if (name === 'totalCompleted') {
-                            return [`${value} tickets`, 'Total Completed'];
+                            return [`${value} ${t('dashboard.tickets')}`, t('dashboard.totalCompleted')];
                           } else if (name === 'ontimeCompleted') {
-                            return [`${value} tickets`, 'Ontime Completed'];
+                            return [`${value} ${t('dashboard.tickets')}`, t('dashboard.ontimeCompleted')];
                           }
                           return [value, name];
                         }}
@@ -2388,7 +2477,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <Bar 
                         dataKey="ontimeRate" 
                         fill="#82ca9d" 
-                        name="Ontime Rate"
+                        name={t('dashboard.ontimeRate')}
                       />
                     </BarChart>
                   </ResponsiveContainer>
@@ -2401,7 +2490,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           {areaFilter !== 'all' && (
             <Card>
               <CardHeader>
-                <CardTitle>Ontime Rate (By User)</CardTitle>
+                <CardTitle>{t('dashboard.ontimeRateByUser')}</CardTitle>
               </CardHeader>
               <CardContent>
                 {ontimeRateByUserLoading ? (

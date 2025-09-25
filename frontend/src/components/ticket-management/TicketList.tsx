@@ -25,6 +25,8 @@ import {
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, TicketFilters } from "@/services/ticketService";
 import { useToast } from "@/hooks/useToast";
+import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 // Removed ViewTicketModal per requirement
 import {
   Dialog,
@@ -42,12 +44,19 @@ import {
 
 export const TicketList: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
+  const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalTickets, setTotalTickets] = useState(0);
   const { toast } = useToast();
+
+  // Helper function to check if user is L3/Admin (permission level 3 or higher)
+  const isL3User = () => {
+    return (user?.permissionLevel || 0) >= 3;
+  };
 
   // Modal states
   // Removed view modal state
@@ -72,9 +81,9 @@ export const TicketList: React.FC = () => {
       setCurrentPage(response.data.pagination.page);
     } catch (error) {
       toast({
-        title: "Error",
+        title: t('common.error'),
         description:
-          error instanceof Error ? error.message : "Failed to fetch tickets",
+          error instanceof Error ? error.message : t('ticket.failedToFetchTickets'),
         variant: "destructive",
       });
     } finally {
@@ -99,23 +108,23 @@ export const TicketList: React.FC = () => {
   };
 
   const handleDeleteTicket = async (ticketId: number) => {
-    if (!confirm("Are you sure you want to delete this ticket?")) {
+    if (!confirm(t('ticket.deleteConfirm'))) {
       return;
     }
 
     try {
       await ticketService.deleteTicket(ticketId);
       toast({
-        title: "Success",
-        description: "Ticket deleted successfully",
+        title: t('common.success'),
+        description: t('ticket.ticketDeletedSuccess'),
         variant: "default",
       });
       fetchTickets();
     } catch (error) {
       toast({
-        title: "Error",
+        title: t('common.error'),
         description:
-          error instanceof Error ? error.message : "Failed to delete ticket",
+          error instanceof Error ? error.message : t('ticket.failedToDeleteTicket'),
         variant: "destructive",
       });
     }
@@ -143,32 +152,32 @@ export const TicketList: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 py-6">
       {/* Options Bar (filters, export) */}
       <div className="flex items-center justify-between gap-2">
         <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          Tickets ({totalTickets})
+          {t('nav.tickets')} ({totalTickets})
         </div>
         <div className="flex items-center gap-2">
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" title="Filters">
+              <Button variant="outline" size="sm" title={t('ticket.filterByStatus')}>
                 <Filter className="h-4 w-4" />
-                <span className="ml-2 hidden sm:inline">Filters</span>
+                <span className="ml-2 hidden sm:inline">{t('homepage.filters')}</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl bg-white dark:bg-gray-900 dark:text-gray-100">
+            <DialogContent className="max-w-3xl dark:text-gray-100">
               <DialogHeader>
-                <DialogTitle>Filter Tickets</DialogTitle>
+                <DialogTitle>{t('ticket.filterByStatus')}</DialogTitle>
               </DialogHeader>
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="search">Search</Label>
+                  <Label htmlFor="search">{t('common.search')}</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
                     <Input
                       id="search"
-                      placeholder="Search tickets..."
+                      placeholder={t('ticket.searchTickets')}
                       value={filters.search || ""}
                       onChange={(e) =>
                         handleFilterChange("search", e.target.value)
@@ -178,21 +187,21 @@ export const TicketList: React.FC = () => {
                   </div>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="status">Status</Label>
+                  <Label htmlFor="status">{t('ticket.status')}</Label>
                   <Select
                     value={filters.status || ""}
                     onValueChange={(v) => handleFilterChange("status", v)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="All Statuses" />
+                      <SelectValue placeholder={t('ticket.allStatuses')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value=" ">All Statuses</SelectItem>
-                      <SelectItem value="open">Open</SelectItem>
-                      <SelectItem value="assigned">Assigned</SelectItem>
-                      <SelectItem value="in_progress">In Progress</SelectItem>
-                      <SelectItem value="resolved">Resolved</SelectItem>
-                      <SelectItem value="closed">Closed</SelectItem>
+                      <SelectItem value=" ">{t('ticket.allStatuses')}</SelectItem>
+                      <SelectItem value="open">{t('ticket.open')}</SelectItem>
+                      <SelectItem value="assigned">{t('ticket.assigned')}</SelectItem>
+                      <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
+                      <SelectItem value="resolved">{t('ticket.resolved')}</SelectItem>
+                      <SelectItem value="closed">{t('ticket.closed')}</SelectItem>
                       <SelectItem value="rejected_pending_l3_review">
                         Rejected (L3 Review)
                       </SelectItem>
@@ -208,25 +217,25 @@ export const TicketList: React.FC = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="priority">Priority</Label>
+                  <Label htmlFor="priority">{t('ticket.priority')}</Label>
                   <Select
                     value={filters.priority || ""}
                     onValueChange={(v) => handleFilterChange("priority", v)}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="All Priorities" />
+                      <SelectValue placeholder={t('ticket.allPriorities')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value=" ">All Priorities</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
+                      <SelectItem value=" ">{t('ticket.allPriorities')}</SelectItem>
+                      <SelectItem value="low">{t('ticket.low')}</SelectItem>
+                      <SelectItem value="normal">{t('ticket.normal')}</SelectItem>
+                      <SelectItem value="high">{t('ticket.high')}</SelectItem>
+                      <SelectItem value="urgent">{t('ticket.urgent')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="severity">Severity</Label>
+                  <Label htmlFor="severity">{t('ticket.severity')}</Label>
                   <Select
                     value={filters.severity_level || ""}
                     onValueChange={(v) =>
@@ -234,14 +243,14 @@ export const TicketList: React.FC = () => {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="All Severities" />
+                      <SelectValue placeholder={t('ticket.allSeverities')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value=" ">All Severities</SelectItem>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="critical">Critical</SelectItem>
+                      <SelectItem value=" ">{t('ticket.allSeverities')}</SelectItem>
+                      <SelectItem value="low">{t('ticket.low')}</SelectItem>
+                      <SelectItem value="medium">{t('ticket.medium')}</SelectItem>
+                      <SelectItem value="high">{t('ticket.high')}</SelectItem>
+                      <SelectItem value="critical">{t('ticket.critical')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -252,9 +261,9 @@ export const TicketList: React.FC = () => {
             variant="outline"
             size="sm"
             disabled
-            title="Export (coming soon)"
+            title={t('ticket.exportComingSoon')}
           >
-            Export
+            {t('ticket.export')}
           </Button>
         </div>
       </div>
@@ -267,7 +276,7 @@ export const TicketList: React.FC = () => {
           </div>
         ) : tickets.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
-            No tickets found
+            {t('ticket.noTicketsFound')}
           </div>
         ) : (
           <>
@@ -305,7 +314,7 @@ export const TicketList: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4" />
                       <span>
-                        Created by:{" "}
+                        {t('ticket.createdBy')}:{" "}
                         {ticket.reporter_name || `User ${ticket.reported_by}`}
                       </span>
                     </div>
@@ -313,30 +322,32 @@ export const TicketList: React.FC = () => {
                       <div className="flex items-center gap-2 mt-1">
                         <User className="w-4 h-4" />
                         <span>
-                          Assigned to:{" "}
+                          {t('ticket.assignedTo')}:{" "}
                           {ticket.assignee_name || `User ${ticket.assigned_to}`}
                         </span>
                       </div>
                     )}
                   </div>
                   <div className="mt-4 flex justify-between items-center text-xs text-muted-foreground">
-                    <span>Created {formatDate(ticket.created_at)}</span>
+                    <span>{t('ticket.created')} {formatDate(ticket.created_at)}</span>
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={() => handleViewTicket(ticket)}
                       >
-                        View
+                        {t('ticket.view')}
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-red-600"
-                        onClick={() => handleDeleteTicket(ticket.id)}
-                      >
-                        Delete
-                      </Button>
+                      {isL3User() && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-red-600"
+                          onClick={() => handleDeleteTicket(ticket.id)}
+                        >
+                          {t('common.delete')}
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -348,15 +359,15 @@ export const TicketList: React.FC = () => {
               <table className="min-w-full text-sm">
                 <thead className="bg-muted/50 text-left">
                   <tr>
-                    <th className="px-4 py-2">Ticket #</th>
-                    <th className="px-4 py-2">Title</th>
-                    <th className="px-4 py-2">Status</th>
-                    <th className="px-4 py-2">Priority</th>
-                    <th className="px-4 py-2">Severity</th>
-                    <th className="px-4 py-2">Created By</th>
-                    <th className="px-4 py-2">Assigned To</th>
-                    <th className="px-4 py-2">Created</th>
-                    <th className="px-4 py-2">Actions</th>
+                    <th className="px-4 py-2">{t('ticket.ticketNumber')}</th>
+                    <th className="px-4 py-2">{t('ticket.title')}</th>
+                    <th className="px-4 py-2">{t('ticket.status')}</th>
+                    <th className="px-4 py-2">{t('ticket.priority')}</th>
+                    <th className="px-4 py-2">{t('ticket.severity')}</th>
+                    <th className="px-4 py-2">{t('ticket.createdBy')}</th>
+                    <th className="px-4 py-2">{t('ticket.assignedTo')}</th>
+                    <th className="px-4 py-2">{t('ticket.created')}</th>
+                    {isL3User() && <th className="px-4 py-2">{t('ticket.actions')}</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -379,10 +390,7 @@ export const TicketList: React.FC = () => {
                       </td>
                       <td className="px-4 py-2">
                         <Badge className={getTicketStatusClass(ticket.status)}>
-                          {getStatusIcon(ticket.status)}
-                          <span className="ml-1">
-                            {ticket.status.replace("_", " ").toUpperCase()}
-                          </span>
+                          {ticket.status.replace("_", " ").toUpperCase()}
                         </Badge>
                       </td>
                       <td className="px-4 py-2">
@@ -421,29 +429,31 @@ export const TicketList: React.FC = () => {
                           </div>
                         ) : (
                           <span className="text-muted-foreground">
-                            Unassigned
+                            {t('ticket.unassigned')}
                           </span>
                         )}
                       </td>
                       <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
                         {formatDate(ticket.created_at)}
                       </td>
-                      <td className="px-4 py-2">
-                        <div
-                          className="flex gap-2"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleDeleteTicket(ticket.id)}
-                            title="Delete"
-                            className="text-red-600 hover:text-red-700"
+                      {isL3User() && (
+                        <td className="px-4 py-2">
+                          <div
+                            className="flex gap-2"
+                            onClick={(e) => e.stopPropagation()}
                           >
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        </div>
-                      </td>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteTicket(ticket.id)}
+                              title={t('common.delete')}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -454,9 +464,9 @@ export const TicketList: React.FC = () => {
             {totalPages > 1 && (
               <div className="flex justify-between items-center mt-6">
                 <div className="text-sm text-muted-foreground">
-                  Showing {(currentPage - 1) * (filters.limit || 10) + 1} to{" "}
+                  {t('ticket.showing')} {(currentPage - 1) * (filters.limit || 10) + 1} {t('ticket.to')}{" "}
                   {Math.min(currentPage * (filters.limit || 10), totalTickets)}{" "}
-                  of {totalTickets} tickets
+                  {t('ticket.of')} {totalTickets} {t('nav.tickets').toLowerCase()}
                 </div>
                 <div className="flex gap-2">
                   <Button
@@ -466,7 +476,7 @@ export const TicketList: React.FC = () => {
                     disabled={currentPage === 1}
                   >
                     <ChevronLeft className="w-4 h-4" />
-                    Previous
+                    {t('common.previous')}
                   </Button>
                   <Button
                     variant="outline"
@@ -474,7 +484,7 @@ export const TicketList: React.FC = () => {
                     onClick={() => handlePageChange(currentPage + 1)}
                     disabled={currentPage === totalPages}
                   >
-                    Next
+                    {t('common.next')}
                     <ChevronRight className="w-4 h-4" />
                   </Button>
                 </div>

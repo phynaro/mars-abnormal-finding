@@ -9,12 +9,16 @@ import {
   Tooltip,
   ResponsiveContainer,
   Line,
+  ComposedChart,
+  Legend,
 } from "recharts";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Award,
   BarChart3,
@@ -25,14 +29,27 @@ import {
   Target,
   Ticket,
   TrendingUp,
+  TrendingDown,
   TrendingUp as TrendingUpIcon,
   User,
   Users,
+  AlertTriangle,
+  CheckCircle,
+  Filter,
 } from "lucide-react";
 import {
   ticketService,
   type PendingTicket as APIPendingTicket,
 } from "@/services/ticketService";
+import personalTargetService from "@/services/personalTargetService";
+import { Badge } from "@/components/ui/badge";
+import PersonalKPISetupModal from "@/components/personal/PersonalKPISetupModal";
+import PersonalFilterModal from "@/components/personal/PersonalFilterModal";
+import {
+  getTicketPriorityClass,
+  getTicketSeverityClass,
+  getTicketStatusClass,
+} from "@/utils/ticketBadgeStyles";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:3001/api";
@@ -68,61 +85,6 @@ interface QuickAction {
   color: string;
 }
 
-interface BadgeConfig {
-  label: string;
-  className: string;
-}
-
-const BADGE_BASE_CLASS =
-  "inline-flex items-center rounded-full border px-2 py-1 text-xs font-semibold";
-const DEFAULT_BADGE_CLASS =
-  "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/50 dark:text-slate-200";
-
-const STATUS_BADGES: Record<APIPendingTicket["status"], BadgeConfig> = {
-  open: {
-    label: "Open",
-    className:
-      "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/40 dark:bg-amber-900/40 dark:text-amber-200",
-  },
-  in_progress: {
-    label: "In Progress",
-    className:
-      "border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-500/40 dark:bg-blue-900/40 dark:text-blue-200",
-  },
-  pending_approval: {
-    label: "Pending Approval",
-    className:
-      "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-900/40 dark:text-yellow-200",
-  },
-  pending_assignment: {
-    label: "Pending Assignment",
-    className:
-      "border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-500/40 dark:bg-purple-900/40 dark:text-purple-200",
-  },
-};
-
-const PRIORITY_BADGES: Record<APIPendingTicket["priority"], BadgeConfig> = {
-  urgent: {
-    label: "Urgent",
-    className:
-      "border-red-200 bg-red-50 text-red-700 dark:border-red-500/40 dark:bg-red-900/40 dark:text-red-200",
-  },
-  high: {
-    label: "High",
-    className:
-      "border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-500/40 dark:bg-orange-900/40 dark:text-orange-200",
-  },
-  medium: {
-    label: "Medium",
-    className:
-      "border-yellow-200 bg-yellow-50 text-yellow-700 dark:border-yellow-500/40 dark:bg-yellow-900/40 dark:text-yellow-200",
-  },
-  low: {
-    label: "Low",
-    className:
-      "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-900/40 dark:text-emerald-200",
-  },
-};
 
 const mockPersonalKPI: PersonalKPI = {
   ticketsCreatedByMonth: [
@@ -176,40 +138,20 @@ function formatHours(hours: number) {
   return `${hours.toFixed(1)}h`;
 }
 
-const createBadge = (label: string, className: string) => (
-  <span className={`${BADGE_BASE_CLASS} ${className}`}>{label}</span>
-);
-
-const StatusBadge: React.FC<{ status: APIPendingTicket["status"] }> = ({
-  status,
-}) => {
-  const config = STATUS_BADGES[status] ?? {
-    label: status,
-    className: DEFAULT_BADGE_CLASS,
-  };
-  return createBadge(config.label, config.className);
-};
-
-const PriorityBadge: React.FC<{ priority: APIPendingTicket["priority"] }> = ({
-  priority,
-}) => {
-  const config = PRIORITY_BADGES[priority] ?? {
-    label: priority,
-    className: DEFAULT_BADGE_CLASS,
-  };
-  return createBadge(config.label, config.className);
-};
 
 const QuickActionsSection: React.FC<{ actions: QuickAction[] }> = ({
   actions,
-}) => (
-  <Card>
-    <CardHeader>
-      <CardTitle className="flex items-center space-x-2">
-        <TrendingUp className="h-5 w-5" />
-        <span>Quick Actions</span>
-      </CardTitle>
-    </CardHeader>
+}) => {
+  const { t } = useLanguage();
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <TrendingUp className="h-5 w-5" />
+          <span>{t('homepage.quickActions')}</span>
+        </CardTitle>
+      </CardHeader>
     <CardContent>
       <div className="space-y-3">
         {actions.map((action) => (
@@ -229,31 +171,35 @@ const QuickActionsSection: React.FC<{ actions: QuickAction[] }> = ({
       </div>
     </CardContent>
   </Card>
-);
+  );
+};
 
 const PendingTicketsSection: React.FC<{
   tickets: APIPendingTicket[];
   loading: boolean;
   error: string | null;
   onTicketClick: (ticketId: number) => void;
-}> = ({ tickets, loading, error, onTicketClick }) => (
-  <Card>
-    <CardHeader>
-      <CardTitle className="flex items-center space-x-2">
-        <Ticket className="h-5 w-5" />
-        <span>Pending Tickets</span>
-      </CardTitle>
-    </CardHeader>
+}> = ({ tickets, loading, error, onTicketClick }) => {
+  const { t } = useLanguage();
+  
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center space-x-2">
+          <Ticket className="h-5 w-5" />
+          <span>{t('homepage.pendingTickets')}</span>
+        </CardTitle>
+      </CardHeader>
     <CardContent>
       {loading ? (
         <div className="py-8 text-center text-muted-foreground">
           <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
-          <p>Loading pending tickets...</p>
+          <p>{t('homepage.loadingPendingTickets')}</p>
         </div>
       ) : error ? (
         <div className="py-8 text-center text-destructive dark:text-red-300">
           <Ticket className="mx-auto mb-4 h-12 w-12 opacity-50" />
-          <p>Error loading tickets</p>
+          <p>{t('homepage.errorLoadingTickets')}</p>
           <p className="text-sm">{error}</p>
         </div>
       ) : tickets.length > 0 ? (
@@ -297,10 +243,14 @@ const PendingTicketsSection: React.FC<{
                         {ticket.title}
                       </td>
                       <td className="py-3">
-                        <StatusBadge status={ticket.status} />
+                        <Badge className={getTicketStatusClass(ticket.status)}>
+                          {ticket.status.replace("_", " ").toUpperCase()}
+                        </Badge>
                       </td>
                       <td className="py-3">
-                        <PriorityBadge priority={ticket.priority} />
+                        <Badge className={getTicketPriorityClass(ticket.priority)}>
+                          {ticket.priority?.toUpperCase()}
+                        </Badge>
                       </td>
                       <td className="py-3 text-muted-foreground">
                         {ticket.area_name || "N/A"}
@@ -326,8 +276,12 @@ const PendingTicketsSection: React.FC<{
                     {ticket.ticket_number}
                   </div>
                   <div className="flex space-x-2">
-                    <StatusBadge status={ticket.status} />
-                    <PriorityBadge priority={ticket.priority} />
+                    <Badge className={getTicketStatusClass(ticket.status)}>
+                      {ticket.status.replace("_", " ").toUpperCase()}
+                    </Badge>
+                    <Badge className={getTicketPriorityClass(ticket.priority)}>
+                      {ticket.priority?.toUpperCase()}
+                    </Badge>
                   </div>
                 </div>
                 <div className="text-sm text-foreground mb-2">
@@ -341,10 +295,10 @@ const PendingTicketsSection: React.FC<{
                   {ticket.user_relationship && (
                     <div className="font-medium text-primary">
                       {ticket.user_relationship === "creator"
-                        ? "You created this ticket"
+                        ? t('homepage.youCreatedThisTicket')
                         : ticket.user_relationship === "approver"
-                          ? "Requires your approval"
-                          : "View only"}
+                          ? t('homepage.requiresYourApproval')
+                          : t('homepage.viewOnly')}
                     </div>
                   )}
                 </div>
@@ -355,128 +309,599 @@ const PendingTicketsSection: React.FC<{
       ) : (
         <div className="py-8 text-center text-muted-foreground">
           <Ticket className="mx-auto mb-4 h-12 w-12 opacity-50" />
-          <p>No pending tickets</p>
-          <p className="text-sm">All your tickets are up to date!</p>
+          <p>{t('homepage.noPendingTickets')}</p>
+          <p className="text-sm">{t('homepage.allTicketsUpToDate')}</p>
         </div>
       )}
     </CardContent>
   </Card>
-);
+  );
+};
 
-const PersonalKPISection: React.FC<{ personalKPI: PersonalKPI }> = ({
-  personalKPI,
-}) => (
-  <div className="space-y-6">
+// Personal Completed Ticket Count Chart Component (L2+ users only)
+// Personal Completed Ticket Chart Component
+const PersonalCompletedTicketChart: React.FC<{
+  data: Array<{ period: string; tickets: number; target: number }>;
+  loading: boolean;
+  error: string | null;
+  onKpiSetupClick: () => void;
+  selectedYear: number;
+}> = ({ data, loading, error, onKpiSetupClick, selectedYear }) => {
+  const { t } = useLanguage();
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const period = data.period;
+      
+      // Calculate date range for this period using the selected year
+      const getPeriodDateRange = (period: string, year: number) => {
+        const newYearDay = new Date(year, 0, 1);
+        const firstSunday = new Date(newYearDay);
+        const dayOfWeek = newYearDay.getDay();
+        const daysToSubtract = dayOfWeek === 0 ? 0 : dayOfWeek;
+        firstSunday.setDate(newYearDay.getDate() - daysToSubtract);
+        
+        const periodNumber = parseInt(period.replace('P', ''));
+        const periodStartDate = new Date(firstSunday);
+        periodStartDate.setDate(firstSunday.getDate() + (periodNumber - 1) * 28);
+        
+        const periodEndDate = new Date(periodStartDate);
+        periodEndDate.setDate(periodStartDate.getDate() + 27);
+        
+        return {
+          startDate: periodStartDate.toLocaleDateString(),
+          endDate: periodEndDate.toLocaleDateString()
+        };
+      };
+      
+      const dateRange = getPeriodDateRange(period, selectedYear);
+      
+      return (
+        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+          <p className="font-medium text-foreground">{`${period}`}</p>
+          <p className="text-sm text-muted-foreground mb-2">
+            {`${dateRange.startDate} - ${dateRange.endDate}`}
+          </p>
+          <div className="space-y-1">
+            <p className="text-sm">
+              <span className="text-green-600 font-medium">Completed Tickets:</span> {data.tickets}
+            </p>
+            <p className="text-sm">
+              <span className="text-red-600 font-medium">Target:</span> {data.target}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <BarChart3 className="h-5 w-5" />
-          <span>Tickets Created This Year</span>
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <BarChart3 className="h-5 w-5" />
+            <span>{t('homepage.myCompleteCasesPerPeriod')}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onKpiSetupClick}
+            className="flex items-center space-x-1"
+          >
+            <Settings className="h-4 w-4" />
+            <span>{t('homepage.setupKPI')}</span>
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={personalKPI.ticketsCreatedByMonth}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="month" />
-            <YAxis />
-            <Tooltip />
-            <Bar dataKey="tickets" fill="#3b82f6" name="Tickets Created" />
-            <Line
-              type="monotone"
-              dataKey="target"
-              stroke="#ef4444"
-              strokeWidth={2}
-              name="Target"
-              dot={false}
-            />
-          </BarChart>
-        </ResponsiveContainer>
+        {loading ? (
+          <div className="flex items-center justify-center h-[300px]">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-[300px] text-red-600">
+            <div className="text-center">
+              <p className="font-medium">{t('homepage.errorLoadingChartData')}</p>
+              <p className="text-sm">{error}</p>
+            </div>
+          </div>
+        ) : data.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="period" />
+              <YAxis />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+              <Bar dataKey="tickets" fill="#82ca9d" name={t('homepage.completedTickets')} />
+              <Line
+                type="monotone"
+                dataKey="target"
+                stroke="#ef4444"
+                strokeWidth={2}
+                name={t('homepage.target')}
+                dot={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-[300px] text-gray-500">
+            <div className="text-center">
+              <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>{t('homepage.noCompletedTicketData')}</p>
+              <p className="text-sm">{t('homepage.completeSomeTickets')}</p>
+            </div>
+          </div>
+        )}
       </CardContent>
     </Card>
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center space-x-2 mb-2">
-                <Clock className="h-5 w-5 text-blue-600" />
-                <span className="text-sm font-medium text-gray-600">
-                  Downtime Avoidance
-                </span>
-              </div>
-              <div className="text-2xl font-bold text-blue-600">
-                {formatHours(personalKPI.downtimeAvoidance.thisPeriod)}
-              </div>
-              <div className="text-sm text-gray-500">
-                This Period • #{personalKPI.downtimeAvoidance.ranking} Ranking
-              </div>
-              <div className="text-xs text-gray-400 mt-1">
-                {formatHours(personalKPI.downtimeAvoidance.thisYear)} This Year
-              </div>
+  );
+};
+
+// Personal Ticket Count Chart Component
+const PersonalTicketCountChart: React.FC<{
+  data: Array<{ period: string; tickets: number; target: number }>;
+  loading: boolean;
+  error: string | null;
+  onKpiSetupClick: () => void;
+  selectedYear: number;
+}> = ({ data, loading, error, onKpiSetupClick, selectedYear }) => {
+  const { t } = useLanguage();
+  // Custom tooltip component
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      const period = data.period;
+      
+      // Calculate date range for this period using the selected year
+      const getPeriodDateRange = (period: string, year: number) => {
+        const newYearDay = new Date(year, 0, 1);
+        const firstSunday = new Date(newYearDay);
+        const dayOfWeek = newYearDay.getDay();
+        const daysToSubtract = dayOfWeek === 0 ? 0 : dayOfWeek;
+        firstSunday.setDate(newYearDay.getDate() - daysToSubtract);
+        
+        const periodNumber = parseInt(period.replace('P', ''));
+        const periodStartDate = new Date(firstSunday);
+        periodStartDate.setDate(firstSunday.getDate() + (periodNumber - 1) * 28);
+        
+        const periodEndDate = new Date(periodStartDate);
+        periodEndDate.setDate(periodStartDate.getDate() + 27);
+        
+        return {
+          startDate: periodStartDate.toLocaleDateString(),
+          endDate: periodEndDate.toLocaleDateString()
+        };
+      };
+      
+      const dateRange = getPeriodDateRange(period, selectedYear);
+      
+      return (
+        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+          <p className="font-medium text-foreground">{`${period}`}</p>
+          <p className="text-sm text-muted-foreground mb-2">
+            {`${dateRange.startDate} - ${dateRange.endDate}`}
+          </p>
+          <div className="space-y-1">
+            <p className="text-sm">
+              <span className="text-blue-600 font-medium">My Tickets:</span> {data.tickets}
+            </p>
+            <p className="text-sm">
+              <span className="text-red-600 font-medium">Target:</span> {data.target}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <BarChart3 className="h-5 w-5" />
+            <span>{t('homepage.myReportCasePerPeriod')}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onKpiSetupClick}
+            className="flex items-center space-x-1"
+          >
+            <Settings className="h-4 w-4" />
+            <span>{t('homepage.setupKPI')}</span>
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center justify-center h-[300px]">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-[300px] text-red-600">
+            <div className="text-center">
+              <p className="font-medium">{t('homepage.errorLoadingChartData')}</p>
+              <p className="text-sm">{error}</p>
             </div>
-            <Award className="h-8 w-8 text-blue-100" />
+          </div>
+        ) : data.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="period" />
+              <YAxis />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+              <Bar dataKey="tickets" fill="#8884d8" name={t('homepage.myTickets')} />
+              <Line
+                type="monotone"
+                dataKey="target"
+                stroke="#ef4444"
+                strokeWidth={2}
+                name={t('homepage.target')}
+                dot={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-[300px] text-gray-500">
+            <div className="text-center">
+              <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>{t('homepage.noTicketDataAvailable')}</p>
+              <p className="text-sm">{t('homepage.startCreatingTickets')}</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+// Personal KPI Tiles Component (Role-based)
+const PersonalKPITiles: React.FC<{
+  kpiData: any;
+  loading: boolean;
+  error: string | null;
+}> = ({ kpiData, loading, error }) => {
+  const { t } = useLanguage();
+  // Utility function for dynamic currency formatting (same as AbnormalReportDashboardV2Page)
+  const formatCurrencyDynamic = (amount: number): { display: string; tooltip: string } => {
+    const tooltip = `฿${amount.toLocaleString('en-US')} THB`;
+    
+    if (amount >= 1000000) {
+      return {
+        display: `฿${(amount / 1000000).toFixed(1)}M`,
+        tooltip
+      };
+    } else if (amount >= 1000) {
+      return {
+        display: `฿${(amount / 1000).toFixed(1)}K`,
+        tooltip
+      };
+    } else {
+      return {
+        display: `฿${amount.toFixed(0)}`,
+        tooltip
+      };
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {/* Loading skeleton for reporter metrics */}
+        <div>
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <AlertTriangle className="h-5 w-5 mr-2 text-blue-600" />
+            {t('homepage.asReporter')}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Card key={index}>
+                <CardContent className="p-4">
+                  <div className="animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                    <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+        
+        {/* Loading skeleton for action person metrics (if L2+) */}
+        <div>
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
+            {t('homepage.asActionPerson')}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {Array.from({ length: 3 }).map((_, index) => (
+              <Card key={index}>
+                <CardContent className="p-4">
+                  <div className="animate-pulse">
+                    <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                    <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
+                    <div className="h-3 bg-gray-200 rounded w-2/3"></div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="p-4">
+          <div className="text-center text-red-600">
+            <p className="font-medium">{t('homepage.errorLoadingKPIData')}</p>
+            <p className="text-sm">{error}</p>
           </div>
         </CardContent>
       </Card>
+    );
+  }
+
+  if (!kpiData) {
+    return (
       <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center space-x-2 mb-2">
-                <DollarSign className="h-5 w-5 text-green-600" />
-                <span className="text-sm font-medium text-gray-600">
-                  Cost Avoidance
-                </span>
-              </div>
-              <div className="text-2xl font-bold text-green-600">
-                {formatCurrency(personalKPI.costAvoidance.thisPeriod)}
-              </div>
-              <div className="text-sm text-gray-500">
-                This Period • #{personalKPI.costAvoidance.ranking} Ranking
-              </div>
-              <div className="text-xs text-gray-400 mt-1">
-                {formatCurrency(personalKPI.costAvoidance.thisYear)} This Year
-              </div>
-            </div>
-            <TrendingUpIcon className="h-8 w-8 text-green-100" />
+        <CardContent className="p-4">
+          <div className="text-center text-muted-foreground">
+            <p>{t('homepage.noKPIDataAvailable')}</p>
+            <p className="text-sm">{t('homepage.loadingPersonalMetrics')}</p>
           </div>
         </CardContent>
       </Card>
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="flex items-center space-x-2 mb-2">
-                <Ticket className="h-5 w-5 text-orange-600" />
-                <span className="text-sm font-medium text-gray-600">
-                  Ticket Performance
+    );
+  }
+
+  const { userRole, reporterMetrics, actionPersonMetrics, summary } = kpiData;
+
+  // Reporter KPI tiles (for all users)
+  const reporterTiles = [
+    {
+      title: t('homepage.myReportsCreated'),
+      value: reporterMetrics.totalReportsThisPeriod,
+      change: summary.reporterComparisonMetrics.reportGrowthRate.percentage,
+      changeDescription: summary.reporterComparisonMetrics.reportGrowthRate.description,
+      changeType: summary.reporterComparisonMetrics.reportGrowthRate.type,
+      icon: <AlertTriangle className="h-4 w-4" />,
+      color: 'text-blue-600 dark:text-blue-400'
+    },
+    {
+      title: t('homepage.downtimeAvoidedByMyReports'),
+      value: `${reporterMetrics.downtimeAvoidedByReportsThisPeriod.toFixed(1)} hrs`,
+      change: summary.reporterComparisonMetrics.downtimeAvoidedByReportsGrowth.percentage,
+      changeDescription: summary.reporterComparisonMetrics.downtimeAvoidedByReportsGrowth.description,
+      changeType: summary.reporterComparisonMetrics.downtimeAvoidedByReportsGrowth.type,
+      icon: <TrendingUp className="h-4 w-4" />,
+      color: 'text-purple-600 dark:text-purple-400'
+    },
+    {
+      title: t('homepage.costAvoidedByMyReports'),
+      value: formatCurrencyDynamic(reporterMetrics.costAvoidedByReportsThisPeriod).display,
+      tooltip: formatCurrencyDynamic(reporterMetrics.costAvoidedByReportsThisPeriod).tooltip,
+      change: summary.reporterComparisonMetrics.costAvoidedByReportsGrowth.percentage,
+      changeDescription: summary.reporterComparisonMetrics.costAvoidedByReportsGrowth.description,
+      changeType: summary.reporterComparisonMetrics.costAvoidedByReportsGrowth.type,
+      icon: <DollarSign className="h-4 w-4" />,
+      color: 'text-emerald-600 dark:text-emerald-400'
+    }
+  ];
+
+  // Action Person KPI tiles (for L2+ users only)
+  const actionPersonTiles = actionPersonMetrics ? [
+    {
+      title: t('homepage.casesIFixed'),
+      value: actionPersonMetrics.totalCasesFixedThisPeriod,
+      change: summary.actionPersonComparisonMetrics.casesFixedGrowthRate.percentage,
+      changeDescription: summary.actionPersonComparisonMetrics.casesFixedGrowthRate.description,
+      changeType: summary.actionPersonComparisonMetrics.casesFixedGrowthRate.type,
+      icon: <CheckCircle className="h-4 w-4" />,
+      color: 'text-green-600 dark:text-green-400'
+    },
+    {
+      title: t('homepage.downtimeIFixed'),
+      value: `${actionPersonMetrics.downtimeAvoidedByFixesThisPeriod.toFixed(1)} hrs`,
+      change: summary.actionPersonComparisonMetrics.downtimeAvoidedByFixesGrowth.percentage,
+      changeDescription: summary.actionPersonComparisonMetrics.downtimeAvoidedByFixesGrowth.description,
+      changeType: summary.actionPersonComparisonMetrics.downtimeAvoidedByFixesGrowth.type,
+      icon: <TrendingUp className="h-4 w-4" />,
+      color: 'text-purple-600 dark:text-purple-400'
+    },
+    {
+      title: t('homepage.costIFixed'),
+      value: formatCurrencyDynamic(actionPersonMetrics.costAvoidedByFixesThisPeriod).display,
+      tooltip: formatCurrencyDynamic(actionPersonMetrics.costAvoidedByFixesThisPeriod).tooltip,
+      change: summary.actionPersonComparisonMetrics.costAvoidedByFixesGrowth.percentage,
+      changeDescription: summary.actionPersonComparisonMetrics.costAvoidedByFixesGrowth.description,
+      changeType: summary.actionPersonComparisonMetrics.costAvoidedByFixesGrowth.type,
+      icon: <DollarSign className="h-4 w-4" />,
+      color: 'text-emerald-600 dark:text-emerald-400'
+    }
+  ] : [];
+
+  const renderKpiTile = (kpi: any, index: number) => (
+    <Card key={index}>
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium text-muted-foreground">{kpi.title}</p>
+            {kpi.tooltip ? (
+              <p className="text-2xl font-bold cursor-help" title={kpi.tooltip}>{kpi.value}</p>
+            ) : (
+              <p className="text-2xl font-bold">{kpi.value}</p>
+            )}
+            {kpi.change !== undefined && (
+              <div className="flex items-center mt-1">
+                {kpi.changeType === 'increase' ? (
+                  <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
+                ) : kpi.changeType === 'decrease' ? (
+                  <TrendingDown className="h-3 w-3 text-red-500 mr-1" />
+                ) : (
+                  <div className="h-3 w-3 bg-muted rounded-full mr-1" />
+                )}
+                <span className={`text-xs ${
+                  kpi.changeType === 'increase' ? 'text-green-500' :
+                  kpi.changeType === 'decrease' ? 'text-red-500' : 'text-gray-400'
+                }`}>
+                  {kpi.changeType === 'no_change' ? t('homepage.noChange') :
+                   `${Math.abs(kpi.change).toFixed(1)}%`}
                 </span>
               </div>
-              <div className="text-2xl font-bold text-orange-600">
-                {personalKPI.ticketStats.closedCount}/
-                {personalKPI.ticketStats.openCount}
+            )}
+            {kpi.changeDescription && (
+              <div className="text-xs text-muted-foreground mt-1">
+                {kpi.changeDescription}
               </div>
-              <div className="text-sm text-gray-500">
-                Closed/Open • #{personalKPI.ticketStats.ranking} Ranking
-              </div>
-              <div className="text-xs text-gray-400 mt-1">By Create Count</div>
-            </div>
-            <Target className="h-8 w-8 text-orange-100" />
+            )}
           </div>
-        </CardContent>
-      </Card>
+          <div className={`p-2 rounded-lg bg-muted/50 ${kpi.color}`}>
+            {kpi.icon}
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <div className="space-y-4">
+      {/* Reporter Metrics Section */}
+      <div>
+        <h3 className="text-lg font-semibold mb-4 flex items-center">
+          <AlertTriangle className="h-5 w-5 mr-2 text-blue-600" />
+          {t('homepage.asReporter')}
+        </h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {reporterTiles.map((kpi, index) => renderKpiTile(kpi, index))}
+        </div>
+      </div>
+
+      {/* Action Person Metrics Section (L2+ only) */}
+      {userRole === 'L2+' && actionPersonTiles.length > 0 && (
+        <div>
+          <h3 className="text-lg font-semibold mb-4 flex items-center">
+            <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
+            {t('homepage.asActionPerson')}
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {actionPersonTiles.map((kpi, index) => renderKpiTile(kpi, index))}
+          </div>
+        </div>
+      )}
     </div>
+  );
+};
+
+const PersonalKPISection: React.FC<{ 
+  personalKPI: PersonalKPI;
+  timeFilter: string;
+  selectedYear: number;
+  selectedPeriod: number;
+  personalTicketData: Array<{ period: string; tickets: number; target: number }>;
+  personalTicketLoading: boolean;
+  personalTicketError: string | null;
+  personalCompletedTicketData: Array<{ period: string; tickets: number; target: number }>;
+  personalCompletedTicketLoading: boolean;
+  personalCompletedTicketError: string | null;
+  personalKPIData: any;
+  personalKPILoading: boolean;
+  personalKPIError: string | null;
+  onKpiSetupClick: (type: 'report' | 'fix') => void;
+}> = ({
+  personalKPI,
+  timeFilter,
+  selectedYear,
+  selectedPeriod,
+  personalTicketData,
+  personalTicketLoading,
+  personalTicketError,
+  personalCompletedTicketData,
+  personalCompletedTicketLoading,
+  personalCompletedTicketError,
+  personalKPIData,
+  personalKPILoading,
+  personalKPIError,
+  onKpiSetupClick,
+}) => (
+  <div className="space-y-4">
+    {/* Personal KPI Tiles */}
+    <PersonalKPITiles 
+      kpiData={personalKPIData}
+      loading={personalKPILoading}
+      error={personalKPIError}
+    />
+    
+    {/* Personal Ticket Count Chart */}
+    <PersonalTicketCountChart 
+      data={personalTicketData}
+      loading={personalTicketLoading}
+      error={personalTicketError}
+      onKpiSetupClick={() => onKpiSetupClick('report')}
+      selectedYear={selectedYear}
+    />
+    
+    {/* Personal Completed Ticket Count Chart (L2+ users only) */}
+    <PersonalCompletedTicketChart 
+      data={personalCompletedTicketData}
+      loading={personalCompletedTicketLoading}
+      error={personalCompletedTicketError}
+      onKpiSetupClick={() => onKpiSetupClick('fix')}
+      selectedYear={selectedYear}
+    />
+    
+    {/* Legacy chart - keeping for now */}
+    
+    
   </div>
 );
 
 const HomePage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const [personalKPI] = useState<PersonalKPI>(mockPersonalKPI);
   const [pendingTickets, setPendingTickets] = useState<APIPendingTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Personal tab time range filter state
+  const [personalTimeFilter, setPersonalTimeFilter] = useState<string>('this-period');
+  const [personalSelectedYear, setPersonalSelectedYear] = useState<number>(new Date().getFullYear());
+  const [personalSelectedPeriod, setPersonalSelectedPeriod] = useState<number>(1);
+
+  // Personal ticket data state
+  const [personalTicketData, setPersonalTicketData] = useState<Array<{ period: string; tickets: number; target: number }>>([]);
+  const [personalTicketLoading, setPersonalTicketLoading] = useState<boolean>(false);
+  const [personalTicketError, setPersonalTicketError] = useState<string | null>(null);
+
+  // Personal completed ticket data state (L2+ users only)
+  const [personalCompletedTicketData, setPersonalCompletedTicketData] = useState<Array<{ period: string; tickets: number; target: number }>>([]);
+  const [personalCompletedTicketLoading, setPersonalCompletedTicketLoading] = useState<boolean>(false);
+  const [personalCompletedTicketError, setPersonalCompletedTicketError] = useState<string | null>(null);
+
+  // Personal KPI data state
+  const [personalKPIData, setPersonalKPIData] = useState<any>(null);
+  const [personalKPILoading, setPersonalKPILoading] = useState<boolean>(false);
+  const [personalKPIError, setPersonalKPIError] = useState<string | null>(null);
+
+  // KPI Setup Modal state
+  const [kpiSetupModalOpen, setKpiSetupModalOpen] = useState<boolean>(false);
+  const [kpiSetupModalType, setKpiSetupModalType] = useState<'report' | 'fix'>('report');
+
+  // Personal Filter Modal state
+  const [personalFilterModalOpen, setPersonalFilterModalOpen] = useState<boolean>(false);
 
   // Fetch pending tickets on component mount
   useEffect(() => {
@@ -493,14 +918,14 @@ const HomePage: React.FC = () => {
         if (response.success) {
           setPendingTickets(response.data);
         } else {
-          setError("Failed to fetch pending tickets");
+          setError(t('homepage.failedToFetchPendingTickets'));
         }
       } catch (err) {
         console.error("Error fetching pending tickets:", err);
         setError(
           err instanceof Error
             ? err.message
-            : "Failed to fetch pending tickets",
+            : t('homepage.failedToFetchPendingTickets'),
         );
       } finally {
         setLoading(false);
@@ -510,24 +935,47 @@ const HomePage: React.FC = () => {
     fetchPendingTickets();
   }, [isAuthenticated, user]);
 
+  // Fetch personal ticket data when filters change
+  useEffect(() => {
+    fetchPersonalTicketData();
+  }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
+
+  // Fetch personal completed ticket data when filters change (L2+ users only)
+  useEffect(() => {
+    fetchPersonalCompletedTicketData();
+  }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
+
+  // Fetch personal KPI data when filters change
+  useEffect(() => {
+    fetchPersonalKPIData();
+  }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
+
   const quickActions = useMemo<QuickAction[]>(
     () => [
       {
-        title: "Create Ticket",
-        description: "Report a new issue or request",
+        title: t('homepage.createTicket'),
+        description: t('homepage.reportNewIssue'),
         icon: <Ticket className="h-6 w-6" />,
-        onClick: () => navigate("/tickets/create"),
+        onClick: () => {
+          // Check if screen is mobile size (less than md breakpoint)
+          const isMobile = window.innerWidth < 768; // md breakpoint is 768px
+          if (isMobile) {
+            navigate("/tickets/create/wizard");
+          } else {
+            navigate("/tickets/create");
+          }
+        },
         color: "bg-blue-500 hover:bg-blue-600",
       },
       {
-        title: "View Tickets",
-        description: "Check your ticket status",
+        title: t('homepage.viewTickets'),
+        description: t('homepage.checkTicketStatus'),
         icon: <FileText className="h-6 w-6" />,
         onClick: () => navigate("/tickets"),
         color: "bg-green-500 hover:bg-green-600",
       },
     ],
-    [navigate],
+    [navigate, t],
   );
 
   const subtitleSource = user as unknown as
@@ -548,57 +996,334 @@ const HomePage: React.FC = () => {
     navigate(`/tickets/${ticketId}`);
   };
 
+  // Handle KPI setup modal
+  const handleKpiSetupClick = (type: 'report' | 'fix') => {
+    setKpiSetupModalType(type);
+    setKpiSetupModalOpen(true);
+  };
+
+  // Fetch personal ticket data
+  const fetchPersonalTicketData = async () => {
+    if (!isAuthenticated || !user) {
+      setPersonalTicketLoading(false);
+      return;
+    }
+
+    try {
+      setPersonalTicketLoading(true);
+      setPersonalTicketError(null);
+
+      const dateRange = getPersonalDateRange(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
+      const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
+      
+      const params = {
+        year: yearFromDateRange,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
+      };
+
+      // Fetch both ticket data and personal targets
+      const [ticketResponse, targetResponse] = await Promise.all([
+        ticketService.getUserTicketCountPerPeriod(params),
+        personalTargetService.getPersonalTargets({
+          personno: user.id,
+          year: yearFromDateRange,
+          type: 'report'
+        })
+      ]);
+
+      if (ticketResponse.success) {
+        // Get targets for the current year
+        const targets = targetResponse.success ? targetResponse.data : [];
+        const targetMap: { [period: string]: number } = {};
+        
+        targets.forEach(target => {
+          targetMap[target.period] = target.target_value;
+        });
+
+        // Add real target data or fallback to mock targets
+        const dataWithTargets = ticketResponse.data.map(item => ({
+          ...item,
+          target: targetMap[item.period] || 15 // Fallback to mock target if no real target
+        }));
+        setPersonalTicketData(dataWithTargets);
+      } else {
+        setPersonalTicketError(t('homepage.failedToFetchPersonalTicketData'));
+      }
+    } catch (err) {
+      console.error('Error fetching personal ticket data:', err);
+      setPersonalTicketError(
+        err instanceof Error
+          ? err.message
+          : t('homepage.failedToFetchPersonalTicketData')
+      );
+    } finally {
+      setPersonalTicketLoading(false);
+    }
+  };
+
+  // Fetch personal completed ticket data (L2+ users only)
+  const fetchPersonalCompletedTicketData = async () => {
+    if (!isAuthenticated || !user) {
+      setPersonalCompletedTicketLoading(false);
+      return;
+    }
+
+    try {
+      setPersonalCompletedTicketLoading(true);
+      setPersonalCompletedTicketError(null);
+
+      const dateRange = getPersonalDateRange(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
+      const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
+      
+      const params = {
+        year: yearFromDateRange,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate
+      };
+
+      // Fetch both completed ticket data and personal targets
+      const [ticketResponse, targetResponse] = await Promise.all([
+        ticketService.getUserCompletedTicketCountPerPeriod(params),
+        personalTargetService.getPersonalTargets({
+          personno: user.id,
+          year: yearFromDateRange,
+          type: 'fix'
+        })
+      ]);
+
+      if (ticketResponse.success) {
+        // Get targets for the current year
+        const targets = targetResponse.success ? targetResponse.data : [];
+        const targetMap: { [period: string]: number } = {};
+        
+        targets.forEach(target => {
+          targetMap[target.period] = target.target_value;
+        });
+
+        // Add real target data or fallback to mock targets
+        const dataWithTargets = ticketResponse.data.map(item => ({
+          ...item,
+          target: targetMap[item.period] || 15 // Fallback to mock target if no real target
+        }));
+        setPersonalCompletedTicketData(dataWithTargets);
+      } else {
+        setPersonalCompletedTicketError(t('homepage.failedToFetchPersonalCompletedTicketData'));
+      }
+    } catch (err) {
+      console.error('Error fetching personal completed ticket data:', err);
+      setPersonalCompletedTicketError(
+        err instanceof Error
+          ? err.message
+          : t('homepage.failedToFetchPersonalCompletedTicketData')
+      );
+    } finally {
+      setPersonalCompletedTicketLoading(false);
+    }
+  };
+
+  // Fetch personal KPI data
+  const fetchPersonalKPIData = async () => {
+    if (!isAuthenticated || !user) {
+      setPersonalKPILoading(false);
+      return;
+    }
+
+    try {
+      setPersonalKPILoading(true);
+      setPersonalKPIError(null);
+
+      const dateRange = getPersonalDateRange(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        compare_startDate: dateRange.compare_startDate,
+        compare_endDate: dateRange.compare_endDate
+      };
+
+      const response = await ticketService.getPersonalKPIData(params);
+      
+      if (response.success) {
+        setPersonalKPIData(response.data);
+      } else {
+        setPersonalKPIError(t('homepage.failedToFetchPersonalKPIData'));
+      }
+    } catch (err) {
+      console.error('Error fetching personal KPI data:', err);
+      setPersonalKPIError(
+        err instanceof Error
+          ? err.message
+          : t('homepage.failedToFetchPersonalKPIData')
+      );
+    } finally {
+      setPersonalKPILoading(false);
+    }
+  };
+
+  // Utility function to format date as YYYY-MM-DD in local timezone
+  const formatLocalDate = (date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  // Utility function to calculate period for a specific date (based on backend logic)
+  const calculatePeriodForDate = (date: Date, year: number) => {
+    const firstDayOfYear = new Date(year, 0, 1, 0, 0, 0, 0);
+    const firstSunday = new Date(firstDayOfYear);
+    
+    // Adjust to first Sunday
+    const dayOfWeek = firstDayOfYear.getDay();
+    const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+    firstSunday.setDate(firstDayOfYear.getDate() + daysToAdd);
+    
+    // Calculate period number (1-based)
+    const daysSinceFirstSunday = Math.floor((date.getTime() - firstSunday.getTime()) / (1000 * 60 * 60 * 24));
+    const periodNumber = Math.floor(daysSinceFirstSunday / 28) + 1;
+    
+    return {
+      period: periodNumber,
+      firstSunday
+    };
+  };
+
+  // Utility function to get date range based on time filter (similar to AbnormalReportDashboardV2Page)
+  const getPersonalDateRange = (timeFilter: string, year?: number, period?: number) => {
+    const now = new Date();
+    const currentYear = year || now.getFullYear();
+    
+    switch (timeFilter) {
+      case 'this-year':
+        // For this-year, we need to find the first Sunday of the week containing New Year's Day
+        const newYearDay = new Date(currentYear, 0, 1); // January 1st
+        const firstSundayOfYear = new Date(newYearDay);
+        const dayOfWeek = newYearDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const daysToSubtract = dayOfWeek === 0 ? 0 : dayOfWeek; // Go back to Sunday
+        firstSundayOfYear.setDate(newYearDay.getDate() - daysToSubtract);
+        
+        // Calculate the end date (13 periods * 28 days = 364 days)
+        const yearEndDate = new Date(firstSundayOfYear);
+        yearEndDate.setDate(firstSundayOfYear.getDate() + 363); // 364 days - 1 (inclusive)
+        
+        return {
+          startDate: formatLocalDate(firstSundayOfYear),
+          endDate: formatLocalDate(yearEndDate),
+          compare_startDate: `${currentYear - 1}-01-01`,
+          compare_endDate: `${currentYear - 1}-12-31`
+        };
+      case 'last-year':
+        return {
+          startDate: `${currentYear - 1}-01-01`,
+          endDate: `${currentYear - 1}-12-31`,
+          compare_startDate: `${currentYear - 2}-01-01`,
+          compare_endDate: `${currentYear - 2}-12-31`
+        };
+      case 'this-period':
+        // Calculate current 28-day period based on first Sunday of the year
+        const currentPeriodInfo = calculatePeriodForDate(now, currentYear);
+        const currentPeriod = currentPeriodInfo.period;
+        
+        // Calculate current period start and end dates
+        const currentPeriodStartDate = new Date(currentPeriodInfo.firstSunday);
+        currentPeriodStartDate.setDate(currentPeriodInfo.firstSunday.getDate() + (currentPeriod - 1) * 28);
+        
+        const currentPeriodEndDate = new Date(currentPeriodStartDate);
+        currentPeriodEndDate.setDate(currentPeriodStartDate.getDate() + 27); // 28 days - 1
+        
+        // Calculate previous period for comparison
+        const currentPrevPeriodStartDate = new Date(currentPeriodStartDate);
+        currentPrevPeriodStartDate.setDate(currentPeriodStartDate.getDate() - 28);
+        
+        const currentPrevPeriodEndDate = new Date(currentPrevPeriodStartDate);
+        currentPrevPeriodEndDate.setDate(currentPrevPeriodStartDate.getDate() + 27);
+        
+        return {
+          startDate: formatLocalDate(currentPeriodStartDate),
+          endDate: formatLocalDate(currentPeriodEndDate),
+          compare_startDate: formatLocalDate(currentPrevPeriodStartDate),
+          compare_endDate: formatLocalDate(currentPrevPeriodEndDate)
+        };
+      case 'select-period':
+        // Correct period calculation: 28-day periods starting from first Sunday of the week containing New Year's Day
+        const newYearDayForPeriod = new Date(currentYear, 0, 1); // January 1st
+        const firstSundayForPeriod = new Date(newYearDayForPeriod);
+        const dayOfWeekForPeriod = newYearDayForPeriod.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const daysToSubtractForPeriod = dayOfWeekForPeriod === 0 ? 0 : dayOfWeekForPeriod; // Go back to Sunday
+        firstSundayForPeriod.setDate(newYearDayForPeriod.getDate() - daysToSubtractForPeriod);
+        
+        // Calculate the specific period start date
+        const periodStartDate = new Date(firstSundayForPeriod);
+        periodStartDate.setDate(firstSundayForPeriod.getDate() + (period! - 1) * 28);
+        
+        // Calculate the period end date (28 days later)
+        const periodEndDate = new Date(periodStartDate);
+        periodEndDate.setDate(periodStartDate.getDate() + 27); // 28 days - 1
+        
+        // Calculate previous period for comparison
+        const prevPeriodStartDate = new Date(periodStartDate);
+        prevPeriodStartDate.setDate(periodStartDate.getDate() - 28);
+        
+        const prevPeriodEndDate = new Date(prevPeriodStartDate);
+        prevPeriodEndDate.setDate(prevPeriodStartDate.getDate() + 27);
+        
+        return {
+          startDate: formatLocalDate(periodStartDate),
+          endDate: formatLocalDate(periodEndDate),
+          compare_startDate: formatLocalDate(prevPeriodStartDate),
+          compare_endDate: formatLocalDate(prevPeriodEndDate)
+        };
+      default:
+        return {
+          startDate: `${currentYear}-01-01`,
+          endDate: `${currentYear}-12-31`,
+          compare_startDate: `${currentYear - 1}-01-01`,
+          compare_endDate: `${currentYear - 1}-12-31`
+        };
+    }
+  };
+
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
+    <div className="container mx-auto px-4 py-4 space-y-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <Avatar className="h-16 w-16">
+        <div className="flex items-center space-x-3">
+          <Avatar className="h-12 w-12">
             {avatarSrc ? <AvatarImage src={avatarSrc} alt="avatar" /> : null}
-            <AvatarFallback className="text-lg">
+            <AvatarFallback className="text-sm">
               {avatarInitials}
             </AvatarFallback>
           </Avatar>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">
-              Welcome back, {user?.firstName} {user?.lastName}!
+            <h1 className="text-2xl font-bold">
+              {t('homepage.welcome')}, {user?.firstName} {user?.lastName}!
             </h1>
-            <p className="text-gray-600 mt-1">{subtitle}</p>
+            <p className="text-muted-foreground text-sm">{subtitle}</p>
           </div>
         </div>
-        {/* <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => navigate("/profile")}
-            className="flex items-center space-x-2"
-          >
-            <Settings className="h-4 w-4" />
-            <span>Profile</span>
-          </Button>
-        </div> */}
       </div>
 
-      <Tabs defaultValue="quick-actions" className="space-y-6">
+      <Tabs defaultValue="quick-actions" className="space-y-4">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger
             value="quick-actions"
             className="flex items-center space-x-2"
           >
             <TrendingUp className="h-4 w-4" />
-            <span>Quick Actions</span>
+            <span>{t('homepage.quickActions')}</span>
           </TabsTrigger>
           <TabsTrigger value="personal" className="flex items-center space-x-2">
             <User className="h-4 w-4" />
-            <span>Personal</span>
+            <span>{t('homepage.personal')}</span>
           </TabsTrigger>
           <TabsTrigger value="team" className="flex items-center space-x-2">
             <Users className="h-4 w-4" />
-            <span>Team</span>
+            <span>{t('homepage.team')}</span>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="quick-actions" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <TabsContent value="quick-actions" className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-1">
               <QuickActionsSection actions={quickActions} />
             </div>
@@ -613,23 +1338,101 @@ const HomePage: React.FC = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="personal" className="space-y-6">
-          <PersonalKPISection personalKPI={personalKPI} />
+        <TabsContent value="personal" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              {/* Empty div to maintain layout balance */}
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Compact Date Range Display */}
+              <div className="text-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">{t('homepage.range')}:</span>
+                  <span className="text-foreground font-medium">
+                    {(() => {
+                      const dateRange = getPersonalDateRange(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
+                      return `${dateRange.startDate} - ${dateRange.endDate}`;
+                    })()}
+                  </span>
+                  {(personalTimeFilter === 'this-period' || personalTimeFilter === 'select-period') && (
+                    <span className="text-xs text-muted-foreground">
+                      {personalTimeFilter === 'this-period' 
+                        ? (() => {
+                            const currentPeriodInfo = calculatePeriodForDate(new Date(), personalSelectedYear);
+                            return `P${currentPeriodInfo.period}`;
+                          })()
+                        : `P${personalSelectedPeriod}`
+                      }
+                    </span>
+                  )}
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPersonalFilterModalOpen(true)}
+                className="flex items-center space-x-2"
+              >
+                <Filter className="h-4 w-4" />
+                <span>{t('homepage.filters')}</span>
+              </Button>
+            </div>
+          </div>
+          <PersonalKPISection 
+            personalKPI={personalKPI}
+            timeFilter={personalTimeFilter}
+            selectedYear={personalSelectedYear}
+            selectedPeriod={personalSelectedPeriod}
+            personalTicketData={personalTicketData}
+            personalTicketLoading={personalTicketLoading}
+            personalTicketError={personalTicketError}
+            personalCompletedTicketData={personalCompletedTicketData}
+            personalCompletedTicketLoading={personalCompletedTicketLoading}
+            personalCompletedTicketError={personalCompletedTicketError}
+            personalKPIData={personalKPIData}
+            personalKPILoading={personalKPILoading}
+            personalKPIError={personalKPIError}
+            onKpiSetupClick={handleKpiSetupClick}
+          />
         </TabsContent>
 
         <TabsContent value="team">
           <Card>
             <CardHeader>
-              <CardTitle>Team Performance</CardTitle>
+              <CardTitle>{t('homepage.teamPerformance')}</CardTitle>
             </CardHeader>
             <CardContent>
               <p className="text-gray-500">
-                Team performance metrics coming soon...
+                {t('homepage.teamPerformanceComingSoon')}
               </p>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* KPI Setup Modal */}
+      <PersonalKPISetupModal
+        open={kpiSetupModalOpen}
+        onOpenChange={setKpiSetupModalOpen}
+        targetType={kpiSetupModalType}
+        onTargetsUpdated={() => {
+          // Refresh personal ticket data when targets are updated
+          fetchPersonalTicketData();
+          fetchPersonalCompletedTicketData();
+        }}
+      />
+
+      {/* Personal Filter Modal */}
+      <PersonalFilterModal
+        open={personalFilterModalOpen}
+        onOpenChange={setPersonalFilterModalOpen}
+        timeFilter={personalTimeFilter}
+        setTimeFilter={setPersonalTimeFilter}
+        selectedYear={personalSelectedYear}
+        setSelectedYear={setPersonalSelectedYear}
+        selectedPeriod={personalSelectedPeriod}
+        setSelectedPeriod={setPersonalSelectedPeriod}
+      />
     </div>
   );
 };

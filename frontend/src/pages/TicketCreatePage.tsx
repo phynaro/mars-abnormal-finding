@@ -3,11 +3,13 @@ import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest } from '@/services/ticketService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FileUpload } from '@/components/ui/file-upload';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/useToast';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Upload, X } from 'lucide-react';
 import authService from '@/services/authService';
 
@@ -29,6 +31,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 const TicketCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   const [submitting, setSubmitting] = useState(false);
   const [imagesUploading, setImagesUploading] = useState(false);
@@ -100,16 +103,16 @@ const TicketCreatePage: React.FC = () => {
     
     if (imageFiles.length !== fileArray.length) {
       toast({
-        title: 'Warning',
-        description: 'Some files were skipped. Only image files are supported.',
+        title: t('common.warning'),
+        description: t('ticket.wizardImageFormat'),
         variant: 'destructive'
       });
     }
     
     if (oversizedFiles.length > 0) {
       toast({
-        title: 'Warning',
-        description: `${oversizedFiles.length} file(s) were skipped. Maximum file size is 10MB.`,
+        title: t('common.warning'),
+        description: `${oversizedFiles.length} file(s) were skipped. ${t('ticket.wizardImageSize')}`,
         variant: 'destructive'
       });
     }
@@ -173,8 +176,8 @@ const TicketCreatePage: React.FC = () => {
     } catch (error) {
       console.error('Error searching machines:', error);
       toast({
-        title: 'Error',
-        description: 'Failed to search machines. Please try again.',
+        title: t('common.error'),
+        description: t('ticket.failedToSearchMachines'),
         variant: 'destructive'
       });
     } finally {
@@ -184,10 +187,10 @@ const TicketCreatePage: React.FC = () => {
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
-    if (!formData.title.trim()) newErrors.title = 'Title is required';
-    if (!formData.description.trim()) newErrors.description = 'Description is required';
-    if (!selectedMachine) newErrors.machine = 'Please select a machine';
-    if (selectedFiles.length === 0) newErrors.files = 'At least one attachment is required';
+    if (!formData.title.trim()) newErrors.title = t('ticket.titleRequired');
+    if (!formData.description.trim()) newErrors.description = t('ticket.descriptionRequired');
+    if (!selectedMachine) newErrors.machine = t('ticket.selectMachine');
+    if (selectedFiles.length === 0) newErrors.files = t('ticket.atLeastOneAttachment');
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -286,10 +289,10 @@ const TicketCreatePage: React.FC = () => {
         }
       }
 
-      toast({ title: 'Success', description: 'Ticket created successfully', variant: 'default' });
+      toast({ title: t('common.success'), description: t('ticket.ticketCreatedSuccess'), variant: 'default' });
       navigate(`/tickets/${ticketId}`);
     } catch (error) {
-      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to create ticket', variant: 'destructive' });
+      toast({ title: t('common.error'), description: error instanceof Error ? error.message : t('ticket.failedToCreateTicket'), variant: 'destructive' });
     } finally {
       setSubmitting(false);
     }
@@ -298,7 +301,7 @@ const TicketCreatePage: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-6">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
-        <h1 className="text-2xl font-bold primary-foreground">Report Abnormal Finding</h1>
+        <h1 className="text-2xl font-bold primary-foreground">{t('ticket.reportAbnormalFinding')}</h1>
         <div className="flex gap-2">
           <Button
             type="button"
@@ -306,14 +309,14 @@ const TicketCreatePage: React.FC = () => {
             onClick={() => navigate('/tickets')}
             disabled={submitting || imagesUploading}
           >
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             type="button"
             onClick={() => formRef.current?.requestSubmit()}
             disabled={submitting || imagesUploading}
           >
-            {submitting ? 'Creating…' : imagesUploading ? 'Uploading images…' : 'Submit Report'}
+            {submitting ? t('ticket.creating') : imagesUploading ? t('ticket.uploadingImages') : t('ticket.submitReport')}
           </Button>
         </div>
       </div>
@@ -325,7 +328,7 @@ const TicketCreatePage: React.FC = () => {
             <div className="space-y-6">
               {/* Simplified Machine Selection */}
               <div className="space-y-4">
-                <Label htmlFor="machine-search" className="text-base font-semibold">What machine is affected? *</Label>
+                <Label htmlFor="machine-search" className="text-base font-semibold">{t('ticket.wizardSelectMachine')} *</Label>
                 
                 <div className="space-y-3">
                   <div className="relative">
@@ -338,13 +341,13 @@ const TicketCreatePage: React.FC = () => {
                         setMachineSearchDropdownOpen(true);
                       }}
                       onFocus={() => setMachineSearchDropdownOpen(true)}
-                      placeholder="Search by machine name, PUCODE (Plant-Area-Line-Machine-Number), or description..."
+                      placeholder={t('ticket.wizardSelectMachine')}
                       className={errors.machine ? 'border-red-500' : ''}
                     />
                     {machineSearchDropdownOpen && machineSearchResults.length > 0 && (
                       <div className="search-dropdown absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
                         {machineSearchLoading ? (
-                          <div className="p-3 text-sm text-gray-500">Searching...</div>
+                          <div className="p-3 text-sm text-gray-500">{t('ticket.searchMachines')}</div>
                         ) : (
                           machineSearchResults.map((result, idx) => (
                             <button
@@ -372,7 +375,7 @@ const TicketCreatePage: React.FC = () => {
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <p className="text-sm font-medium text-green-800">Selected Machine</p>
+                            <p className="text-sm font-medium text-green-800">{t('ticket.selectedMachine')}</p>
                           </div>
                           <p className="text-lg font-mono text-green-900 mb-1">{selectedMachine.PUCODE}</p>
                           <p className="text-sm text-green-700 mb-2">{selectedMachine.PUDESC}</p>
@@ -394,7 +397,7 @@ const TicketCreatePage: React.FC = () => {
                   )}
                   
                   <p className="text-xs text-gray-500">
-                    Type at least 2 characters to search. Only 5-section PUCODEs (Plant-Area-Line-Machine-Number) are shown for abnormal findings.
+                    {t('ticket.typeToSearch')}
                   </p>
                 </div>
 
@@ -403,7 +406,7 @@ const TicketCreatePage: React.FC = () => {
 
               {/* Attach images (before) */}
               <div className="space-y-3">
-                <Label htmlFor="images" className="text-base font-semibold">Attach Images (Before) *</Label>
+                <Label htmlFor="images" className="text-base font-semibold">{t('ticket.attachImages')} *</Label>
                 <div
                   className={`border-2 border-dashed rounded-xl p-8 transition-all duration-200 ${
                     imagesUploading 
@@ -429,7 +432,7 @@ const TicketCreatePage: React.FC = () => {
                       <p className={`text-sm font-medium transition-colors ${
                         isDragOver ? 'text-primary' : 'text-muted-foreground'
                       }`}>
-                        {isDragOver ? 'Drop files here' : 'Drag & drop files here or'}
+                        {isDragOver ? t('ticket.dropFilesHere') : t('ticket.dragDropFiles')}
                       </p>
                       {!isDragOver && (
                         <Button
@@ -442,12 +445,12 @@ const TicketCreatePage: React.FC = () => {
                           }}
                           disabled={imagesUploading}
                         >
-                          Browse files
+                          {t('ticket.browseFiles')}
                         </Button>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
-                      PNG, JPG, or JPEG up to 10MB each. Images upload after ticket creation.
+                      {t('ticket.imageUploadInfo')}
                     </p>
                   </div>
                   <Input
@@ -465,8 +468,8 @@ const TicketCreatePage: React.FC = () => {
                 {selectedFiles.length > 0 && (
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-sm text-muted-foreground">Selected: {selectedFiles.length} file(s)</span>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedFiles([])} disabled={imagesUploading}>Clear all</Button>
+                      <span className="text-sm text-muted-foreground">{t('ticket.selectedFiles')} {selectedFiles.length} file(s)</span>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedFiles([])} disabled={imagesUploading}>{t('ticket.clearAll')}</Button>
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 max-h-60 overflow-y-auto pr-1">
                       {previews.map((p, idx) => (
@@ -478,7 +481,7 @@ const TicketCreatePage: React.FC = () => {
                             onClick={() => setSelectedFiles((prev) => prev.filter((_, i) => i !== idx))}
                             disabled={imagesUploading}
                           >
-                            Remove
+                            {t('ticket.remove')}
                           </button>
                           <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-1 text-xs text-white">
                             <div className="truncate">{p.file.name}</div>
@@ -501,12 +504,12 @@ const TicketCreatePage: React.FC = () => {
             <div className="space-y-6">
               {/* Problem Title */}
               <div className="space-y-2">
-                <Label htmlFor="title">Problem Title *</Label>
+                <Label htmlFor="title">{t('ticket.problemTitle')} *</Label>
                 <Input
                   id="title"
                   value={formData.title}
                   onChange={(e) => handleInputChange('title', e.target.value)}
-                  placeholder="Add a concise problem title"
+                  placeholder={t('ticket.addConciseTitle')}
                   className={errors.title ? 'border-red-500' : ''}
                 />
                 {errors.title && <p className="text-sm text-red-500">{errors.title}</p>}
@@ -514,13 +517,13 @@ const TicketCreatePage: React.FC = () => {
 
               {/* Description */}
               <div className="space-y-3">
-                <Label htmlFor="description">Description *</Label>
+                <Label htmlFor="description">{t('ticket.description')} *</Label>
                 <Textarea
                   id="description"
                   rows={5}
                   value={formData.description}
                   onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder="Describe the abnormal finding in detail"
+                  placeholder={t('ticket.describeAbnormalFinding')}
                   className={errors.description ? 'border-red-500' : ''}
                 />
                 {errors.description && <p className="text-sm text-red-500">{errors.description}</p>}
@@ -529,26 +532,26 @@ const TicketCreatePage: React.FC = () => {
               {/* Severity & Priority */}
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="severity_level">Severity</Label>
+                  <Label htmlFor="severity_level">{t('ticket.severity')}</Label>
                   <Select value={formData.severity_level} onValueChange={(v) => handleInputChange('severity_level', v as any)}>
-                    <SelectTrigger><SelectValue placeholder="Select severity" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('ticket.selectSeverity')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="medium">Medium</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="critical">Critical</SelectItem>
+                      <SelectItem value="low">{t('ticket.low')}</SelectItem>
+                      <SelectItem value="medium">{t('ticket.medium')}</SelectItem>
+                      <SelectItem value="high">{t('ticket.high')}</SelectItem>
+                      <SelectItem value="critical">{t('ticket.critical')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="priority">Priority</Label>
+                  <Label htmlFor="priority">{t('ticket.priority')}</Label>
                   <Select value={formData.priority} onValueChange={(v) => handleInputChange('priority', v as any)}>
-                    <SelectTrigger><SelectValue placeholder="Select priority" /></SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder={t('ticket.selectPriority')} /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="low">Low</SelectItem>
-                      <SelectItem value="normal">Normal</SelectItem>
-                      <SelectItem value="high">High</SelectItem>
-                      <SelectItem value="urgent">Urgent</SelectItem>
+                      <SelectItem value="low">{t('ticket.low')}</SelectItem>
+                      <SelectItem value="normal">{t('ticket.normal')}</SelectItem>
+                      <SelectItem value="high">{t('ticket.high')}</SelectItem>
+                      <SelectItem value="urgent">{t('ticket.urgent')}</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
