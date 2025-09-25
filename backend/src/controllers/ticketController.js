@@ -353,7 +353,8 @@ const getTickets = async (req, res) => {
             severity_level,
             assigned_to,
             reported_by,
-            search
+            search,
+            area_id
         } = req.query;
 
         const offset = (page - 1) * limit;
@@ -392,6 +393,11 @@ const getTickets = async (req, res) => {
             params.push({ name: 'search', value: `%${search}%`, type: sql.NVarChar(255) });
         }
 
+        if (area_id) {
+            whereClause += ' AND t.area_id = @area_id';
+            params.push({ name: 'area_id', value: area_id, type: sql.Int });
+        }
+
         // Build the request with parameters
         let request = createSqlRequest(pool, params);
 
@@ -412,10 +418,26 @@ const getTickets = async (req, res) => {
                 r.PERSON_NAME as reporter_name,
                 r.EMAIL as reporter_email,
                 a.PERSON_NAME as assignee_name,
-                a.EMAIL as assignee_email
+                a.EMAIL as assignee_email,
+                -- Plant information
+                p.name as plant_name,
+                p.code as plant_code,
+                -- Area information
+                ar.name as area_name,
+                ar.code as area_code,
+                -- Line information
+                l.name as line_name,
+                l.code as line_code,
+                -- Machine information
+                m.name as machine_name,
+                m.code as machine_code
             FROM Tickets t
             LEFT JOIN Person r ON t.reported_by = r.PERSONNO
             LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
+            LEFT JOIN Plant p ON t.plant_id = p.id
+            LEFT JOIN Area ar ON t.area_id = ar.id
+            LEFT JOIN Line l ON t.line_id = l.id
+            LEFT JOIN Machine m ON t.machine_id = m.id
             ${whereClause}
             ORDER BY t.created_at DESC
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY

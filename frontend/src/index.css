@@ -5,76 +5,96 @@
 @layer base {
   :root {
     /* Neutral surfaces */
-    --background: 0 0% 100%;          /* white */
-    --foreground: 0 0% 10%;           /* near black */
+    --background: 0 0% 100%;          /* #FFFFFF - White */
+    --foreground: 0 0% 24%;           /* #3C3C3C - Gray text */
   
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
+    --card: 0 0% 100%;                /* #FFFFFF - White cards */
+    --card-foreground: 0 0% 24%;      /* #3C3C3C - Gray text */
   
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
+    --popover: 0 0% 100%;             /* #FFFFFF - White popovers */
+    --popover-foreground: 0 0% 24%;   /* #3C3C3C - Gray text */
   
-    /* Brand highlight */
-    --primary: 156 65% 41%;           /* green-600 */
-    --primary-foreground: 0 0% 100%;  /* white text on green */
+    /* Brand highlight - Blue */
+    --primary: 240 100% 31%;          /* #0000A0 - Blue brand color */
+    --primary-foreground: 0 0% 100%;  /* White text on blue */
   
-    /* Secondary neutrals */
-    --secondary: 0 0% 96%;            /* light gray */
-    --secondary-foreground: 0 0% 20%; /* dark gray text */
+    /* Secondary neutrals - Gray variations */
+    --secondary: 0 0% 96%;            /* Light gray background */
+    --secondary-foreground: 0 0% 24%; /* #3C3C3C - Gray text */
   
     /* Muted */
-    --muted: 0 0% 96%;                /* light gray background */
-    --muted-foreground: 0 0% 45%;     /* mid gray text */
+    --muted: 0 0% 96%;                /* Light gray background */
+    --muted-foreground: 0 0% 45%;     /* Mid gray text */
   
-    /* Accent (same as primary for simplicity) */
-    --accent: 156 65% 95%;
-    --accent-foreground: 0 0% 10%;
+    /* Accent - Pink/Magenta */
+    --accent: 320 68% 44%;            /* #BC2486 - Pink/Magenta accent */
+    --accent-foreground: 0 0% 100%;   /* White text on accent */
+  
+    /* Status colors */
+    --success: 142 76% 36%;           /* Green for success (derived) */
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 33 100% 57%;          /* #FFA124 - Orange warning */
+    --warning-foreground: 0 0% 100%;
+    
+    --info: 48 100% 50%;             /* #FFCD00 - Yellow info */
+    --info-foreground: 0 0% 24%;
   
     /* Danger */
-    --destructive: 0 72% 50%;         /* red */
+    --destructive: 0 100% 54%;        /* #FF1414 - Red */
     --destructive-foreground: 0 0% 100%;
   
     /* Borders, inputs, rings */
-    --border: 0 0% 90%;               /* light gray border */
-    --input: 0 0% 90%;
-    --ring: 156 65% 41%;              /* brand green for focus */
-  }       /* match primary */
+    --border: 0 0% 90%;               /* Light gray border */
+    --input: 0 0% 90%;                /* Light gray input */
+    --ring: 240 100% 31%;             /* Blue ring for focus */
+  }
 
   .dark {
     /* Neutral surfaces */
-    --background: 0 0% 10%;           /* near black */
-    --foreground: 0 0% 95%;           /* near white */
+    --background: 0 0% 10%;           /* Near black background */
+    --foreground: 0 0% 95%;           /* Near white text */
   
-    --card: 0 0% 14%;                 /* dark gray card */
-    --card-foreground: 0 0% 95%;
+    --card: 0 0% 14%;                 /* Dark gray cards */
+    --card-foreground: 0 0% 95%;      /* Near white text */
   
-    --popover: 0 0% 14%;
-    --popover-foreground: 0 0% 95%;
+    --popover: 0 0% 14%;              /* Dark gray popovers */
+    --popover-foreground: 0 0% 95%;   /* Near white text */
   
-    /* Brand highlight */
-    --primary: 156 65% 41%;             /* green-500 (lighter on dark) */
-    --primary-foreground: 0 0% 100%;  /* white */
+    /* Brand highlight - Blue (lighter for dark mode) */
+    --primary: 240 100% 60%;          /* Lighter blue for dark mode */
+    --primary-foreground: 0 0% 100%;  /* White text */
   
     /* Secondary neutrals */
-    --secondary: 0 0% 20%;            /* dark gray */
-    --secondary-foreground: 0 0% 80%; /* light gray text */
+    --secondary: 0 0% 20%;            /* Dark gray */
+    --secondary-foreground: 0 0% 80%; /* Light gray text */
   
     /* Muted */
-    --muted: 0 0% 20%;
-    --muted-foreground: 0 0% 65%;
+    --muted: 0 0% 20%;                /* Dark gray background */
+    --muted-foreground: 0 0% 65%;     /* Mid gray text */
   
-    /* Accent */
-    --accent: 156 65% 23%;
-    --accent-foreground: 0 0% 100%;
+    /* Accent - Pink/Magenta (lighter for dark mode) */
+    --accent: 320 68% 60%;            /* Lighter pink/magenta */
+    --accent-foreground: 0 0% 100%;   /* White text */
+  
+    /* Status colors */
+    --success: 142 76% 50%;           /* Lighter green for dark mode */
+    --success-foreground: 0 0% 100%;
+    
+    --warning: 33 100% 70%;          /* Lighter orange for dark mode */
+    --warning-foreground: 0 0% 10%;  /* Dark text on light orange */
+    
+    --info: 48 100% 60%;             /* Lighter yellow for dark mode */
+    --info-foreground: 0 0% 10%;     /* Dark text on yellow */
   
     /* Danger */
-    --destructive: 0 62% 45%;         /* darker red */
+    --destructive: 0 100% 60%;        /* Lighter red for dark mode */
     --destructive-foreground: 0 0% 100%;
   
     /* Borders, inputs, rings */
-    --border: 0 0% 25%;               /* dark gray border */
-    --input: 0 0% 25%;
-    --ring: 156 65% 51%;              /* green for focus */
+    --border: 0 0% 25%;               /* Dark gray border */
+    --input: 0 0% 25%;                /* Dark gray input */
+    --ring: 240 100% 60%;             /* Blue ring for focus */
   }
 }
 
@@ -84,5 +104,76 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* Brand color utilities */
+  .text-brand {
+    color: hsl(var(--primary));
+  }
+  
+  .bg-brand {
+    background-color: hsl(var(--primary));
+  }
+  
+  .border-brand {
+    border-color: hsl(var(--primary));
+  }
+  
+  /* Accent color utilities */
+  .text-accent {
+    color: hsl(var(--accent));
+  }
+  
+  .bg-accent {
+    background-color: hsl(var(--accent));
+  }
+  
+  .border-accent {
+    border-color: hsl(var(--accent));
+  }
+  
+  /* Status color utilities */
+  .text-success {
+    color: hsl(var(--success));
+  }
+  
+  .bg-success {
+    background-color: hsl(var(--success));
+  }
+  
+  .text-warning {
+    color: hsl(var(--warning));
+  }
+  
+  .bg-warning {
+    background-color: hsl(var(--warning));
+  }
+  
+  .text-info {
+    color: hsl(var(--info));
+  }
+  
+  .bg-info {
+    background-color: hsl(var(--info));
+  }
+  
+  /* Custom gradient utilities */
+  .bg-gradient-brand {
+    background: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  }
+  
+  .bg-gradient-warm {
+    background: linear-gradient(135deg, hsl(var(--warning)), hsl(var(--info)));
+  }
+  
+  /* Shadow utilities with brand colors */
+  .shadow-brand {
+    box-shadow: 0 4px 14px 0 hsl(var(--primary) / 0.2);
+  }
+  
+  .shadow-accent {
+    box-shadow: 0 4px 14px 0 hsl(var(--accent) / 0.2);
   }
 }

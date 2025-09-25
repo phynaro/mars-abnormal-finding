@@ -34,7 +34,7 @@ export const SubmenuPanel: React.FC<SubmenuPanelProps> = ({ activeId, collapsed 
               return (
                 <button
                   key={child.id}
-                  className={`w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-accent min-w-0 ${isActive ? 'bg-accent' : ''}`}
+                  className={`w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-accent hover:text-accent-foreground min-w-0 ${isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
                   onClick={() => navigate(child.path)}
                 >
                   <span className="">{child.icon}</span>

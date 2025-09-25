@@ -141,6 +141,7 @@ export interface TicketFilters {
   assigned_to?: number;
   reported_by?: number;
   search?: string;
+  area_id?: number;
 }
 
 // New hierarchy interfaces

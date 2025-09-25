@@ -1110,7 +1110,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         changeDescription: summary.comparisonMetrics.ticketGrowthRate.description,
         changeType: summary.comparisonMetrics.ticketGrowthRate.type,
         icon: <AlertTriangle className="h-4 w-4" />,
-        color: 'text-blue-600 dark:text-blue-400'
+        color: 'text-brand'
       },
       {
         title: t('dashboard.closedTickets'),
@@ -1119,7 +1119,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         changeDescription: summary.comparisonMetrics.closureRateImprovement.description,
         changeType: summary.comparisonMetrics.closureRateImprovement.type,
         icon: <CheckCircle className="h-4 w-4" />,
-        color: 'text-green-600 dark:text-green-400'
+        color: 'text-success'
       },
       {
         title: t('dashboard.pendingTickets'),
@@ -1142,7 +1142,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           ? 'activity_stopped'
           : kpis.pendingTicketsThisPeriod > kpis.pendingTicketsLastPeriod ? 'increase' : 'decrease',
         icon: <Clock className="h-4 w-4" />,
-        color: 'text-orange-600 dark:text-orange-400'
+        color: 'text-warning'
       },
       {
         title: t('dashboard.totalDowntimeAvoidance'),
@@ -1151,7 +1151,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         changeDescription: summary.comparisonMetrics.downtimeAvoidanceGrowth.description,
         changeType: summary.comparisonMetrics.downtimeAvoidanceGrowth.type,
         icon: <TrendingUp className="h-4 w-4" />,
-        color: 'text-purple-600 dark:text-purple-400'
+        color: 'text-accent'
       },
       {
         title: t('dashboard.totalCostAvoidance'),
@@ -1161,7 +1161,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         changeDescription: summary.comparisonMetrics.costAvoidanceGrowth.description,
         changeType: summary.comparisonMetrics.costAvoidanceGrowth.type,
         icon: <DollarSign className="h-4 w-4" />,
-        color: 'text-emerald-600 dark:text-emerald-400'
+        color: 'text-info'
       }
     ];
   }, [kpiData, t]);
@@ -1392,37 +1392,37 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           overflow-x: auto;
         }
         .react-calendar-heatmap .color-empty {
-          fill: #ebedf0;
+          fill: hsl(var(--muted));
         }
         .react-calendar-heatmap .color-scale-1 {
-          fill: #EAFAF3;
+          fill: hsl(var(--primary) / 0.1);
         }
         .react-calendar-heatmap .color-scale-2 {
-          fill: #C5F1DE;
+          fill: hsl(var(--primary) / 0.2);
         }
         .react-calendar-heatmap .color-scale-3 {
-          fill: #A0E9C8;
+          fill: hsl(var(--primary) / 0.3);
         }
         .react-calendar-heatmap .color-scale-4 {
-          fill: #7BE0B2;
+          fill: hsl(var(--primary) / 0.4);
         }
         .react-calendar-heatmap .color-scale-5 {
-          fill: #56D79D;
+          fill: hsl(var(--primary) / 0.5);
         }
         .react-calendar-heatmap .color-scale-6 {
-          fill: #30CF87;
+          fill: hsl(var(--primary) / 0.6);
         }
         .react-calendar-heatmap .color-scale-7 {
-          fill: #28A96E;
+          fill: hsl(var(--primary) / 0.7);
         }
         .react-calendar-heatmap .color-scale-8 {
-          fill: #1F8457;
+          fill: hsl(var(--primary) / 0.8);
         }
         .react-calendar-heatmap .color-scale-9 {
-          fill: #165F3E;
+          fill: hsl(var(--primary) / 0.9);
         }
         .react-calendar-heatmap .color-scale-10 {
-          fill: #0E3A26;
+          fill: hsl(var(--primary));
         }
         .react-calendar-heatmap rect:hover {
           stroke: #000;
@@ -1657,7 +1657,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </Avatar>
                   <div>
                     <p className="font-medium">{topPerformers[0]?.name || t('dashboard.noData')}</p>
-                    <p className="text-lg font-bold text-blue-600">{topPerformers[0]?.value || `0 ${t('dashboard.tickets')}`}</p>
+                    <p className="text-lg font-bold text-brand">{topPerformers[0]?.value || `0 ${t('dashboard.tickets')}`}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1678,7 +1678,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </Avatar>
                   <div>
                     <p className="font-medium">{topPerformers[1]?.name || t('dashboard.noData')}</p>
-                    <p className="text-lg font-bold text-emerald-600">{topPerformers[1]?.value || `฿0 ${t('dashboard.costAvoided')}`}</p>
+                    <p className="text-lg font-bold text-success">{topPerformers[1]?.value || `฿0 ${t('dashboard.costAvoided')}`}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1699,7 +1699,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </Avatar>
                   <div>
                     <p className="font-medium">{topPerformers[2]?.name || t('dashboard.noData')}</p>
-                    <p className="text-lg font-bold text-purple-600">{topPerformers[2]?.value || `0 ${t('dashboard.hoursSaved')}`}</p>
+                    <p className="text-lg font-bold text-accent">{topPerformers[2]?.value || `0 ${t('dashboard.hoursSaved')}`}</p>
                   </div>
                 </div>
               </CardContent>
@@ -1721,7 +1721,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {participationLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -1731,8 +1731,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <YAxis />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar dataKey="tickets" fill="#8884d8" name={t('dashboard.tickets')} />
-                    <Line type="monotone" dataKey="target" stroke="#82ca9d" name={t('dashboard.target')} />
+                    <Bar dataKey="tickets" fill="hsl(var(--primary))" name={t('dashboard.tickets')} />
+                    <Line type="monotone" dataKey="target" stroke="hsl(var(--accent))" name={t('dashboard.target')} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -1747,7 +1747,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {participationLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -1758,8 +1758,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <YAxis yAxisId="right" orientation="right" />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar yAxisId="left" dataKey="uniqueReporters" fill="#8884d8" name={t('dashboard.uniqueReporters')} />
-                    <Bar yAxisId="right" dataKey="coverageRate" fill="#82ca9d" name={t('dashboard.coverageRate')} />
+                    <Bar yAxisId="left" dataKey="uniqueReporters" fill="hsl(var(--primary))" name={t('dashboard.uniqueReporters')} />
+                    <Bar yAxisId="right" dataKey="coverageRate" fill="hsl(var(--accent))" name={t('dashboard.coverageRate')} />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -1776,7 +1776,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {areaActivityLoading ? (
                 <div className="flex items-center justify-center h-[400px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={Math.max(300, areaActivityChartData.length * 40 + 60)}>
@@ -1791,7 +1791,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <XAxis type="number" allowDecimals={false} />
                     <YAxis dataKey="area" type="category" width={80} />
                     <RechartsTooltip />
-                    <Bar dataKey="tickets" fill="#8884d8" />
+                    <Bar dataKey="tickets" fill="hsl(var(--primary))" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -1819,7 +1819,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {userActivityLoading ? (
                 <div className="flex items-center justify-center h-[400px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={Math.max(400, userActivityChartData.length * 48 + 40)}>
@@ -1850,7 +1850,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     />
                     <Bar 
                       dataKey="tickets" 
-                      fill="#82ca9d"
+                      fill="hsl(var(--accent))"
                       radius={[0, 8, 8, 0]} // rounded bar end
                       isAnimationActive
                       animationBegin={0}
@@ -1949,7 +1949,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {downtimeTrendLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -1960,7 +1960,16 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <RechartsTooltip />
                     <Legend />
                     {downtimeTrendAreas.map((area, index) => {
-                      const colors = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#8dd1e1', '#d084d0', '#87d068', '#ffc0cb'];
+                      const colors = [
+                        'hsl(var(--primary))', 
+                        'hsl(var(--accent))', 
+                        'hsl(var(--warning))', 
+                        'hsl(var(--info))', 
+                        'hsl(var(--success))', 
+                        'hsl(var(--destructive))',
+                        'hsl(var(--primary) / 0.7)', 
+                        'hsl(var(--accent) / 0.7)'
+                      ];
                       const color = colors[index % colors.length];
                       return (
                         <Area 
@@ -1987,7 +1996,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {costAvoidanceLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -1998,8 +2007,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <YAxis yAxisId="right" orientation="right" />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar yAxisId="left" dataKey="costAvoidance" fill="#8884d8" name={t('dashboard.costAvoidanceTHB')} />
-                    <Line yAxisId="right" type="monotone" dataKey="costPerCase" stroke="#82ca9d" name={t('dashboard.costPerCase')} />
+                    <Bar yAxisId="left" dataKey="costAvoidance" fill="hsl(var(--primary))" name={t('dashboard.costAvoidanceTHB')} />
+                    <Line yAxisId="right" type="monotone" dataKey="costPerCase" stroke="hsl(var(--accent))" name={t('dashboard.costPerCase')} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -2016,7 +2025,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {downtimeImpactLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -2025,7 +2034,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <XAxis type="number" allowDecimals={false} />
                     <YAxis dataKey="area" type="category" width={80} />
                     <RechartsTooltip />
-                    <Bar dataKey="hours" fill="#8884d8" />
+                    <Bar dataKey="hours" fill="hsl(var(--primary))" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -2040,7 +2049,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {costImpactLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -2049,7 +2058,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <XAxis type="number" allowDecimals={false} />
                     <YAxis dataKey="area" type="category" width={80} />
                     <RechartsTooltip />
-                    <Bar dataKey="cost" fill="#82ca9d" />
+                    <Bar dataKey="cost" fill="hsl(var(--accent))" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
@@ -2066,7 +2075,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {downtimeImpactReporterLoading ? (
                 <div className="flex items-center justify-center h-[400px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={Math.max(400, downtimeImpactReporterChartData.length * 48 + 40)}>
@@ -2097,7 +2106,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     />
                     <Bar 
                       dataKey="hours" 
-                      fill="#8884d8"
+                      fill="hsl(var(--primary))"
                       radius={[0, 8, 8, 0]}
                       isAnimationActive
                       animationBegin={0}
@@ -2125,7 +2134,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {costImpactReporterLoading ? (
                 <div className="flex items-center justify-center h-[400px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={Math.max(400, costImpactReporterChartData.length * 48 + 40)}>
@@ -2157,7 +2166,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   />
                   <Bar 
                     dataKey="cost" 
-                    fill="#82ca9d"
+                    fill="hsl(var(--accent))"
                     radius={[0, 8, 8, 0]}
                     isAnimationActive
                     animationBegin={0}
@@ -2188,7 +2197,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {downtimeByFailureModeLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -2231,14 +2240,14 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <Bar 
                       yAxisId="downtime"
                       dataKey="downtime" 
-                      fill="#8884d8" 
+                      fill="hsl(var(--primary))" 
                       name={t('dashboard.downtimeHours')}
                     />
                     <Line 
                       yAxisId="cases"
                       type="monotone" 
                       dataKey="caseCount" 
-                      stroke="#82ca9d" 
+                      stroke="hsl(var(--accent))" 
                       strokeWidth={3}
                       name={t('dashboard.caseCount')}
                     />
@@ -2256,7 +2265,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <CardContent>
               {costByFailureModeLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -2302,14 +2311,14 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <Bar 
                       yAxisId="cost"
                       dataKey="cost" 
-                      fill="#82ca9d" 
+                      fill="hsl(var(--accent))" 
                       name={t('dashboard.costAvoidance')}
                     />
                     <Line 
                       yAxisId="cases"
                       type="monotone" 
                       dataKey="caseCount" 
-                      stroke="#8884d8" 
+                      stroke="hsl(var(--primary))" 
                       strokeWidth={3}
                       name={t('dashboard.caseCount')}
                     />
@@ -2335,7 +2344,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardContent>
                 {resolveDurationByAreaLoading ? (
                   <div className="flex items-center justify-center h-[300px]">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
@@ -2366,7 +2375,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <Legend />
                       <Bar 
                         dataKey="avgResolveHours" 
-                        fill="#8884d8" 
+                        fill="hsl(var(--primary))" 
                         name={t('dashboard.averageResolveTime')}
                       />
                     </BarChart>
@@ -2385,7 +2394,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardContent>
                 {resolveDurationByUserLoading ? (
                   <div className="flex items-center justify-center h-[400px]">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={Math.max(400, resolveDurationByUserChartData.length * 48 + 40)}>
@@ -2421,7 +2430,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <Legend />
                       <Bar 
                         dataKey="avgResolveHours" 
-                        fill="#8884d8" 
+                        fill="hsl(var(--accent))" 
                         name="Average Resolve Time"
                       >
                         <LabelList content={AvatarLabel({ data: resolveDurationByUserChartData, maxAvatar: 28, clipPrefix: "resolve-duration-user-" })} />
@@ -2442,7 +2451,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardContent>
                 {ontimeRateByAreaLoading ? (
                   <div className="flex items-center justify-center h-[300px]">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
@@ -2476,7 +2485,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <Legend />
                       <Bar 
                         dataKey="ontimeRate" 
-                        fill="#82ca9d" 
+                        fill="hsl(var(--success))" 
                         name={t('dashboard.ontimeRate')}
                       />
                     </BarChart>
@@ -2495,7 +2504,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <CardContent>
                 {ontimeRateByUserLoading ? (
                   <div className="flex items-center justify-center h-[400px]">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={Math.max(400, ontimeRateByUserChartData.length * 48 + 40)}>
@@ -2534,7 +2543,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <Legend />
                       <Bar 
                         dataKey="ontimeRate" 
-                        fill="#82ca9d" 
+                        fill="hsl(var(--success))" 
                         name="Ontime Rate"
                       >
                         <LabelList content={AvatarLabel({ data: ontimeRateByUserChartData, maxAvatar: 28, clipPrefix: "ontime-rate-user-" })} />

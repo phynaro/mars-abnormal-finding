@@ -135,7 +135,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     "w-full justify-start h-auto p-2 text-sm",
                     isChildActive
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground",
+                      : "text-muted-foreground hover:text-foreground hover:bg-accent hover:text-accent-foreground",
                     !canAccess(child.permissionLevel) &&
                       "opacity-50 cursor-not-allowed",
                     isCollapsed && !isMobile && "justify-center px-2",

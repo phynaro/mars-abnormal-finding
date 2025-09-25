@@ -357,8 +357,8 @@ const TicketCreatePage: React.FC = () => {
                               onClick={() => onSelectMachine(result)}
                             >
                               <div className="font-medium text-base">{result.PUCODE}</div>
-                              <div className="text-sm text-gray-600 mt-1">{result.PUDESC}</div>
-                              <div className="text-xs text-gray-400 mt-1">
+                              <div className="text-sm opacity-80 mt-1">{result.PUDESC}</div>
+                              <div className="text-xs opacity-60 mt-1">
                                 {result.PLANT} → {result.AREA} → {result.LINE} → {result.MACHINE} → {result.NUMBER}
                               </div>
                             </button>

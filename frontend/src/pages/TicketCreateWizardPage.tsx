@@ -235,7 +235,7 @@ const TicketCreateWizardPage: React.FC = () => {
 
       {/* Progress bar */}
       <div className="w-full bg-gray-200 dark:bg-gray-800 rounded-full h-2 mb-6">
-        <div className="bg-green-500 h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
+        <div className="bg-brand h-2 rounded-full transition-all" style={{ width: `${progress}%` }} />
       </div>
 
       {/* Step content */}
@@ -429,8 +429,12 @@ const TicketCreateWizardPage: React.FC = () => {
                   <span className="font-medium font-mono">{selectedMachine?.PUCODE || '-'}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">{t('ticket.description')}:</span> 
+                  <span className="text-gray-500">{t('ticket.machineName')}:</span> 
                   <span className="font-medium">{selectedMachine?.PUDESC || '-'}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t('ticket.description')}:</span> 
+                  <span className="font-medium">{description}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.title')}:</span> 

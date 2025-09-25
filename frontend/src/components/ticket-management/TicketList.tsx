@@ -21,9 +21,12 @@ import {
   Clock,
   User,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, TicketFilters } from "@/services/ticketService";
+import { dashboardService } from "@/services/dashboardService";
+import type { AreaData } from "@/services/dashboardService";
 import { useToast } from "@/hooks/useToast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -51,6 +54,7 @@ export const TicketList: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalTickets, setTotalTickets] = useState(0);
+  const [areas, setAreas] = useState<AreaData[]>([]);
   const { toast } = useToast();
 
   // Helper function to check if user is L3/Admin (permission level 3 or higher)
@@ -69,6 +73,7 @@ export const TicketList: React.FC = () => {
     priority: "",
     severity_level: "",
     search: "",
+    area_id: undefined,
   });
 
   const fetchTickets = async () => {
@@ -91,9 +96,22 @@ export const TicketList: React.FC = () => {
     }
   };
 
+  const fetchAreas = async () => {
+    try {
+      const response = await dashboardService.getAllAreas();
+      setAreas(response.data);
+    } catch (error) {
+      console.error('Failed to fetch areas:', error);
+    }
+  };
+
   useEffect(() => {
     fetchTickets();
   }, [filters]);
+
+  useEffect(() => {
+    fetchAreas();
+  }, []);
 
   const handleFilterChange = (key: keyof TicketFilters, value: any) => {
     setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
@@ -132,6 +150,74 @@ export const TicketList: React.FC = () => {
 
   const formatDate = (dateString: string) => {
     return formatTimelineTime(dateString);
+  };
+
+  const handleExportTickets = () => {
+    if (tickets.length === 0) {
+      toast({
+        title: t('common.warning'),
+        description: t('ticket.noTicketsToExport'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prepare CSV data
+    const csvHeaders = [
+      t('ticket.ticketNumber'),
+      t('ticket.title'),
+      t('ticket.description'),
+      t('ticket.status'),
+      t('ticket.priority'),
+      t('ticket.severity'),
+      t('ticket.area'),
+      t('ticket.createdBy'),
+      t('ticket.assignedTo'),
+      t('ticket.created'),
+    ];
+
+    const csvData = tickets.map(ticket => [
+      ticket.ticket_number,
+      ticket.title,
+      ticket.description?.replace(/\n/g, ' ') || '', // Replace newlines with spaces
+      ticket.status.replace('_', ' ').toUpperCase(),
+      ticket.priority?.toUpperCase() || '',
+      ticket.severity_level?.toUpperCase() || '',
+      ticket.plant_name ? `${ticket.plant_name} - ${ticket.area_name}` : ticket.area_name || '',
+      ticket.reporter_name || `User ${ticket.reported_by}`,
+      ticket.assignee_name || `User ${ticket.assigned_to}` || t('ticket.unassigned'),
+      formatDate(ticket.created_at),
+    ]);
+
+    // Convert to CSV string
+    const csvContent = [
+      csvHeaders.join(','),
+      ...csvData.map(row => row.map(field => `"${field}"`).join(','))
+    ].join('\n');
+
+    // Create and download file
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    
+    // Generate filename with current date and filters
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const filterStr = filters.status ? `_${filters.status}` : '';
+    const areaStr = filters.area_id ? `_area${filters.area_id}` : '';
+    link.setAttribute('download', `tickets_${dateStr}${filterStr}${areaStr}.csv`);
+    
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    toast({
+      title: t('common.success'),
+      description: t('ticket.exportSuccess'),
+      variant: "default",
+    });
   };
 
   const getStatusIcon = (status: string) => {
@@ -189,14 +275,14 @@ export const TicketList: React.FC = () => {
                 <div className="space-y-2">
                   <Label htmlFor="status">{t('ticket.status')}</Label>
                   <Select
-                    value={filters.status || ""}
-                    onValueChange={(v) => handleFilterChange("status", v)}
+                    value={filters.status || "all"}
+                    onValueChange={(v) => handleFilterChange("status", v === "all" ? "" : v)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder={t('ticket.allStatuses')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value=" ">{t('ticket.allStatuses')}</SelectItem>
+                      <SelectItem value="all">{t('ticket.allStatuses')}</SelectItem>
                       <SelectItem value="open">{t('ticket.open')}</SelectItem>
                       <SelectItem value="assigned">{t('ticket.assigned')}</SelectItem>
                       <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
@@ -219,14 +305,14 @@ export const TicketList: React.FC = () => {
                 <div className="space-y-2">
                   <Label htmlFor="priority">{t('ticket.priority')}</Label>
                   <Select
-                    value={filters.priority || ""}
-                    onValueChange={(v) => handleFilterChange("priority", v)}
+                    value={filters.priority || "all"}
+                    onValueChange={(v) => handleFilterChange("priority", v === "all" ? "" : v)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder={t('ticket.allPriorities')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value=" ">{t('ticket.allPriorities')}</SelectItem>
+                      <SelectItem value="all">{t('ticket.allPriorities')}</SelectItem>
                       <SelectItem value="low">{t('ticket.low')}</SelectItem>
                       <SelectItem value="normal">{t('ticket.normal')}</SelectItem>
                       <SelectItem value="high">{t('ticket.high')}</SelectItem>
@@ -237,20 +323,41 @@ export const TicketList: React.FC = () => {
                 <div className="space-y-2">
                   <Label htmlFor="severity">{t('ticket.severity')}</Label>
                   <Select
-                    value={filters.severity_level || ""}
+                    value={filters.severity_level || "all"}
                     onValueChange={(v) =>
-                      handleFilterChange("severity_level", v)
+                      handleFilterChange("severity_level", v === "all" ? "" : v)
                     }
                   >
                     <SelectTrigger>
                       <SelectValue placeholder={t('ticket.allSeverities')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value=" ">{t('ticket.allSeverities')}</SelectItem>
+                      <SelectItem value="all">{t('ticket.allSeverities')}</SelectItem>
                       <SelectItem value="low">{t('ticket.low')}</SelectItem>
                       <SelectItem value="medium">{t('ticket.medium')}</SelectItem>
                       <SelectItem value="high">{t('ticket.high')}</SelectItem>
                       <SelectItem value="critical">{t('ticket.critical')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="area">{t('ticket.area')}</Label>
+                  <Select
+                    value={filters.area_id?.toString() || "all"}
+                    onValueChange={(v) =>
+                      handleFilterChange("area_id", v === "all" ? undefined : parseInt(v))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('ticket.allAreas')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('ticket.allAreas')}</SelectItem>
+                      {areas.map((area) => (
+                        <SelectItem key={area.id} value={area.id.toString()}>
+                          {area.plant_name ? `${area.plant_name} - ${area.name}` : area.name} ({area.code})
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -260,9 +367,10 @@ export const TicketList: React.FC = () => {
           <Button
             variant="outline"
             size="sm"
-            disabled
-            title={t('ticket.exportComingSoon')}
+            onClick={handleExportTickets}
+            title={t('ticket.exportTickets')}
           >
+            <Download className="h-4 w-4 mr-2" />
             {t('ticket.export')}
           </Button>
         </div>
@@ -308,6 +416,9 @@ export const TicketList: React.FC = () => {
                       className={getTicketSeverityClass(ticket.severity_level)}
                     >
                       {ticket.severity_level?.toUpperCase()}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {ticket.plant_name ? `${ticket.plant_name} - ${ticket.area_name}` : ticket.area_name}
                     </Badge>
                   </div>
                   <div className="mt-3 text-sm text-muted-foreground">
@@ -364,6 +475,7 @@ export const TicketList: React.FC = () => {
                     <th className="px-4 py-2">{t('ticket.status')}</th>
                     <th className="px-4 py-2">{t('ticket.priority')}</th>
                     <th className="px-4 py-2">{t('ticket.severity')}</th>
+                    <th className="px-4 py-2">{t('ticket.area')}</th>
                     <th className="px-4 py-2">{t('ticket.createdBy')}</th>
                     <th className="px-4 py-2">{t('ticket.assignedTo')}</th>
                     <th className="px-4 py-2">{t('ticket.created')}</th>
@@ -374,7 +486,7 @@ export const TicketList: React.FC = () => {
                   {tickets.map((ticket) => (
                     <tr
                       key={ticket.id}
-                      className="border-t cursor-pointer hover:bg-accent"
+                      className="border-t cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
                       onClick={() => handleViewTicket(ticket)}
                     >
                       <td className="px-4 py-2 whitespace-nowrap font-medium">
@@ -408,6 +520,11 @@ export const TicketList: React.FC = () => {
                         >
                           {ticket.severity_level?.toUpperCase()}
                         </Badge>
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className="text-sm">
+                          {ticket.plant_name ? `${ticket.plant_name} - ${ticket.area_name}` : ticket.area_name}
+                        </span>
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">

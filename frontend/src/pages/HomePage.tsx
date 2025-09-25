@@ -193,7 +193,7 @@ const PendingTicketsSection: React.FC<{
     <CardContent>
       {loading ? (
         <div className="py-8 text-center text-muted-foreground">
-          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-primary"></div>
+          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-brand"></div>
           <p>{t('homepage.loadingPendingTickets')}</p>
         </div>
       ) : error ? (
@@ -365,10 +365,10 @@ const PersonalCompletedTicketChart: React.FC<{
           </p>
           <div className="space-y-1">
             <p className="text-sm">
-              <span className="text-green-600 font-medium">Completed Tickets:</span> {data.tickets}
+              <span className="text-success font-medium">Completed Tickets:</span> {data.tickets}
             </p>
             <p className="text-sm">
-              <span className="text-red-600 font-medium">Target:</span> {data.target}
+              <span className="text-destructive font-medium">Target:</span> {data.target}
             </p>
           </div>
         </div>
@@ -399,7 +399,7 @@ const PersonalCompletedTicketChart: React.FC<{
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center h-[300px]">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
           </div>
         ) : error ? (
           <div className="flex items-center justify-center h-[300px] text-red-600">
@@ -416,11 +416,11 @@ const PersonalCompletedTicketChart: React.FC<{
               <YAxis />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Bar dataKey="tickets" fill="#82ca9d" name={t('homepage.completedTickets')} />
+              <Bar dataKey="tickets" fill="hsl(var(--accent))" name={t('homepage.completedTickets')} />
               <Line
                 type="monotone"
                 dataKey="target"
-                stroke="#ef4444"
+                stroke="hsl(var(--destructive))"
                 strokeWidth={2}
                 name={t('homepage.target')}
                 dot={false}
@@ -487,10 +487,10 @@ const PersonalTicketCountChart: React.FC<{
           </p>
           <div className="space-y-1">
             <p className="text-sm">
-              <span className="text-blue-600 font-medium">My Tickets:</span> {data.tickets}
+              <span className="text-brand font-medium">My Tickets:</span> {data.tickets}
             </p>
             <p className="text-sm">
-              <span className="text-red-600 font-medium">Target:</span> {data.target}
+              <span className="text-destructive font-medium">Target:</span> {data.target}
             </p>
           </div>
         </div>
@@ -521,7 +521,7 @@ const PersonalTicketCountChart: React.FC<{
       <CardContent>
         {loading ? (
           <div className="flex items-center justify-center h-[300px]">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
           </div>
         ) : error ? (
           <div className="flex items-center justify-center h-[300px] text-red-600">
@@ -538,11 +538,11 @@ const PersonalTicketCountChart: React.FC<{
               <YAxis />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Bar dataKey="tickets" fill="#8884d8" name={t('homepage.myTickets')} />
+              <Bar dataKey="tickets" fill="hsl(var(--primary))" name={t('homepage.myTickets')} />
               <Line
                 type="monotone"
                 dataKey="target"
-                stroke="#ef4444"
+                stroke="hsl(var(--destructive))"
                 strokeWidth={2}
                 name={t('homepage.target')}
                 dot={false}
@@ -598,7 +598,7 @@ const PersonalKPITiles: React.FC<{
         {/* Loading skeleton for reporter metrics */}
         <div>
           <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <AlertTriangle className="h-5 w-5 mr-2 text-blue-600" />
+            <AlertTriangle className="h-5 w-5 mr-2 text-brand" />
             {t('homepage.asReporter')}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -619,7 +619,7 @@ const PersonalKPITiles: React.FC<{
         {/* Loading skeleton for action person metrics (if L2+) */}
         <div>
           <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
+            <CheckCircle className="h-5 w-5 mr-2 text-success" />
             {t('homepage.asActionPerson')}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -677,7 +677,7 @@ const PersonalKPITiles: React.FC<{
       changeDescription: summary.reporterComparisonMetrics.reportGrowthRate.description,
       changeType: summary.reporterComparisonMetrics.reportGrowthRate.type,
       icon: <AlertTriangle className="h-4 w-4" />,
-      color: 'text-blue-600 dark:text-blue-400'
+      color: 'text-brand'
     },
     {
       title: t('homepage.downtimeAvoidedByMyReports'),
@@ -686,7 +686,7 @@ const PersonalKPITiles: React.FC<{
       changeDescription: summary.reporterComparisonMetrics.downtimeAvoidedByReportsGrowth.description,
       changeType: summary.reporterComparisonMetrics.downtimeAvoidedByReportsGrowth.type,
       icon: <TrendingUp className="h-4 w-4" />,
-      color: 'text-purple-600 dark:text-purple-400'
+      color: 'text-accent'
     },
     {
       title: t('homepage.costAvoidedByMyReports'),
@@ -696,7 +696,7 @@ const PersonalKPITiles: React.FC<{
       changeDescription: summary.reporterComparisonMetrics.costAvoidedByReportsGrowth.description,
       changeType: summary.reporterComparisonMetrics.costAvoidedByReportsGrowth.type,
       icon: <DollarSign className="h-4 w-4" />,
-      color: 'text-emerald-600 dark:text-emerald-400'
+      color: 'text-info'
     }
   ];
 
@@ -709,7 +709,7 @@ const PersonalKPITiles: React.FC<{
       changeDescription: summary.actionPersonComparisonMetrics.casesFixedGrowthRate.description,
       changeType: summary.actionPersonComparisonMetrics.casesFixedGrowthRate.type,
       icon: <CheckCircle className="h-4 w-4" />,
-      color: 'text-green-600 dark:text-green-400'
+      color: 'text-success'
     },
     {
       title: t('homepage.downtimeIFixed'),
@@ -718,7 +718,7 @@ const PersonalKPITiles: React.FC<{
       changeDescription: summary.actionPersonComparisonMetrics.downtimeAvoidedByFixesGrowth.description,
       changeType: summary.actionPersonComparisonMetrics.downtimeAvoidedByFixesGrowth.type,
       icon: <TrendingUp className="h-4 w-4" />,
-      color: 'text-purple-600 dark:text-purple-400'
+      color: 'text-accent'
     },
     {
       title: t('homepage.costIFixed'),
@@ -728,7 +728,7 @@ const PersonalKPITiles: React.FC<{
       changeDescription: summary.actionPersonComparisonMetrics.costAvoidedByFixesGrowth.description,
       changeType: summary.actionPersonComparisonMetrics.costAvoidedByFixesGrowth.type,
       icon: <DollarSign className="h-4 w-4" />,
-      color: 'text-emerald-600 dark:text-emerald-400'
+      color: 'text-info'
     }
   ] : [];
 
@@ -780,7 +780,7 @@ const PersonalKPITiles: React.FC<{
       {/* Reporter Metrics Section */}
       <div>
         <h3 className="text-lg font-semibold mb-4 flex items-center">
-          <AlertTriangle className="h-5 w-5 mr-2 text-blue-600" />
+          <AlertTriangle className="h-5 w-5 mr-2 text-brand" />
           {t('homepage.asReporter')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -792,7 +792,7 @@ const PersonalKPITiles: React.FC<{
       {userRole === 'L2+' && actionPersonTiles.length > 0 && (
         <div>
           <h3 className="text-lg font-semibold mb-4 flex items-center">
-            <CheckCircle className="h-5 w-5 mr-2 text-green-600" />
+            <CheckCircle className="h-5 w-5 mr-2 text-success" />
             {t('homepage.asActionPerson')}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -965,14 +965,14 @@ const HomePage: React.FC = () => {
             navigate("/tickets/create");
           }
         },
-        color: "bg-blue-500 hover:bg-blue-600",
+        color: "bg-red-600 hover:bg-red-400",
       },
       {
         title: t('homepage.viewTickets'),
         description: t('homepage.checkTicketStatus'),
         icon: <FileText className="h-6 w-6" />,
         onClick: () => navigate("/tickets"),
-        color: "bg-green-500 hover:bg-green-600",
+        color: "bg-gray-600 hover:bg-gray-500",
       },
     ],
     [navigate, t],
