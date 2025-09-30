@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search,
   Filter,
@@ -237,6 +238,42 @@ export const TicketList: React.FC = () => {
     }
   };
 
+  const MobileCardSkeleton = () => (
+    <div className="border rounded-lg p-4 bg-card">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <Skeleton className="h-4 w-16 mb-2" />
+          <Skeleton className="h-6 w-3/4 mb-2" />
+        </div>
+        <Skeleton className="h-6 w-20 rounded-full" />
+      </div>
+      <Skeleton className="h-4 w-full mb-1" />
+      <Skeleton className="h-4 w-2/3 mb-3" />
+      <div className="flex flex-wrap gap-2 mb-3">
+        <Skeleton className="h-5 w-16 rounded-full" />
+        <Skeleton className="h-5 w-16 rounded-full" />
+        <Skeleton className="h-5 w-24 rounded-full" />
+      </div>
+      <div className="space-y-2 mb-3">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4" />
+          <Skeleton className="h-4 w-28" />
+        </div>
+      </div>
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-3 w-40" />
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-8 w-16" />
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className="space-y-6 py-6">
       {/* Options Bar (filters, export) */}
@@ -379,9 +416,18 @@ export const TicketList: React.FC = () => {
       {/* Tickets List */}
       <div>
         {loading ? (
-          <div className="flex justify-center items-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-          </div>
+          <>
+            {/* Mobile Skeleton Cards */}
+            <div className="block lg:hidden space-y-4">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <MobileCardSkeleton key={index} />
+              ))}
+            </div>
+            {/* Desktop Spinner */}
+            <div className="hidden lg:flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          </>
         ) : tickets.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             {t('ticket.noTicketsFound')}

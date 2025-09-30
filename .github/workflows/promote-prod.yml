@@ -1,0 +1,72 @@
+name: promote-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Git commit SHA to promote (leave empty to use latest staging)"
+        required: false
+        default: ""
+
+env:
+    HOST: ${{ secrets.DEPLOY_HOST }}
+    USER: ${{ secrets.DEPLOY_USER }}    # e.g., ubuntu
+    REPO_OWNER: ${{ github.repository_owner }}
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1) Try to get the latest 'staging-sha' artifact from the 'deploy-staging' workflow
+      - name: Download latest staging SHA artifact
+        uses: dawidd6/action-download-artifact@v6
+        with:
+          workflow: deploy-staging.yml    # or the workflow NAME if you prefer: deploy-staging
+          workflow_conclusion: success
+          name: staging_sha
+          path: .
+          search_artifacts: true
+          if_no_artifact_found: ignore
+
+      # 2) Decide which SHA to use: input > artifact > fail
+      - name: Resolve SHA to deploy
+        id: r
+        shell: bash
+        run: |
+          INPUT_SHA="${{ github.event.inputs.sha }}"
+          ART_SHA=""
+          if [[ -f staging_sha.txt ]]; then ART_SHA="$(cat staging_sha.txt | tr -d '\n' )"; fi
+
+          if [[ -n "$INPUT_SHA" ]]; then
+            USE="$INPUT_SHA"
+            SRC="input"
+          elif [[ -n "$ART_SHA" ]]; then
+            USE="$ART_SHA"
+            SRC="latest-staging-artifact"
+          else
+            echo "No SHA provided and no staging artifact found." >&2
+            exit 1
+          fi
+
+          echo "sha=$USE" >> "$GITHUB_OUTPUT"
+          echo "src=$SRC" >> "$GITHUB_OUTPUT"
+      - name: Show chosen SHA
+        run: |
+            echo "Promoting SHA ${{ steps.r.outputs.sha }} (source: ${{ steps.r.outputs.src }})"
+
+      # 3) Deploy over SSH using the chosen SHA
+      - name: Promote to prod via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ env.HOST }}
+          username: ${{ env.USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script: |
+            set -e
+            cd /opt/hello-cicd/prod
+            export REPO_OWNER="${{ env.REPO_OWNER }}"
+            export IMAGE_SHA="${{ steps.r.outputs.sha }}"
+            # If GHCR packages are private, uncomment:
+            # export GHCR_TOKEN="${{ secrets.GHCR_TOKEN }}"
+            ./deploy_prod.sh

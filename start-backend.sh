@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# Script to start backend with Docker and ngrok manually
+# Script to start backend with Docker
 # Run this on your local machine
 
 set -e
 
-echo "🐳 Starting Mars Backend with Docker and ngrok"
+echo "🐳 Starting Mars Backend with Docker"
 
 # Check if .env file exists
 if [ ! -f .env ]; then
@@ -19,13 +19,6 @@ fi
 # Load environment variables
 source .env
 
-# Check if ngrok authtoken is set
-if [ -z "$NGROK_AUTHTOKEN" ]; then
-    echo "❌ NGROK_AUTHTOKEN not set in .env file!"
-    echo "📝 Please get your ngrok authtoken from: https://dashboard.ngrok.com/get-started/your-authtoken"
-    exit 1
-fi
-
 # Build and start Docker container
 echo "🔨 Building Docker image..."
 docker-compose build
@@ -37,14 +30,12 @@ docker-compose up -d
 echo "⏳ Waiting for backend to start..."
 sleep 5
 
-# Start ngrok manually
-echo "🌐 Starting ngrok tunnel..."
-echo "📝 Note: Keep this terminal open to maintain the ngrok tunnel"
-echo "📝 Copy the ngrok URL and update your nginx configuration"
+# Check if backend is running
+echo "✅ Backend started successfully!"
+echo "🌐 Backend is running on: http://localhost:3001"
+echo "📝 You can now access the API at: http://localhost:3001/api"
 echo ""
-
-# Authenticate ngrok
-ngrok config add-authtoken $NGROK_AUTHTOKEN
-
-# Start ngrok tunnel
-ngrok http 3001
+echo "📋 Useful commands:"
+echo "   - View logs: docker-compose logs -f"
+echo "   - Stop backend: docker-compose down"
+echo "   - Restart backend: docker-compose restart"

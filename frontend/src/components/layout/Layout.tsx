@@ -76,6 +76,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             activeId={activeId}
             onSelect={(id) => {
               setActiveId(id);
+              // Auto-expand submenu when selecting a main menu item that has children
+              const selectedItem = menuItems.find(m => m.id === id);
+              if (selectedItem?.children?.length) {
+                setSubmenuCollapsed(false);
+              }
             }}
           />
           {(() => {

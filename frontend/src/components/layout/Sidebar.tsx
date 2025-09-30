@@ -45,6 +45,16 @@ const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [location.pathname]);
 
+  // Auto-expand all sub menus when mobile menu opens
+  useEffect(() => {
+    if (isMobile && isMobileOpen) {
+      const allParentIds = menuItems
+        .filter(item => item.children && item.children.length > 0)
+        .map(item => item.id);
+      setExpandedItems(allParentIds);
+    }
+  }, [isMobile, isMobileOpen]);
+
   const toggleExpanded = (itemId: string) => {
     setExpandedItems((prev) =>
       prev.includes(itemId)
@@ -76,7 +86,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     const isExpanded = expandedItems.includes(item.id);
     const hasChildren = item.children && item.children.length > 0;
 
-    const isActive = location.pathname.startsWith(item.path);
+    // Check if this item is active, but not if a child is active
+    const hasActiveChild = item.children?.some(child => location.pathname.startsWith(child.path));
+    const isActive = !hasActiveChild && location.pathname.startsWith(item.path);
 
     return (
       <div key={item.id}>
@@ -125,7 +137,7 @@ const Sidebar: React.FC<SidebarProps> = ({
             )}
           >
             {item.children!.map((child) => {
-              const isChildActive = location.pathname === child.path;
+              const isChildActive = location.pathname.startsWith(child.path);
 
               return (
                 <Button
@@ -183,7 +195,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                       M
                     </span>
                   </div>
-                  <span className="text-lg font-semibold">CMMS</span>
+                  <span className="text-lg font-semibold">MARS</span>
                 </div>
                 <Button
                   variant="ghost"

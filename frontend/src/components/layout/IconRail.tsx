@@ -92,8 +92,8 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Language</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => setLanguage('en')} className={language === 'en' ? 'bg-accent' : ''}>English</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setLanguage('th')} className={language === 'th' ? 'bg-accent' : ''}>Thai</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setLanguage('en')} className={language === 'en' ? 'bg-accent text-accent-foreground' : ''}>English</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setLanguage('th')} className={language === 'th' ? 'bg-accent text-accent-foreground' : ''}>ไทย</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
           {/* Profile/Logout with Avatar */}

@@ -97,13 +97,13 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
             <DropdownMenuContent align="end">
               <DropdownMenuItem
                 onClick={() => setLanguage('en')}
-                className={language === 'en' ? 'bg-accent' : ''}
+                className={language === 'en' ? 'bg-accent text-accent-foreground' : ''}
               >
                 {t('language.english')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => setLanguage('th')}
-                className={language === 'th' ? 'bg-accent' : ''}
+                className={language === 'th' ? 'bg-accent text-accent-foreground' : ''}
               >
                 {t('language.thai')}
               </DropdownMenuItem>

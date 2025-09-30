@@ -4,10 +4,10 @@
         "command": "npx",
         "args": ["-y", "mssql-mcp-node"],
         "env": {
-          "MSSQL_SERVER": "192.168.0.25",
+          "MSSQL_SERVER": "192.168.0.177",
           "MSSQL_PORT": "1433",
           "MSSQL_USER": "sa",
-          "MSSQL_PASSWORD": "Sonic@True101",
+          "MSSQL_PASSWORD": "Jir@202501",
           "MSSQL_DATABASE": "Cedar6_Mars",
           "MSSQL_ENCRYPT": "true",
           "MSSQL_TRUST_SERVER_CERTIFICATE": "true"

@@ -55,7 +55,9 @@ const TicketCreateWizardPage: React.FC = () => {
   const [machineSearchLoading, setMachineSearchLoading] = useState(false);
   const [machineSearchDropdownOpen, setMachineSearchDropdownOpen] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<PUCODEResult | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Data state (mirrors CreateTicketRequest with extras)
   const [title, setTitle] = useState('');
@@ -70,14 +72,17 @@ const TicketCreateWizardPage: React.FC = () => {
   const previews = useMemo(() => beforeFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [beforeFiles]);
   useEffect(() => () => { previews.forEach(p => URL.revokeObjectURL(p.url)); }, [previews]);
 
-  // Simplified machine search function
+  // Improved machine search function with better UX
   const searchMachines = async (query: string) => {
     if (query.length < 2) {
       setMachineSearchResults([]);
+      setMachineSearchLoading(false);
+      setIsSearching(false);
       return;
     }
 
     try {
+      setIsSearching(true);
       setMachineSearchLoading(true);
       const response = await fetch(`${API_BASE_URL}/hierarchy/pucode/search?search=${encodeURIComponent(query)}`, {
         headers: authService.getAuthHeaders()
@@ -85,9 +90,16 @@ const TicketCreateWizardPage: React.FC = () => {
       const data = await response.json();
       if (data.success) {
         setMachineSearchResults(data.data || []);
+        // Keep dropdown open if we have results or if user is still typing
+        if (data.data && data.data.length > 0) {
+          setMachineSearchDropdownOpen(true);
+        }
+      } else {
+        setMachineSearchResults([]);
       }
     } catch (error) {
       console.error('Error searching machines:', error);
+      setMachineSearchResults([]);
       toast({
         title: 'Error',
         description: 'Failed to search machines. Please try again.',
@@ -95,26 +107,50 @@ const TicketCreateWizardPage: React.FC = () => {
       });
     } finally {
       setMachineSearchLoading(false);
+      setIsSearching(false);
     }
   };
 
-  // Search machines with debounce
+  // Improved search with better debouncing and state management
   useEffect(() => {
-    const t = setTimeout(async () => {
-      if (machineSearchQuery.length >= 2) {
-        await searchMachines(machineSearchQuery);
-      }
+    // Clear previous timeout
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    // If query is too short, clear results immediately
+    if (machineSearchQuery.length < 2) {
+      setMachineSearchResults([]);
+      setMachineSearchLoading(false);
+      setIsSearching(false);
+      return;
+    }
+
+    // Set searching state immediately for better UX
+    setIsSearching(true);
+    setMachineSearchDropdownOpen(true);
+
+    // Debounce the actual search
+    searchTimeoutRef.current = setTimeout(async () => {
+      await searchMachines(machineSearchQuery);
     }, 300);
-    return () => clearTimeout(t);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
   }, [machineSearchQuery]);
 
-  // Click outside handler to close dropdown
+  // Improved click outside handler
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Element;
       const dropdown = target.closest('.search-dropdown');
+      const input = target.closest('input');
       
-      if (searchInputRef.current && !searchInputRef.current.contains(target) && !dropdown) {
+      // Don't close if clicking on input or dropdown
+      if (searchInputRef.current && !searchInputRef.current.contains(target) && !dropdown && !input) {
         setMachineSearchDropdownOpen(false);
       }
     };
@@ -143,6 +179,9 @@ const TicketCreateWizardPage: React.FC = () => {
     setMachineSearchResults([]);
     setPucode('');
     setPu_id(undefined);
+    setMachineSearchDropdownOpen(false);
+    setIsSearching(false);
+    setMachineSearchLoading(false);
   };
 
   const canNext = (): boolean => {
@@ -252,28 +291,48 @@ const TicketCreateWizardPage: React.FC = () => {
                   id="machine-search"
                   value={machineSearchQuery}
                   onChange={(e) => {
-                    setMachineSearchQuery(e.target.value);
-                    setMachineSearchDropdownOpen(true);
+                    const value = e.target.value;
+                    setMachineSearchQuery(value);
+                    // Keep dropdown open while typing, but don't force it if query is too short
+                    if (value.length >= 2) {
+                      setMachineSearchDropdownOpen(true);
+                    }
                   }}
-                  onFocus={() => setMachineSearchDropdownOpen(true)}
+                  onFocus={() => {
+                    if (machineSearchQuery.length >= 2 || machineSearchResults.length > 0) {
+                      setMachineSearchDropdownOpen(true);
+                    }
+                  }}
                   placeholder={t('ticket.wizardSelectMachine')}
+                  className="pr-8"
                 />
-                {machineSearchDropdownOpen && machineSearchResults.length > 0 && (
+                {machineSearchDropdownOpen && (
                   <div className="search-dropdown absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
-                    {machineSearchLoading ? (
-                      <div className="p-3 text-sm text-gray-500">{t('common.loading')}</div>
-                    ) : (
+                    {machineSearchLoading || isSearching ? (
+                      <div className="p-3 text-sm text-gray-500 flex items-center gap-2">
+                        <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                        {t('common.loading')}
+                      </div>
+                    ) : machineSearchResults.length > 0 ? (
                       machineSearchResults.map((result, idx) => (
                         <button
                           type="button"
                           key={idx}
-                          className="w-full text-left px-3 py-3 text-sm hover:bg-accent hover:text-accent-foreground border-b last:border-b-0"
+                          className="w-full text-left px-3 py-3 text-sm hover:bg-accent hover:text-accent-foreground border-b last:border-b-0 transition-colors"
                           onClick={() => onSelectMachine(result)}
                         >
                           <div className="font-medium text-base">{result.PUDESC}</div>
                           <div className="text-sm text-gray-600 mt-1">{result.PUCODE}</div>
                         </button>
                       ))
+                    ) : machineSearchQuery.length >= 2 ? (
+                      <div className="p-3 text-sm text-gray-500">
+                        No machines found for "{machineSearchQuery}"
+                      </div>
+                    ) : (
+                      <div className="p-3 text-sm text-gray-500">
+                        Type at least 2 characters to search
+                      </div>
                     )}
                   </div>
                 )}
