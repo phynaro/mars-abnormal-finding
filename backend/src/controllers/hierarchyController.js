@@ -235,7 +235,7 @@ const searchPUCODE = async (req, res) => {
                 FROM PU 
                 WHERE (PUCODE LIKE @search OR PUNAME LIKE @search)
                 AND FLAGDEL = 'F'
-                AND PUCODE LIKE '%-%-%-%-%'  -- Only 5-section PUCODEs (Plant-Area-Line-Machine-Number)
+                AND PUCODE LIKE '%-%-%'  -- At least 3-section PUCODEs (minimum Plant-Area-Number)
                 ORDER BY PUCODE
             `);
 
@@ -303,7 +303,7 @@ const getPUCODEDetails = async (req, res) => {
                 FROM PU 
                 WHERE PUCODE = @pucode
                 AND FLAGDEL = 'F'
-                AND PUCODE LIKE '%-%-%-%-%'  -- Only 5-section PUCODEs (Plant-Area-Line-Machine-Number)
+                AND PUCODE LIKE '%-%-%'  -- At least 3-section PUCODEs (minimum Plant-Area-Number)
             `);
 
         if (result.recordset.length === 0) {
@@ -461,6 +461,75 @@ const generatePUCODE = async (req, res) => {
     }
 };
 
+// Get distinct plants from PUExtension (for filters)
+const getDistinctPlants = async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request().query(`
+            SELECT DISTINCT 
+                plant as code,
+                plant as name
+            FROM PUExtension
+            WHERE plant IS NOT NULL AND plant != ''
+            ORDER BY plant
+        `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching distinct plants:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch distinct plants',
+            error: error.message
+        });
+    }
+};
+
+// Get distinct areas from PUExtension (for filters)
+const getDistinctAreas = async (req, res) => {
+    try {
+        const { plant } = req.query;
+        const pool = await sql.connect(dbConfig);
+        
+        let query = `
+            SELECT DISTINCT 
+                area as code,
+                area as name,
+                plant
+            FROM PUExtension
+            WHERE area IS NOT NULL AND area != ''
+        `;
+        
+        const request = pool.request();
+        if (plant) {
+            query += ' AND plant = @plant';
+            request.input('plant', sql.VarChar(50), plant);
+        }
+        
+        query += ' ORDER BY area';
+        
+        const result = await request.query(query);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching distinct areas:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch distinct areas',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getPlants,
     getAllAreas,
@@ -469,5 +538,7 @@ module.exports = {
     getMachinesByLine,
     searchPUCODE,
     getPUCODEDetails,
-    generatePUCODE
+    generatePUCODE,
+    getDistinctPlants,
+    getDistinctAreas
 };

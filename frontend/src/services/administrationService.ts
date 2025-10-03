@@ -55,22 +55,6 @@ export interface Machine {
   plant_name?: string;
 }
 
-export interface TicketApproval {
-  id: number;
-  personno: number;
-  area_id: number;
-  approval_level: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-  area_name?: string;
-  plant_name?: string;
-  person_name?: string;
-  firstname?: string;
-  lastname?: string;
-  personcode?: string;
-}
-
 export interface Person {
   PERSONNO: number;
   PERSON_NAME: string;
@@ -80,6 +64,52 @@ export interface Person {
   EMAIL?: string;
   PHONE?: string;
 }
+
+// Interfaces for the simplified approval system
+export interface CreateTicketApprovalRequest {
+  personno: number;
+  plant_code: string;
+  area_code?: string;
+  line_code?: string;
+  machine_code?: string;
+  approval_level: number;
+  is_active?: boolean;
+}
+
+export interface TicketApproval {
+  id?: number;
+  personno: number;
+  plant_code?: string;
+  area_code?: string;
+  line_code?: string;
+  machine_code?: string;
+  approval_level: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  plant_name?: string;
+  area_name?: string;
+  line_name?: string;
+  machine_name?: string;
+  person_name?: string;
+  firstname?: string;
+  lastname?: string;
+  personcode?: string;
+  location_scope?: string;
+  approval_level_name?: string;
+  total_approvals?: number;
+}
+
+// Action mapping for approval levels
+export const ACTION_MAPPING = {
+  L1: ['create', 'approve_review', 'reopen'],
+  L2: ['accept', 'reject', 'escalate', 'complete'],
+  L3: ['reassign', 'reject_final'],
+  L4: ['approve_close']
+} as const;
+
+export type ApprovalLevel = 1 | 2 | 3 | 4;
+export type ActionType = 'create' | 'approve_review' | 'reopen' | 'accept' | 'reject' | 'escalate' | 'complete' | 'reassign' | 'reject_final' | 'approve_close';
 
 export interface LookupData {
   plants: Plant[];
@@ -97,6 +127,31 @@ interface ApiResponse<T> {
 }
 
 // ==================== HELPER FUNCTIONS ====================
+
+// Helper function to check if user can perform action
+export const canUserPerformAction = (userLevel: number, action: ActionType): boolean => {
+  const levelKey = `L${userLevel}` as keyof typeof ACTION_MAPPING;
+  const actions = ACTION_MAPPING[levelKey];
+  return actions ? (actions as readonly ActionType[]).includes(action) : false;
+};
+
+// Helper function to get all actions for a level
+export const getActionsForLevel = (level: number): ActionType[] => {
+  const levelKey = `L${level}` as keyof typeof ACTION_MAPPING;
+  const actions = ACTION_MAPPING[levelKey];
+  return actions ? [...actions] : [];
+};
+
+// Helper function to get approval level name
+export const getApprovalLevelName = (level: number): string => {
+  switch (level) {
+    case 1: return 'L1 - Create/Review/Reopen';
+    case 2: return 'L2 - Accept/Reject/Escalate/Complete';
+    case 3: return 'L3 - Reassign/Reject Final';
+    case 4: return 'L4 - Approve Close';
+    default: return 'Unknown Level';
+  }
+};
 
 const getAuthHeaders = () => {
   const token = authService.getToken();
@@ -329,10 +384,10 @@ export const machineService = {
 // ==================== TICKET APPROVAL API ====================
 
 export const ticketApprovalService = {
-  async getAll(area_id?: number, personno?: number): Promise<TicketApproval[]> {
+  async getAll(plant_code?: string, personno?: number): Promise<TicketApproval[]> {
     const url = new URL(`${API_BASE_URL}/administration/ticket-approvals`);
-    if (area_id) {
-      url.searchParams.append('area_id', area_id.toString());
+    if (plant_code) {
+      url.searchParams.append('plant_code', plant_code);
     }
     if (personno) {
       url.searchParams.append('personno', personno.toString());
@@ -342,6 +397,7 @@ export const ticketApprovalService = {
       headers: getAuthHeaders()
     });
     const result: ApiResponse<TicketApproval[]> = await handleApiResponse(response);
+    console.log('Ticket approvals:', result.data);
     return result.data;
   },
 
@@ -353,7 +409,15 @@ export const ticketApprovalService = {
     return result.data;
   },
 
-  async create(approval: Omit<TicketApproval, 'id' | 'created_at' | 'updated_at' | 'area_name' | 'plant_name'>): Promise<{ id: number }> {
+  async getByPersonAndLevel(personno: number, approvalLevel: number): Promise<TicketApproval[]> {
+    const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/person/${personno}/level/${approvalLevel}`, {
+      headers: getAuthHeaders()
+    });
+    const result: ApiResponse<TicketApproval[]> = await handleApiResponse(response);
+    return result.data;
+  },
+
+  async create(approval: CreateTicketApprovalRequest): Promise<{ id: number }> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals`, {
       method: 'POST',
       headers: getAuthHeaders(),
@@ -363,7 +427,17 @@ export const ticketApprovalService = {
     return result.data;
   },
 
-  async update(id: number, approval: Omit<TicketApproval, 'id' | 'created_at' | 'updated_at' | 'area_name' | 'plant_name'>): Promise<void> {
+  async createMultiple(approvals: CreateTicketApprovalRequest[]): Promise<{ ids: number[]; count: number }> {
+    const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/bulk`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ approvals })
+    });
+    const result: ApiResponse<{ ids: number[]; count: number }> = await handleApiResponse(response);
+    return result.data;
+  },
+
+  async update(id: number, approval: Partial<CreateTicketApprovalRequest>): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/${id}`, {
       method: 'PUT',
       headers: getAuthHeaders(),
@@ -378,6 +452,41 @@ export const ticketApprovalService = {
       headers: getAuthHeaders()
     });
     await handleApiResponse(response);
+  },
+
+  async deleteByPersonAndLevel(personno: number, approvalLevel: number): Promise<{ count: number }> {
+    const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/person/${personno}/level/${approvalLevel}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    const result: ApiResponse<{ count: number }> = await handleApiResponse(response);
+    return result.data;
+  },
+
+  // New methods for the simplified approval system
+  async checkUserActionPermission(userId: number, puno: number, action: ActionType): Promise<{ hasPermission: boolean; approvalLevel: number }> {
+    const response = await fetch(`${API_BASE_URL}/administration/check-action-permission`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ userId, puno, action })
+    });
+    const result: ApiResponse<{ hasPermission: boolean; approvalLevel: number }> = await handleApiResponse(response);
+    return result.data;
+  },
+
+  async getUsersForNotification(puno: number, approvalLevel: number, excludeUserId?: number): Promise<Person[]> {
+    const url = new URL(`${API_BASE_URL}/administration/notification-users`);
+    url.searchParams.append('puno', puno.toString());
+    url.searchParams.append('approval_level', approvalLevel.toString());
+    if (excludeUserId) {
+      url.searchParams.append('exclude_user_id', excludeUserId.toString());
+    }
+    
+    const response = await fetch(url.toString(), {
+      headers: getAuthHeaders()
+    });
+    const result: ApiResponse<Person[]> = await handleApiResponse(response);
+    return result.data;
   }
 };
 

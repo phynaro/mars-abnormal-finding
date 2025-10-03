@@ -63,7 +63,7 @@ const TicketCreateWizardPage: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [pucode, setPucode] = useState('');
-  const [pu_id, setPu_id] = useState<number | undefined>(undefined);
+  const [puno, setPu_id] = useState<number | undefined>(undefined);
   const [severity, setSeverity] = useState<'low'|'medium'|'high'|'critical'>('medium');
   const [priority, setPriority] = useState<'low'|'normal'|'high'|'urgent'>('normal');
 
@@ -209,7 +209,7 @@ const TicketCreateWizardPage: React.FC = () => {
         title: title.trim(),
         description: description.trim(),
         pucode: pucode.trim(),
-        pu_id: pu_id,
+        puno: puno,
         severity_level: severity,
         priority,
       };

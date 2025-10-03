@@ -122,8 +122,10 @@ const TicketDetailsPage: React.FC = () => {
     }
   }, [ticketId]);
 
-  // Load failure modes on component mount
+  // Load failure modes only when complete modal opens
   useEffect(() => {
+    if (!actionOpen || actionType !== "complete") return;
+    
     const loadFailureModes = async () => {
       try {
         const response = await ticketService.getFailureModes();
@@ -135,7 +137,7 @@ const TicketDetailsPage: React.FC = () => {
       }
     };
     loadFailureModes();
-  }, []);
+  }, [actionOpen, actionType]);
 
   const fetchTicketDetails = async () => {
     try {
@@ -143,6 +145,7 @@ const TicketDetailsPage: React.FC = () => {
       const response = await ticketService.getTicketById(parseInt(ticketId!));
       if (response.success) {
         setTicket(response.data);
+        console.log(response.data);
       } else {
         setError(t('ticket.failedToFetchTickets'));
       }
@@ -159,29 +162,29 @@ const TicketDetailsPage: React.FC = () => {
   ).replace(/\/$/, "");
   const uploadsBase = apiBase.endsWith("/api") ? apiBase.slice(0, -4) : apiBase;
   // Load assignees on query change (keep hooks consistent regardless of visibility)
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        setAssigneesLoading(true);
-        // For escalate action, only show L3 users; for reassign, show L2+ users
-        const escalationOnly = actionType === "escalate";
-        const res = await ticketService.getAvailableAssignees(
-          assigneeQuery || undefined,
-          ticket?.id,
-          escalationOnly,
-        );
-        if (!cancelled) setAssignees(res.data || []);
-      } catch (e) {
-        if (!cancelled) setAssignees([]);
-      } finally {
-        if (!cancelled) setAssigneesLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [assigneeQuery, ticket?.id, actionType]);
+  // useEffect(() => {
+  //   let cancelled = false;
+  //   (async () => {
+  //     try {
+  //       setAssigneesLoading(true);
+  //       // For escalate action, only show L3 users; for reassign, show L2+ users
+  //       const escalationOnly = actionType === "escalate";
+  //       const res = await ticketService.getAvailableAssignees(
+  //         assigneeQuery || undefined,
+  //         ticket?.id,
+  //         escalationOnly,
+  //       );
+  //       if (!cancelled) setAssignees(res.data || []);
+  //     } catch (e) {
+  //       if (!cancelled) setAssignees([]);
+  //     } finally {
+  //       if (!cancelled) setAssigneesLoading(false);
+  //     }
+  //   })();
+  //   return () => {
+  //     cancelled = true;
+  //   };
+  // }, [assigneeQuery, ticket?.id, actionType]);
 
   // Handle click outside assignee dropdown
   useEffect(() => {
@@ -334,13 +337,13 @@ const TicketDetailsPage: React.FC = () => {
     ticket?.images?.filter((img) => img.image_type === "after") || [];
   const locationHierarchy = ticket
     ? [
-        { label: "Plant", value: ticket.plant_name },
-        { label: "Area", value: ticket.area_name },
-        { label: "Line", value: ticket.line_name },
+        { label: "Plant", value: ticket.plant_code },
+        { label: "Area", value: ticket.area_code },
+        { label: "Line", value: ticket.line_code },
         {
           label: "Machine",
-          value: ticket.machine_name
-            ? `${ticket.machine_name}${ticket.machine_number ? ` (#${ticket.machine_number})` : ""}`
+          value: ticket.machine_code
+            ? `${ticket.machine_code}${ticket.machine_number ? `-${ticket.machine_number}` : ""}`
             : undefined,
         },
       ].filter((item) => Boolean(item.value))
@@ -931,6 +934,17 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
               )}
 
+              {ticket.pu_name && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    PU Name
+                  </p>
+                  <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                    {ticket.pu_name}
+                  </p>
+                </div>
+              )}
+
               <div className="grid gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -1007,7 +1021,7 @@ const TicketDetailsPage: React.FC = () => {
                       {t('ticket.costAvoidance')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                      ${ticket.cost_avoidance.toFixed(2)}
+                      ฿{ticket.cost_avoidance.toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </dd>
                   </div>
                 )}
@@ -1018,6 +1032,17 @@ const TicketDetailsPage: React.FC = () => {
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                       {ticket.downtime_avoidance_hours} {t('ticket.hours')}
+                    </dd>
+                  </div>
+                )}
+                {ticket.failure_mode_name && (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      Failure Mode
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                      {ticket.failure_mode_code && `[${ticket.failure_mode_code}] `}
+                      {ticket.failure_mode_name}
                     </dd>
                   </div>
                 )}

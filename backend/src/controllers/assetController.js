@@ -645,6 +645,62 @@ const getProductionUnitDetails = async (req, res) => {
   }
 };
 
+// Get all equipment by PUNO
+const getEquipmentByPUNO = async (req, res) => {
+  try {
+    const { puNo } = req.query;
+    
+    if (!puNo) {
+      return res.status(400).json({
+        success: false,
+        message: 'PUNO parameter is required'
+      });
+    }
+
+    const pool = await getConnection();
+    const request = pool.request();
+    request.input('puNo', sql.Int, puNo);
+
+    const result = await request.query(`
+      SELECT 
+        e.EQNO, e.EQCODE, e.EQNAME, e.EQPARENT, e.EQREFCODE,
+        e.ASSETNO, e.EQMODEL, e.EQSERIALNO, e.EQBrand,
+        e.Location, e.Room, e.IMG, e.NOTE,
+        e.HIERARCHYNO, e.CURR_LEVEL,
+        p.PUCODE, p.PUNAME,
+        et.EQTYPENAME, et.EQTYPECODE,
+        es.EQSTATUSNAME, es.EQSTATUSCODE,
+        s.SiteName, s.SiteCode,
+        d_own.DEPTNAME as OwnerDeptName, d_own.DEPTCODE as OwnerDeptCode,
+        d_maint.DEPTNAME as MaintDeptName, d_maint.DEPTCODE as MaintDeptCode,
+        b.BUILDINGNAME, f.FLOORNAME
+      FROM EQ e
+      LEFT JOIN PU p ON e.PUNO = p.PUNO
+      LEFT JOIN EQType et ON e.EQTYPENO = et.EQTYPENO
+      LEFT JOIN EQStatus es ON e.EQSTATUSNO = es.EQSTATUSNO
+      LEFT JOIN Site s ON e.SiteNo = s.SiteNo
+      LEFT JOIN Dept d_own ON e.DEPT_OWN = d_own.DEPTNO
+      LEFT JOIN Dept d_maint ON e.DEPT_MAINT = d_maint.DEPTNO
+      LEFT JOIN EQ_Building b ON e.EQBuildingNo = b.BUILDINGNO
+      LEFT JOIN EQ_Floor f ON e.EQFloorNo = f.FLOORNO
+      WHERE e.FLAGDEL = 'F' AND e.PUNO = @puNo
+      ORDER BY e.HIERARCHYNO, e.EQCODE
+    `);
+
+    res.json({
+      success: true,
+      data: result.recordset
+    });
+
+  } catch (error) {
+    console.error('Get equipment by PUNO error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
+    });
+  }
+};
+
 // Get equipment details
 const getEquipmentDetails = async (req, res) => {
   try {
@@ -826,6 +882,7 @@ module.exports = {
   getDepartments,
   getProductionUnits,
   getEquipment,
+  getEquipmentByPUNO,
   getAssetHierarchy,
   getDepartmentHierarchyDetails,
   getProductionUnitDetails,

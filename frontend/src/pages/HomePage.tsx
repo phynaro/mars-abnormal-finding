@@ -222,7 +222,7 @@ const PendingTicketsSection: React.FC<{
                       Priority
                     </th>
                     <th className="py-2 text-left font-medium text-muted-foreground">
-                      Area
+                      Line
                     </th>
                     <th className="py-2 text-left font-medium text-muted-foreground">
                       Created
@@ -253,7 +253,7 @@ const PendingTicketsSection: React.FC<{
                         </Badge>
                       </td>
                       <td className="py-3 text-muted-foreground">
-                        {ticket.area_name || "N/A"}
+                        {ticket.line_name || "N/A"}
                       </td>
                       <td className="py-3 text-muted-foreground">
                         {new Date(ticket.created_at).toLocaleDateString()}
@@ -288,7 +288,7 @@ const PendingTicketsSection: React.FC<{
                   {ticket.title}
                 </div>
                 <div className="text-xs text-muted-foreground space-y-1">
-                  <div>Area: {ticket.area_name || "N/A"}</div>
+                  <div>Line: {ticket.line_name || "N/A"}</div>
                   <div>
                     Created: {new Date(ticket.created_at).toLocaleDateString()}
                   </div>

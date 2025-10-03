@@ -23,11 +23,11 @@ import {
   User,
   AlertTriangle,
   Download,
+  X,
 } from "lucide-react";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, TicketFilters } from "@/services/ticketService";
-import { dashboardService } from "@/services/dashboardService";
-import type { AreaData } from "@/services/dashboardService";
+import authService from "@/services/authService";
 import { useToast } from "@/hooks/useToast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -46,6 +46,14 @@ import {
   getTicketStatusClass,
 } from "@/utils/ticketBadgeStyles";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+
+interface HierarchyOption {
+  code: string;
+  name: string;
+  plant?: string;
+}
+
 export const TicketList: React.FC = () => {
   const navigate = useNavigate();
   const { t } = useLanguage();
@@ -55,7 +63,8 @@ export const TicketList: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalTickets, setTotalTickets] = useState(0);
-  const [areas, setAreas] = useState<AreaData[]>([]);
+  const [plants, setPlants] = useState<HierarchyOption[]>([]);
+  const [areas, setAreas] = useState<HierarchyOption[]>([]);
   const { toast } = useToast();
 
   // Helper function to check if user is L3/Admin (permission level 3 or higher)
@@ -74,13 +83,15 @@ export const TicketList: React.FC = () => {
     priority: "",
     severity_level: "",
     search: "",
-    area_id: undefined,
+    plant: undefined,
+    area: undefined,
   });
 
   const fetchTickets = async () => {
     try {
       setLoading(true);
       const response = await ticketService.getTickets(filters);
+      console.log(response);
       setTickets(response.data.tickets);
       setTotalPages(response.data.pagination.pages);
       setTotalTickets(response.data.pagination.total);
@@ -97,10 +108,32 @@ export const TicketList: React.FC = () => {
     }
   };
 
-  const fetchAreas = async () => {
+  const fetchPlants = async () => {
     try {
-      const response = await dashboardService.getAllAreas();
-      setAreas(response.data);
+      const response = await fetch(`${API_BASE_URL}/hierarchy/distinct/plants`, {
+        headers: authService.getAuthHeaders()
+      });
+      const result = await response.json();
+      if (result.success) {
+        setPlants(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch plants:', error);
+    }
+  };
+
+  const fetchAreas = async (plantCode?: string) => {
+    try {
+      const url = plantCode 
+        ? `${API_BASE_URL}/hierarchy/distinct/areas?plant=${plantCode}`
+        : `${API_BASE_URL}/hierarchy/distinct/areas`;
+      const response = await fetch(url, {
+        headers: authService.getAuthHeaders()
+      });
+      const result = await response.json();
+      if (result.success) {
+        setAreas(result.data);
+      }
     } catch (error) {
       console.error('Failed to fetch areas:', error);
     }
@@ -111,11 +144,47 @@ export const TicketList: React.FC = () => {
   }, [filters]);
 
   useEffect(() => {
+    fetchPlants();
     fetchAreas();
   }, []);
 
+  // Refetch areas when plant filter changes
+  useEffect(() => {
+    if (filters.plant) {
+      fetchAreas(filters.plant);
+    } else {
+      fetchAreas();
+    }
+  }, [filters.plant]);
+
   const handleFilterChange = (key: keyof TicketFilters, value: any) => {
-    setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+    // When plant changes, reset area filter
+    if (key === 'plant') {
+      setFilters((prev) => ({ ...prev, [key]: value, area: undefined, page: 1 }));
+    } else {
+      setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+    }
+  };
+
+  const clearFilter = (key: keyof TicketFilters) => {
+    setFilters((prev) => ({ ...prev, [key]: key === 'page' || key === 'limit' ? prev[key] : undefined, page: 1 }));
+  };
+
+  const clearAllFilters = () => {
+    setFilters({
+      page: 1,
+      limit: 10,
+      status: "",
+      priority: "",
+      severity_level: "",
+      search: "",
+      plant: undefined,
+      area: undefined,
+    });
+  };
+
+  const hasActiveFilters = () => {
+    return !!(filters.status || filters.priority || filters.severity_level || filters.search || filters.plant || filters.area);
   };
 
   const handlePageChange = (page: number) => {
@@ -171,7 +240,7 @@ export const TicketList: React.FC = () => {
       t('ticket.status'),
       t('ticket.priority'),
       t('ticket.severity'),
-      t('ticket.area'),
+      'PU Name',
       t('ticket.createdBy'),
       t('ticket.assignedTo'),
       t('ticket.created'),
@@ -184,7 +253,7 @@ export const TicketList: React.FC = () => {
       ticket.status.replace('_', ' ').toUpperCase(),
       ticket.priority?.toUpperCase() || '',
       ticket.severity_level?.toUpperCase() || '',
-      ticket.plant_name ? `${ticket.plant_name} - ${ticket.area_name}` : ticket.area_name || '',
+      ticket.pu_name || ticket.pucode || 'N/A',
       ticket.reporter_name || `User ${ticket.reported_by}`,
       ticket.assignee_name || `User ${ticket.assigned_to}` || t('ticket.unassigned'),
       formatDate(ticket.created_at),
@@ -206,8 +275,9 @@ export const TicketList: React.FC = () => {
     const now = new Date();
     const dateStr = now.toISOString().split('T')[0];
     const filterStr = filters.status ? `_${filters.status}` : '';
-    const areaStr = filters.area_id ? `_area${filters.area_id}` : '';
-    link.setAttribute('download', `tickets_${dateStr}${filterStr}${areaStr}.csv`);
+    const plantStr = filters.plant ? `_${filters.plant}` : '';
+    const areaStr = filters.area ? `_${filters.area}` : '';
+    link.setAttribute('download', `tickets_${dateStr}${filterStr}${plantStr}${areaStr}.csv`);
     
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
@@ -378,11 +448,32 @@ export const TicketList: React.FC = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label htmlFor="plant">Plant</Label>
+                  <Select
+                    value={filters.plant || "all"}
+                    onValueChange={(v) =>
+                      handleFilterChange("plant", v === "all" ? undefined : v)
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="All Plants" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Plants</SelectItem>
+                      {plants.map((plant) => (
+                        <SelectItem key={plant.code} value={plant.code}>
+                          {plant.code}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
                   <Label htmlFor="area">{t('ticket.area')}</Label>
                   <Select
-                    value={filters.area_id?.toString() || "all"}
+                    value={filters.area || "all"}
                     onValueChange={(v) =>
-                      handleFilterChange("area_id", v === "all" ? undefined : parseInt(v))
+                      handleFilterChange("area", v === "all" ? undefined : v)
                     }
                   >
                     <SelectTrigger>
@@ -391,8 +482,8 @@ export const TicketList: React.FC = () => {
                     <SelectContent>
                       <SelectItem value="all">{t('ticket.allAreas')}</SelectItem>
                       {areas.map((area) => (
-                        <SelectItem key={area.id} value={area.id.toString()}>
-                          {area.plant_name ? `${area.plant_name} - ${area.name}` : area.name} ({area.code})
+                        <SelectItem key={area.code} value={area.code}>
+                          {area.code}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -412,6 +503,77 @@ export const TicketList: React.FC = () => {
           </Button>
         </div>
       </div>
+
+      {/* Active Filters Display */}
+      {hasActiveFilters() && (
+        <div className="flex flex-wrap items-center gap-2 p-4 bg-muted/30 rounded-lg border">
+          <span className="text-sm font-medium text-muted-foreground">
+            Active Filters:
+          </span>
+          {filters.status && (
+            <Badge variant="secondary" className="gap-1">
+              Status: {filters.status.replace("_", " ").toUpperCase()}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("status")}
+              />
+            </Badge>
+          )}
+          {filters.priority && (
+            <Badge variant="secondary" className="gap-1">
+              Priority: {filters.priority.toUpperCase()}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("priority")}
+              />
+            </Badge>
+          )}
+          {filters.severity_level && (
+            <Badge variant="secondary" className="gap-1">
+              Severity: {filters.severity_level.toUpperCase()}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("severity_level")}
+              />
+            </Badge>
+          )}
+          {filters.plant && (
+            <Badge variant="secondary" className="gap-1">
+              Plant: {filters.plant}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("plant")}
+              />
+            </Badge>
+          )}
+          {filters.area && (
+            <Badge variant="secondary" className="gap-1">
+              Area: {filters.area}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("area")}
+              />
+            </Badge>
+          )}
+          {filters.search && (
+            <Badge variant="secondary" className="gap-1">
+              Search: "{filters.search}"
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("search")}
+              />
+            </Badge>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearAllFilters}
+            className="h-6 text-xs"
+          >
+            Clear All
+          </Button>
+        </div>
+      )}
 
       {/* Tickets List */}
       <div>
@@ -464,7 +626,7 @@ export const TicketList: React.FC = () => {
                       {ticket.severity_level?.toUpperCase()}
                     </Badge>
                     <Badge variant="outline" className="text-xs">
-                      {ticket.plant_name ? `${ticket.plant_name} - ${ticket.area_name}` : ticket.area_name}
+                      {ticket.pu_name || ticket.pucode || 'N/A'}
                     </Badge>
                   </div>
                   <div className="mt-3 text-sm text-muted-foreground">
@@ -521,7 +683,7 @@ export const TicketList: React.FC = () => {
                     <th className="px-4 py-2">{t('ticket.status')}</th>
                     <th className="px-4 py-2">{t('ticket.priority')}</th>
                     <th className="px-4 py-2">{t('ticket.severity')}</th>
-                    <th className="px-4 py-2">{t('ticket.area')}</th>
+                    <th className="px-4 py-2">PU Name</th>
                     <th className="px-4 py-2">{t('ticket.createdBy')}</th>
                     <th className="px-4 py-2">{t('ticket.assignedTo')}</th>
                     <th className="px-4 py-2">{t('ticket.created')}</th>
@@ -569,7 +731,7 @@ export const TicketList: React.FC = () => {
                       </td>
                       <td className="px-4 py-2">
                         <span className="text-sm">
-                          {ticket.plant_name ? `${ticket.plant_name} - ${ticket.area_name}` : ticket.area_name}
+                          {ticket.pu_name || ticket.pucode || 'N/A'}
                         </span>
                       </td>
                       <td className="px-4 py-2">

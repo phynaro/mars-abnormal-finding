@@ -20,7 +20,7 @@ interface TicketFormData {
   machineId: number | null;
   machineNumber: number | null;
   pucode: string;
-  pu_id: number | null; // Added PU ID
+  puno: number | null; // Added PU ID
   severityLevel: 'low' | 'medium' | 'high' | 'critical';
   priority: 'low' | 'normal' | 'high' | 'urgent';
   costAvoidance: number | null;
@@ -46,7 +46,7 @@ const NewTicketForm: React.FC = () => {
     machineId: null,
     machineNumber: null,
     pucode: '',
-    pu_id: null,
+    puno: null,
     severityLevel: 'medium',
     priority: 'normal',
     costAvoidance: null,
@@ -275,7 +275,7 @@ const NewTicketForm: React.FC = () => {
         setFormData(prev => ({
           ...prev,
           pucode: pu.PUCODE,
-          pu_id: pu.PUNO,
+          puno: pu.PUNO,
           plantId: hierarchy.plant_id,
           areaId: hierarchy.area_id,
           lineId: hierarchy.line_id,
@@ -333,8 +333,8 @@ const NewTicketForm: React.FC = () => {
       newErrors.description = 'Description is required';
     }
 
-    if (!formData.pucode.trim()) {
-      newErrors.pucode = 'PUCODE is required';
+    if (!formData.puno) {
+      newErrors.puno = 'Production Unit is required';
     }
 
     if (selectedFiles.length === 0) {
@@ -360,7 +360,7 @@ const NewTicketForm: React.FC = () => {
         title: formData.title,
         description: formData.description,
         pucode: formData.pucode,
-        pu_id: formData.pu_id || undefined,
+        puno: formData.puno || undefined,
         severity_level: formData.severityLevel,
         priority: formData.priority,
         cost_avoidance: formData.costAvoidance || undefined,

@@ -1,4 +1,5 @@
 import { authService } from './authService';
+import { canUserPerformAction, getActionsForLevel, type ActionType } from './administrationService';
 
 export interface Ticket {
   id: number;
@@ -6,6 +7,7 @@ export interface Ticket {
   title: string;
   description: string;
   pucode?: string; // New field for PUCODE
+  puno?: number; // New field for PU ID
   plant_id?: number;
   area_id?: number;
   line_id?: number;
@@ -14,6 +16,8 @@ export interface Ticket {
   cost_avoidance?: number;
   downtime_avoidance_hours?: number;
   failure_mode_id?: number;
+  failure_mode_code?: string;
+  failure_mode_name?: string;
   severity_level: 'low' | 'medium' | 'high' | 'critical';
   status: 'open' | 'in_progress' | 'rejected_pending_l3_review' | 'rejected_final' | 'completed' | 'escalated' | 'closed' | 'reopened_in_progress';
   priority: 'low' | 'normal' | 'high' | 'urgent';
@@ -58,6 +62,11 @@ export interface Ticket {
   line_code?: string;
   machine_name?: string;
   machine_code?: string;
+  PUNAME?: string; // From PU table
+  pu_name?: string; // PU name from new schema
+  pu_pucode?: string; // From PU table
+  pudescription?: string; // From PUExtension table
+  digit_count?: number; // From PUExtension table
   images?: TicketImage[];
   comments?: TicketComment[];
   status_history?: TicketStatusHistory[];
@@ -105,7 +114,8 @@ export interface CreateTicketRequest {
   title: string;
   description: string;
   pucode?: string; // New field for PUCODE
-  pu_id?: number; // New field for PU ID
+  puno?: number; // New field for PU ID
+  equipment_id?: number; // New field for Equipment ID
   plant_id?: number;
   area_id?: number;
   line_id?: number;
@@ -141,45 +151,12 @@ export interface TicketFilters {
   assigned_to?: number;
   reported_by?: number;
   search?: string;
-  area_id?: number;
+  plant?: string;  // Plant code from PUExtension
+  area?: string;   // Area code from PUExtension
 }
 
-// New hierarchy interfaces
-export interface Plant {
-  id: number;
-  name: string;
-  code: string;
-  description?: string;
-  is_active: boolean;
-}
-
-export interface Area {
-  id: number;
-  name: string;
-  code: string;
-  description?: string;
-  plant_id: number;
-  is_active: boolean;
-}
-
-export interface Line {
-  id: number;
-  name: string;
-  code: string;
-  description?: string;
-  area_id: number;
-  is_active: boolean;
-}
-
-export interface Machine {
-  id: number;
-  name: string;
-  code: string;
-  description?: string;
-  line_id: number;
-  machine_number: number;
-  is_active: boolean;
-}
+// Legacy hierarchy interfaces (deprecated - use PUExtension data instead)
+// These remain for backward compatibility but are no longer actively used
 
 export interface PendingTicket {
   id: number;
@@ -196,6 +173,9 @@ export interface PendingTicket {
   area_id: number;
   area_name: string;
   area_code: string;
+  line_id: number;
+  line_name: string;
+  line_code: string;
   plant_name: string;
   plant_code: string;
   creator_name: string;
@@ -215,6 +195,38 @@ export interface PUCODE {
   LINE: string;
   MACHINE: string;
   NUMBER: number;
+}
+
+export interface Equipment {
+  EQNO: number;
+  EQCODE: string;
+  EQNAME: string;
+  EQPARENT?: number;
+  EQREFCODE?: string;
+  ASSETNO?: string;
+  EQMODEL?: string;
+  EQSERIALNO?: string;
+  EQBrand?: string;
+  Location?: string;
+  Room?: string;
+  IMG?: string;
+  NOTE?: string;
+  HIERARCHYNO?: string;
+  CURR_LEVEL?: number;
+  PUCODE?: string;
+  PUNAME?: string;
+  EQTYPENAME?: string;
+  EQTYPECODE?: string;
+  EQSTATUSNAME?: string;
+  EQSTATUSCODE?: string;
+  SiteName?: string;
+  SiteCode?: string;
+  OwnerDeptName?: string;
+  OwnerDeptCode?: string;
+  MaintDeptName?: string;
+  MaintDeptCode?: string;
+  BUILDINGNAME?: string;
+  FLOORNAME?: string;
 }
 
 export interface FailureMode {
@@ -586,7 +598,7 @@ class TicketService {
     return result;
   }
 
-  async getUserPendingTickets(): Promise<{ success: boolean; data: PendingTicket[]; count: number }> {
+  async getUserPendingTickets(): Promise<{ success: boolean; data: PendingTicket[] }> {
     const headers = await this.getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/pending/user`, { headers });
     const result = await res.json();
@@ -595,15 +607,15 @@ class TicketService {
   }
 
   async getUserTicketCountPerPeriod(params: {
-    year: number;
-    startDate?: string;
-    endDate?: string;
-  }): Promise<{ success: boolean; data: Array<{ period: string; tickets: number; target: number }> }> {
+    userId: number;
+    startDate: string;
+    endDate: string;
+  }): Promise<{ success: boolean; data: any }> {
     const headers = await this.getAuthHeaders();
     const url = new URL(`${API_BASE_URL}/tickets/user/count-per-period`);
-    url.searchParams.set('year', params.year.toString());
-    if (params.startDate) url.searchParams.set('startDate', params.startDate);
-    if (params.endDate) url.searchParams.set('endDate', params.endDate);
+    url.searchParams.set('userId', params.userId.toString());
+    url.searchParams.set('startDate', params.startDate);
+    url.searchParams.set('endDate', params.endDate);
     
     const res = await fetch(url.toString(), { headers });
     const result = await res.json();
@@ -612,15 +624,15 @@ class TicketService {
   }
 
   async getUserCompletedTicketCountPerPeriod(params: {
-    year: number;
-    startDate?: string;
-    endDate?: string;
-  }): Promise<{ success: boolean; data: Array<{ period: string; tickets: number; target: number }> }> {
+    userId: number;
+    startDate: string;
+    endDate: string;
+  }): Promise<{ success: boolean; data: any }> {
     const headers = await this.getAuthHeaders();
     const url = new URL(`${API_BASE_URL}/tickets/user/completed-count-per-period`);
-    url.searchParams.set('year', params.year.toString());
-    if (params.startDate) url.searchParams.set('startDate', params.startDate);
-    if (params.endDate) url.searchParams.set('endDate', params.endDate);
+    url.searchParams.set('userId', params.userId.toString());
+    url.searchParams.set('startDate', params.startDate);
+    url.searchParams.set('endDate', params.endDate);
     
     const res = await fetch(url.toString(), { headers });
     const result = await res.json();
@@ -628,20 +640,9 @@ class TicketService {
     return result;
   }
 
-  async getPersonalKPIData(params: {
-    startDate: string;
-    endDate: string;
-    compare_startDate: string;
-    compare_endDate: string;
-  }): Promise<{ success: boolean; data: any }> {
+  async getPersonalKPIData(): Promise<{ success: boolean; data: any }> {
     const headers = await this.getAuthHeaders();
-    const url = new URL(`${API_BASE_URL}/tickets/user/personal-kpi`);
-    url.searchParams.set('startDate', params.startDate);
-    url.searchParams.set('endDate', params.endDate);
-    url.searchParams.set('compare_startDate', params.compare_startDate);
-    url.searchParams.set('compare_endDate', params.compare_endDate);
-    
-    const res = await fetch(url.toString(), { headers });
+    const res = await fetch(`${API_BASE_URL}/tickets/user/personal-kpi`, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch personal KPI data');
     return result;
@@ -655,39 +656,7 @@ class TicketService {
     return result;
   }
 
-  // Hierarchy APIs
-  async getPlants(): Promise<{ success: boolean; data: Plant[] }> {
-    const headers = await this.getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}/hierarchy/plants`, { headers });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.message || 'Failed to fetch plants');
-    return result;
-  }
-
-  async getAreasByPlant(plantId: number): Promise<{ success: boolean; data: Area[] }> {
-    const headers = await this.getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}/hierarchy/plants/${plantId}/areas`, { headers });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.message || 'Failed to fetch areas');
-    return result;
-  }
-
-  async getLinesByArea(areaId: number): Promise<{ success: boolean; data: Line[] }> {
-    const headers = await this.getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}/hierarchy/areas/${areaId}/lines`, { headers });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.message || 'Failed to fetch lines');
-    return result;
-  }
-
-  async getMachinesByLine(lineId: number): Promise<{ success: boolean; data: Machine[] }> {
-    const headers = await this.getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}/hierarchy/lines/${lineId}/machines`, { headers });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.message || 'Failed to fetch machines');
-    return result;
-  }
-
+  // Hierarchy APIs  
   async searchPUCODE(search: string): Promise<{ success: boolean; data: PUCODE[] }> {
     const headers = await this.getAuthHeaders();
     const url = new URL(`${API_BASE_URL}/hierarchy/pucode/search`);
@@ -701,21 +670,51 @@ class TicketService {
   async getPUCODEDetails(pucode: string): Promise<{ success: boolean; data: PUCODEDetails }> {
     const headers = await this.getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/hierarchy/pucode/${encodeURIComponent(pucode)}`, { headers });
+    const resData = await res.json();
+    if (!res.ok) throw new Error(resData.message || 'Failed to fetch PUCODE details');
+    return resData;
+  }
+
+  // Equipment APIs
+  async getEquipmentByPUNO(puNo: number): Promise<{ success: boolean; data: Equipment[] }> {
+    const headers = await this.getAuthHeaders();
+    const url = new URL(`${API_BASE_URL}/assets/equipment/by-puno`);
+    url.searchParams.set('puNo', puNo.toString());
+    const res = await fetch(url.toString(), { headers });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.message || 'Failed to fetch PUCODE details');
+    if (!res.ok) throw new Error(result.message || 'Failed to get equipment');
     return result;
   }
 
-  async generatePUCODE(plantId: number, areaId: number, lineId: number, machineId: number): Promise<{ success: boolean; data: GeneratedPUCODE }> {
+  // Test endpoints (for development)
+  async testL2UsersForArea(areaId: number): Promise<{ success: boolean; data: any[]; message: string }> {
     const headers = await this.getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}/hierarchy/pucode/generate`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ plantId, areaId, lineId, machineId })
+    const response = await fetch(`${API_BASE_URL}/tickets/test-l2-users/${areaId}`, {
+      headers
     });
-    const result = await res.json();
-    if (!res.ok) throw new Error(result.message || 'Failed to generate PUCODE');
-    return result;
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch L2 users for area');
+    }
+
+    return response.json();
+  }
+
+  // Test email notification (for development)
+  async testEmailNotification(): Promise<{ success: boolean; message: string }> {
+    const headers = await this.getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/tickets/test-email`, {
+      method: 'POST',
+      headers
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to send test email');
+    }
+
+    return response.json();
   }
 }
 

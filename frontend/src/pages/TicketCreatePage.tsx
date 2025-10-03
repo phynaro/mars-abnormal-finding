@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ticketService, type CreateTicketRequest } from '@/services/ticketService';
+import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/ui/file-upload';
@@ -36,11 +36,11 @@ const TicketCreatePage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [imagesUploading, setImagesUploading] = useState(false);
 
-  const [formData, setFormData] = useState<Pick<CreateTicketRequest, 'title' | 'description' | 'severity_level' | 'priority'> & { pucode?: string; pu_id?: number }>({
+  const [formData, setFormData] = useState<Pick<CreateTicketRequest, 'title' | 'description' | 'severity_level' | 'priority'> & { puno?: number; equipment_id?: number }>({
     title: '',
     description: '',
-    pucode: '',
-    pu_id: undefined,
+    puno: undefined,
+    equipment_id: undefined,
     severity_level: 'medium',
     priority: 'normal',
   });
@@ -60,6 +60,11 @@ const TicketCreatePage: React.FC = () => {
   const [machineSearchLoading, setMachineSearchLoading] = useState(false);
   const [machineSearchDropdownOpen, setMachineSearchDropdownOpen] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<PUCODEResult | null>(null);
+
+  // Equipment selection state
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
+  const [equipmentLoading, setEquipmentLoading] = useState(false);
+  const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
 
   // Generate previews and revoke URLs on unmount/change
   const previews = useMemo(() => selectedFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [selectedFiles]);
@@ -185,6 +190,31 @@ const TicketCreatePage: React.FC = () => {
     }
   };
 
+  // Load equipment function
+  const loadEquipment = async () => {
+    if (!selectedMachine) {
+      setEquipmentList([]);
+      return;
+    }
+
+    try {
+      setEquipmentLoading(true);
+      const response = await ticketService.getEquipmentByPUNO(selectedMachine.PUNO);
+      if (response.success) {
+        setEquipmentList(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading equipment:', error);
+      toast({
+        title: t('common.error'),
+        description: 'Failed to load equipment',
+        variant: 'destructive'
+      });
+    } finally {
+      setEquipmentLoading(false);
+    }
+  };
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = t('ticket.titleRequired');
@@ -204,6 +234,16 @@ const TicketCreatePage: React.FC = () => {
     }, 300);
     return () => clearTimeout(t);
   }, [machineSearchQuery]);
+
+  // Load equipment when machine is selected
+  useEffect(() => {
+    if (selectedMachine) {
+      loadEquipment();
+    } else {
+      setEquipmentList([]);
+      setSelectedEquipment(null);
+    }
+  }, [selectedMachine]);
 
   // Click outside handler to close dropdown
   useEffect(() => {
@@ -228,18 +268,41 @@ const TicketCreatePage: React.FC = () => {
   // Machine selection handlers
   const onSelectMachine = (machine: PUCODEResult) => {
     setSelectedMachine(machine);
-    handleInputChange('pucode', machine.PUCODE);
-    handleInputChange('pu_id', machine.PUNO);
+    handleInputChange('puno', machine.PUNO);
     setMachineSearchQuery(machine.PUCODE);
     setMachineSearchDropdownOpen(false);
+    
+    // Clear equipment selection when machine changes
+    clearEquipmentSelection();
   };
 
   const clearMachineSelection = () => {
     setSelectedMachine(null);
     setMachineSearchQuery('');
     setMachineSearchResults([]);
-    handleInputChange('pucode', '');
-    handleInputChange('pu_id', undefined);
+    handleInputChange('puno', undefined);
+    
+    // Clear equipment selection when machine is cleared
+    clearEquipmentSelection();
+  };
+
+  // Equipment selection handlers
+  const onSelectEquipment = (equipmentId: string) => {
+    if (equipmentId === 'none') {
+      setSelectedEquipment(null);
+      handleInputChange('equipment_id', undefined);
+    } else {
+      const equipment = equipmentList.find(eq => eq.EQNO.toString() === equipmentId);
+      if (equipment) {
+        setSelectedEquipment(equipment);
+        handleInputChange('equipment_id', equipment.EQNO);
+      }
+    }
+  };
+
+  const clearEquipmentSelection = () => {
+    setSelectedEquipment(null);
+    handleInputChange('equipment_id', undefined);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -252,8 +315,8 @@ const TicketCreatePage: React.FC = () => {
       const payload: CreateTicketRequest = {
         title: formData.title.trim(),
         description: formData.description.trim(),
-        pucode: formData.pucode?.trim() || '',
-        pu_id: formData.pu_id,
+        puno: formData.puno,
+        equipment_id: formData.equipment_id,
         severity_level: formData.severity_level,
         priority: formData.priority,
       };
@@ -393,6 +456,71 @@ const TicketCreatePage: React.FC = () => {
                           <X className="w-4 h-4" />
                         </Button>
                       </div>
+                    </div>
+                  )}
+                  
+                  {/* Equipment Selection */}
+                  {selectedMachine && (
+                    <div className="space-y-3">
+                      <Label htmlFor="equipment-select" className="text-base font-semibold">Equipment (Optional)</Label>
+                      
+                      <Select
+                        value={selectedEquipment?.EQNO.toString() || 'none'}
+                        onValueChange={onSelectEquipment}
+                        disabled={equipmentLoading}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={equipmentLoading ? "Loading equipment..." : "Select equipment..."} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">No specific equipment</SelectItem>
+                          {equipmentList.map((equipment) => (
+                            <SelectItem key={equipment.EQNO} value={equipment.EQNO.toString()}>
+                              <div className="flex flex-col">
+                                <span className="font-medium">{equipment.EQCODE}</span>
+                                <span className="text-sm text-muted-foreground">{equipment.EQNAME}</span>
+                                {equipment.EQTYPENAME && (
+                                  <span className="text-xs text-muted-foreground">Type: {equipment.EQTYPENAME}</span>
+                                )}
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      
+                      {/* Selected Equipment Display */}
+                      {selectedEquipment && (
+                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <div className="flex items-start justify-between">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                                <p className="text-sm font-medium text-blue-800">Selected Equipment</p>
+                              </div>
+                              <p className="text-lg font-mono text-blue-900 mb-1">{selectedEquipment.EQCODE}</p>
+                              <p className="text-sm text-blue-700 mb-2">{selectedEquipment.EQNAME}</p>
+                              {selectedEquipment.EQTYPENAME && (
+                                <div className="text-xs text-blue-600">
+                                  Type: {selectedEquipment.EQTYPENAME}
+                                </div>
+                              )}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={clearEquipmentSelection}
+                              className="text-blue-600 hover:text-blue-700"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                      
+                      <p className="text-xs text-gray-500">
+                        Select specific equipment if the issue is related to a particular component
+                      </p>
                     </div>
                   )}
                   

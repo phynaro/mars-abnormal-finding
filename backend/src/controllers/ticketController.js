@@ -1,46 +1,96 @@
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
 const emailService = require('../services/emailService');
-
-// Helper function to validate PUCODE format
-const validatePUCODE = (pucode) => {
-    if (!pucode || typeof pucode !== 'string') {
-        return { valid: false, error: 'PUCODE is required and must be a string' };
-    }
-    
-    const parts = pucode.split('-');
-    if (parts.length !== 5) {
-        return { valid: false, error: 'PUCODE must have exactly 5 parts separated by dashes (PLANT-AREA-LINE-MACHINE-NUMBER)' };
-    }
-    
-    const [plant, area, line, machine, number] = parts;
-    
-    // Validate each part
-    if (!plant || plant.trim() === '') {
-        return { valid: false, error: 'Plant code cannot be empty' };
-    }
-    if (!area || area.trim() === '') {
-        return { valid: false, error: 'Area code cannot be empty' };
-    }
-    if (!line || line.trim() === '') {
-        return { valid: false, error: 'Line code cannot be empty' };
-    }
-    if (!machine || machine.trim() === '') {
-        return { valid: false, error: 'Machine code cannot be empty' };
-    }
-    if (!number || isNaN(parseInt(number))) {
-        return { valid: false, error: 'Machine number must be a valid number' };
-    }
-    
-    return { 
-        valid: true, 
-        parts: { plant, area, line, machine, number: parseInt(number) }
-    };
-};
-const lineService = require('../services/lineService');
 const abnFlexService = require('../services/abnormalFindingFlexService');
 const fs = require('fs');
 const path = require('path');
+
+// Action mapping configuration for approval levels
+const ACTION_MAPPING = {
+    L1: ['create', 'approve_review', 'reopen'],
+    L2: ['accept', 'reject', 'escalate', 'complete'],
+    L3: ['reassign', 'reject_final'],
+    L4: ['approve_close']
+};
+
+// Helper function to check if user can perform action
+const canUserPerformAction = (userLevel, action) => {
+    return ACTION_MAPPING[`L${userLevel}`]?.includes(action) || false;
+};
+
+// Helper function to get all actions for a level
+const getActionsForLevel = (level) => {
+    return ACTION_MAPPING[`L${level}`] || [];
+};
+
+// Helper function to check user action permission
+const checkUserActionPermission = async (userId, puno, action) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('personno', sql.Int, userId)
+            .input('puno', sql.Int, puno)
+            .input('action', sql.NVarChar, action)
+            .execute('sp_CheckUserActionPermission');
+        
+        return {
+            hasPermission: result.recordset[0]?.has_permission || false,
+            approvalLevel: result.recordset[0]?.approval_level || 0
+        };
+    } catch (error) {
+        console.error('Error checking user action permission:', error);
+        return { hasPermission: false, approvalLevel: 0 };
+    }
+};
+
+// Helper function to get user's maximum approval level for a PU
+const getUserMaxApprovalLevelForPU = async (userId, puno) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('user_id', sql.Int, userId)
+            .input('puno', sql.Int, puno)
+            .execute('sp_GetUserMaxApprovalLevelForPU');
+        
+        return result.recordset[0]?.max_approval_level || 0;
+    } catch (error) {
+        console.error('Error getting user max approval level:', error);
+        return 0;
+    }
+};
+
+// Helper function to get users for notification
+const getUsersForNotification = async (puno, approvalLevel, excludeUserId = null) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('puno', sql.Int, puno)
+            .input('approval_level', sql.Int, approvalLevel)
+            .input('exclude_user_id', sql.Int, excludeUserId)
+            .execute('sp_GetUsersForNotification');
+        
+        return result.recordset;
+    } catch (error) {
+        console.error('Error getting users for notification:', error);
+        return [];
+    }
+};
+
+// Helper function to get all notification users for a ticket
+const getTicketNotificationUsers = async (ticketId, notificationType) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+            .input('ticket_id', sql.Int, ticketId)
+            .input('notification_type', sql.NVarChar, notificationType)
+            .execute('sp_GetTicketNotificationUsers');
+        
+        return result.recordset;
+    } catch (error) {
+        console.error('Error getting ticket notification users:', error);
+        return [];
+    }
+};
 
 const DEFAULT_BASE_URL = 'http://localhost:3001';
 
@@ -79,14 +129,12 @@ const getHeroImageUrl = (images, imageType = 'before') => {
     if (images[0]?.url) {
         return images[0].url;
     }
-    
     // For raw database records
     const baseUrl = getBaseUrl();
     const heroImage = images[0];
     if (heroImage?.image_url) {
         return `${baseUrl}${heroImage.image_url}`;
     }
-    
     return null;
 };
 
@@ -161,81 +209,118 @@ const createTicket = async (req, res) => {
         const {
             title,
             description,
-            pucode, // New field: PUCODE format (PLANT-AREA-LINE-MACHINE-NUMBER)
-            pu_id, // New field: PU ID for direct reference
+            pucode, // PUCODE format (PLANT-AREA-LINE-MACHINE-NUMBER)
+            puno, // PU ID for direct reference
+            equipment_id, // Equipment ID for specific equipment reference
             severity_level,
             priority,
-            cost_avoidance,
-            downtime_avoidance_hours,
-            failure_mode_id,
-            suggested_assignee_id,
-            scheduled_complete
+            // cost_avoidance,
+            // downtime_avoidance_hours,
+            // failure_mode_id,
+            // suggested_assignee_id,
+            // scheduled_complete
         } = req.body;
 
         const reported_by = req.user.id; // From auth middleware
 
-        // Validate PUCODE format
-        const pucodeValidation = validatePUCODE(pucode);
-        if (!pucodeValidation.valid) {
+        // Basic validation
+        if (!title || !description || !puno) {
             return res.status(400).json({
                 success: false,
-                message: pucodeValidation.error,
-                error: 'Invalid PUCODE format'
+                message: 'Title, description, and PU ID are required'
             });
         }
 
         const pool = await sql.connect(dbConfig);
         const ticket_number = await generateTicketNumber(pool);
-        
-        // Validate suggested assignee has L2+ permissions if provided
-        let validatedAssigneeId = null;
-        if (suggested_assignee_id) {
-            const assigneeCheck = await pool.request()
-                .input('assignee_id', sql.Int, suggested_assignee_id)
+
+        // Validate equipment_id if provided
+        let validatedEquipmentId = null;
+        if (equipment_id) {
+            const equipmentCheck = await pool.request()
+                .input('equipment_id', sql.Int, equipment_id)
+                .input('puno', sql.Int, puno)
                 .query(`
-                    SELECT PERSONNO, FIRSTNAME, LASTNAME, EMAIL, DEPTNO 
-                    FROM Person 
-                    WHERE PERSONNO = @assignee_id AND FLAGDEL != 'Y'
+                    SELECT EQNO, EQCODE, EQNAME, PUNO
+                    FROM EQ 
+                    WHERE EQNO = @equipment_id AND PUNO = @puno AND FLAGDEL = 'F'
                 `);
             
-            if (assigneeCheck.recordset.length === 0) {
+            if (equipmentCheck.recordset.length === 0) {
                 return res.status(400).json({
                     success: false,
-                    message: 'Suggested assignee not found or inactive'
+                    message: 'Equipment not found or does not belong to the selected production unit'
                 });
             }
             
-            validatedAssigneeId = suggested_assignee_id;
+            validatedEquipmentId = equipment_id;
         }
 
-        // Use stored procedure to create ticket with PUCODE validation
+        // Create ticket using standard INSERT
         const result = await pool.request()
             .input('ticket_number', sql.VarChar(20), ticket_number)
             .input('title', sql.NVarChar(255), title)
             .input('description', sql.NVarChar(sql.MAX), description)
-            .input('pucode', sql.VarChar(100), pucode)
-            .input('puid', sql.Int, pu_id)
+            .input('puno', sql.Int, puno)
+            .input('equipment_id', sql.Int, validatedEquipmentId)
             .input('severity_level', sql.VarChar(20), severity_level || 'medium')
             .input('priority', sql.VarChar(20), priority || 'normal')
-            .input('cost_avoidance', sql.Decimal(15,2), cost_avoidance)
-            .input('downtime_avoidance_hours', sql.Decimal(8,2), downtime_avoidance_hours)
-            .input('failure_mode_id', sql.Int, failure_mode_id || 0)
+            // .input('cost_avoidance', sql.Decimal(15,2), cost_avoidance || null)
+            // .input('downtime_avoidance_hours', sql.Decimal(8,2), downtime_avoidance_hours || null)
+            // .input('failure_mode_id', sql.Int, failure_mode_id || null)
             .input('reported_by', sql.Int, reported_by)
-            .input('assigned_to', sql.Int, validatedAssigneeId)
-            .input('scheduled_complete', sql.DateTime2, scheduled_complete)
-            .execute('sp_CreateTicketWithPUCODE');
+            // .input('assigned_to', sql.Int, validatedAssigneeId)
+            // .input('scheduled_complete', sql.DateTime2, scheduled_complete || null)
+            .query(`
+                INSERT INTO Tickets (
+                    ticket_number, title, description, puno, equipment_id,
+                    severity_level, priority,
+                    reported_by,
+                    status, created_at, updated_at
+                )
+                VALUES (
+                    @ticket_number, @title, @description, @puno, @equipment_id,
+                    @severity_level, @priority,
+                    @reported_by,
+                    'open', GETDATE(), GETDATE()
+                );
+                SELECT SCOPE_IDENTITY() as ticket_id;
+            `);
 
-        const ticketResult = result.recordset[0];
+        const ticketId = result.recordset[0].ticket_id;
 
-        if (ticketResult.status === 'ERROR') {
-            return res.status(400).json({
-                success: false,
-                message: ticketResult.message,
-                error: 'PUCODE validation failed'
-            });
-        }
+        // Get ticket with hierarchy information via PUExtension
+        const ticketWithHierarchy = await pool.request()
+            .input('ticket_id', sql.Int, ticketId)
+            .query(`
+                SELECT 
+                    t.*,
+                    -- Hierarchy information from PUExtension
+                    pe.pucode,
+                    pe.plant as plant_code,
+                    pe.area as area_code,
+                    pe.line as line_code,
+                    pe.machine as machine_code,
+                    pe.number as machine_number,
+                    pe.puname as plant_name,
+                    pe.pudescription as pudescription,
+                    pe.digit_count,
+                -- Hierarchy codes from PUExtension
+                    -- PU information
+                    pu.PUCODE as pu_pucode,
+                    pu.PUNAME as pu_name,
+                    -- Equipment information
+                    eq.EQNO as equipment_id,
+                    eq.EQCODE as equipment_code,
+                    eq.EQNAME as equipment_name
+                FROM Tickets t
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
+                WHERE t.id = @ticket_id
+            `);
 
-        const ticketId = ticketResult.ticket_id;
+        const ticketData = ticketWithHierarchy.recordset[0];
 
         // Send email notification (for demo, sending to phynaro@hotmail.com)
         try {
@@ -252,42 +337,25 @@ const createTicket = async (req, res) => {
             const reporterRow = reporterResult.recordset[0] || {};
             const reporterName = formatPersonName(reporterRow);
             
-            // Get assignee info if ticket was pre-assigned
-            let assigneeInfo = null;
-            if (validatedAssigneeId) {
-                const assigneeResult = await pool.request()
-                    .input('assignee_id', sql.Int, validatedAssigneeId)
-                    .query(`
-                        SELECT p.PERSON_NAME, p.FIRSTNAME, p.LASTNAME, p.EMAIL, p.DEPTNO, u.LineID
-                        FROM Person p
-                        LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                        WHERE p.PERSONNO = @assignee_id
-                    `);
-                const assigneeRow = assigneeResult.recordset[0] || {};
-                assigneeInfo = {
-                    full_name: formatPersonName(assigneeRow),
-                    LineID: assigneeRow.LineID,
-                    Email: assigneeRow.EMAIL
-                };
-            }
-            
-            // Prepare ticket data for email
+            // Prepare ticket data for email using PUExtension data
             const ticketDataForEmail = {
                 id: ticketId,
                 ticket_number: ticket_number,
                 title,
                 description,
-                pucode: pucode,
-                plant_id: ticketResult.plant_id,
-                area_id: ticketResult.area_id,
-                line_id: ticketResult.line_id,
-                machine_id: ticketResult.machine_id,
-                machine_number: ticketResult.machine_number,
+                pucode: ticketData.pucode,
+                plant_code: ticketData.plant_code,
+                area_code: ticketData.area_code,
+                line_code: ticketData.line_code,
+                machine_code: ticketData.machine_code,
+                machine_number: ticketData.machine_number,
+                plant_name: ticketData.pudescription,
+                equipment_id: validatedEquipmentId,
+                equipment_name: ticketData.equipment_name,
+                equipment_code: ticketData.equipment_code,
+                PUNAME: ticketData.pudescription, // For email template compatibility
                 severity_level: severity_level || 'medium',
                 priority: priority || 'normal',
-                cost_avoidance,
-                downtime_avoidance_hours,
-                failure_mode_id: failure_mode_id || 0,
                 reported_by,
                 assigned_to: validatedAssigneeId,
                 created_at: new Date().toISOString()
@@ -296,17 +364,6 @@ const createTicket = async (req, res) => {
             // Send notification email
             await emailService.sendNewTicketNotification(ticketDataForEmail, reporterName);
             console.log('Email notification sent successfully for ticket:', ticket_number);
-
-            // Send notification to pre-assigned user if applicable
-            if (assigneeInfo && assigneeInfo.Email) {
-                try {
-                    await emailService.sendTicketPreAssignedNotification(ticketDataForEmail, reporterName, assigneeInfo.Email);
-                    console.log('Pre-assignment notification sent to:', assigneeInfo.full_name);
-                } catch (assigneeEmailErr) {
-                    console.error('Failed to send pre-assignment email:', assigneeEmailErr);
-                }
-            }
-
             // Note: LINE notification will be triggered after image uploads
             // This ensures images are included in the notification
             console.log('Ticket created successfully. LINE notification will be sent after image uploads.');
@@ -323,11 +380,11 @@ const createTicket = async (req, res) => {
                 ticket_number: ticket_number,
                 title,
                 pucode: pucode,
-                plant_id: ticketResult.plant_id,
-                area_id: ticketResult.area_id,
-                line_id: ticketResult.line_id,
-                machine_id: ticketResult.machine_id,
-                machine_number: ticketResult.machine_number,
+                plant_id: ticketData.plant_id,
+                area_id: ticketData.area_id,
+                line_id: ticketData.line_id,
+                machine_id: ticketData.machine_id,
+                machine_number: ticketData.machine_number,
                 status: 'open'
             }
         });
@@ -354,7 +411,8 @@ const getTickets = async (req, res) => {
             assigned_to,
             reported_by,
             search,
-            area_id
+            plant,
+            area
         } = req.query;
 
         const offset = (page - 1) * limit;
@@ -393,9 +451,14 @@ const getTickets = async (req, res) => {
             params.push({ name: 'search', value: `%${search}%`, type: sql.NVarChar(255) });
         }
 
-        if (area_id) {
-            whereClause += ' AND t.area_id = @area_id';
-            params.push({ name: 'area_id', value: area_id, type: sql.Int });
+        if (plant) {
+            whereClause += ' AND pe.plant = @plant';
+            params.push({ name: 'plant', value: plant, type: sql.VarChar(50) });
+        }
+
+        if (area) {
+            whereClause += ' AND pe.area = @area';
+            params.push({ name: 'area', value: area, type: sql.VarChar(50) });
         }
 
         // Build the request with parameters
@@ -405,13 +468,17 @@ const getTickets = async (req, res) => {
         request.input('offset', sql.Int, offset);
         request.input('limit', sql.Int, parseInt(limit));
 
-        // Get total count
+        // Get total count (with PUExtension join for plant/area filters)
         const countResult = await request.query(`
-            SELECT COUNT(*) as total FROM Tickets t ${whereClause}
+            SELECT COUNT(*) as total 
+            FROM Tickets t
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            ${whereClause}
         `);
         const total = countResult.recordset[0].total;
 
-        // Get tickets with user information
+        // Get tickets with user information and hierarchy via PUExtension
         const ticketsResult = await request.query(`
             SELECT 
                 t.*,
@@ -419,25 +486,25 @@ const getTickets = async (req, res) => {
                 r.EMAIL as reporter_email,
                 a.PERSON_NAME as assignee_name,
                 a.EMAIL as assignee_email,
-                -- Plant information
-                p.name as plant_name,
-                p.code as plant_code,
-                -- Area information
-                ar.name as area_name,
-                ar.code as area_code,
-                -- Line information
-                l.name as line_name,
-                l.code as line_code,
-                -- Machine information
-                m.name as machine_name,
-                m.code as machine_code
+                -- Hierarchy information from PUExtension
+                pe.pucode,
+                pe.plant as plant_code,
+                pe.area as area_code,
+                pe.line as line_code,
+                pe.machine as machine_code,
+                pe.number as machine_number,
+                pe.puname as plant_name,
+                pe.pudescription as pudescription,
+                pe.digit_count,
+                -- Hierarchy codes from PUExtension
+                -- PU information
+                pu.PUCODE as pu_pucode,
+                pu.PUNAME as pu_name
             FROM Tickets t
             LEFT JOIN Person r ON t.reported_by = r.PERSONNO
             LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
-            LEFT JOIN Plant p ON t.plant_id = p.id
-            LEFT JOIN Area ar ON t.area_id = ar.id
-            LEFT JOIN Line l ON t.line_id = l.id
-            LEFT JOIN Machine m ON t.machine_id = m.id
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             ${whereClause}
             ORDER BY t.created_at DESC
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -475,9 +542,9 @@ const getTicketById = async (req, res) => {
         const userId = req.user.id; // Get current user ID for approval level calculation
         const pool = await sql.connect(dbConfig);
 
+        // Simplified query without TicketApproval JOIN
         const result = await pool.request()
             .input('id', sql.Int, id)
-            .input('userId', sql.Int, userId)
             .query(`
                 SELECT 
                     t.*,
@@ -493,25 +560,22 @@ const getTicketById = async (req, res) => {
                     closed_user.PERSON_NAME as closed_by_name,
                     reopened_user.PERSON_NAME as reopened_by_name,
                     l3_override_user.PERSON_NAME as l3_override_by_name,
-                    -- Plant information
-                    p.name as plant_name,
-                    p.code as plant_code,
-                    -- Area information
-                    ar.name as area_name,
-                    ar.code as area_code,
-                    -- Line information
-                    l.name as line_name,
-                    l.code as line_code,
-                    -- Machine information
-                    m.name as machine_name,
-                    m.code as machine_code,
-                    -- User's relationship to this ticket
-                    CASE 
-                        WHEN t.reported_by = @userId THEN 'creator'
-                        WHEN ta.approval_level > 2 THEN 'approver'
-                        ELSE 'viewer'
-                    END as user_relationship,
-                    ta.approval_level as user_approval_level
+                    -- Hierarchy information from PUExtension
+                    pe.pucode,
+                    pe.plant as plant_code,
+                    pe.area as area_code,
+                    pe.line as line_code,
+                    pe.machine as machine_code,
+                    pe.number as machine_number,
+                    pe.puname as plant_name,
+                    pe.pudescription as pudescription,
+                    pe.digit_count,
+                    -- PU information
+                    pu.PUCODE as pu_pucode,
+                    pu.PUNAME as pu_name,
+                    -- Failure mode information
+                    fm.FailureModeCode as failure_mode_code,
+                    fm.FailureModeName as failure_mode_name
                 FROM Tickets t
                 LEFT JOIN Person r ON t.reported_by = r.PERSONNO
                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
@@ -522,11 +586,9 @@ const getTicketById = async (req, res) => {
                 LEFT JOIN Person closed_user ON t.closed_by = closed_user.PERSONNO
                 LEFT JOIN Person reopened_user ON t.reopened_by = reopened_user.PERSONNO
                 LEFT JOIN Person l3_override_user ON t.l3_override_by = l3_override_user.PERSONNO
-                LEFT JOIN Plant p ON t.plant_id = p.id
-                LEFT JOIN Area ar ON t.area_id = ar.id
-                LEFT JOIN Line l ON t.line_id = l.id
-                LEFT JOIN Machine m ON t.machine_id = m.id
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo AND fm.FlagDel != 'Y'
                 WHERE t.id = @id
             `);
 
@@ -535,6 +597,19 @@ const getTicketById = async (req, res) => {
                 success: false,
                 message: 'Ticket not found'
             });
+        }
+
+        const ticket = result.recordset[0];
+
+        // Get user's max approval level for this ticket's PU using the helper function
+        const userApprovalLevel = await getUserMaxApprovalLevelForPU(userId, ticket.puno);
+
+        // Determine user relationship to the ticket
+        let userRelationship = 'viewer';
+        if (ticket.reported_by === userId) {
+            userRelationship = 'creator';
+        } else if (userApprovalLevel >= 2) {
+            userRelationship = 'approver';
         }
 
         // Get ticket images
@@ -576,14 +651,13 @@ const getTicketById = async (req, res) => {
                 ORDER BY tsh.changed_at
             `);
 
-        const ticket = result.recordset[0];
         ticket.images = imagesResult.recordset;
         ticket.comments = commentsResult.recordset;
         ticket.status_history = historyResult.recordset;
         
-        // Include user relationship and approval level
-        ticket.user_relationship = ticket.user_relationship;
-        ticket.user_approval_level = ticket.user_approval_level;
+        // Add user relationship and approval level (calculated from helper)
+        ticket.user_relationship = userRelationship;
+        ticket.user_approval_level = userApprovalLevel;
 
         res.json({
             success: true,
@@ -673,8 +747,15 @@ const updateTicket = async (req, res) => {
                     .query(`
                         SELECT 
                             t.id, t.ticket_number, t.title, t.severity_level, t.priority,
-                            t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number
+                            t.puno,
+                            pe.plant as plant_code,
+                            pe.area as area_code,
+                            pe.line as line_code,
+                            pe.machine as machine_code,
+                            pe.number as machine_number
                         FROM Tickets t
+                        LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                        LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                         WHERE t.id = @ticket_id;
 
                         SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID 
@@ -710,7 +791,7 @@ const updateTicket = async (req, res) => {
                                 ORDER BY uploaded_at ASC
                             `);
                         
-                        const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
+                       // const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
                         
                         // Determine state based on new status
                         let abnState;
@@ -844,8 +925,16 @@ const assignTicket = async (req, res) => {
                 .input('ticket_id', sql.Int, id)
                 .input('assignee_id', sql.Int, assigned_to)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, plant_id, area_id, line_id, machine_id, machine_number
-                    FROM Tickets WHERE id = @ticket_id;
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
+                           pe.plant as plant_code,
+                           pe.area as area_code,
+                           pe.line as line_code,
+                           pe.machine as machine_code,
+                           pe.number as machine_number
+                    FROM Tickets t
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    WHERE t.id = @ticket_id;
 
                     SELECT PERSON_NAME, EMAIL, DEPTNO
                     FROM Person WHERE PERSONNO = @assignee_id;
@@ -1089,7 +1178,7 @@ const deleteTicketImage = async (req, res) => {
                     t.area_id,
                     ta.approval_level as user_approval_level
                 FROM Tickets t
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
                 WHERE t.id = @ticket_id
             `);
         const ticketRow = ticketResult.recordset[0];
@@ -1146,10 +1235,10 @@ const acceptTicket = async (req, res) => {
             });
         }
 
-        // Get current ticket status
+        // Get current ticket status and puno
         const currentTicket = await pool.request()
             .input('id', sql.Int, id)
-            .query('SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id');
+            .query('SELECT status, reported_by, assigned_to, puno FROM Tickets WHERE id = @id');
 
         if (currentTicket.recordset.length === 0) {
             return res.status(404).json({
@@ -1159,6 +1248,17 @@ const acceptTicket = async (req, res) => {
         }
 
         const ticket = currentTicket.recordset[0];
+        const { status, reported_by, assigned_to, puno } = ticket;
+
+        // Check if user has permission to accept tickets
+        const permissionCheck = await checkUserActionPermission(accepted_by, puno, 'accept');
+        if (!permissionCheck.hasPermission) {
+            return res.status(403).json({
+                success: false,
+                message: 'You do not have permission to accept tickets for this location'
+            });
+        }
+
         let newStatus = 'in_progress';
         let statusNotes = 'Ticket accepted and work started';
 
@@ -1216,10 +1316,16 @@ const acceptTicket = async (req, res) => {
                 .input('ticket_id', sql.Int, id)
                 .input('reporter_id', sql.Int, ticket.reported_by)
                 .query(`
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.status, t.pu_id,
-                           pu.PUCODE, pu.PUNAME
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
+                           pu.PUCODE, pu.PUNAME,
+                           pe.plant as plant_code,
+                           pe.area as area_code,
+                           pe.line as line_code,
+                           pe.machine as machine_code,
+                           pe.number as machine_number
                     FROM Tickets t
-                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id;
 
                     SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
@@ -1314,7 +1420,7 @@ const rejectTicket = async (req, res) => {
                     t.area_id,
                     ta.approval_level as user_approval_level
                 FROM Tickets t
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
                 WHERE t.id = @id
             `);
 
@@ -1378,10 +1484,16 @@ const rejectTicket = async (req, res) => {
                 .input('reporter_id', sql.Int, ticket.reported_by)
                 .input('assignee_id', sql.Int, ticket.assigned_to)
                 .query(`
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.pu_id, t.assigned_to,
-                           pu.PUCODE, pu.PUNAME
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno, t.assigned_to,
+                           pu.PUCODE, pu.PUNAME,
+                           pe.plant as plant_code,
+                           pe.area as area_code,
+                           pe.line as line_code,
+                           pe.machine as machine_code,
+                           pe.number as machine_number
                     FROM Tickets t
-                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id;
 
                     SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
@@ -1575,12 +1687,18 @@ const completeJob = async (req, res) => {
                 .input('ticket_id', sql.Int, id)
                 .input('reporter_id', sql.Int, ticket.reported_by)
                 .query(`
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.status, t.downtime_avoidance_hours, t.cost_avoidance, t.pu_id, t.failure_mode_id,
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.downtime_avoidance_hours, t.cost_avoidance, t.puno, t.failure_mode_id,
                            fm.FailureModeCode, fm.FailureModeName,
-                           pu.PUCODE, pu.PUNAME
+                           pu.PUCODE, pu.PUNAME,
+                           pe.plant as plant_code,
+                           pe.area as area_code,
+                           pe.line as line_code,
+                           pe.machine as machine_code,
+                           pe.number as machine_number
                     FROM Tickets t
                     LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo AND fm.FlagDel != 'Y'
-                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id;
 
                     SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
@@ -1743,10 +1861,16 @@ const escalateTicket = async (req, res) => {
                 .input('reporter_id', sql.Int, ticket.reported_by)
                 .input('escalated_to_id', sql.Int, escalated_to)
                 .query(`
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.pu_id,
-                           pu.PUCODE, pu.PUNAME
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
+                           pu.PUCODE, pu.PUNAME,
+                           pe.plant as plant_code,
+                           pe.area as area_code,
+                           pe.line as line_code,
+                           pe.machine as machine_code,
+                           pe.number as machine_number
                     FROM Tickets t
-                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id;
 
                     SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
@@ -1931,10 +2055,16 @@ const closeTicket = async (req, res) => {
                 .input('ticket_id', sql.Int, id)
                 .input('assignee_id', sql.Int, ticket.assigned_to)
                 .query(`
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.plant_id, t.area_id, t.line_id, t.machine_id, t.machine_number, t.status, t.pu_id,
-                           pu.PUCODE, pu.PUNAME
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
+                           pu.PUCODE, pu.PUNAME,
+                           pe.plant as plant_code,
+                           pe.area as area_code,
+                           pe.line as line_code,
+                           pe.machine as machine_code,
+                           pe.number as machine_number
                     FROM Tickets t
-                    LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id;
 
                     
@@ -2016,7 +2146,7 @@ const reassignTicket = async (req, res) => {
                     t.area_id,
                     ta.approval_level as user_approval_level
                 FROM Tickets t
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
                 WHERE t.id = @id
             `);
 
@@ -2108,8 +2238,16 @@ const reassignTicket = async (req, res) => {
             const detailResult = await pool.request()
                 .input('ticket_id', sql.Int, id)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, plant_id, area_id, line_id, machine_id, machine_number
-                    FROM Tickets WHERE id = @ticket_id
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
+                           pe.plant as plant_code,
+                           pe.area as area_code,
+                           pe.line as line_code,
+                           pe.machine as machine_code,
+                           pe.number as machine_number
+                    FROM Tickets t
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    WHERE t.id = @ticket_id
                 `);
 
             const ticketData = detailResult.recordset[0];
@@ -2214,7 +2352,7 @@ const sendDelayedTicketNotification = async (ticketId) => {
     try {
         const pool = await sql.connect(dbConfig);
         
-        // Get ticket information
+        // Get ticket information with hierarchy
         const ticketResult = await pool.request()
             .input('ticket_id', sql.Int, ticketId)
             .query(`
@@ -2225,13 +2363,26 @@ const sendDelayedTicketNotification = async (ticketId) => {
                        a.PERSON_NAME as assignee_name,
                        ua.LineID as assignee_line_id,
                        a.EMAIL as assignee_email,
-                       pu.PUCODE, pu.PUNAME
+                       pu.PUCODE as pu_pucode, 
+                       pu.PUNAME as pu_name,
+                       -- Hierarchy information from PUExtension
+                       pe.pucode,
+                       pe.plant as plant_code,
+                       pe.area as area_code,
+                       pe.line as line_code,
+                       pe.machine as machine_code,
+                       pe.number as machine_number,
+                       pe.puname as plant_name,
+                       pe.pudescription as pudescription,
+                       pe.digit_count,
+                       -- Hierarchy codes from PUExtension
                 FROM Tickets t
                 LEFT JOIN Person r ON t.reported_by = r.PERSONNO
                 LEFT JOIN _secUsers ur ON r.PERSONNO = ur.PersonNo
                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
                 LEFT JOIN _secUsers ua ON a.PERSONNO = ua.PersonNo
-                LEFT JOIN PU pu ON t.pu_id = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                 WHERE t.id = @ticket_id
             `);
         
@@ -2360,96 +2511,109 @@ const getAvailableAssignees = async (req, res) => {
         const { search, ticket_id, escalation_only } = req.query;
         const pool = await sql.connect(dbConfig);
 
-        // Get ticket's area_id if ticket_id is provided
-        let areaFilter = '';
-        let request = pool.request();
+        let assignees = [];
         
         if (ticket_id) {
+            // Get ticket's puno if ticket_id is provided
             const ticketResult = await pool.request()
                 .input('ticket_id', sql.Int, ticket_id)
-                .query('SELECT area_id FROM Tickets WHERE id = @ticket_id');
+                .query('SELECT puno FROM Tickets WHERE id = @ticket_id');
             
             if (ticketResult.recordset.length > 0) {
-                const areaId = ticketResult.recordset[0].area_id;
-                if (areaId) {
+                const puno = ticketResult.recordset[0].puno;
+                
+                if (puno) {
                     // For escalation, only show L3 users (approval_level >= 3)
                     // For reassign, show L2+ users (approval_level >= 2)
                     const minApprovalLevel = escalation_only === 'true' ? 3 : 2;
                     
-                    areaFilter = `AND EXISTS (
-                        SELECT 1 FROM TicketApproval ta 
-                        WHERE ta.personno = p.PERSONNO 
-                        AND ta.area_id = @area_id 
-                        AND ta.approval_level >= @min_approval_level
-                    )`;
-                    request.input('area_id', sql.Int, areaId);
-                    request.input('min_approval_level', sql.Int, minApprovalLevel);
+                    // Use the helper function to get users for the specific PUNO and approval level
+                    const users = await getUsersForNotification(puno, minApprovalLevel);
+                    console.log(users);
+                    // Apply search filter if provided
+                    assignees = users
+                        .filter(user => {
+                            if (!search) return true;
+                            const searchLower = search.toLowerCase();
+                            return (
+                                (user.PERSON_NAME && user.PERSON_NAME.toLowerCase().includes(searchLower)) ||
+                                (user.FIRSTNAME && user.FIRSTNAME.toLowerCase().includes(searchLower)) ||
+                                (user.LASTNAME && user.LASTNAME.toLowerCase().includes(searchLower)) ||
+                                (user.EMAIL && user.EMAIL.toLowerCase().includes(searchLower))
+                            );
+                        })
+                        .map(person => ({
+                            id: person.PERSONNO,
+                            name: person.PERSON_NAME || `${person.FIRSTNAME || ''} ${person.LASTNAME || ''}`.trim(),
+                            email: person.EMAIL,
+                            phone: person.PHONE,
+                            title: person.TITLE,
+                            department: person.DEPTNO,
+                            userGroup: person.USERGROUPNAME,
+                            approvalLevel: person.approval_level
+                        }));
                 }
             }
+        } else {
+            // If no ticket_id provided, return all L2+ users (legacy behavior)
+            const minApprovalLevel = escalation_only === 'true' ? 3 : 2;
+            
+            let request = pool.request()
+                .input('min_approval_level', sql.Int, minApprovalLevel);
+
+            // Build search condition
+            let searchCondition = '';
+            if (search) {
+                searchCondition = `AND (p.FIRSTNAME LIKE @search OR p.LASTNAME LIKE @search OR p.PERSON_NAME LIKE @search OR p.EMAIL LIKE @search)`;
+                request.input('search', sql.NVarChar, `%${search}%`);
+            }
+
+            // Get all active persons with the minimum approval level
+            const result = await request.query(`
+                SELECT DISTINCT
+                    p.PERSONNO,
+                    p.FIRSTNAME,
+                    p.LASTNAME,
+                    p.PERSON_NAME,
+                    p.EMAIL,
+                    p.PHONE,
+                    p.TITLE,
+                    p.DEPTNO,
+                    ta.approval_level,
+                    -- Get the first non-null user group name for display
+                    (SELECT TOP 1 vpug2.USERGROUPNAME 
+                     FROM V_PERSON_USERGROUP vpug2 
+                     WHERE vpug2.PERSONNO = p.PERSONNO 
+                     AND vpug2.USERGROUPNAME IS NOT NULL
+                     AND vpug2.USERGROUPNAME != 'Requester'
+                     AND (
+                         vpug2.USERGROUPNAME LIKE '%Manager%' 
+                         OR vpug2.USERGROUPNAME LIKE '%Owner%'
+                         OR vpug2.USERGROUPNAME LIKE '%Technician%'
+                         OR vpug2.USERGROUPNAME LIKE '%Planner%'
+                         OR vpug2.USERGROUPNAME LIKE '%Approval%'
+                     )
+                     ORDER BY vpug2.USERGROUPNAME) AS USERGROUPNAME
+                FROM Person p
+                INNER JOIN TicketApproval ta ON ta.personno = p.PERSONNO
+                WHERE p.FLAGDEL != 'Y'
+                AND ta.approval_level >= @min_approval_level
+                AND ta.is_active = 1
+                ${searchCondition}
+                ORDER BY p.FIRSTNAME, p.LASTNAME
+            `);
+
+            assignees = result.recordset.map(person => ({
+                id: person.PERSONNO,
+                name: person.PERSON_NAME || `${person.FIRSTNAME || ''} ${person.LASTNAME || ''}`.trim(),
+                email: person.EMAIL,
+                phone: person.PHONE,
+                title: person.TITLE,
+                department: person.DEPTNO,
+                userGroup: person.USERGROUPNAME,
+                approvalLevel: person.approval_level
+            }));
         }
-
-        // Build search condition
-        let searchCondition = '';
-        if (search) {
-            searchCondition = `AND (p.FIRSTNAME LIKE @search OR p.LASTNAME LIKE @search OR p.PERSON_NAME LIKE @search OR p.EMAIL LIKE @search)`;
-            request.input('search', sql.NVarChar, `%${search}%`);
-        }
-
-        // Get all active persons with user groups (excluding basic Requesters)
-        // Filter by area-specific approval levels if ticket_id is provided
-        const result = await request.query(`
-            SELECT DISTINCT
-                p.PERSONNO,
-                p.FIRSTNAME,
-                p.LASTNAME,
-                p.PERSON_NAME,
-                p.EMAIL,
-                p.PHONE,
-                p.TITLE,
-                p.DEPTNO,
-                -- Get the first non-null user group name for display
-                (SELECT TOP 1 vpug2.USERGROUPNAME 
-                 FROM V_PERSON_USERGROUP vpug2 
-                 WHERE vpug2.PERSONNO = p.PERSONNO 
-                 AND vpug2.USERGROUPNAME IS NOT NULL
-                 AND vpug2.USERGROUPNAME != 'Requester'
-                 AND (
-                     vpug2.USERGROUPNAME LIKE '%Manager%' 
-                     OR vpug2.USERGROUPNAME LIKE '%Owner%'
-                     OR vpug2.USERGROUPNAME LIKE '%Technician%'
-                     OR vpug2.USERGROUPNAME LIKE '%Planner%'
-                     OR vpug2.USERGROUPNAME LIKE '%Approval%'
-                 )
-                 ORDER BY vpug2.USERGROUPNAME) AS USERGROUPNAME
-            FROM Person p
-            WHERE p.FLAGDEL != 'Y'
-            AND EXISTS (
-                SELECT 1 FROM V_PERSON_USERGROUP vpug 
-                WHERE vpug.PERSONNO = p.PERSONNO
-                AND vpug.USERGROUPNAME IS NOT NULL
-                AND vpug.USERGROUPNAME != 'Requester'
-                AND (
-                    vpug.USERGROUPNAME LIKE '%Manager%' 
-                    OR vpug.USERGROUPNAME LIKE '%Owner%'
-                    OR vpug.USERGROUPNAME LIKE '%Technician%'
-                    OR vpug.USERGROUPNAME LIKE '%Planner%'
-                    OR vpug.USERGROUPNAME LIKE '%Approval%'
-                )
-            )
-            ${areaFilter}
-            ${searchCondition}
-            ORDER BY p.FIRSTNAME, p.LASTNAME
-        `);
-
-        const assignees = result.recordset.map(person => ({
-            id: person.PERSONNO,
-            name: person.PERSON_NAME || `${person.FIRSTNAME} ${person.LASTNAME}`,
-            email: person.EMAIL,
-            phone: person.PHONE,
-            title: person.TITLE,
-            department: person.DEPTNO,
-            userGroup: person.USERGROUPNAME
-        }));
 
         res.json({
             success: true,
@@ -2539,8 +2703,16 @@ const reopenTicket = async (req, res) => {
                 .input('ticket_id', sql.Int, id)
                 .input('assignee_id', sql.Int, ticket.assigned_to)
                 .query(`
-                    SELECT id, ticket_number, title, severity_level, priority, plant_id, area_id, line_id, machine_id, machine_number
-                    FROM Tickets WHERE id = @ticket_id;
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
+                           pe.plant as plant_code,
+                           pe.area as area_code,
+                           pe.line as line_code,
+                           pe.machine as machine_code,
+                           pe.number as machine_number
+                    FROM Tickets t
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    WHERE t.id = @ticket_id;
 
                     SELECT PERSON_NAME, EMAIL, DEPTNO
                     FROM Person WHERE PERSONNO = @assignee_id;
@@ -2623,7 +2795,7 @@ const getUserPendingTickets = async (req, res) => {
         
         // Query to get tickets related to the user:
         // 1. Tickets created by the user
-        // 2. Tickets where user has approval_level > 2 for the ticket's area_id
+        // 2. Tickets where user has approval_level > 2 for the ticket's line_id
         // Status should not be 'closed', 'completed', or 'canceled'
         const query = `
             SELECT
@@ -2638,11 +2810,17 @@ const getUserPendingTickets = async (req, res) => {
                 t.updated_at,
                 t.assigned_to,
                 t.reported_by,
-                t.area_id,
-                a.name as area_name,
-                a.code as area_code,
-                p.name as plant_name,
-                p.code as plant_code,
+                -- Hierarchy information from PUExtension
+                pe.pucode,
+                pe.plant as plant_code,
+                pe.area as area_code,
+                pe.line as line_code,
+                pe.machine as machine_code,
+                pe.number as machine_number,
+                pe.puname as plant_name,
+                pe.pudescription as pudescription,
+                pe.digit_count,
+                -- Hierarchy codes from PUExtension
                 -- Creator info
                 creator.FIRSTNAME + ' ' + creator.LASTNAME as creator_name,
                 creator.PERSONNO as creator_id,
@@ -2665,16 +2843,17 @@ const getUserPendingTickets = async (req, res) => {
                 END as priority_order,
                 t.created_at as created_at_order
             FROM Tickets t
-            LEFT JOIN Area a ON a.id = t.area_id
-            LEFT JOIN Plant p ON p.id = a.plant_id
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN Person creator ON creator.PERSONNO = t.reported_by
             LEFT JOIN Person assignee ON assignee.PERSONNO = t.assigned_to
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.area_id = t.area_id
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+            LEFT JOIN Line l ON ta.line_id = l.id AND l.code = pe.line AND ta.is_active = 1
             WHERE (
                 -- Tickets created by the user
                 t.reported_by = @userId
                 OR 
-                -- Tickets where user has approval_level > 2 for the area
+                -- Tickets where user has approval_level > 2 for the line
                 (ta.approval_level > 2 AND ta.is_active = 1)
             )
             AND t.status NOT IN ('closed', 'completed', 'canceled', 'rejected_final')
@@ -2699,11 +2878,15 @@ const getUserPendingTickets = async (req, res) => {
             updated_at: ticket.updated_at,
             assigned_to: ticket.assigned_to,
             reported_by: ticket.reported_by,
+            plant_id: ticket.plant_id,
+            plant_name: ticket.plant_name,
+            plant_code: ticket.plant_code,
             area_id: ticket.area_id,
             area_name: ticket.area_name,
             area_code: ticket.area_code,
-            plant_name: ticket.plant_name,
-            plant_code: ticket.plant_code,
+            line_id: ticket.line_id,
+            line_name: ticket.line_name,
+            line_code: ticket.line_code,
             creator_name: ticket.creator_name,
             creator_id: ticket.creator_id,
             assignee_name: ticket.assignee_name,
@@ -2815,8 +2998,14 @@ const getUserTicketCountPerPeriod = async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
         
-        // Build WHERE clause for user's tickets
-        let whereClause = `WHERE t.reported_by = @userId AND YEAR(t.created_at) = @year`;
+        // Build WHERE clause for user's tickets (same logic as getUserPendingTickets)
+        let whereClause = `WHERE (
+            -- Tickets created by the user
+            t.reported_by = @userId
+            OR 
+            -- Tickets where user has approval_level > 2 for the line
+            (ta.approval_level > 2 AND ta.is_active = 1)
+        ) AND YEAR(t.created_at) = @year`;
         
         // Add date range filter if provided
         if (startDate && endDate) {
@@ -2846,6 +3035,7 @@ const getUserTicketCountPerPeriod = async (req, res) => {
                 END as period,
                 COUNT(*) as tickets
             FROM Tickets t
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
             ${whereClause}
             GROUP BY 
                 CASE 
@@ -2929,7 +3119,7 @@ const getUserCompletedTicketCountPerPeriod = async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
         
-        // First, check if user has L2+ approval level in any area
+        // First, check if user has L2+ approval level in any line
         const l2CheckQuery = `
             SELECT COUNT(*) as l2_count
             FROM TicketApproval ta
@@ -2949,8 +3139,14 @@ const getUserCompletedTicketCountPerPeriod = async (req, res) => {
             });
         }
         
-        // Build WHERE clause for user's completed tickets
-        let whereClause = `WHERE t.completed_by = @userId AND YEAR(t.completed_at) = @year`;
+        // Build WHERE clause for user's completed tickets (same logic as getUserPendingTickets)
+        let whereClause = `WHERE (
+            -- Tickets completed by the user
+            t.completed_by = @userId
+            OR 
+            -- Tickets where user has approval_level > 2 for the line and was involved
+            (ta.approval_level > 2 AND ta.is_active = 1)
+        ) AND YEAR(t.completed_at) = @year`;
         
         // Add date range filter if provided (based on completed_at)
         if (startDate && endDate) {
@@ -2980,6 +3176,7 @@ const getUserCompletedTicketCountPerPeriod = async (req, res) => {
                 END as period,
                 COUNT(*) as tickets
             FROM Tickets t
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
             ${whereClause}
             GROUP BY 
                 CASE 
@@ -3064,7 +3261,7 @@ const getPersonalKPIData = async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
         
-        // First, check if user has L2+ approval level in any area
+        // First, check if user has L2+ approval level in any line
         const l2CheckQuery = `
             SELECT COUNT(*) as l2_count
             FROM TicketApproval ta
@@ -3092,7 +3289,14 @@ const getPersonalKPIData = async (req, res) => {
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsThisPeriod
             FROM Tickets t
-            WHERE t.reported_by = @userId
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+            WHERE (
+                -- Tickets created by the user
+                t.reported_by = @userId
+                OR 
+                -- Tickets where user has approval_level > 2 for the line
+                (ta.approval_level > 2 AND ta.is_active = 1)
+            )
             AND t.created_at >= @startDate 
             AND t.created_at <= @endDate
         `;
@@ -3110,7 +3314,14 @@ const getPersonalKPIData = async (req, res) => {
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsLastPeriod
             FROM Tickets t
-            WHERE t.reported_by = @userId
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+            WHERE (
+                -- Tickets created by the user
+                t.reported_by = @userId
+                OR 
+                -- Tickets where user has approval_level > 2 for the line
+                (ta.approval_level > 2 AND ta.is_active = 1)
+            )
             AND t.created_at >= @compare_startDate 
             AND t.created_at <= @compare_endDate
         `;
@@ -3146,7 +3357,14 @@ const getPersonalKPIData = async (req, res) => {
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesThisPeriod
                 FROM Tickets t
-                WHERE t.completed_by = @userId
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+                WHERE (
+                    -- Tickets completed by the user
+                    t.completed_by = @userId
+                    OR 
+                    -- Tickets where user has approval_level > 2 for the line and was involved
+                    (ta.approval_level > 2 AND ta.is_active = 1)
+                )
                 AND t.completed_at >= @startDate 
                 AND t.completed_at <= @endDate
             `;
@@ -3161,7 +3379,14 @@ const getPersonalKPIData = async (req, res) => {
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesLastPeriod
                 FROM Tickets t
-                WHERE t.completed_by = @userId
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+                WHERE (
+                    -- Tickets completed by the user
+                    t.completed_by = @userId
+                    OR 
+                    -- Tickets where user has approval_level > 2 for the line and was involved
+                    (ta.approval_level > 2 AND ta.is_active = 1)
+                )
                 AND t.completed_at >= @compare_startDate 
                 AND t.completed_at <= @compare_endDate
             `;

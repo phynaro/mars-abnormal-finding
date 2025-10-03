@@ -27,4 +27,10 @@ router.get('/pucode/:pucode', authenticateToken, hierarchyController.getPUCODEDe
 // Generate PUCODE from hierarchy
 router.post('/pucode/generate', authenticateToken, hierarchyController.generatePUCODE);
 
+// Get distinct plants from PUExtension (for filters)
+router.get('/distinct/plants', authenticateToken, hierarchyController.getDistinctPlants);
+
+// Get distinct areas from PUExtension (for filters)
+router.get('/distinct/areas', authenticateToken, hierarchyController.getDistinctAreas);
+
 module.exports = router;

@@ -1,12 +1,13 @@
 -- =====================================================
 -- STORED PROCEDURE FOR TICKET CREATION WITH PUCODE VALIDATION
+-- Updated to support flexible PUCODE format (minimum 3 parts)
 -- =====================================================
 
 CREATE PROCEDURE sp_CreateTicketWithPUCODE
     @ticket_number VARCHAR(20),
     @title NVARCHAR(255),
     @description NVARCHAR(MAX),
-    @pucode VARCHAR(100), -- Format: PLANT-AREA-LINE-MACHINE-NUMBER
+    @pucode VARCHAR(100), -- Format: PLANT-AREA-[LINE-][MACHINE-]NUMBER (minimum 3 parts)
     @severity_level VARCHAR(20) = 'medium',
     @priority VARCHAR(20) = 'normal',
     @cost_avoidance DECIMAL(15,2) = NULL,
@@ -27,7 +28,7 @@ BEGIN
     BEGIN TRY
         BEGIN TRANSACTION;
         
-        -- Parse PUCODE: PLANT-AREA-LINE-MACHINE-NUMBER
+        -- Parse PUCODE: PLANT-AREA-[LINE-][MACHINE-]NUMBER (minimum 3 parts)
         DECLARE @parts TABLE (
             part_number INT,
             part_value VARCHAR(50)
@@ -48,22 +49,33 @@ BEGIN
             SET @pos = @next_pos + 1;
         END;
         
-        -- Validate PUCODE has exactly 5 parts
-        IF @part_count != 5
+        -- Validate PUCODE has at least 3 parts
+        IF @part_count < 3
         BEGIN
-            SET @error_message = 'Invalid PUCODE format. Expected: PLANT-AREA-LINE-MACHINE-NUMBER';
+            SET @error_message = 'Invalid PUCODE format. Expected at least 3 parts: PLANT-AREA-NUMBER';
             RAISERROR(@error_message, 16, 1);
         END;
         
-        -- Extract parts
+        -- Extract parts (flexible based on part count)
         DECLARE @plant_code VARCHAR(50), @area_code VARCHAR(50), @line_code VARCHAR(50), @machine_code VARCHAR(50);
         SELECT @plant_code = part_value FROM @parts WHERE part_number = 1;
         SELECT @area_code = part_value FROM @parts WHERE part_number = 2;
-        SELECT @line_code = part_value FROM @parts WHERE part_number = 3;
-        SELECT @machine_code = part_value FROM @parts WHERE part_number = 4;
-        SELECT @machine_number = CAST(part_value AS INT) FROM @parts WHERE part_number = 5;
         
-        -- Validate and get IDs
+        -- Handle optional parts based on total count
+        IF @part_count >= 4
+            SELECT @line_code = part_value FROM @parts WHERE part_number = 3;
+        ELSE
+            SET @line_code = NULL;
+            
+        IF @part_count >= 5
+            SELECT @machine_code = part_value FROM @parts WHERE part_number = 4;
+        ELSE
+            SET @machine_code = NULL;
+            
+        -- Last part is always the machine number
+        SELECT @machine_number = CAST(part_value AS INT) FROM @parts WHERE part_number = @part_count;
+        
+        -- Validate and get IDs (flexible based on available parts)
         SELECT @plant_id = id FROM Plant WHERE code = @plant_code AND is_active = 1;
         IF @plant_id IS NULL
         BEGIN
@@ -78,18 +90,34 @@ BEGIN
             RAISERROR(@error_message, 16, 1);
         END;
         
-        SELECT @line_id = id FROM Line WHERE code = @line_code AND area_id = @area_id AND is_active = 1;
-        IF @line_id IS NULL
+        -- Line is optional (only if @line_code is provided)
+        IF @line_code IS NOT NULL
         BEGIN
-            SET @error_message = 'Line not found: ' + @line_code + ' for area: ' + @area_code;
-            RAISERROR(@error_message, 16, 1);
+            SELECT @line_id = id FROM Line WHERE code = @line_code AND area_id = @area_id AND is_active = 1;
+            IF @line_id IS NULL
+            BEGIN
+                SET @error_message = 'Line not found: ' + @line_code + ' for area: ' + @area_code;
+                RAISERROR(@error_message, 16, 1);
+            END;
+        END
+        ELSE
+        BEGIN
+            SET @line_id = NULL;
         END;
         
-        SELECT @machine_id = id FROM Machine WHERE code = @machine_code AND line_id = @line_id AND machine_number = @machine_number AND is_active = 1;
-        IF @machine_id IS NULL
+        -- Machine is optional (only if @machine_code is provided)
+        IF @machine_code IS NOT NULL AND @line_id IS NOT NULL
         BEGIN
-            SET @error_message = 'Machine not found: ' + @machine_code + '-' + CAST(@machine_number AS VARCHAR) + ' for line: ' + @line_code;
-            RAISERROR(@error_message, 16, 1);
+            SELECT @machine_id = id FROM Machine WHERE code = @machine_code AND line_id = @line_id AND machine_number = @machine_number AND is_active = 1;
+            IF @machine_id IS NULL
+            BEGIN
+                SET @error_message = 'Machine not found: ' + @machine_code + '-' + CAST(@machine_number AS VARCHAR) + ' for line: ' + @line_code;
+                RAISERROR(@error_message, 16, 1);
+            END;
+        END
+        ELSE
+        BEGIN
+            SET @machine_id = NULL;
         END;
         
         -- Validate person references

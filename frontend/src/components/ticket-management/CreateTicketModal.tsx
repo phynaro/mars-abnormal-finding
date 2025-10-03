@@ -29,6 +29,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
     title: '',
     description: '',
     pucode: '',
+    puno: undefined,
     severity_level: 'medium',
     priority: 'normal',
     cost_avoidance: undefined,
@@ -49,8 +50,8 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
       newErrors.description = t('ticket.descriptionRequired');
     }
 
-    if (!formData.pucode?.trim()) {
-      newErrors.pucode = t('ticket.pucodeRequired');
+    if (!formData.puno) {
+      newErrors.puno = t('ticket.puRequired');
     }
 
     setErrors(newErrors);
@@ -78,6 +79,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
         title: '',
         description: '',
         pucode: '',
+        puno: undefined,
         severity_level: 'medium',
         priority: 'normal',
         cost_avoidance: undefined,
@@ -152,12 +154,12 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
 
           {/* PUCODE */}
           <div className="space-y-2">
-            <Label htmlFor="pucode">{t('ticket.pucode')} *</Label>
+            <Label htmlFor="pucode">{t('ticket.pucode')}</Label>
             <Input
               id="pucode"
               value={formData.pucode}
               onChange={(e) => handleInputChange('pucode', e.target.value)}
-              placeholder="PLANT-AREA-LINE-MACHINE-NUMBER"
+              placeholder="PLANT-AREA-LINE-MACHINE-NUMBER (optional)"
               className={errors.pucode ? 'border-red-500' : ''}
             />
             {errors.pucode && <p className="text-sm text-red-500">{errors.pucode}</p>}

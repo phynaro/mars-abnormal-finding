@@ -138,7 +138,7 @@ function buildTicketFlexMessage(ticket, messageType = 'created', images = [], ad
                     text:
                       safeText(ticket.PUNAME) ||
                       safeText(ticket.PUCODE) ||
-                      safeText(ticket.pu_id) ||
+                      safeText(ticket.puno) ||
                       'ไม่ระบุ',
                     wrap: true,
                     color: '#666666',
@@ -147,6 +147,28 @@ function buildTicketFlexMessage(ticket, messageType = 'created', images = [], ad
                   },
                 ],
               },
+              ...(ticket.equipment_name ? [{
+                type: 'box',
+                layout: 'horizontal',
+                spacing: 'sm',
+                contents: [
+                  {
+                    type: 'text',
+                    text: 'Equipment',
+                    color: '#aaaaaa',
+                    size: 'sm',
+                    flex: 3,
+                  },
+                  {
+                    type: 'text',
+                    text: safeText(ticket.equipment_name),
+                    wrap: true,
+                    color: '#666666',
+                    size: 'sm',
+                    flex: 5,
+                  },
+                ],
+              }] : []),
               {
                 type: 'box',
                 layout: 'horizontal',

@@ -18,6 +18,7 @@ router.get('/production-units/:puNo', assetController.getProductionUnitDetails);
 
 // Equipment
 router.get('/equipment', assetController.getEquipment);
+router.get('/equipment/by-puno', assetController.getEquipmentByPUNO);
 router.get('/equipment/:eqNo', assetController.getEquipmentDetails);
 
 // Hierarchy

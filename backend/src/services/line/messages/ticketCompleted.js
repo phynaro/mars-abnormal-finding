@@ -149,7 +149,7 @@ function buildJobCompletedFlexMessageWithHero(ticket, completerName, downtimeAvo
                     text:
                       safeText(ticket.PUNAME) ||
                       safeText(ticket.PUCODE) ||
-                      safeText(ticket.pu_id) ||
+                      safeText(ticket.puno) ||
                       'ไม่ระบุ',
                     wrap: true,
                     color: '#666666',
