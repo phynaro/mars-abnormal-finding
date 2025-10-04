@@ -13,8 +13,8 @@ const TicketManagementPage: React.FC = () => {
         title={t('ticketManagement.title')}
         //description="Report and manage abnormal findings in machines, areas, and equipment"
         rightContent={
-          <div className="flex items-center gap-2">
-            <Button asChild className="md:hidden" variant="destructive">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+            <Button asChild className="md:hidden w-full" variant="destructive">
               <Link to="/tickets/create/wizard">{t('ticketManagement.createTicket')}</Link>
             </Button>
             <Button asChild className="hidden md:inline-flex" variant="destructive">

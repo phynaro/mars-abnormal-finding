@@ -2,13 +2,13 @@ const express = require('express');
 const router = express.Router();
 const ticketController = require('../controllers/ticketController');
 const { authenticateToken, requireFormPermission } = require('../middleware/auth');
-const { upload } = require('../middleware/upload');
+const { upload, uploadMemory } = require('../middleware/upload');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
 
 // Create a new ticket (requires TKT form save permission)
-router.post('/', requireFormPermission('TKT', 'save'), ticketController.createTicket);
+router.post('/', requireFormPermission('TKT', 'save'), uploadMemory.array('images', 10), ticketController.createTicket);
 
 // Get all tickets with filtering and pagination (requires TKT form view permission)
 router.get('/', requireFormPermission('TKT', 'view'), ticketController.getTickets);
@@ -53,8 +53,11 @@ router.post('/:id/complete', requireFormPermission('TKT', 'save'), ticketControl
 // Escalate ticket (requires TKT form save permission)
 router.post('/:id/escalate', requireFormPermission('TKT', 'save'), ticketController.escalateTicket);
 
-// Close ticket (requires TKT form save permission)
-router.post('/:id/close', requireFormPermission('TKT', 'save'), ticketController.closeTicket);
+// Approve review ticket (L1 - Requestor only, requires TKT form save permission)
+router.post('/:id/approve-review', requireFormPermission('TKT', 'save'), ticketController.approveReview);
+
+// Approve close ticket (L4+ Managers only, requires TKT form save permission)
+router.post('/:id/approve-close', requireFormPermission('TKT', 'save'), ticketController.approveClose);
 
 // Reopen ticket (requires TKT form save permission)
 router.post('/:id/reopen', requireFormPermission('TKT', 'save'), ticketController.reopenTicket);
@@ -66,7 +69,7 @@ router.post('/:id/reassign', requireFormPermission('TKT', 'save'), ticketControl
 router.get('/assignees/available', requireFormPermission('TKT', 'view'), ticketController.getAvailableAssignees);
 
 // Trigger LINE notification for ticket (called after image uploads)
-router.post('/:id/trigger-notification', requireFormPermission('TKT', 'save'), ticketController.triggerTicketNotification);
+// trigger-notification route removed - notifications now handled automatically
 
 // Test L2 users for an area (for testing)
 router.get('/test-l2-users/:area_id', requireFormPermission('TKT', 'view'), async (req, res) => {

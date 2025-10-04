@@ -7,6 +7,7 @@ const STATUS_CLASSES: Record<string, string> = {
   rejected_pending_l3_review: "border-orange-200 bg-orange-50 text-orange-700",
   rejected_final: "border-red-200 bg-red-50 text-red-700",
   completed: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  reviewed: "border-purple-200 bg-purple-50 text-purple-700",
   escalated: "border-red-200 bg-red-50 text-red-700",
   reopened_in_progress: "border-blue-200 bg-blue-50 text-blue-700",
 };

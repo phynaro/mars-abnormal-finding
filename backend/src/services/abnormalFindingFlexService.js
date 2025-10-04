@@ -18,6 +18,7 @@ const AbnCaseState = Object.freeze({
   REJECT_TO_MANAGER: "REJECT_TO_MANAGER",
   REJECT_FINAL: "REJECT_FINAL",
   COMPLETED: "COMPLETED",
+  REVIEWED: "REVIEWED",
   REASSIGNED: "REASSIGNED",
   ESCALATED: "ESCALATED",
   CLOSED: "CLOSED",
@@ -31,6 +32,7 @@ const stateColorMap = Object.freeze({
   [AbnCaseState.REJECT_TO_MANAGER]: "#F59E0B",// amber
   [AbnCaseState.REJECT_FINAL]: "#EF4444",     // red
   [AbnCaseState.COMPLETED]: "#10B981",        // emerald
+  [AbnCaseState.REVIEWED]: "#8B5CF6",         // purple
   [AbnCaseState.REASSIGNED]: "#A855F7",       // violet
   [AbnCaseState.ESCALATED]: "#FB7185",        // rose
   [AbnCaseState.CLOSED]: "#64748B",           // slate
@@ -44,6 +46,7 @@ const stateLabels = Object.freeze({
   [AbnCaseState.REJECT_TO_MANAGER]: "ปฏิเสธ รอการอนุมัติจากหัวหน้างาน",
   [AbnCaseState.REJECT_FINAL]: "ปฏิเสธขั้นสุดท้าย",
   [AbnCaseState.COMPLETED]: "เสร็จสิ้น",
+  [AbnCaseState.REVIEWED]: "ตรวจสอบแล้ว รอการปิด",
   [AbnCaseState.REASSIGNED]: "มอบหมายใหม่",
   [AbnCaseState.ESCALATED]: "ส่งต่อให้หัวหน้างาน",
   [AbnCaseState.CLOSED]: "ปิดเคส",

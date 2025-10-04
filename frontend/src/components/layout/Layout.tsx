@@ -119,9 +119,16 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Content */}
       <div className="flex-1 flex flex-col min-h-screen">
         {isMobile && (
-          <TopNavbar isMobile={isMobile} onMobileMenuToggle={handleToggleMobileMenu} />
+          <div className="sticky top-0 z-50 bg-background">
+            <TopNavbar isMobile={isMobile} onMobileMenuToggle={handleToggleMobileMenu} />
+            <Breadcrumbs />
+          </div>
         )}
-        <Breadcrumbs />
+        {!isMobile && (
+          <>
+            <Breadcrumbs />
+          </>
+        )}
         <main className="flex-1 overflow-auto bg-background">
           {children}
         </main>

@@ -146,6 +146,59 @@ app.get('/api/health', (req, res) => {
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
+  
+  // Handle multer errors with proper status codes and messages
+  if (err.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({
+      success: false,
+      message: 'File too large. Maximum file size allowed is 10MB.',
+      code: 'LIMIT_FILE_SIZE',
+      field: err.field || 'file'
+    });
+  }
+  
+  if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(400).json({
+      success: false,
+      message: 'Unexpected file field',
+      code: 'LIMIT_UNEXPECTED_FILE',
+      field: err.field
+    });
+  }
+  
+  if (err.code === 'LIMIT_FILE_COUNT') {
+    return res.status(400).json({
+      success: false,
+      message: 'Too many files uploaded',
+      code: 'LIMIT_FILE_COUNT'
+    });
+  }
+  
+  if (err.code === 'LIMIT_FIELD_KEY') {
+    return res.status(400).json({
+      success: false,
+      message: 'Field name too long',
+      code: 'LIMIT_FIELD_KEY'
+    });
+  }
+  
+  if (err.code === 'LIMIT_FIELD_VALUE') {
+    return res.status(400).json({
+      success: false,
+      message: 'Field value too long',
+      code: 'LIMIT_FIELD_VALUE'
+    });
+  }
+  
+  if (err.code === 'LIMIT_FIELD_COUNT') {
+    return res.status(400).json({
+      success: false,
+      message: 'Too many fields',
+      code: 'LIMIT_FIELD_COUNT'
+    });
+  }
+
+  // Default error handling
   res.status(500).json({ 
     success: false, 
     message: 'Internal server error',

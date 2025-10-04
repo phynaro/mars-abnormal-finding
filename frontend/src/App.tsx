@@ -48,17 +48,9 @@ import TicketCreatePage from './pages/TicketCreatePage';
 import TicketCreateWizardPage from './pages/TicketCreateWizardPage';
 import NewTicketForm from './pages/NewTicketForm';
 import ProfilePage from './pages/ProfilePage';
-import AssetSitesPage from './pages/AssetSitesPage';
-import AssetDepartmentsPage from './pages/AssetDepartmentsPage';
-import ProductionUnitPage from './pages/ProductionUnitPage';
-import EquipmentPage from './pages/EquipmentPage';
-import AssetHierarchyPage from './pages/AssetHierarchyPage';
-import WorkflowTypesPage from './pages/WorkflowTypesPage';
-import PlantManagementPage from './pages/PlantManagementPage';
-import AreaManagementPage from './pages/AreaManagementPage';
-import LineManagementPage from './pages/LineManagementPage';
-import MachineManagementPage from './pages/MachineManagementPage';
+import HierarchyViewPage from './pages/HierarchyViewPage';
 import TicketApprovalManagementPage from './pages/TicketApprovalManagementPage';
+import WorkflowTypesPage from './pages/WorkflowTypesPage';
 
 // Main App Component with Routing
 const AppContent: React.FC = () => {
@@ -195,16 +187,8 @@ const AppContent: React.FC = () => {
           <Route path="profile" element={<ProfilePage />} />
 
           {/* Asset Management Routes */}
-          <Route path="assets" element={<AssetSitesPage />} />
-          <Route path="assets/sites" element={<AssetSitesPage />} />
-          <Route path="assets/departments" element={<AssetDepartmentsPage />} />
-          <Route path="assets/production-units" element={<ProductionUnitPage />} />
-          <Route path="assets/equipment" element={<EquipmentPage />} />
-          <Route path="assets/hierarchy" element={<AssetHierarchyPage />} />
-          <Route path="assets/plants" element={<PlantManagementPage />} />
-          <Route path="assets/areas" element={<AreaManagementPage />} />
-          <Route path="assets/lines" element={<LineManagementPage />} />
-          <Route path="assets/machines" element={<MachineManagementPage />} />
+          <Route path="assets" element={<HierarchyViewPage />} />
+          <Route path="assets/hierarchy" element={<HierarchyViewPage />} />
           <Route path="assets/ticket-approvals" element={<TicketApprovalManagementPage />} />
 
           {/* Spare Part (Inventory) */}

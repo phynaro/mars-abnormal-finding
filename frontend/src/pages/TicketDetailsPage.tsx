@@ -72,7 +72,8 @@ const TicketDetailsPage: React.FC = () => {
     | "reject"
     | "complete"
     | "escalate"
-    | "close"
+    | "approve-review"
+    | "approve-close"
     | "reopen"
     | "reassign";
   const [actionOpen, setActionOpen] = useState(false);
@@ -98,6 +99,7 @@ const TicketDetailsPage: React.FC = () => {
   const userApprovalLevel = ticket?.user_approval_level || 0;
   const isL2Plus = userApprovalLevel >= 2;
   const isL3Plus = userApprovalLevel >= 3;
+  const isL4Plus = userApprovalLevel >= 4;
 
   // Check if current user is the assigned person for this ticket
   const isAssignedUser = ticket?.assigned_to === user?.id;
@@ -161,30 +163,36 @@ const TicketDetailsPage: React.FC = () => {
     import.meta.env.VITE_API_URL || "http://localhost:3001/api"
   ).replace(/\/$/, "");
   const uploadsBase = apiBase.endsWith("/api") ? apiBase.slice(0, -4) : apiBase;
-  // Load assignees on query change (keep hooks consistent regardless of visibility)
-  // useEffect(() => {
-  //   let cancelled = false;
-  //   (async () => {
-  //     try {
-  //       setAssigneesLoading(true);
-  //       // For escalate action, only show L3 users; for reassign, show L2+ users
-  //       const escalationOnly = actionType === "escalate";
-  //       const res = await ticketService.getAvailableAssignees(
-  //         assigneeQuery || undefined,
-  //         ticket?.id,
-  //         escalationOnly,
-  //       );
-  //       if (!cancelled) setAssignees(res.data || []);
-  //     } catch (e) {
-  //       if (!cancelled) setAssignees([]);
-  //     } finally {
-  //       if (!cancelled) setAssigneesLoading(false);
-  //     }
-  //   })();
-  //   return () => {
-  //     cancelled = true;
-  //   };
-  // }, [assigneeQuery, ticket?.id, actionType]);
+  // Load assignees only when modal is open with specific actions
+  useEffect(() => {
+    // Only load when the modal is open and we need assignees (reassign/escalate)
+    if (!actionOpen || !ticket?.id || (actionType !== 'reassign' && actionType !== 'escalate')) {
+      setAssignees([]);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      try {
+        setAssigneesLoading(true);
+        // For escalate action, only show L3 users; for reassign, show L2+ users
+        const escalationOnly = actionType === "escalate";
+        const res = await ticketService.getAvailableAssignees(
+          assigneeQuery || undefined,
+          ticket.id,
+          escalationOnly,
+        );
+        if (!cancelled) setAssignees(res.data || []);
+      } catch (e) {
+        if (!cancelled) setAssignees([]);
+      } finally {
+        if (!cancelled) setAssigneesLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [actionOpen, assigneeQuery, ticket?.id, actionType]);
 
   // Handle click outside assignee dropdown
   useEffect(() => {
@@ -472,13 +480,20 @@ const TicketDetailsPage: React.FC = () => {
           );
           break;
         }
-        case "close": {
+        case "approve-review": {
           const rating =
             actionNumber !== "" ? parseInt(actionNumber, 10) : undefined;
-          await ticketService.closeTicket(
+          await ticketService.approveReview(
             ticket.id,
-            actionComment || "Closed",
+            actionComment || "Approved review",
             rating,
+          );
+          break;
+        }
+        case "approve-close": {
+          await ticketService.approveClose(
+            ticket.id,
+            actionComment || "Approved close",
           );
           break;
         }
@@ -512,11 +527,11 @@ const TicketDetailsPage: React.FC = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <PageHeader
-        title={`Ticket #${ticket.ticket_number}`}
-        showBackButton={true}
-        onBack={() => navigate("/tickets")}
-        rightContent={
-          <>
+          title={`Ticket #${ticket.ticket_number}`}
+          showBackButton={true}
+          onBack={() => navigate("/tickets")}
+          rightContent={
+          <div className="flex flex-wrap gap-2 justify-end">
             {/* Accept button - Only assigned L2 user can accept open tickets */}
             {isL2Plus &&
               (isAssignedUser || ticket.assigned_to == null) &&
@@ -571,14 +586,23 @@ const TicketDetailsPage: React.FC = () => {
                   </Button>
                 </>
               )}
-            {/* Close/Reopen buttons - Creator can close/reopen when ticket is completed */}
+            {/* Approve Review button - Creator can approve review when ticket is completed */}
             {isCreator && ticket.status === "completed" && (
               <>
-                <Button onClick={() => openAction("close")}>{t('ticket.close')}</Button>
+                <Button onClick={() => openAction("approve-review")}>
+                  {t('ticket.approveReview')}
+                </Button>
                 <Button variant="outline" onClick={() => openAction("reopen")}>
                   {t('ticket.reopen')}
                 </Button>
               </>
+            )}
+            
+            {/* Approve Close button - L4+ managers can approve close when ticket is reviewed */}
+            {isL4Plus && ticket.status === "reviewed" && (
+              <Button onClick={() => openAction("approve-close")}>
+                {t('ticket.approveClose')}
+              </Button>
             )}
             {/* L3 Reassign button - L3 can reassign tickets in any status except rejected_final and closed */}
             {isL3Plus &&
@@ -591,7 +615,7 @@ const TicketDetailsPage: React.FC = () => {
                   {t('ticket.reassign')}
                 </Button>
               )}
-          </>
+          </div>
         }
       />
 
@@ -1310,8 +1334,10 @@ const TicketDetailsPage: React.FC = () => {
               <Label>
                 {actionType === "reject"
                   ? t('ticket.rejectionReason')
-                  : actionType === "close"
-                    ? t('ticket.closeReason')
+                  : actionType === "approve-review"
+                    ? t('ticket.reviewReason')
+                    : actionType === "approve-close"
+                      ? t('ticket.closeReason')
                     : actionType === "reopen"
                       ? t('ticket.reopenReason')
                       : t('ticket.notes')}
@@ -1385,7 +1411,7 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
               </div>
             )}
-            {actionType === "close" && (
+            {actionType === "approve-review" && (
               <div className="space-y-2">
                 <Label>{t('ticket.satisfactionRating')}</Label>
                 <Input

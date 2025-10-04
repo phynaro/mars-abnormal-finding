@@ -19,7 +19,7 @@ export interface Ticket {
   failure_mode_code?: string;
   failure_mode_name?: string;
   severity_level: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'in_progress' | 'rejected_pending_l3_review' | 'rejected_final' | 'completed' | 'escalated' | 'closed' | 'reopened_in_progress';
+  status: 'open' | 'in_progress' | 'rejected_pending_l3_review' | 'rejected_final' | 'completed' | 'reviewed' | 'escalated' | 'closed' | 'reopened_in_progress';
   priority: 'low' | 'normal' | 'high' | 'urgent';
   reported_by: number;
   assigned_to?: number;
@@ -39,6 +39,9 @@ export interface Ticket {
   escalated_by?: number;
   reopened_at?: string;
   reopened_by?: number;
+  reviewed_at?: string;
+  reviewed_by?: number;
+  closed_by?: number;
   l3_override_at?: string;
   l3_override_by?: number;
   reporter_name?: string;
@@ -49,6 +52,7 @@ export interface Ticket {
   accepted_by_name?: string;
   rejected_by_name?: string;
   completed_by_name?: string;
+  reviewed_by_name?: string;
   escalated_by_name?: string;
   closed_by_name?: string;
   reopened_by_name?: string;
@@ -305,17 +309,46 @@ class TicketService {
     } as Record<string, string>;
   }
 
-  async createTicket(ticketData: CreateTicketRequest): Promise<SingleTicketResponse> {
-    const headers = await this.getAuthHeaders();
-    const response = await fetch(`${API_BASE_URL}/tickets`, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(ticketData)
-    });
+  async createTicket(
+    ticketData: CreateTicketRequest,
+    files: File[] = [],
+    imageType: 'before' | 'after' | 'other' = 'before'
+  ): Promise<SingleTicketResponse> {
+    const hasFiles = Array.isArray(files) && files.length > 0;
+    const url = `${API_BASE_URL}/tickets`;
+
+    let response: Response;
+
+    if (hasFiles) {
+      const headers = await this.getAuthHeadersNoContentType();
+      const form = new FormData();
+      form.append('payload', JSON.stringify(ticketData));
+      form.append('image_type', imageType);
+      files.forEach(file => form.append('images', file));
+
+      response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: form
+      });
+    } else {
+      const headers = await this.getAuthHeaders();
+      response = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(ticketData)
+      });
+    }
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to create ticket');
+      let errorMessage = 'Failed to create ticket';
+      try {
+        const error = await response.json();
+        errorMessage = error.message || errorMessage;
+      } catch (parseError) {
+        console.error('Failed to parse ticket creation error response', parseError);
+      }
+      throw new Error(errorMessage);
     }
 
     return response.json();
@@ -549,15 +582,27 @@ class TicketService {
     return result;
   }
 
-  async closeTicket(id: number, close_reason: string, satisfaction_rating?: number): Promise<{ success: boolean; message: string }> {
+  async approveReview(id: number, review_reason: string, satisfaction_rating?: number): Promise<{ success: boolean; message: string }> {
     const headers = await this.getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}/tickets/${id}/close`, {
+    const res = await fetch(`${API_BASE_URL}/tickets/${id}/approve-review`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ close_reason, satisfaction_rating })
+      body: JSON.stringify({ review_reason, satisfaction_rating })
     });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.message || 'Failed to close ticket');
+    if (!res.ok) throw new Error(result.message || 'Failed to approve review');
+    return result;
+  }
+
+  async approveClose(id: number, close_reason: string): Promise<{ success: boolean; message: string }> {
+    const headers = await this.getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/tickets/${id}/approve-close`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ close_reason })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Failed to approve close');
     return result;
   }
 

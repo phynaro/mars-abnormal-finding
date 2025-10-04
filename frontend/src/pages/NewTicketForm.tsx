@@ -381,7 +381,7 @@ const NewTicketForm: React.FC = () => {
           
           // Trigger LINE notification after images are uploaded
           try {
-            await ticketService.triggerTicketNotification(response.data.id);
+            // triggerTicketNotification removed - notifications now handled automatically
             console.log('LINE notification sent with images');
           } catch (notificationError) {
             console.error('Failed to send LINE notification:', notificationError);

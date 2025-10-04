@@ -1,6 +1,6 @@
 const express = require('express');
 const { authenticateToken } = require('../middleware/auth');
-const { uploadAvatar } = require('../middleware/upload');
+const { uploadAvatar, compressAvatarMiddleware } = require('../middleware/upload');
 const userController = require('../controllers/userController');
 const userManagementController = require('../controllers/userManagementController');
 
@@ -12,7 +12,7 @@ router.use(authenticateToken);
 // Basic user profile routes (existing)
 router.get('/profile', userController.getProfile);
 router.put('/profile', userController.updateProfile);
-router.post('/profile/avatar', uploadAvatar.single('avatar'), userController.uploadAvatar);
+router.post('/profile/avatar', uploadAvatar.single('avatar'), compressAvatarMiddleware, userController.uploadAvatar);
 router.post('/line/test', userController.sendLineTest);
 router.get('/stats', userController.getUserStats);
 router.get('/role', userController.getRole);

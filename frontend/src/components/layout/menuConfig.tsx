@@ -13,7 +13,8 @@ import {
   Cpu,
   UserCheck,
   Target,
-  Settings
+  Settings,
+  TrendingUp
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -102,15 +103,7 @@ export const menuItems: MenuItem[] = [
     path: '/assets',
     permissionLevel: 1,
     children: [
-     // { id: 'assets-sites', label: 'Sites', icon: <FileText className="h-4 w-4" />, path: '/assets/sites', permissionLevel: 1 },
-      //{ id: 'assets-departments', label: 'Departments', icon: <FileText className="h-4 w-4" />, path: '/assets/departments', permissionLevel: 1 },
-      //{ id: 'assets-pus', label: 'Production Units', icon: <FileText className="h-4 w-4" />, path: '/assets/production-units', permissionLevel: 1 },
-      //{ id: 'assets-equipment', label: 'Equipment', icon: <Wrench className="h-4 w-4" />, path: '/assets/equipment', permissionLevel: 1 },
-      //{ id: 'assets-hierarchy', label: 'Hierarchy', icon: <FileText className="h-4 w-4" />, path: '/assets/hierarchy', permissionLevel: 1 },
-      { id: 'assets-plants', label: 'Plant Management', icon: <Factory className="h-4 w-4" />, path: '/assets/plants', permissionLevel: 1 },
-      { id: 'assets-areas', label: 'Area Management', icon: <MapPin className="h-4 w-4" />, path: '/assets/areas', permissionLevel: 1 },
-      { id: 'assets-lines', label: 'Line Management', icon: <Layers className="h-4 w-4" />, path: '/assets/lines', permissionLevel: 1 },
-      { id: 'assets-machines', label: 'Machine Management', icon: <Cpu className="h-4 w-4" />, path: '/assets/machines', permissionLevel: 1 },
+      { id: 'assets-hierarchy', label: 'Hierarchy View', icon: <TrendingUp className="h-4 w-4" />, path: '/assets/hierarchy', permissionLevel: 1 },
       { id: 'assets-ticket-approvals', label: 'Ticket Approvals', icon: <UserCheck className="h-4 w-4" />, path: '/assets/ticket-approvals', permissionLevel: 1 },
     ]
   },

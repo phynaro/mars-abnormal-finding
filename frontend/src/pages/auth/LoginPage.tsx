@@ -37,7 +37,7 @@ const LoginPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.username || !formData.password) {
       setError(t('validation.required'));
       return;
@@ -52,13 +52,13 @@ const LoginPage: React.FC = () => {
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : t('error.serverError');
       setError(errorMessage);
-      
+
       // Check if it's an email verification error
       if (errorMessage.includes('verify your email') || errorMessage.includes('email verification')) {
         setShowResendVerification(true);
         setResendEmail(formData.username); // Assuming username might be email
       }
-      
+
       // Log the error for debugging purposes (only in development)
       if (process.env.NODE_ENV === 'development') {
         console.error('Login error:', error);
@@ -116,14 +116,20 @@ const LoginPage: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-background py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto h-16 w-16 bg-primary rounded-lg flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-2xl">M</span>
+          <div className="mx-auto h-28 w-56 rounded-lg items-left">
+
+
+            <img
+              src="/Mars_Petcare_Logo.png"
+              alt="MARS Logo"
+              className="object-contain"
+            />
           </div>
           <CardTitle className="text-3xl font-extrabold">
             {t('auth.login')}
           </CardTitle>
           <CardDescription>
-            Sign in to your Mars CMMS account
+            Sign in using your Mars Cedar account
           </CardDescription>
         </CardHeader>
 
@@ -258,14 +264,14 @@ const LoginPage: React.FC = () => {
               <Button type="button" variant="link" className="p-0 h-auto text-sm" onClick={() => navigate('/verify-email')}>
                 {t('auth.forgotPassword')}
               </Button>
-              <div>
+              {/* <div>
                 <span className="text-muted-foreground">
                   Don't have an account?{' '}
                 </span>
                 <Button type="button" variant="link" className="p-0 h-auto text-sm" onClick={() => navigate('/register')}>
                   {t('auth.register')}
                 </Button>
-              </div>
+              </div> */}
             </div>
           </form>
         </CardContent>

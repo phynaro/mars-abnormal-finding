@@ -34,7 +34,6 @@ const TicketCreatePage: React.FC = () => {
   const { t } = useLanguage();
 
   const [submitting, setSubmitting] = useState(false);
-  const [imagesUploading, setImagesUploading] = useState(false);
 
   const [formData, setFormData] = useState<Pick<CreateTicketRequest, 'title' | 'description' | 'severity_level' | 'priority'> & { puno?: number; equipment_id?: number }>({
     title: '',
@@ -145,7 +144,7 @@ const TicketCreatePage: React.FC = () => {
     e.stopPropagation();
     setIsDragOver(false);
     
-    if (imagesUploading) return;
+    if (submitting) return;
     
     const files = e.dataTransfer.files;
     if (files.length > 0) {
@@ -321,35 +320,15 @@ const TicketCreatePage: React.FC = () => {
         priority: formData.priority,
       };
 
-      const createRes = await ticketService.createTicket(payload);
+      const createRes = await ticketService.createTicket(payload, selectedFiles, 'before');
       const ticketId = createRes.data.id;
 
-      // Upload images if any, with image_type = 'before'
-      if (selectedFiles.length > 0) {
-        setImagesUploading(true);
-        try {
-          await ticketService.uploadTicketImages(ticketId, selectedFiles, 'before');
-          
-          // Trigger LINE notification after images are uploaded
-          try {
-            await ticketService.triggerTicketNotification(ticketId);
-            console.log('LINE notification sent with images');
-          } catch (notificationError) {
-            console.error('Failed to send LINE notification:', notificationError);
-            // Don't fail the ticket creation if notification fails
-          }
-        } finally {
-          setImagesUploading(false);
-        }
-      } else {
-        // If no images, trigger notification immediately
-        try {
-          await ticketService.triggerTicketNotification(ticketId);
-          console.log('LINE notification sent without images');
-        } catch (notificationError) {
-          console.error('Failed to send LINE notification:', notificationError);
-          // Don't fail the ticket creation if notification fails
-        }
+      try {
+        // triggerTicketNotification removed - notifications now handled automatically
+        console.log('LINE notification sent after ticket creation');
+      } catch (notificationError) {
+        console.error('Failed to send LINE notification:', notificationError);
+        // Don't fail the ticket creation if notification fails
       }
 
       toast({ title: t('common.success'), description: t('ticket.ticketCreatedSuccess'), variant: 'default' });
@@ -370,16 +349,16 @@ const TicketCreatePage: React.FC = () => {
             type="button"
             variant="outline"
             onClick={() => navigate('/tickets')}
-            disabled={submitting || imagesUploading}
+            disabled={submitting}
           >
             {t('common.cancel')}
           </Button>
           <Button
             type="button"
             onClick={() => formRef.current?.requestSubmit()}
-            disabled={submitting || imagesUploading}
+            disabled={submitting}
           >
-            {submitting ? t('ticket.creating') : imagesUploading ? t('ticket.uploadingImages') : t('ticket.submitReport')}
+            {submitting ? t('ticket.creating') : t('ticket.submitReport')}
           </Button>
         </div>
       </div>
@@ -537,14 +516,14 @@ const TicketCreatePage: React.FC = () => {
                 <Label htmlFor="images" className="text-base font-semibold">{t('ticket.attachImages')} *</Label>
                 <div
                   className={`border-2 border-dashed rounded-xl p-8 transition-all duration-200 ${
-                    imagesUploading 
-                      ? 'opacity-70 cursor-not-allowed border-muted-foreground/20' 
+                    submitting
+                      ? 'opacity-70 cursor-not-allowed border-muted-foreground/20'
                       : isDragOver
                         ? 'border-primary bg-primary/5 scale-[1.02]'
                         : 'border-muted-foreground/40 hover:border-primary hover:bg-muted/50 cursor-pointer'
                   }`}
                   onClick={() => {
-                    if (!imagesUploading) {
+                    if (!submitting) {
                       fileInputRef.current?.click();
                     }
                   }}
@@ -571,7 +550,7 @@ const TicketCreatePage: React.FC = () => {
                             e.stopPropagation();
                             fileInputRef.current?.click();
                           }}
-                          disabled={imagesUploading}
+                          disabled={submitting}
                         >
                           {t('ticket.browseFiles')}
                         </Button>
@@ -589,7 +568,7 @@ const TicketCreatePage: React.FC = () => {
                     multiple
                     className="hidden"
                     onChange={handleFileInputChange}
-                    disabled={imagesUploading}
+                    disabled={submitting}
                   />
                 </div>
 
@@ -597,7 +576,7 @@ const TicketCreatePage: React.FC = () => {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-sm text-muted-foreground">{t('ticket.selectedFiles')} {selectedFiles.length} file(s)</span>
-                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedFiles([])} disabled={imagesUploading}>{t('ticket.clearAll')}</Button>
+                      <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedFiles([])} disabled={submitting}>{t('ticket.clearAll')}</Button>
                     </div>
                     <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 max-h-60 overflow-y-auto pr-1">
                       {previews.map((p, idx) => (
@@ -607,7 +586,7 @@ const TicketCreatePage: React.FC = () => {
                             type="button"
                             className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
                             onClick={() => setSelectedFiles((prev) => prev.filter((_, i) => i !== idx))}
-                            disabled={imagesUploading}
+                            disabled={submitting}
                           >
                             {t('ticket.remove')}
                           </button>

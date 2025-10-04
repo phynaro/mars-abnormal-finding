@@ -5,6 +5,9 @@
 
 @layer base {
   :root {
+    /* Layout variables */
+    --top-nav-height: 4rem;            /* Height of top navigation bar */
+    
     /* Neutral surfaces */
     --background: 0 0% 100%;          /* #FFFFFF - White */
     --foreground: 0 0% 24%;           /* #3C3C3C - Gray text */

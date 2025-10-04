@@ -24,7 +24,7 @@ interface PUCODEResult {
   NUMBER: string;
 }
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api';
 
 type StepKey = 'machine' | 'images' | 'title' | 'description' | 'severity_priority' | 'review';
 
@@ -63,7 +63,7 @@ const TicketCreateWizardPage: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [pucode, setPucode] = useState('');
-  const [puno, setPu_id] = useState<number | undefined>(undefined);
+  const [puno, setPuno] = useState<number | undefined>(undefined);
   const [severity, setSeverity] = useState<'low'|'medium'|'high'|'critical'>('medium');
   const [priority, setPriority] = useState<'low'|'normal'|'high'|'urgent'>('normal');
 
@@ -168,7 +168,7 @@ const TicketCreateWizardPage: React.FC = () => {
   const onSelectMachine = (machine: PUCODEResult) => {
     setSelectedMachine(machine);
     setPucode(machine.PUCODE);
-    setPu_id(machine.PUNO);
+    setPuno(machine.PUNO);
     setMachineSearchQuery(machine.PUCODE);
     setMachineSearchDropdownOpen(false);
   };
@@ -178,7 +178,7 @@ const TicketCreateWizardPage: React.FC = () => {
     setMachineSearchQuery('');
     setMachineSearchResults([]);
     setPucode('');
-    setPu_id(undefined);
+    setPuno(undefined);
     setMachineSearchDropdownOpen(false);
     setIsSearching(false);
     setMachineSearchLoading(false);
@@ -222,8 +222,7 @@ const TicketCreateWizardPage: React.FC = () => {
           
           // Trigger LINE notification after images are uploaded
           try {
-            await ticketService.triggerTicketNotification(ticketId);
-            console.log('LINE notification sent with images');
+            console.log('Ticket created with images - notifications handled automatically');
           } catch (notificationError) {
             console.error('Failed to send LINE notification:', notificationError);
             // Don't fail the ticket creation if notification fails
@@ -234,8 +233,7 @@ const TicketCreateWizardPage: React.FC = () => {
       } else {
         // If no images, trigger notification immediately
         try {
-          await ticketService.triggerTicketNotification(ticketId);
-          console.log('LINE notification sent without images');
+            console.log('Ticket created without images - notifications handled automatically');
         } catch (notificationError) {
           console.error('Failed to send LINE notification:', notificationError);
           // Don't fail the ticket creation if notification fails

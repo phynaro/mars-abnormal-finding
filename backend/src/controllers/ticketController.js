@@ -5,225 +5,71 @@ const abnFlexService = require('../services/abnormalFindingFlexService');
 const fs = require('fs');
 const path = require('path');
 
-// Action mapping configuration for approval levels
-const ACTION_MAPPING = {
-    L1: ['create', 'approve_review', 'reopen'],
-    L2: ['accept', 'reject', 'escalate', 'complete'],
-    L3: ['reassign', 'reject_final'],
-    L4: ['approve_close']
-};
-
-// Helper function to check if user can perform action
-const canUserPerformAction = (userLevel, action) => {
-    return ACTION_MAPPING[`L${userLevel}`]?.includes(action) || false;
-};
-
-// Helper function to get all actions for a level
-const getActionsForLevel = (level) => {
-    return ACTION_MAPPING[`L${level}`] || [];
-};
-
-// Helper function to check user action permission
-const checkUserActionPermission = async (userId, puno, action) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
-            .input('personno', sql.Int, userId)
-            .input('puno', sql.Int, puno)
-            .input('action', sql.NVarChar, action)
-            .execute('sp_CheckUserActionPermission');
-        
-        return {
-            hasPermission: result.recordset[0]?.has_permission || false,
-            approvalLevel: result.recordset[0]?.approval_level || 0
-        };
-    } catch (error) {
-        console.error('Error checking user action permission:', error);
-        return { hasPermission: false, approvalLevel: 0 };
-    }
-};
-
-// Helper function to get user's maximum approval level for a PU
-const getUserMaxApprovalLevelForPU = async (userId, puno) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
-            .input('user_id', sql.Int, userId)
-            .input('puno', sql.Int, puno)
-            .execute('sp_GetUserMaxApprovalLevelForPU');
-        
-        return result.recordset[0]?.max_approval_level || 0;
-    } catch (error) {
-        console.error('Error getting user max approval level:', error);
-        return 0;
-    }
-};
-
-// Helper function to get users for notification
-const getUsersForNotification = async (puno, approvalLevel, excludeUserId = null) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
-            .input('puno', sql.Int, puno)
-            .input('approval_level', sql.Int, approvalLevel)
-            .input('exclude_user_id', sql.Int, excludeUserId)
-            .execute('sp_GetUsersForNotification');
-        
-        return result.recordset;
-    } catch (error) {
-        console.error('Error getting users for notification:', error);
-        return [];
-    }
-};
-
-// Helper function to get all notification users for a ticket
-const getTicketNotificationUsers = async (ticketId, notificationType) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        const result = await pool.request()
-            .input('ticket_id', sql.Int, ticketId)
-            .input('notification_type', sql.NVarChar, notificationType)
-            .execute('sp_GetTicketNotificationUsers');
-        
-        return result.recordset;
-    } catch (error) {
-        console.error('Error getting ticket notification users:', error);
-        return [];
-    }
-};
-
-const DEFAULT_BASE_URL = 'http://localhost:3001';
-
-const getBaseUrl = () => process.env.BACKEND_URL || process.env.FRONTEND_URL || DEFAULT_BASE_URL;
-
-const createSqlRequest = (pool, inputs = []) => {
-    const request = pool.request();
-    inputs.forEach(({ name, type, value }) => {
-        request.input(name, type, value);
-    });
-    return request;
-};
-
-const formatPersonName = (personRow, fallback = 'Unknown User') => {
-    if (!personRow) return fallback;
-    if (personRow.PERSON_NAME && personRow.PERSON_NAME.trim()) {
-        return personRow.PERSON_NAME.trim();
-    }
-    const first = personRow.FIRSTNAME ? personRow.FIRSTNAME.trim() : '';
-    const last = personRow.LASTNAME ? personRow.LASTNAME.trim() : '';
-    const combined = `${first} ${last}`.trim();
-    return combined || fallback;
-};
-
-const mapImagesToLinePayload = (records = [], baseUrl = getBaseUrl()) =>
-    records.map((img) => ({
-        url: `${baseUrl}${img.image_url}`,
-        filename: img.image_name,
-    }));
-
-// Helper function to get hero image from ticket images
-const getHeroImageUrl = (images, imageType = 'before') => {
-    if (!images || images.length === 0) return null;
-    
-    // For ticket images array with full URLs
-    if (images[0]?.url) {
-        return images[0].url;
-    }
-    // For raw database records
-    const baseUrl = getBaseUrl();
-    const heroImage = images[0];
-    if (heroImage?.image_url) {
-        return `${baseUrl}${heroImage.image_url}`;
-    }
-    return null;
-};
-
-// Generate unique ticket number in format TKT-YYYYMMDD-Case number
-const generateTicketNumber = async (pool) => {
-    try {
-        const today = new Date();
-        const dateStr = today.getFullYear().toString() + 
-                       (today.getMonth() + 1).toString().padStart(2, '0') + 
-                       today.getDate().toString().padStart(2, '0');
-        
-        // Get or create today's counter
-        const counterResult = await pool.request()
-            .input('date_str', sql.VarChar(8), dateStr)
-            .query(`
-                IF EXISTS (SELECT 1 FROM TicketDailyCounters WHERE date_str = @date_str)
-                    UPDATE TicketDailyCounters 
-                    SET case_number = case_number + 1 
-                    WHERE date_str = @date_str;
-                ELSE
-                    INSERT INTO TicketDailyCounters (date_str, case_number) 
-                    VALUES (@date_str, 1);
-                
-                SELECT case_number FROM TicketDailyCounters WHERE date_str = @date_str;
-            `);
-        
-        const caseNumber = counterResult.recordset[0].case_number;
-        return `TKT-${dateStr}-${caseNumber.toString().padStart(3, '0')}`;
-        
-    } catch (error) {
-        console.error('Error generating ticket number:', error);
-        // Fallback to timestamp-based generation if database fails
-        const timestamp = Date.now().toString().slice(-8);
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        return `TKT-${timestamp}-${random}`;
-    }
-};
-
-// Helper function to add status change comment
-const addStatusChangeComment = async (pool, ticketId, userId, oldStatus, newStatus, actionNote) => {
-    try {
-        // Get user name for the comment
-        const userResult = await pool.request()
-            .input('userId', sql.Int, userId)
-            .query('SELECT FIRSTNAME, LASTNAME FROM Person WHERE PERSONNO = @userId');
-        
-        const userName = userResult.recordset.length > 0 
-            ? `${userResult.recordset[0].FIRSTNAME} ${userResult.recordset[0].LASTNAME}`
-            : `User ${userId}`;
-        
-        // Create status change message
-        const statusChangeMessage = `Status changed from ${oldStatus} to ${newStatus}${actionNote ? ` - ${actionNote}` : ''}`;
-        
-        // Add comment to TicketComments table
-        await pool.request()
-            .input('ticket_id', sql.Int, ticketId)
-            .input('user_id', sql.Int, userId)
-            .input('comment', sql.NVarChar(500), statusChangeMessage)
-            .query(`
-                INSERT INTO TicketComments (ticket_id, user_id, comment, created_at)
-                VALUES (@ticket_id, @user_id, @comment, GETDATE())
-            `);
-    } catch (error) {
-        console.error('Error adding status change comment:', error);
-        // Don't throw error - this is supplementary functionality
-    }
-};
+const {
+    addStatusChangeComment,
+    checkUserActionPermission,
+    createSqlRequest,
+    firstRecord,
+    formatPersonName,
+    generateTicketNumber,
+    getBackendBaseUrl,
+    getHeroImageUrl,
+    getTicketDetailUrl,
+    getTicketNotificationRecipients,
+    getUserDisplayNameFromRequest,
+    getUserMaxApprovalLevelForPU,
+    getAvailableAssigneesForPU,
+    insertStatusHistory,
+    mapImagesToLinePayload,
+    mapRecordset,
+    safeSendEmail,
+    safeSendLineNotification,
+    runQuery
+} = require('./ticketController/helpers');
 
 // Create a new ticket
 const createTicket = async (req, res) => {
-    try {
-        const {
-            title,
-            description,
-            pucode, // PUCODE format (PLANT-AREA-LINE-MACHINE-NUMBER)
-            puno, // PU ID for direct reference
-            equipment_id, // Equipment ID for specific equipment reference
-            severity_level,
-            priority,
-            // cost_avoidance,
-            // downtime_avoidance_hours,
-            // failure_mode_id,
-            // suggested_assignee_id,
-            // scheduled_complete
-        } = req.body;
+    const fsPromises = fs.promises;
 
+    try {
+        const rawBody = req.body ? { ...req.body } : {};
+        if (typeof rawBody.payload === 'string') {
+            try {
+                const parsedPayload = JSON.parse(rawBody.payload);
+                Object.assign(rawBody, parsedPayload);
+            } catch (parseErr) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid ticket payload format',
+                    error: parseErr.message
+                });
+            }
+            delete rawBody.payload;
+        }
+
+        const parseOptionalInt = (value) => {
+            if (value === undefined || value === null || value === '') return null;
+            if (typeof value === 'number') {
+                return Number.isNaN(value) ? null : value;
+            }
+            const parsed = parseInt(value, 10);
+            return Number.isNaN(parsed) ? null : parsed;
+        };
+
+        const title = typeof rawBody.title === 'string' ? rawBody.title : rawBody.title?.toString?.();
+        const description = typeof rawBody.description === 'string' ? rawBody.description : rawBody.description?.toString?.();
+        const pucode = typeof rawBody.pucode === 'string' ? rawBody.pucode : rawBody.pucode?.toString?.();
+        const puno = parseOptionalInt(rawBody.puno);
+        const equipmentIdInput = parseOptionalInt(rawBody.equipment_id);
+        const severityLevel = typeof rawBody.severity_level === 'string' ? rawBody.severity_level : rawBody.severity_level?.toString?.();
+        const priorityLevel = typeof rawBody.priority === 'string' ? rawBody.priority : rawBody.priority?.toString?.();
+        const imageType = typeof rawBody.image_type === 'string' && rawBody.image_type.trim()
+            ? rawBody.image_type.trim()
+            : 'before';
+
+        const files = Array.isArray(req.files) ? req.files : [];
         const reported_by = req.user.id; // From auth middleware
 
-        // Basic validation
         if (!title || !description || !puno) {
             return res.status(400).json({
                 success: false,
@@ -236,141 +82,315 @@ const createTicket = async (req, res) => {
 
         // Validate equipment_id if provided
         let validatedEquipmentId = null;
-        if (equipment_id) {
-            const equipmentCheck = await pool.request()
-                .input('equipment_id', sql.Int, equipment_id)
-                .input('puno', sql.Int, puno)
-                .query(`
-                    SELECT EQNO, EQCODE, EQNAME, PUNO
-                    FROM EQ 
-                    WHERE EQNO = @equipment_id AND PUNO = @puno AND FLAGDEL = 'F'
-                `);
-            
-            if (equipmentCheck.recordset.length === 0) {
+        if (equipmentIdInput) {
+            const equipmentCheck = await runQuery(pool, `
+                SELECT EQNO, EQCODE, EQNAME, PUNO
+                FROM EQ 
+                WHERE EQNO = @equipment_id AND PUNO = @puno AND FLAGDEL = 'F'
+            `, [
+                { name: 'equipment_id', type: sql.Int, value: equipmentIdInput },
+                { name: 'puno', type: sql.Int, value: puno }
+            ]);
+
+            if (mapRecordset(equipmentCheck).length === 0) {
                 return res.status(400).json({
                     success: false,
                     message: 'Equipment not found or does not belong to the selected production unit'
                 });
             }
-            
-            validatedEquipmentId = equipment_id;
+
+            validatedEquipmentId = equipmentIdInput;
         }
 
-        // Create ticket using standard INSERT
-        const result = await pool.request()
-            .input('ticket_number', sql.VarChar(20), ticket_number)
-            .input('title', sql.NVarChar(255), title)
-            .input('description', sql.NVarChar(sql.MAX), description)
-            .input('puno', sql.Int, puno)
-            .input('equipment_id', sql.Int, validatedEquipmentId)
-            .input('severity_level', sql.VarChar(20), severity_level || 'medium')
-            .input('priority', sql.VarChar(20), priority || 'normal')
-            // .input('cost_avoidance', sql.Decimal(15,2), cost_avoidance || null)
-            // .input('downtime_avoidance_hours', sql.Decimal(8,2), downtime_avoidance_hours || null)
-            // .input('failure_mode_id', sql.Int, failure_mode_id || null)
-            .input('reported_by', sql.Int, reported_by)
-            // .input('assigned_to', sql.Int, validatedAssigneeId)
-            // .input('scheduled_complete', sql.DateTime2, scheduled_complete || null)
-            .query(`
-                INSERT INTO Tickets (
-                    ticket_number, title, description, puno, equipment_id,
-                    severity_level, priority,
-                    reported_by,
-                    status, created_at, updated_at
-                )
-                VALUES (
-                    @ticket_number, @title, @description, @puno, @equipment_id,
-                    @severity_level, @priority,
-                    @reported_by,
-                    'open', GETDATE(), GETDATE()
-                );
-                SELECT SCOPE_IDENTITY() as ticket_id;
-            `);
+        // Create ticket record
+        const ticketInsertResult = await runQuery(pool, `
+            INSERT INTO Tickets (
+                ticket_number, title, description, puno, equipment_id,
+                severity_level, priority,
+                reported_by,
+                status, created_at, updated_at
+            )
+            VALUES (
+                @ticket_number, @title, @description, @puno, @equipment_id,
+                @severity_level, @priority,
+                @reported_by,
+                'open', GETDATE(), GETDATE()
+            );
+            SELECT SCOPE_IDENTITY() as ticket_id;
+        `, [
+            { name: 'ticket_number', type: sql.VarChar(20), value: ticket_number },
+            { name: 'title', type: sql.NVarChar(255), value: title },
+            { name: 'description', type: sql.NVarChar(sql.MAX), value: description },
+            { name: 'puno', type: sql.Int, value: puno },
+            { name: 'equipment_id', type: sql.Int, value: validatedEquipmentId },
+            { name: 'severity_level', type: sql.VarChar(20), value: severityLevel || 'medium' },
+            { name: 'priority', type: sql.VarChar(20), value: priorityLevel || 'normal' },
+            { name: 'reported_by', type: sql.Int, value: reported_by }
+        ]);
 
-        const ticketId = result.recordset[0].ticket_id;
+        const ticketId = firstRecord(ticketInsertResult)?.ticket_id;
+        if (!ticketId) {
+            throw new Error('Failed to retrieve ticket identifier');
+        }
 
         // Get ticket with hierarchy information via PUExtension
-        const ticketWithHierarchy = await pool.request()
-            .input('ticket_id', sql.Int, ticketId)
-            .query(`
-                SELECT 
-                    t.*,
-                    -- Hierarchy information from PUExtension
-                    pe.pucode,
-                    pe.plant as plant_code,
-                    pe.area as area_code,
-                    pe.line as line_code,
-                    pe.machine as machine_code,
-                    pe.number as machine_number,
-                    pe.puname as plant_name,
-                    pe.pudescription as pudescription,
-                    pe.digit_count,
-                -- Hierarchy codes from PUExtension
-                    -- PU information
-                    pu.PUCODE as pu_pucode,
-                    pu.PUNAME as pu_name,
-                    -- Equipment information
-                    eq.EQNO as equipment_id,
-                    eq.EQCODE as equipment_code,
-                    eq.EQNAME as equipment_name
-                FROM Tickets t
-                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
-                WHERE t.id = @ticket_id
-            `);
+        const ticketWithHierarchy = await runQuery(pool, `
+            SELECT 
+                t.*,
+                pe.pucode,
+                pe.plant as plant_code,
+                pe.area as area_code,
+                pe.line as line_code,
+                pe.machine as machine_code,
+                pe.number as machine_number,
+                pe.puname as plant_name,
+                pe.pudescription as pudescription,
+                pe.digit_count,
+                pu.PUCODE as pu_pucode,
+                pu.PUNAME as pu_name,
+                eq.EQNO as equipment_id,
+                eq.EQCODE as equipment_code,
+                eq.EQNAME as equipment_name
+            FROM Tickets t
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
+            WHERE t.id = @ticket_id
+        `, [
+            { name: 'ticket_id', type: sql.Int, value: ticketId }
+        ]);
 
-        const ticketData = ticketWithHierarchy.recordset[0];
+        const ticketData = firstRecord(ticketWithHierarchy);
 
-        // Send email notification (for demo, sending to phynaro@hotmail.com)
-        try {
-            // Get reporter name for the email
-            const reporterResult = await pool.request()
-                .input('user_id', sql.Int, reported_by)
-                .query(`
+        if (!ticketData) {
+            throw new Error('Failed to load ticket details after creation');
+        }
+
+        // Persist uploaded images (if any) and rollback ticket if this fails
+        if (files.length > 0) {
+            const uploadDir = path.join(__dirname, '..', 'uploads', 'tickets', String(ticketId));
+            const savedFilePaths = [];
+
+            try {
+                await fsPromises.mkdir(uploadDir, { recursive: true });
+
+                for (const file of files) {
+                    const ext = path.extname(file.originalname) || '.jpg';
+                    const safeBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_') || 'image';
+                    const unique = `${Date.now()}_${Math.random().toString(36).slice(-6)}`;
+                    const fileName = `${unique}_${safeBase}${ext.toLowerCase()}`;
+                    const fullPath = path.join(uploadDir, fileName);
+
+                    await fsPromises.writeFile(fullPath, file.buffer);
+                    savedFilePaths.push(fullPath);
+
+                    const relativePath = `/uploads/tickets/${ticketId}/${fileName}`;
+                    await runQuery(pool, `
+                        INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
+                        VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
+                    `, [
+                        { name: 'ticket_id', type: sql.Int, value: ticketId },
+                        { name: 'image_type', type: sql.VarChar(20), value: imageType },
+                        { name: 'image_url', type: sql.NVarChar(500), value: relativePath },
+                        { name: 'image_name', type: sql.NVarChar(255), value: file.originalname || fileName },
+                        { name: 'uploaded_by', type: sql.Int, value: reported_by }
+                    ]);
+                }
+            } catch (imageErr) {
+                console.error('Failed to persist ticket images, rolling back ticket creation:', imageErr);
+
+                for (const fullPath of savedFilePaths) {
+                    fs.unlink(fullPath, () => {});
+                }
+
+                try {
+                    await runQuery(pool, 'DELETE FROM TicketImages WHERE ticket_id = @ticket_id', [
+                        { name: 'ticket_id', type: sql.Int, value: ticketId }
+                    ]);
+                    await runQuery(pool, 'DELETE FROM Tickets WHERE id = @ticket_id', [
+                        { name: 'ticket_id', type: sql.Int, value: ticketId }
+                    ]);
+                } catch (rollbackErr) {
+                    console.error('Failed to rollback ticket after image error:', rollbackErr);
+                }
+
+                return res.status(500).json({
+                    success: false,
+                    message: 'Failed to save ticket images. Ticket creation has been rolled back.',
+                    error: imageErr.message
+                });
+            }
+        }
+
+        // Send notifications according to new workflow logic: L2ForPU + actor (creator)
+        await safeSendEmail('send new ticket notifications', async () => {
+            try {
+                // Get notification users using the new workflow system (single call)
+                const notificationUsers = await getTicketNotificationRecipients(ticketId, 'create', reported_by);
+                console.log(`\n=== TICKET CREATION NOTIFICATIONS SUMMARY ===`);
+                console.log(`Ticket: ${ticket_number} (ID: ${ticketId})`);
+                console.log(`Action: CREATE`);
+                // Get reporter information for notifications
+                const reporterResult = await runQuery(pool, `
                     SELECT p.PERSON_NAME, p.FIRSTNAME, p.LASTNAME, p.EMAIL, p.DEPTNO, u.LineID
                     FROM Person p
                     LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
                     WHERE p.PERSONNO = @user_id
-                `);
-            
-            const reporterRow = reporterResult.recordset[0] || {};
-            const reporterName = formatPersonName(reporterRow);
-            
-            // Prepare ticket data for email using PUExtension data
-            const ticketDataForEmail = {
-                id: ticketId,
-                ticket_number: ticket_number,
-                title,
-                description,
-                pucode: ticketData.pucode,
-                plant_code: ticketData.plant_code,
-                area_code: ticketData.area_code,
-                line_code: ticketData.line_code,
-                machine_code: ticketData.machine_code,
-                machine_number: ticketData.machine_number,
-                plant_name: ticketData.pudescription,
-                equipment_id: validatedEquipmentId,
-                equipment_name: ticketData.equipment_name,
-                equipment_code: ticketData.equipment_code,
-                PUNAME: ticketData.pudescription, // For email template compatibility
-                severity_level: severity_level || 'medium',
-                priority: priority || 'normal',
-                reported_by,
-                assigned_to: validatedAssigneeId,
-                created_at: new Date().toISOString()
-            };
-            
-            // Send notification email
-            await emailService.sendNewTicketNotification(ticketDataForEmail, reporterName);
-            console.log('Email notification sent successfully for ticket:', ticket_number);
-            // Note: LINE notification will be triggered after image uploads
-            // This ensures images are included in the notification
-            console.log('Ticket created successfully. LINE notification will be sent after image uploads.');
-        } catch (emailError) {
-            console.error('Failed to send email notification:', emailError);
-            // Don't fail the ticket creation if email fails
-        }
+                `, [
+                    { name: 'user_id', type: sql.Int, value: reported_by }
+                ]);
+
+                const reporterRow = firstRecord(reporterResult) || {};
+                const reporterName = formatPersonName(reporterRow);
+
+                console.log(`Reported by: ${reported_by} (${reporterName})`);
+                console.log(`Total notification users from SP: ${notificationUsers.length}`);
+
+                if (notificationUsers.length === 0) {
+                    console.log(`⚠️  No notification users found for create action`);
+                    console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+                    return;
+                }
+
+                // LOG ALL NOTIFICATION USERS BEFORE FILTERING
+                console.log('\n📋 ALL NOTIFICATION USERS (Before Filtering):');
+                notificationUsers.forEach((user, index) => {
+                    const hasEmail = user.EMAIL && user.EMAIL.trim() !== '';
+                    const hasLineID = user.LineID && user.LineID.trim() !== '';
+                    const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : '❌ No Email';
+                    const lineStatus = hasLineID ? `✅ ${user.LineID}` : '❌ No LineID';
+                    
+                    console.log(`  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`);
+                    console.log(`     └─ Reason: ${user.notification_reason}`);
+                    console.log(`     └─ Type: ${user.recipient_type}`);
+                    console.log(`     └─ Email: ${emailStatus}`);
+                    console.log(`     └─ LineID: ${lineStatus}`);
+                });
+
+                // COUNT USERS BY RECIPIENT TYPE
+                const userCounts = notificationUsers.reduce((counts, user) => {
+                    const type = user.recipient_type || 'Unknown';
+                    counts[type] = (counts[type] || 0) + 1;
+                    return counts;
+                }, {});
+                
+                console.log('\n📊 RECIPIENT TYPE BREAKDOWN:');
+                Object.entries(userCounts).forEach(([type, count]) => {
+                    console.log(`  • ${type}: ${count} user(s)`);
+                });
+
+                // COUNT USERS BY NOTIFICATION CAPABILITY
+                const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const bothCapable = notificationUsers.filter(u => 
+                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                ).length;
+                const noContactInfo = notificationUsers.filter(u => 
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                ).length;
+
+                console.log('\n📞 NOTIFICATION CAPABILITY:');
+                console.log(`  • Email capable: ${emailCapable} user(s)`);
+                console.log(`  • LINE capable: ${lineCapable} user(s)`);
+                console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
+                console.log(`  • No contact info: ${noContactInfo} user(s)`);
+
+                // Prepare ticket data for notifications
+                const ticketDataForNotifications = {
+                    id: ticketId,
+                    ticket_number: ticket_number,
+                    title,
+                    description,
+                    pucode: ticketData.pucode,
+                    plant_code: ticketData.plant_code,
+                    area_code: ticketData.area_code,
+                    line_code: ticketData.line_code,
+                    machine_code: ticketData.machine_code,
+                    machine_number: ticketData.machine_number,
+                    plant_name: ticketData.pudescription,
+                    equipment_id: validatedEquipmentId,
+                    equipment_name: ticketData.equipment_name,
+                    equipment_code: ticketData.equipment_code,
+                    PUNAME: ticketData.pudescription, // For email template compatibility
+                    severity_level: severityLevel || 'medium',
+                    priority: priorityLevel || 'normal',
+                    reported_by,
+                    assigned_to: null,
+                    created_at: new Date().toISOString()
+                };
+
+                // Filter recipients for each notification type
+                const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
+                const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
+
+                console.log('\n📧 EMAIL RECIPIENTS (After Filtering):');
+                if (emailRecipients.length === 0) {
+                    console.log('  ⚠️  No email-capable recipients found');
+                } else {
+                    emailRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                console.log('\n💬 LINE RECIPIENTS (After Filtering):');
+                if (lineRecipients.length === 0) {
+                    console.log('  ⚠️  No LINE-capable recipients found');
+                } else {
+                    lineRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                // Send email notifications
+                if (emailRecipients.length > 0) {
+                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
+                    await emailService.sendNewTicketNotification(ticketDataForNotifications, reporterName, emailRecipients);
+                    console.log(`✅ Email notifications sent successfully for ticket ${ticket_number} إلى ${emailRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
+                }
+
+                // Send LINE notifications
+                if (lineRecipients.length > 0) {
+                    // Prepare flexible message for LINE
+                    const linePayload = {
+                        caseNo: ticket_number,
+                        assetName: ticketData.equipment_name || ticketData.pudescription || 'Unknown Asset',
+                        problem: title,
+                        actionBy: reporterName,
+                        comment: description,
+                        extraKVs: [
+                            { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
+                            { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },
+                            { label: 'Reported by', value: reporterName }
+                        ]
+                    };
+
+                    const linePromises = lineRecipients.map(user => {
+                        return abnFlexService.pushToUser(user.LineID, [
+                            abnFlexService.buildAbnFlexMinimal('open', linePayload)
+                        ]);
+                    });
+
+                    const lineResults = await Promise.all(linePromises);
+                    const successfulLines = lineResults.filter(result => result.success).length;
+                    
+                    console.log(`LINE notifications sent successfully for ticket ${ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
+                }
+
+                console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
+                console.log(`📊 Final Summary: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+
+            } catch (error) {
+                console.error('Error sending notifications for ticket creation:', error);
+                throw error;
+            }
+        });
 
         res.status(201).json({
             success: true,
@@ -681,20 +701,19 @@ const updateTicket = async (req, res) => {
         const updateData = req.body;
         const pool = await sql.connect(dbConfig);
 
-        // Get current ticket to check status changes
-        const currentTicket = await pool.request()
-            .input('id', sql.Int, id)
-            .query('SELECT status, reported_by FROM Tickets WHERE id = @id');
+        const currentTicketResult = await runQuery(pool, 'SELECT status, reported_by FROM Tickets WHERE id = @id', [
+            { name: 'id', type: sql.Int, value: id }
+        ]);
 
-        if (currentTicket.recordset.length === 0) {
+        const currentTicket = firstRecord(currentTicketResult);
+        if (!currentTicket) {
             return res.status(404).json({
                 success: false,
                 message: 'Ticket not found'
             });
         }
 
-        const oldStatus = currentTicket.recordset[0].status;
-        const reporterId = currentTicket.recordset[0].reported_by;
+        const { status: oldStatus, reported_by: reporterId } = currentTicket;
 
         // Build update query dynamically
         const updateFields = [];
@@ -727,47 +746,42 @@ const updateTicket = async (req, res) => {
 
         // Log status change if status was updated
         if (updateData.status && updateData.status !== oldStatus) {
-            await pool.request()
-                .input('ticket_id', sql.Int, id)
-                .input('old_status', sql.VarChar(20), oldStatus)
-                .input('new_status', sql.VarChar(20), updateData.status)
-                .input('changed_by', sql.Int, req.user.id)
-                .input('notes', sql.NVarChar(500), updateData.status_notes || 'Status updated')
-                .query(`
-                    INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, notes)
-                    VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
-                `);
+            await insertStatusHistory(pool, {
+                ticketId: id,
+                oldStatus,
+                newStatus: updateData.status,
+                changedBy: req.user.id,
+                notes: updateData.status_notes || 'Status updated'
+            });
 
-            // Send status update notification to reporter
-            try {
-                // Get reporter info and ticket details
-                const detailResult = await pool.request()
-                    .input('ticket_id', sql.Int, id)
-                    .input('reporter_id', sql.Int, reporterId)
-                    .query(`
-                        SELECT 
-                            t.id, t.ticket_number, t.title, t.severity_level, t.priority,
-                            t.puno,
-                            pe.plant as plant_code,
-                            pe.area as area_code,
-                            pe.line as line_code,
-                            pe.machine as machine_code,
-                            pe.number as machine_number
-                        FROM Tickets t
-                        LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                        LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                        WHERE t.id = @ticket_id;
+            const detailResult = await runQuery(pool, `
+                SELECT 
+                    t.id, t.ticket_number, t.title, t.severity_level, t.priority,
+                    t.puno,
+                    pe.plant as plant_code,
+                    pe.area as area_code,
+                    pe.line as line_code,
+                    pe.machine as machine_code,
+                    pe.number as machine_number
+                FROM Tickets t
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                WHERE t.id = @ticket_id;
 
-                        SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID 
-                        FROM Person p
-                        LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                        WHERE p.PERSONNO = @reporter_id;
-                    `);
+                SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID 
+                FROM Person p
+                LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                WHERE p.PERSONNO = @reporter_id;
+            `, [
+                { name: 'ticket_id', type: sql.Int, value: id },
+                { name: 'reporter_id', type: sql.Int, value: reporterId }
+            ]);
 
-                const ticketData = detailResult.recordsets[0][0];
-                const reporter = detailResult.recordsets[1][0];
-                const changedByName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
+            const ticketData = detailResult.recordsets[0]?.[0];
+            const reporter = detailResult.recordsets[1]?.[0];
+            const changedByName = getUserDisplayNameFromRequest(req);
 
+            await safeSendEmail('send ticket status update email', async () => {
                 if (reporter?.EMAIL) {
                     await emailService.sendTicketStatusUpdateNotification(
                         ticketData,
@@ -777,66 +791,58 @@ const updateTicket = async (req, res) => {
                         reporter.EMAIL
                     );
                 }
+            });
 
-                // LINE push to reporter
-                try {
-                    if (reporter?.LineID) {
-                        // Get ticket images for FLEX message
-                        const imagesResult = await pool.request()
-                            .input('ticket_id', sql.Int, id)
-                            .query(`
-                                SELECT image_url, image_name 
-                                FROM TicketImages 
-                                WHERE ticket_id = @ticket_id 
-                                ORDER BY uploaded_at ASC
-                            `);
-                        
-                       // const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
-                        
-                        // Determine state based on new status
-                        let abnState;
-                        switch (updateData.status) {
-                            case 'accepted': case 'in_progress':
-                                abnState = abnFlexService.AbnCaseState.ACCEPTED;
-                                break;
-                            case 'completed':
-                                abnState = abnFlexService.AbnCaseState.COMPLETED;
-                                break;
-                            case 'rejected_final':
-                                abnState = abnFlexService.AbnCaseState.REJECT_FINAL;
-                                break;
-                            case 'rejected_pending_l3_review':
-                                abnState = abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
-                                break;
-                            case 'escalated':
-                                abnState = abnFlexService.AbnCaseState.ESCALATED;
-                                break;
-                            case 'closed':
-                                abnState = abnFlexService.AbnCaseState.CLOSED;
-                                break;
-                            case 'reopened_in_progress':
-                                abnState = abnFlexService.AbnCaseState.REOPENED;
-                                break;
-                            default:
-                                abnState = abnFlexService.AbnCaseState.CREATED;
-                        }
-                        
-                        const flexMsg = abnFlexService.buildAbnFlexMinimal(abnState, {
-                            caseNo: ticketData.ticket_number,
-                            assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                            problem: ticketData.title || "No description",
-                            actionBy: changedByName,
-                            comment: updateData.status_notes || `สถานะเปลี่ยนจาก ${oldStatus} เป็น ${updateData.status}`,
-                            detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
-                        });
-                        await abnFlexService.pushToUser(reporter.LineID, flexMsg);
+            await safeSendLineNotification('send LINE status update notification', async () => {
+                if (reporter?.LineID) {
+                    const imagesResult = await runQuery(pool, `
+                        SELECT image_url, image_name 
+                        FROM TicketImages 
+                        WHERE ticket_id = @ticket_id 
+                        ORDER BY uploaded_at ASC
+                    `, [
+                        { name: 'ticket_id', type: sql.Int, value: id }
+                    ]);
+
+                    let abnState;
+                    switch (updateData.status) {
+                        case 'accepted':
+                        case 'in_progress':
+                            abnState = abnFlexService.AbnCaseState.ACCEPTED;
+                            break;
+                        case 'completed':
+                            abnState = abnFlexService.AbnCaseState.COMPLETED;
+                            break;
+                        case 'rejected_final':
+                            abnState = abnFlexService.AbnCaseState.REJECT_FINAL;
+                            break;
+                        case 'rejected_pending_l3_review':
+                            abnState = abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
+                            break;
+                        case 'escalated':
+                            abnState = abnFlexService.AbnCaseState.ESCALATED;
+                            break;
+                        case 'closed':
+                            abnState = abnFlexService.AbnCaseState.CLOSED;
+                            break;
+                        case 'reopened_in_progress':
+                            abnState = abnFlexService.AbnCaseState.REOPENED;
+                            break;
+                        default:
+                            abnState = abnFlexService.AbnCaseState.CREATED;
                     }
-                } catch (lineErr) {
-                    console.error('Failed to send LINE status update notification:', lineErr);
+
+                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnState, {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                        problem: ticketData.title || "No description",
+                        actionBy: changedByName,
+                        comment: updateData.status_notes || `สถานะเปลี่ยนจาก ${oldStatus} เป็น ${updateData.status}`,
+                        detailUrl: getTicketDetailUrl(ticketData.id)
+                    });
+                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
                 }
-            } catch (emailErr) {
-                console.error('Failed to send status update email:', emailErr);
-            }
+            });
         }
 
         res.json({
@@ -907,43 +913,48 @@ const assignTicket = async (req, res) => {
         await pool.request()
             .input('id', sql.Int, id)
             .input('assigned_to', sql.Int, assigned_to)
-            .input('assigned_by', sql.Int, assigned_by)
-            .input('notes', sql.NVarChar(500), notes)
             .query(`
                 UPDATE Tickets SET assigned_to = @assigned_to, updated_at = GETDATE() WHERE id = @id;
                 UPDATE Tickets 
                 SET status = 'assigned', updated_at = GETDATE()
                 WHERE id = @id AND status = 'open';
-                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, to_user, notes)
-                VALUES (@id, 'open', 'assigned', @assigned_by, @assigned_to, @notes)
             `);
 
-        // Send assignment notification to assignee
-        try {
-            // Get ticket details and assignee info
-            const detailResult = await pool.request()
-                .input('ticket_id', sql.Int, id)
-                .input('assignee_id', sql.Int, assigned_to)
-                .query(`
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
-                           pe.plant as plant_code,
-                           pe.area as area_code,
-                           pe.line as line_code,
-                           pe.machine as machine_code,
-                           pe.number as machine_number
-                    FROM Tickets t
-                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id;
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: 'open',
+            newStatus: 'assigned',
+            changedBy: assigned_by,
+            toUser: assigned_to,
+            notes
+        });
 
-                    SELECT PERSON_NAME, EMAIL, DEPTNO
-                    FROM Person WHERE PERSONNO = @assignee_id;
-                `);
+        const detailResult = await runQuery(pool, `
+            SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
+                   pe.plant as plant_code,
+                   pe.area as area_code,
+                   pe.line as line_code,
+                   pe.machine as machine_code,
+                   pe.number as machine_number
+            FROM Tickets t
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            WHERE t.id = @ticket_id;
 
-            const ticketData = detailResult.recordsets[0][0];
-            const assignee = detailResult.recordsets[1][0];
-            const assigneeDisplayName = formatPersonName(assignee, 'Assignee');
+            SELECT PERSON_NAME, EMAIL, DEPTNO, LineID
+            FROM Person p
+            LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+            WHERE p.PERSONNO = @assignee_id;
+        `, [
+            { name: 'ticket_id', type: sql.Int, value: id },
+            { name: 'assignee_id', type: sql.Int, value: assigned_to }
+        ]);
 
+        const ticketData = detailResult.recordsets[0]?.[0];
+        const assignee = detailResult.recordsets[1]?.[0];
+        const assigneeDisplayName = formatPersonName(assignee, 'Assignee');
+
+        await safeSendEmail('send ticket assignment email notification', async () => {
             if (assignee?.EMAIL) {
                 await emailService.sendTicketAssignmentNotification(
                     ticketData,
@@ -951,38 +962,32 @@ const assignTicket = async (req, res) => {
                     assignee.EMAIL
                 );
             }
+        });
 
-            // LINE push to assignee
-            try {
-                if (assignee?.DEPTNO) {
-                    // Get ticket images for FLEX message
-                    const imagesResult = await pool.request()
-                        .input('ticket_id', sql.Int, id)
-                        .query(`
-                            SELECT image_url, image_name 
-                            FROM TicketImages 
-                            WHERE ticket_id = @ticket_id 
-                            ORDER BY uploaded_at ASC
-                        `);
-                    
-                    const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
-                    
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REASSIGNED, {
-                        caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
-                        actionBy: assigneeDisplayName,
-                        comment: notes || "งานได้รับการมอบหมายให้คุณแล้ว",
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
-                    });
-                    await abnFlexService.pushToUser(assignee.LineID, flexMsg);
-                }
-            } catch (lineErr) {
-                console.error('Failed to send LINE assignment notification:', lineErr);
+        await safeSendLineNotification('send LINE assignment notification', async () => {
+            if (assignee?.LineID) {
+                const imagesResult = await runQuery(pool, `
+                    SELECT image_url, image_name 
+                    FROM TicketImages 
+                    WHERE ticket_id = @ticket_id 
+                    ORDER BY uploaded_at ASC
+                `, [
+                    { name: 'ticket_id', type: sql.Int, value: id }
+                ]);
+
+                const ticketImages = mapImagesToLinePayload(mapRecordset(imagesResult));
+
+                const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REASSIGNED, {
+                    caseNo: ticketData.ticket_number,
+                    assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+                    problem: ticketData.title || "No description",
+                    actionBy: assigneeDisplayName,
+                    comment: notes || "งานได้รับการมอบหมายให้คุณแล้ว",
+                    detailUrl: getTicketDetailUrl(ticketData.id)
+                });
+                await abnFlexService.pushToUser(assignee.LineID, flexMsg);
             }
-        } catch (emailErr) {
-            console.error('Failed to send assignment email:', emailErr);
-        }
+        });
 
         res.json({
             success: true,
@@ -1236,18 +1241,17 @@ const acceptTicket = async (req, res) => {
         }
 
         // Get current ticket status and puno
-        const currentTicket = await pool.request()
-            .input('id', sql.Int, id)
-            .query('SELECT status, reported_by, assigned_to, puno FROM Tickets WHERE id = @id');
+        const currentTicketResult = await runQuery(pool, 'SELECT status, reported_by, assigned_to, puno FROM Tickets WHERE id = @id', [
+            { name: 'id', type: sql.Int, value: id }
+        ]);
 
-        if (currentTicket.recordset.length === 0) {
+        const ticket = firstRecord(currentTicketResult);
+        if (!ticket) {
             return res.status(404).json({
                 success: false,
                 message: 'Ticket not found'
             });
         }
-
-        const ticket = currentTicket.recordset[0];
         const { status, reported_by, assigned_to, puno } = ticket;
 
         // Check if user has permission to accept tickets
@@ -1295,95 +1299,205 @@ const acceptTicket = async (req, res) => {
                 WHERE id = @id
             `);
 
-        // Log status change
-        await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .input('old_status', sql.VarChar(50), ticket.status)
-            .input('new_status', sql.VarChar(50), newStatus)
-            .input('changed_by', sql.Int, accepted_by)
-            .input('notes', sql.NVarChar(500), notes || statusNotes)
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, notes)
-                VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
-            `);
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: ticket.status,
+            newStatus,
+            changedBy: accepted_by,
+            notes: notes || statusNotes
+        });
 
         // Add status change comment
         await addStatusChangeComment(pool, id, accepted_by, ticket.status, newStatus, notes);
 
-        // Send notification to requestor
-        try {
-            const detailResult = await pool.request()
-                .input('ticket_id', sql.Int, id)
-                .input('reporter_id', sql.Int, ticket.reported_by)
-                .query(`
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
-                           pu.PUCODE, pu.PUNAME,
-                           pe.plant as plant_code,
-                           pe.area as area_code,
-                           pe.line as line_code,
-                           pe.machine as machine_code,
-                           pe.number as machine_number
-                    FROM Tickets t
-                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id;
+        const detailResult = await runQuery(pool, `
+            SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
+                   pu.PUCODE, pu.PUNAME,
+                   pe.plant as plant_code,
+                   pe.area as area_code,
+                   pe.line as line_code,
+                   pe.machine as machine_code,
+                   pe.number as machine_number
+            FROM Tickets t
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            WHERE t.id = @ticket_id;
 
-                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
-                    FROM Person p
-                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                    WHERE p.PERSONNO = @reporter_id;
-                `);
+            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+            FROM Person p
+            LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+            WHERE p.PERSONNO = @reporter_id;
+        `, [
+            { name: 'ticket_id', type: sql.Int, value: id },
+            { name: 'reporter_id', type: sql.Int, value: ticket.reported_by }
+        ]);
 
-            const ticketData = detailResult.recordsets[0][0];
-            const reporter = detailResult.recordsets[1][0];
-            const acceptorName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
+        const ticketData = detailResult.recordsets[0]?.[0];
+        const reporter = detailResult.recordsets[1]?.[0];
+        const acceptorName = getUserDisplayNameFromRequest(req);
 
-            if (reporter?.Email) {
-                await emailService.sendTicketAcceptedNotification(
-                    ticketData,
-                    acceptorName,
-                    reporter.Email
-                );
-            }
-
-            // LINE notification
+        // Send notifications according to new workflow logic: requester + actor (acceptor)
+        await safeSendEmail('send ticket acceptance notifications', async () => {
             try {
-                if (reporter?.LineID) {
-                    // Get ticket images for FLEX message
-                    // const imagesResult = await pool.request()
-                    //     .input('ticket_id', sql.Int, id)
-                    //     .query(`
-                    //         SELECT image_url, image_name 
-                    //         FROM TicketImages 
-                    //         WHERE ticket_id = @ticket_id 
-                    //         ORDER BY uploaded_at ASC
-                    //     `);
+                // Get notification users using the new workflow system (single call)
+                const notificationUsers = await getTicketNotificationRecipients(id, 'accept', accepted_by);
+                console.log(`\n=== TICKET ACCEPTANCE NOTIFICATIONS SUMMARY ===`);
+                console.log(`Ticket: ${ticketData.ticket_number} (ID: ${id})`);
+                console.log(`Action: ACCEPT`);
+                console.log(`Accepted by: ${accepted_by} (${acceptorName})`);
+                console.log(`Total notification users from SP: ${notificationUsers.length}`);
+
+                if (notificationUsers.length === 0) {
+                    console.log(`⚠️  No notification users found for accept action`);
+                    console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+                    return;
+                }
+
+                // LOG ALL NOTIFICATION USERS BEFORE FILTERING
+                console.log('\n📋 ALL NOTIFICATION USERS (Before Filtering):');
+                notificationUsers.forEach((user, index) => {
+                    const hasEmail = user.EMAIL && user.EMAIL.trim() !== '';
+                    const hasLineID = user.LineID && user.LineID.trim() !== '';
+                    const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : '❌ No Email';
+                    const lineStatus = hasLineID ? `✅ ${user.LineID}` : '❌ No LineID';
                     
-                    // const ticketImages = imagesResult.recordset.map(img => ({
-                    //     url: `${baseUrl}${img.image_url}`,
-                    //     filename: img.image_name
-                    // }));
-                    
-                    // NEW: Using clean abnormal finding flex service
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ACCEPTED, {
+                    console.log(`  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`);
+                    console.log(`     └─ Reason: ${user.notification_reason}`);
+                    console.log(`     └─ Type: ${user.recipient_type}`);
+                    console.log(`     └─ Email: ${emailStatus}`);
+                    console.log(`     └─ LineID: ${lineStatus}`);
+                });
+
+                // COUNT USERS BY RECIPIENT TYPE
+                const userCounts = notificationUsers.reduce((counts, user) => {
+                    const type = user.recipient_type || 'Unknown';
+                    counts[type] = (counts[type] || 0) + 1;
+                    return counts;
+                }, {});
+                
+                console.log('\n📊 RECIPIENT TYPE BREAKDOWN:');
+                Object.entries(userCounts).forEach(([type, count]) => {
+                    console.log(`  • ${type}: ${count} user(s)`);
+                });
+
+                // COUNT USERS BY NOTIFICATION CAPABILITY
+                const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const bothCapable = notificationUsers.filter(u => 
+                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                ).length;
+                const noContactInfo = notificationUsers.filter(u => 
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                ).length;
+
+                console.log('\n📞 NOTIFICATION CAPABILITY:');
+                console.log(`  • Email capable: ${emailCapable} user(s)`);
+                console.log(`  • LINE capable: ${lineCapable} user(s)`);
+                console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
+                console.log(`  • No contact info: ${noContactInfo} user(s)`);
+
+                // Prepare ticket data for notifications
+                const ticketDataForNotifications = {
+                    id: id,
+                    ticket_number: ticketData.ticket_number,
+                    title: ticketData.title,
+                    description: ticketData.title, // Using title as description for accept notifications
+                    pucode: ticketData.PUCODE,
+                    plant_code: ticketData.plant_code,
+                    area_code: ticketData.area_code,
+                    line_code: ticketData.line_code,
+                    machine_code: ticketData.machine_code,
+                    machine_number: ticketData.machine_number,
+                    plant_name: ticketData.PUNAME,
+                    PUNAME: ticketData.PUNAME, // For email template compatibility
+                    severity_level: ticketData.severity_level,
+                    priority: ticketData.priority,
+                    reported_by: ticket.reported_by,
+                    assigned_to: accepted_by,
+                    created_at: new Date().toISOString()
+                };
+
+                // Filter recipients for each notification type
+                const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
+                const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
+
+                console.log('\n📧 EMAIL RECIPIENTS (After Filtering):');
+                if (emailRecipients.length === 0) {
+                    console.log('  ⚠️  No email-capable recipients found');
+                } else {
+                    emailRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                console.log('\n💬 LINE RECIPIENTS (After Filtering):');
+                if (lineRecipients.length === 0) {
+                    console.log('  ⚠️  No LINE-capable recipients found');
+                } else {
+                    lineRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                // Send email notifications
+                if (emailRecipients.length > 0) {
+                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
+                    await emailService.sendTicketAcceptedNotification(ticketDataForNotifications, acceptorName, emailRecipients);
+                    console.log(`✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
+                }
+
+                // Send LINE notifications
+                if (lineRecipients.length > 0) {
+                    console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
+                    // Prepare flexible message for LINE
+                    const linePayload = {
                         caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
+                        assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
+                        problem: ticketData.title || 'No description',
                         actionBy: acceptorName,
                         comment: notes || `งานได้รับการยอมรับแล้ว โดย ${acceptorName}`,
-                        extraKVs: scheduled_complete ? [
-                            { label: "Scheduled Complete", value: new Date(scheduled_complete).toLocaleDateString('th-TH') }
-                        ] : [],
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                        extraKVs: [
+                            { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                            { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                            { label: 'Accepted by', value: acceptorName }
+                        ]
+                    };
+
+                    // Add scheduled completion date if provided
+                    if (scheduled_complete) {
+                        linePayload.extraKVs.push({
+                            label: 'Scheduled Complete',
+                            value: new Date(scheduled_complete).toLocaleDateString('th-TH')
+                        });
+                    }
+
+                    const linePromises = lineRecipients.map(user => {
+                        return abnFlexService.pushToUser(user.LineID, [
+                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ACCEPTED, linePayload)
+                        ]);
                     });
-                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
+
+                    const lineResults = await Promise.all(linePromises);
+                    const successfulLines = lineResults.filter(result => result.success).length;
+
+                    console.log(`✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
                 }
-            } catch (lineErr) {
-                console.error('Failed to send LINE acceptance notification:', lineErr);
+
+                console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
+                console.log(`📊 Final Summary: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+
+            } catch (error) {
+                console.error('Error sending notifications for ticket acceptance:', error);
+                throw error;
             }
-        } catch (emailErr) {
-            console.error('Failed to send acceptance email:', emailErr);
-        }
+        });
 
         res.json({
             success: true,
@@ -1409,34 +1523,55 @@ const rejectTicket = async (req, res) => {
         const rejected_by = req.user.id;
         const pool = await sql.connect(dbConfig);
 
-        // Get current ticket status and user's area-specific approval level
-        const currentTicket = await pool.request()
-            .input('id', sql.Int, id)
-            .input('userId', sql.Int, rejected_by)
-            .query(`
-                SELECT 
-                    t.status, 
-                    t.reported_by,
-                    t.area_id,
-                    ta.approval_level as user_approval_level
-                FROM Tickets t
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
-                WHERE t.id = @id
-            `);
+        // Get current ticket status
+        const currentTicketResult = await runQuery(pool, `
+            SELECT 
+                t.status, 
+                t.reported_by,
+                t.puno
+            FROM Tickets t
+            WHERE t.id = @id
+        `, [
+            { name: 'id', type: sql.Int, value: id }
+        ]);
 
-        if (currentTicket.recordset.length === 0) {
+        const ticket = firstRecord(currentTicketResult);
+        if (!ticket) {
             return res.status(404).json({
                 success: false,
                 message: 'Ticket not found'
             });
         }
-
-        const ticket = currentTicket.recordset[0];
+        // Check if user has L3+ approval level for this PU (similar to approveClose)
+        let userApprovalLevel = 0;
+        try {
+            // Use sp_GetUsersForNotification to check if user has L3+ approval for this PU
+            // Check levels 3, 4, 5 etc. to cover L3+ users
+            const approvalCheckL3 = await pool.request()
+                .input('puno', sql.Int, ticket.puno)
+                .input('approval_level', sql.Int, 3)
+                .execute('sp_GetUsersForNotification');
+            
+            const approvalCheckL4 = await pool.request()
+                .input('puno', sql.Int, ticket.puno)
+                .input('approval_level', sql.Int, 4)
+                .execute('sp_GetUsersForNotification');
+            
+            const hasL3Approval = approvalCheckL3.recordset.some(u => u.PERSONNO === rejected_by);
+            const hasL4Approval = approvalCheckL4.recordset.some(u => u.PERSONNO === rejected_by);
+            
+            userApprovalLevel = hasL4Approval ? 4 : (hasL3Approval ? 3 : 0);
+        } catch (error) {
+            console.log('Checking approval level fallback:', error.message);
+            // Fallback: assume user has L2 permission if they're logged in
+            userApprovalLevel = 2;
+        }
+        
         let newStatus = 'rejected_pending_l3_review'; // Default to L3 review for L2 rejections
         let statusNotes = 'Ticket rejected by L2, escalated to L3 for review';
 
         // Handle different rejection scenarios
-        if ((ticket.user_approval_level || 0) >= 3) {
+        if (userApprovalLevel >= 3) {
             // L3 rejecting (final) - only L3 can make final rejections
             newStatus = 'rejected_final';
             statusNotes = 'Ticket rejected by L3 (final decision)';
@@ -1462,134 +1597,228 @@ const rejectTicket = async (req, res) => {
                 WHERE id = @id
             `);
 
-        // Log status change
-        await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .input('old_status', sql.VarChar(50), ticket.status)
-            .input('new_status', sql.VarChar(50), newStatus)
-            .input('changed_by', sql.Int, rejected_by)
-            .input('notes', sql.NVarChar(500), rejection_reason || statusNotes)
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, notes)
-                VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
-            `);
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: ticket.status,
+            newStatus,
+            changedBy: rejected_by,
+            notes: rejection_reason || statusNotes
+        });
 
         // Add status change comment
         await addStatusChangeComment(pool, id, rejected_by, ticket.status, newStatus, rejection_reason);
 
         // Send notification to requestor and assignee
-        try {
-            const detailResult = await pool.request()
-                .input('ticket_id', sql.Int, id)
-                .input('reporter_id', sql.Int, ticket.reported_by)
-                .input('assignee_id', sql.Int, ticket.assigned_to)
-                .query(`
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno, t.assigned_to,
-                           pu.PUCODE, pu.PUNAME,
-                           pe.plant as plant_code,
-                           pe.area as area_code,
-                           pe.line as line_code,
-                           pe.machine as machine_code,
-                           pe.number as machine_number
-                    FROM Tickets t
-                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id;
+        const detailResult = await runQuery(pool, `
+            SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno, t.assigned_to,
+                   pu.PUCODE, pu.PUNAME,
+                   pe.plant as plant_code,
+                   pe.area as area_code,
+                   pe.line as line_code,
+                   pe.machine as machine_code,
+                   pe.number as machine_number
+            FROM Tickets t
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            WHERE t.id = @ticket_id;
 
-                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
-                    FROM Person p
-                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                    WHERE p.PERSONNO = @reporter_id;
+            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+            FROM Person p
+            LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+            WHERE p.PERSONNO = @reporter_id;
 
-                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
-                    FROM Person p
-                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                    WHERE p.PERSONNO = @assignee_id;
-                `);
+            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+            FROM Person p
+            LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+            WHERE p.PERSONNO = @assignee_id;
+        `, [
+            { name: 'ticket_id', type: sql.Int, value: id },
+            { name: 'reporter_id', type: sql.Int, value: ticket.reported_by },
+            { name: 'assignee_id', type: sql.Int, value: ticket.assigned_to }
+        ]);
 
-            const ticketData = detailResult.recordsets[0][0];
-            const reporter = detailResult.recordsets[1][0];
-            const assignee = detailResult.recordsets[2][0];
-            const rejectorName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
-            const reporterDisplayName = formatPersonName(reporter, 'ไม่ระบุ');
-            const assigneeDisplayName = assignee ? formatPersonName(assignee, 'ไม่ระบุ') : null;
+        const ticketData = detailResult.recordsets[0]?.[0];
+        const reporter = detailResult.recordsets[1]?.[0];
+        const assignee = detailResult.recordsets[2]?.[0];
+        const rejectorName = getUserDisplayNameFromRequest(req);
+        const reporterDisplayName = formatPersonName(reporter, 'ไม่ระบุ');
+        const assigneeDisplayName = assignee ? formatPersonName(assignee, 'ไม่ระบุ') : null;
 
-            // hydrate names for flex payloads
-            ticketData.reporter_name = reporterDisplayName;
-            if (assigneeDisplayName) {
-                ticketData.assignee_name = assigneeDisplayName;
-            }
-
-            // Note: Using simple rejection message format without images
-
-            // Send email notification to reporter
-            if (reporter?.Email) {
-                await emailService.sendTicketRejectedNotification(
-                    ticketData,
-                    rejectorName,
-                    rejection_reason,
-                    newStatus,
-                    reporter.Email
-                );
-            }
-
-            // Send email notification to assignee (if exists)
-            if (assignee?.Email && assignee.PERSON_NAME) {
-                await emailService.sendTicketRejectedNotification(
-                    ticketData,
-                    rejectorName,
-                    rejection_reason,
-                    newStatus,
-                    assignee.Email
-                );
-            }
-
-            // LINE notification to reporter
-            try {
-                if (reporter?.LineID) {
-                    // Determine rejection state based on user level
-                    const rejectionState = (ticket.user_approval_level || 0) >= 3 
-                        ? abnFlexService.AbnCaseState.REJECT_FINAL 
-                        : abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
-                    
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(rejectionState, {
-                        caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
-                        actionBy: rejectorName,
-                        comment: rejection_reason || "งานถูกปฏิเสธ",
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
-                    });
-                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
-                }
-            } catch (lineErr) {
-                console.error('Failed to send LINE rejection notification to reporter:', lineErr);
-            }
-
-            // LINE notification to assignee (if exists)
-            try {
-                if (assignee?.LineID && assignee.PERSON_NAME) {
-                    // Determine rejection state based on user level
-                    const rejectionState = (ticket.user_approval_level || 0) >= 3 
-                        ? abnFlexService.AbnCaseState.REJECT_FINAL 
-                        : abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
-                    
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(rejectionState, {
-                        caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
-                        actionBy: rejectorName,
-                        comment: rejection_reason || "งานถูกปฏิเสธ",
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
-                    });
-                    await abnFlexService.pushToUser(assignee.LineID, flexMsg);
-                }
-            } catch (lineErr) {
-                console.error('Failed to send LINE rejection notification to assignee:', lineErr);
-            }
-        } catch (emailErr) {
-            console.error('Failed to send rejection email:', emailErr);
+        ticketData.reporter_name = reporterDisplayName;
+        if (assigneeDisplayName) {
+            ticketData.assignee_name = assigneeDisplayName;
         }
+
+        // Send notifications according to new workflow logic: requester + L3ForPU + actor (rejector)
+        await safeSendEmail('send ticket rejection notifications', async () => {
+            try {
+                // Get notification users using the new workflow system (single call)
+                const notificationUsers = await getTicketNotificationRecipients(id, 'reject', rejected_by);
+                console.log(`\n=== TICKET REJECTION NOTIFICATIONS SUMMARY ===`);
+                console.log(`Ticket: ${ticketData.ticket_number} (ID: ${id})`);
+                console.log(`Action: REJECT`);
+                console.log(`Rejected by: ${rejected_by} (${rejectorName}) - Level: ${ticket.user_approval_level || 0}`);
+                console.log(`New Status: ${newStatus}`);
+                console.log(`Total notification users from SP: ${notificationUsers.length}`);
+
+                if (notificationUsers.length === 0) {
+                    console.log(`⚠️  No notification users found for reject action`);
+                    console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+                    return;
+                }
+
+                // LOG ALL NOTIFICATION USERS BEFORE FILTERING
+                console.log('\n📋 ALL NOTIFICATION USERS (Before Filtering):');
+                notificationUsers.forEach((user, index) => {
+                    const hasEmail = user.EMAIL && user.EMAIL.trim() !== '';
+                    const hasLineID = user.LineID && user.LineID.trim() !== '';
+                    const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : '❌ No Email';
+                    const lineStatus = hasLineID ? `✅ ${user.LineID}` : '❌ No LineID';
+                    
+                    console.log(`  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`);
+                    console.log(`     └─ Reason: ${user.notification_reason}`);
+                    console.log(`     └─ Type: ${user.recipient_type}`);
+                    console.log(`     └─ Email: ${emailStatus}`);
+                    console.log(`     └─ LineID: ${lineStatus}`);
+                });
+
+                // COUNT USERS BY RECIPIENT TYPE
+                const userCounts = notificationUsers.reduce((counts, user) => {
+                    const type = user.recipient_type || 'Unknown';
+                    counts[type] = (counts[type] || 0) + 1;
+                    return counts;
+                }, {});
+                
+                console.log('\n📊 RECIPIENT TYPE BREAKDOWN:');
+                Object.entries(userCounts).forEach(([type, count]) => {
+                    console.log(`  • ${type}: ${count} user(s)`);
+                });
+
+                // COUNT USERS BY NOTIFICATION CAPABILITY
+                const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const bothCapable = notificationUsers.filter(u => 
+                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                ).length;
+                const noContactInfo = notificationUsers.filter(u => 
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                ).length;
+
+                console.log('\n📞 NOTIFICATION CAPABILITY:');
+                console.log(`  • Email capable: ${emailCapable} user(s)`);
+                console.log(`  • LINE capable: ${lineCapable} user(s)`);
+                console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
+                console.log(`  • No contact info: ${noContactInfo} user(s)`);
+
+                // Determine rejection state based on rejector level
+                const rejectionState = (ticket.user_approval_level || 0) >= 3
+                    ? abnFlexService.AbnCaseState.REJECT_FINAL
+                    : abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
+
+                // Prepare ticket data<｜tool▁call▁begin｜>for notifications
+                const ticketDataForNotifications = {
+                    id: id,
+                    ticket_number: ticketData.ticket_number,
+                    title: ticketData.title,
+                    description: ticketData.title, // Using title as description for reject notifications
+                    pucode: ticketData.PUCODE,
+                    plant_code: ticketData.plant_code,
+                    area_code: ticketData.area_code,
+                    line_code: ticketData.line_code,
+                    machine_code: ticketData.machine_code,
+                    machine_number: ticketData.machine_number,
+                    plant_name: ticketData.PUNAME,
+                    PUNAME: ticketData.PUNAME, // For email template compatibility
+                    severity_level: ticketData.severity_level,
+                    priority: ticketData.priority,
+                    reported_by: ticket.reported_by,
+                    assigned_to: ticketData.assigned_to,
+                    rejection_reason: rejection_reason,
+                    new_status: newStatus,
+                    created_at: new Date().toISOString()
+                };
+
+                // Filter recipients for each notification type
+                const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
+                const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
+
+                console.log('\n📧 EMAIL RECIPIENTS (After Filtering):');
+                if (emailRecipients.length === 0) {
+                    console.log('  ⚠️  No email-capable recipients found');
+                } else {
+                    emailRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                console.log('\n💬 LINE RECIPIENTS (After Filtering):');
+                if (lineRecipients.length === 0) {
+                    console.log('  ⚠️  No LINE-capable recipients found');
+                } else {
+                    lineRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                // Send email notifications
+                if (emailRecipients.length > 0) {
+                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
+                    await emailService.sendTicketRejectedNotification(ticketDataForNotifications, rejectorName, rejection_reason, newStatus, emailRecipients);
+                    console.log(`✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
+                }
+
+                // Send LINE notifications
+                if (lineRecipients.length > 0) {
+                    console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
+                    // Prepare flexible message for LINE
+                    const linePayload = {
+                        caseNo: ticketData.ticket_number,
+                        assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
+                        problem: ticketData.title || 'No description',
+                        actionBy: rejectorName,
+                        comment: rejection_reason || "งานถูกปฏิเสธ",
+                        extraKVs: [
+                            { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                            { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                            { label: 'Rejected by', value: rejectorName },
+                            { label: 'Status', value: newStatus.toUpperCase() }
+                        ]
+                    };
+
+                    let rejectionState;
+                    if (newStatus === 'rejected_final') {
+                        rejectionState = abnFlexService.AbnCaseState.REJECT_FINAL;
+                    } else {
+                        rejectionState = abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
+                    }
+
+                    const linePromises = lineRecipients.map(user => {
+                        return abnFlexService.pushToUser(user.LineID, [
+                            abnFlexService.buildAbnFlexMinimal(rejectionState, linePayload)
+                        ]);
+                    });
+
+                    const lineResults = await Promise.all(linePromises);
+                    const successfulLines = lineResults.filter(result => result.success).length;
+
+                    console.log(`✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
+                }
+
+                console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
+                console.log(`📊 Final Summary: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+
+            } catch (error) {
+                console.error('Error sending notifications for ticket rejection:', error);
+                throw error;
+            }
+        });
 
         res.json({
             success: true,
@@ -1616,18 +1845,17 @@ const completeJob = async (req, res) => {
         const pool = await sql.connect(dbConfig);
 
         // Get current ticket status
-        const currentTicket = await pool.request()
-            .input('id', sql.Int, id)
-            .query('SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id');
+        const currentTicketResult = await runQuery(pool, 'SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id', [
+            { name: 'id', type: sql.Int, value: id }
+        ]);
 
-        if (currentTicket.recordset.length === 0) {
+        const ticket = firstRecord(currentTicketResult);
+        if (!ticket) {
             return res.status(404).json({
                 success: false,
                 message: 'Ticket not found'
             });
         }
-
-        const ticket = currentTicket.recordset[0];
 
         // Check if user is assigned to this ticket
         if (ticket.assigned_to !== completed_by) {
@@ -1666,27 +1894,79 @@ const completeJob = async (req, res) => {
                 WHERE id = @id
             `);
 
-        // Log status change
-        await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .input('old_status', sql.VarChar(50), ticket.status)
-            .input('new_status', sql.VarChar(50), 'completed')
-            .input('changed_by', sql.Int, completed_by)
-            .input('notes', sql.NVarChar(500), completion_notes || 'Job completed')
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, notes)
-                VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
-            `);
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: ticket.status,
+            newStatus: 'completed',
+            changedBy: completed_by,
+            notes: completion_notes || 'Job completed'
+        });
 
         // Add status change comment
         await addStatusChangeComment(pool, id, completed_by, ticket.status, 'completed', completion_notes);
 
-        // Send notification to requestor
-        try {
-            const detailResult = await pool.request()
-                .input('ticket_id', sql.Int, id)
-                .input('reporter_id', sql.Int, ticket.reported_by)
-                .query(`
+        // Send notifications according to new workflow logic: requester + actor (completer)
+        await safeSendEmail('send job completion notifications', async () => {
+            try {
+                // Get notification users using the new workflow system (single call)
+                const notificationUsers = await getTicketNotificationRecipients(id, 'complete', completed_by);
+                console.log(`\n=== JOB COMPLETION NOTIFICATIONS SUMMARY ===`);
+                console.log(`Ticket: ${'ticket_number'} (ID: ${id})`);
+                console.log(`Action: COMPLETE`);
+                console.log(`Completed by: ${completed_by} (${getUserDisplayNameFromRequest(req)})`);
+                console.log(`Total notification users from SP: ${notificationUsers.length}`);
+
+                if (notificationUsers.length === 0) {
+                    console.log(`⚠️ in  No notification users found for complete action`);
+                    console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+                    return;
+                }
+
+                // LOG ALL NOTIFICATION USERS BEFORE FILTERING
+                console.log('\n📋 ALL NOTIFICATION USERS (Before Filtering):');
+                notificationUsers.forEach((user, index) => {
+                    const hasEmail = user.EMAIL && user.EMAIL.trim() !== '';
+                    const hasLineID = user.LineID && user.LineID.trim() !== '';
+                    const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : '❌ No Email';
+                    const lineStatus = hasLineID ? `✅ ${user.LineID}` : '❌ No LineID';
+                    
+                    console.log(`  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`);
+                    console.log(`     └─ Reason: ${user.notification_reason}`);
+                    console.log(`     └─ Type: ${user.recipient_type}`);
+                    console.log(`     └─ Email: ${emailStatus}`);
+                    console.log(`     └─ LineID: ${lineStatus}`);
+                });
+
+                // COUNT USERS BY RECIPIENT TYPE
+                const userCounts = notificationUsers.reduce((counts, user) => {
+                    const type = user.recipient_type || 'Unknown';
+                    counts[type] = (counts[type] || 0) + 1;
+                    return counts;
+                }, {});
+                
+                console.log('\n📊 RECIPIENT TYPE BREAKDOWN:');
+                Object.entries(userCounts).forEach(([type, count]) => {
+                    console.log(`  • ${type}: ${count} user(s)`);
+                });
+
+                // COUNT USERS BY NOTIFICATION CAPABILITY
+                const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const bothCapable = notificationUsers.filter(u => 
+                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                ).length;
+                const noContactInfo = notificationUsers.filter(u => 
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                ).length;
+
+                console.log('\n📞 NOTIFICATION CAPABILITY:');
+                console.log(`  • Email capable: ${emailCapable} user(s)`);
+                console.log(`  • LINE capable: ${lineCapable} user(s)`);
+                console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
+                console.log(`  • No contact info: ${noContactInfo} user(s)`);
+
+                // Get ticket details for notification data
+                const ticketDetailResult = await runQuery(pool, `
                     SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.downtime_avoidance_hours, t.cost_avoidance, t.puno, t.failure_mode_id,
                            fm.FailureModeCode, fm.FailureModeName,
                            pu.PUCODE, pu.PUNAME,
@@ -1699,68 +1979,130 @@ const completeJob = async (req, res) => {
                     LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo AND fm.FlagDel != 'Y'
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                     LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id;
+                    WHERE t.id = @ticket_id
+                `, [
+                    { name: 'ticket_id', type: sql.Int, value: id }
+                ]);
 
-                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
-                    FROM Person p
-                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                    WHERE p.PERSONNO = @reporter_id;
-                `);
+                const ticketData = firstRecord(ticketDetailResult);
+                const completerName = getUserDisplayNameFromRequest(req);
 
-            const ticketData = detailResult.recordsets[0][0];
-            const reporter = detailResult.recordsets[1][0];
-            const completerName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
+                // Prepare ticket data for notifications
+                const ticketDataForNotifications = {
+                    id: id,
+                    ticket_number: ticketData.ticket_number,
+                    title: ticketData.title,
+                    description: ticketData.title, // Using title as description for complete notifications
+                    pucode: ticketData.PUCODE,
+                    plant_code: ticketData.plant_code,
+                    area_code: ticketData.area_code,
+                    line_code: ticketData.line_code,
+                    machine_code: ticketData.machine_code,
+                    machine_number: ticketData.machine_number,
+                    plant_name: ticketData.PUNAME,
+                    PUNAME: ticketData.PUNAME, // For email template compatibility
+                    severity_level: ticketData.severity_level,
+                    priority: ticketData.priority,
+                    reported_by: ticket.reported_by,
+                    assigned_to: completed_by,
+                    downtime_avoidance_hours: downtime_avoidance_hours,
+                    cost_avoidance: cost_avoidance,
+                    failure_mode_id: failure_mode_id,
+                    FailureModeName: ticketData.FailureModeName,
+                    created_at: new Date().toISOString()
+                };
 
-            if (reporter?.Email) {
-                await emailService.sendJobCompletedNotification(
-                    ticketData,
-                    completerName,
-                    completion_notes,
-                    downtime_avoidance_hours,
-                    cost_avoidance,
-                    reporter.Email
-                );
-            }
+                // Filter recipients for each notification type
+                const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
+                const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
 
-            // LINE notification
-            try {
-                if (reporter?.LineID) {
+                console.log('\n📧 EMAIL RECIPIENTS (After Filtering):');
+                if (emailRecipients.length === 0) {
+                    console.log('  ⚠️  No email-capable recipients found');
+                } else {
+                    emailRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                console.log('\n💬 LINE RECIPIENTS (After Filtering):');
+                if (lineRecipients.length === 0) {
+                    console.log('  ⚠️  No LINE-capable recipients found');
+                } else {
+                    lineRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                // Send email notifications
+                if (emailRecipients.length > 0) {
+                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
+                    await emailService.sendJobCompletedNotification(ticketDataForNotifications, completerName, completion_notes, downtime_avoidance_hours, cost_avoidance, emailRecipients);
+                    console.log(`✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
+                }
+
+                // Send LINE notifications
+                if (lineRecipients.length > 0) {
+                    console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
                     // Get ticket images for FLEX message (after images for completion)
-                    const imagesResult = await pool.request()
-                        .input('ticket_id', sql.Int, id)
-                        .query(`
-                            SELECT image_url, image_name, image_type
-                            FROM TicketImages 
-                            WHERE ticket_id = @ticket_id 
-                            ORDER BY uploaded_at ASC
-                        `);
+                    const imagesResult = await runQuery(pool, `
+                        SELECT image_url, image_name, image_type
+                        FROM TicketImages 
+                        WHERE ticket_id = @ticket_id 
+                        ORDER BY uploaded_at ASC
+                    `, [
+                        { name: 'ticket_id', type: sql.Int, value: id }
+                    ]);
                     
                     // Get hero image from "after" images, fallback to any image
                     const afterImages = imagesResult.recordset.filter(img => img.image_type === 'after');
                     const heroImageUrl = getHeroImageUrl(afterImages.length > 0 ? afterImages : imagesResult.recordset);
-                    
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.COMPLETED, {
-                        caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
-                        actionBy: completerName,
-                        comment: completion_notes || "งานเสร็จสมบูรณ์แล้ว",
-                        heroImageUrl: heroImageUrl,
-                        extraKVs: [
-                            { label: "Cost Avoidance", value: cost_avoidance ? `${cost_avoidance.toLocaleString()} บาท` : "-" },
-                            { label: "Downtime Avoidance", value: downtime_avoidance_hours ? `${downtime_avoidance_hours} ชั่วโมง` : "-" },
-                            { label: "Failure Mode", value: ticketData.FailureModeName || "-" }
-                        ],
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+
+                    const linePromises = lineRecipients.map(user => {
+                        // Prepare flexible message for LINE
+                        const linePayload = {
+                            caseNo: ticketData.ticket_number,
+                            assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
+                            problem: ticketData.title || 'No description',
+                            actionBy: completerName,
+                            comment: completion_notes || "งานเสร็จสมบูรณ์แล้ว",
+                            heroImageUrl: heroImageUrl,
+                            extraKVs: [
+                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                                { label: 'Completed by', value: completerName },
+                                { label: "Cost Avoidance", value: cost_avoidance ? `${cost_avoidance.toLocaleString()} บาท` : "-" },
+                                { label: "Downtime Avoidance", value: downtime_avoidance_hours ? `${downtime_avoidance_hours} ชั่วโมง` : "-" },
+                                { label: "Failure Mode", value: ticketData.FailureModeName || "-" }
+                            ]
+                        };
+
+                        return abnFlexService.pushToUser(user.LineID, [
+                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.COMPLETED, linePayload)
+                        ]);
                     });
-                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
+
+                    const lineResults = await Promise.all(linePromises);
+                    const successfulLines = lineResults.filter(result => result.success).length;
+
+                    console.log(`✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
                 }
-            } catch (lineErr) {
-                console.error('Failed to send LINE completion notification:', lineErr);
+
+                console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
+                console.log(`📊 Final Summary: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+
+            } catch (error) {
+                console.error('Error sending notifications for job completion:', error);
+                throw error;
             }
-        } catch (emailErr) {
-            console.error('Failed to send completion email:', emailErr);
-        }
+        });
 
         res.json({
             success: true,
@@ -1792,18 +2134,17 @@ const escalateTicket = async (req, res) => {
         const pool = await sql.connect(dbConfig);
 
         // Get current ticket status
-        const currentTicket = await pool.request()
-            .input('id', sql.Int, id)
-            .query('SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id');
+        const currentTicketResult = await runQuery(pool, 'SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id', [
+            { name: 'id', type: sql.Int, value: id }
+        ]);
 
-        if (currentTicket.recordset.length === 0) {
+        const ticket = firstRecord(currentTicketResult);
+        if (!ticket) {
             return res.status(404).json({
                 success: false,
                 message: 'Ticket not found'
             });
         }
-
-        const ticket = currentTicket.recordset[0];
 
         // Check if user is assigned to this ticket
         if (ticket.assigned_to !== escalated_by) {
@@ -1839,28 +2180,81 @@ const escalateTicket = async (req, res) => {
                 WHERE id = @id
             `);
 
-        // Log status change
-        await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .input('old_status', sql.VarChar(50), ticket.status)
-            .input('new_status', sql.VarChar(50), 'escalated')
-            .input('changed_by', sql.Int, escalated_by)
-            .input('notes', sql.NVarChar(500), `Escalated to L3: ${escalation_reason}`)
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, notes)
-                VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
-            `);
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: ticket.status,
+            newStatus: 'escalated',
+            changedBy: escalated_by,
+            notes: `Escalated to L3: ${escalation_reason}`
+        });
 
         // Add status change comment
         await addStatusChangeComment(pool, id, escalated_by, ticket.status, 'escalated', escalation_reason);
 
-        // Send notification to L3 and requestor
-        try {
-            const detailResult = await pool.request()
-                .input('ticket_id', sql.Int, id)
-                .input('reporter_id', sql.Int, ticket.reported_by)
-                .input('escalated_to_id', sql.Int, escalated_to)
-                .query(`
+        // Send notifications according to new workflow logic: requester + L3ForPU + L4ForPU + actor (escalator)
+        await safeSendEmail('send ticket escalation notifications', async () => {
+            try {
+                // Get notification users using the new workflow system (single call)
+                const notificationUsers = await getTicketNotificationRecipients(id, 'escalate', escalated_by);
+                console.log(`\n=== TICKET ESCALATION NOTIFICATIONS SUMMARY ===`);
+                console.log(`Ticket: ${id} (ID: ${id})`);
+                console.log(`Action: ESCALATE`);
+                console.log(`Escalated by: ${escalated_by} (${getUserDisplayNameFromRequest(req)})`);
+                console.log(`Escalated to: ${escalated_to}`);
+                console.log(`Escalation reason: ${escalation_reason}`);
+                console.log(`Total notification users from SP: ${notificationUsers.length}`);
+
+                if (notificationUsers.length === 0) {
+                    console.log(`⚠️  No notification users found for escalate action`);
+                    console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+                    return;
+                }
+
+                // LOG ALL NOTIFICATION USERS BEFORE FILTERING
+                console.log('\n📋 ALL NOTIFICATION USERS (Before Filtering):');
+                notificationUsers.forEach((user, index) => {
+                    const hasEmail = user.EMAIL && user.EMAIL.trim() !== '';
+                    const hasLineID = user.LineID && user.LineID.trim() !== '';
+                    const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : '❌ No Email';
+                    const lineStatus = hasLineID ? `✅ ${user.LineID}` : '❌ No LineID';
+                    
+                    console.log(`  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`);
+                    console.log(`     └─ Reason: ${user.notification_reason}`);
+                    console.log(`     └─ Type: ${user.recipient_type}`);
+                    console.log(`     └─ Email: ${emailStatus}`);
+                    console.log(`     └─ LineID: ${lineStatus}`);
+                });
+
+                // COUNT USERS BY RECIPIENT TYPE
+                const userCounts = notificationUsers.reduce((counts, user) => {
+                    const type = user.recipient_type || 'Unknown';
+                    counts[type] = (counts[type] || 0) + 1;
+                    return counts;
+                }, {});
+                
+                console.log('\n📊 RECIPIENT TYPE BREAKDOWN:');
+                Object.entries(userCounts).forEach(([type, count]) => {
+                    console.log(`  • ${type}: ${count} user(s)`);
+                });
+
+                // COUNT USERS BY NOTIFICATION CAPABILITY
+                const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const bothCapable = notificationUsers.filter(u => 
+                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                ).length;
+                const noContactInfo = notificationUsers.filter(u => 
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                ).length;
+
+                console.log('\n📞 NOTIFICATION CAPABILITY:');
+                console.log(`  • Email capable: ${emailCapable} user(s)`);
+                console.log(`  • LINE capable: ${lineCapable} user(s)`);
+                console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
+                console.log(`  • No contact info: ${noContactInfo} user(s)`);
+
+                // Get ticket details for notification data
+                const ticketDetailResult = await runQuery(pool, `
                     SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
                            pu.PUCODE, pu.PUNAME,
                            pe.plant as plant_code,
@@ -1871,98 +2265,126 @@ const escalateTicket = async (req, res) => {
                     FROM Tickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                     LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id;
+                    WHERE t.id = @ticket_id
+                `, [
+                    { name: 'ticket_id', type: sql.Int, value: id }
+                ]);
 
-                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
-                    FROM Person p
-                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                    WHERE p.PERSONNO = @reporter_id;
+                const ticketData = firstRecord(ticketDetailResult);
+                const escalatorName = getUserDisplayNameFromRequest(req);
 
-                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
-                    FROM Person p
-                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                    WHERE p.PERSONNO = @escalated_to_id;
+                // Prepare ticket data for notifications
+                const ticketDataForNotifications = {
+                    id: id,
+                    ticket_number: ticketData.ticket_number,
+                    title: ticketData.title,
+                    description: ticketData.title, // Using title as description for escalate notifications
+                    pucode: ticketData.PUCODE,
+                    plant_code: ticketData.plant_code,
+                    area_code: ticketData.area_code,
+                    line_code: ticketData.line_code,
+                    machine_code: ticketData.machine_code,
+                    machine_number: ticketData.machine_number,
+                    plant_name: ticketData.PUNAME,
+                    PUNAME: ticketData.PUNAME, // For email template compatibility
+                    severity_level: ticketData.severity_level,
+                    priority: ticketData.priority,
+                    reported_by: ticket.reported_by,
+                    assigned_to: escalated_by,
+                    escalated_to: escalated_to,
+                    escalation_reason: escalation_reason,
+                    created_at: new Date().toISOString()
+                };
 
-                    SELECT image_name as filename, image_url as url, uploaded_at, uploaded_by
-                    FROM TicketImages 
-                    WHERE ticket_id = @ticket_id
-                    ORDER BY uploaded_at ASC;
-                `);
+                // Filter recipients for each notification type
+                const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
+                const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
 
-            const ticketData = detailResult.recordsets[0][0];
-            const reporter = detailResult.recordsets[1][0];
-            const escalatedTo = detailResult.recordsets[2][0];
-            const images = detailResult.recordsets[3] || [];
-            const escalatorName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
-
-            // Email notifications
-            const sentToEmails = new Set();
-            
-            // Notify L3
-            if (escalatedTo?.Email) {
-                await emailService.sendTicketEscalatedNotification(
-                    ticketData,
-                    escalatorName,
-                    escalation_reason,
-                    escalatedTo.Email
-                );
-                sentToEmails.add(escalatedTo.Email);
-            }
-
-            // Notify requestor (only if different from L3)
-            if (reporter?.Email && !sentToEmails.has(reporter.Email)) {
-                await emailService.sendTicketEscalatedToRequestorNotification(
-                    ticketData,
-                    escalatorName,
-                    escalation_reason,
-                    reporter.Email
-                );
-            }
-
-            // LINE notifications
-            try {
-                // Check for duplicate notifications (if escalatedTo and reporter are the same person)
-                const sentToUsers = new Set();
-                
-                if (escalatedTo?.LineID) {
-                    // Get hero image from before images
-                    const heroImageUrl = getHeroImageUrl(images);
-                    
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ESCALATED, {
-                        caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
-                        actionBy: escalatorName,
-                        comment: escalation_reason || "งานถูกส่งต่อให้หัวหน้างานพิจารณา",
-                        heroImageUrl: heroImageUrl,
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                console.log('\n📧 EMAIL RECIPIENTS (After Filtering):');
+                if (emailRecipients.length === 0) {
+                    console.log('  ⚠️  No email-capable recipients found');
+                } else {
+                    emailRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
                     });
-                    await abnFlexService.pushToUser(escalatedTo.LineID, flexMsg);
-                    sentToUsers.add(escalatedTo.LineID);
                 }
-                
-                // Only send to reporter if they haven't already received a notification
-                if (reporter?.LineID && !sentToUsers.has(reporter.LineID)) {
-                    // Get hero image from before images
-                    const heroImageUrl = getHeroImageUrl(images);
-                    
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ESCALATED, {
-                        caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
-                        actionBy: escalatorName,
-                        comment: escalation_reason || "งานของคุณถูกส่งต่อให้หัวหน้างานพิจารณา",
-                        heroImageUrl: heroImageUrl,
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+
+                console.log('\n💬 LINE RECIPIENTS (After Filtering):');
+                if (lineRecipients.length === 0) {
+                    console.log('  ⚠️  No LINE-capable recipients found');
+                } else {
+                    lineRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
                     });
-                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
                 }
-            } catch (lineErr) {
-                console.error('Failed to send LINE escalation notification:', lineErr);
+
+                // Send email notifications
+                if (emailRecipients.length > 0) {
+                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
+                    await emailService.sendTicketEscalatedNotification(ticketDataForNotifications, escalatorName, escalation_reason, emailRecipients);
+                    console.log(`✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
+                }
+
+                // Send LINE notifications
+                if (lineRecipients.length > 0) {
+                    console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
+                    // Get ticket images for FLEX message
+                    const imagesResult = await runQuery(pool, `
+                        SELECT image_name as filename, image_url as url, uploaded_at, uploaded_by
+                        FROM TicketImages 
+                        WHERE ticket_id = @ticket_id
+                        ORDER BY uploaded_at ASC
+                    `, [
+                        { name: 'ticket_id', type: sql.Int, value: id }
+                    ]);
+                    
+                    // Get hero image from before images
+                    const heroImageUrl = getHeroImageUrl(imagesResult.recordset || []);
+
+                    const linePromises = lineRecipients.map(user => {
+                        // Prepare flexible message for LINE
+                        const linePayload = {
+                            caseNo: ticketData.ticket_number,
+                            assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
+                            problem: ticketData.title || 'No description',
+                            actionBy: escalatorName,
+                            comment: escalation_reason || "งานถูกส่งต่อให้หัวหน้างานพิจารณา",
+                            heroImageUrl: heroImageUrl,
+                            extraKVs: [
+                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                                { label: 'Escalated by', value: escalatorName },
+                                { label: 'Escalated to', value: escalated_to },
+                                { label: 'Status', value: 'ESCALATED' }
+                            ]
+                        };
+
+                        return abnFlexService.pushToUser(user.LineID, [
+                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ESCALATED, linePayload)
+                        ]);
+                    });
+
+                    const lineResults = await Promise.all(linePromises);
+                    const successfulLines = lineResults.filter(result => result.success).length;
+
+                    console.log(`✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
+                }
+
+                console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
+                console.log(`📊 Final Summary: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+
+            } catch (error) {
+                console.error('Error sending notifications for ticket escalation:', error);
+                throw error;
             }
-        } catch (emailErr) {
-            console.error('Failed to send escalation email:', emailErr);
-        }
+        });
 
         res.json({
             success: true,
@@ -1980,33 +2402,32 @@ const escalateTicket = async (req, res) => {
     }
 };
 
-// Close ticket (Requestor)
-const closeTicket = async (req, res) => {
+// Approve review ticket (L1 - Requestor)
+const approveReview = async (req, res) => {
     try {
         const { id } = req.params;
-        const { close_reason, satisfaction_rating } = req.body;
-        const closed_by = req.user.id;
+        const { review_reason, satisfaction_rating } = req.body;
+        const reviewed_by = req.user.id;
         const pool = await sql.connect(dbConfig);
 
         // Get current ticket status
-        const currentTicket = await pool.request()
-            .input('id', sql.Int, id)
-            .query('SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id');
+        const currentTicketResult = await runQuery(pool, 'SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id', [
+            { name: 'id', type: sql.Int, value: id }
+        ]);
 
-        if (currentTicket.recordset.length === 0) {
+        const ticket = firstRecord(currentTicketResult);
+        if (!ticket) {
             return res.status(404).json({
                 success: false,
                 message: 'Ticket not found'
             });
         }
 
-        const ticket = currentTicket.recordset[0];
-
         // Check if user is the requestor
-        if (ticket.reported_by !== closed_by) {
+        if (ticket.reported_by !== reviewed_by) {
             return res.status(403).json({
                 success: false,
-                message: 'Only the requestor can close this ticket'
+                message: 'Only the requestor can approve review this ticket'
             });
         }
 
@@ -2014,47 +2435,102 @@ const closeTicket = async (req, res) => {
         if (ticket.status !== 'completed') {
             return res.status(400).json({
                 success: false,
-                message: 'Only completed tickets can be closed'
+                message: 'Only completed tickets can be reviewed'
             });
         }
 
-        // Update ticket status to closed with workflow tracking
+        // Update ticket status to reviewed with workflow tracking
         await pool.request()
             .input('id', sql.Int, id)
-            .input('status', sql.VarChar(50), 'closed')
-            .input('closed_by', sql.Int, closed_by)
+            .input('status', sql.VarChar(50), 'reviewed')
+            .input('reviewed_by', sql.Int, reviewed_by)
             .input('satisfaction_rating', sql.Int, satisfaction_rating)
             .query(`
                 UPDATE Tickets 
                 SET status = @status, 
-                    closed_at = GETDATE(),
-                    closed_by = @closed_by,
+                    reviewed_at = GETDATE(),
+                    reviewed_by = @reviewed_by,
                     satisfaction_rating = @satisfaction_rating,
                     updated_at = GETDATE()
                 WHERE id = @id
             `);
 
-        // Log status change
-        await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .input('old_status', sql.VarChar(50), ticket.status)
-            .input('new_status', sql.VarChar(50), 'closed')
-            .input('changed_by', sql.Int, closed_by)
-            .input('notes', sql.NVarChar(500), close_reason || 'Ticket closed by requestor')
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, notes)
-                VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
-            `);
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: ticket.status,
+            newStatus: 'reviewed',
+            changedBy: reviewed_by,
+            notes: review_reason || 'Ticket reviewed by requestor'
+        });
 
         // Add status change comment
-        await addStatusChangeComment(pool, id, closed_by, ticket.status, 'closed', close_reason);
+        await addStatusChangeComment(pool, id, reviewed_by, ticket.status, 'reviewed', review_reason);
 
-        // Send notification to assignee
-        try {
-            const detailResult = await pool.request()
-                .input('ticket_id', sql.Int, id)
-                .input('assignee_id', sql.Int, ticket.assigned_to)
-                .query(`
+        // Send notifications according to new workflow logic: assignee + L4ForPU + actor (reviewer)
+        await safeSendEmail('send ticket review approval notifications', async () => {
+            try {
+                // Get notification users using the new workflow system (single call)
+                const notificationUsers = await getTicketNotificationRecipients(id, 'approve_review', reviewed_by);
+                console.log(`\n=== TICKET REVIEW APPROVAL NOTIFICATIONS SUMMARY ===`);
+                console.log(`Ticket: ${id} (ID: ${id})`);
+                console.log(`Action: APPROVE_REVIEW`);
+                console.log(`Reviewed by: ${reviewed_by} (${getUserDisplayNameFromRequest(req)})`);
+                console.log(`Review reason: ${review_reason || 'N/A'}`);
+                console.log(`Satisfaction rating: ${satisfaction_rating ? `${satisfaction_rating}/5 ⭐` : 'ไม่ระบุ'}`);
+                console.log(`New status: reviewed`);
+                console.log(`Total notification users from SP: ${notificationUsers.length}`);
+
+                if (notificationUsers.length === 0) {
+                    console.log(`⚠️  No notification users found for approve_review action`);
+                    console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+                    return;
+                }
+
+                // LOG ALL NOTIFICATION USERS BEFORE FILTERING
+                console.log('\n📋 ALL NOTIFICATION USERS (Before Filtering):');
+                notificationUsers.forEach((user, index) => {
+                    const hasEmail = user.EMAIL && user.EMAIL.trim() !== '';
+                    const hasLineID = user.LineID && user.LineID.trim() !== '';
+                    const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : '❌ No Email';
+                    const lineStatus = hasLineID ? `✅ ${user.LineID}` : '❌ No LineID';
+                    
+                    console.log(`  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`);
+                    console.log(`     └─ Reason: ${user.notification_reason}`);
+                    console.log(`     └─ Type: ${user.recipient_type}`);
+                    console.log(`     └─ Email: ${emailStatus}`);
+                    console.log(`     └─ LineID: ${lineStatus}`);
+                });
+
+                // COUNT USERS BY RECIPIENT TYPE
+                const userCounts = notificationUsers.reduce((counts, user) => {
+                    const type = user.recipient_type || 'Unknown';
+                    counts[type] = (counts[type] || 0) + 1;
+                    return counts;
+                }, {});
+                
+                console.log('\n📊 RECIPIENT TYPE BREAKDOWN:');
+                Object.entries(userCounts).forEach(([type, count]) => {
+                    console.log(`  • ${type}: ${count} user(s)`);
+                });
+
+                // COUNT USERS BY NOTIFICATION CAPABILITY
+                const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const bothCapable = notificationUsers.filter(u => 
+                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                ).length;
+                const noContactInfo = notificationUsers.filter(u => 
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                ).length;
+
+                console.log('\n📞 NOTIFICATION CAPABILITY:');
+                console.log(`  • Email capable: ${emailCapable} user(s)`);
+                console.log(`  • LINE capable: ${lineCapable} user(s)`);
+                console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
+                console.log(`  • No contact info: ${noContactInfo} user(s)`);
+
+                // Get ticket details for notification data
+                const ticketDetailResult = await runQuery(pool, `
                     SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
                            pu.PUCODE, pu.PUNAME,
                            pe.plant as plant_code,
@@ -2065,50 +2541,396 @@ const closeTicket = async (req, res) => {
                     FROM Tickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                     LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id;
+                    WHERE t.id = @ticket_id
+                `, [
+                    { name: 'ticket_id', type: sql.Int, value: id }
+                ]);
 
-                    
-                    SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
-                    FROM Person p
-                    LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                    WHERE p.PERSONNO = @assignee_id;
-                `);
+                const ticketData = firstRecord(ticketDetailResult);
+                const reviewerName = getUserDisplayNameFromRequest(req);
 
-            const ticketData = detailResult.recordsets[0][0];
-            const assignee = detailResult.recordsets[1][0];
-            const closerName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
-            if (assignee?.Email) {
-                await emailService.sendTicketClosedNotification(
-                    ticketData,
-                    closerName,
-                    close_reason,
-                    satisfaction_rating,
-                    assignee.Email
-                );
-            }
+                // Prepare ticket data for notifications
+                const ticketDataForNotifications = {
+                    id: id,
+                    ticket_number: ticketData.ticket_number,
+                    title: ticketData.title,
+                    description: ticketData.title, // Using title as description for review notifications
+                    pucode: ticketData.PUCODE,
+                    plant_code: ticketData.plant_code,
+                    area_code: ticketData.area_code,
+                    line_code: ticketData.line_code,
+                    machine_code: ticketData.machine_code,
+                    machine_number: ticketData.machine_number,
+                    plant_name: ticketData.PUNAME,
+                    PUNAME: ticketData.PUNAME, // For email template compatibility
+                    severity_level: ticketData.severity_level,
+                    priority: ticketData.priority,
+                    reported_by: ticket.reported_by,
+                    assigned_to: ticket.assigned_to,
+                    review_reason: review_reason,
+                    satisfaction_rating: satisfaction_rating,
+                    created_at: new Date().toISOString()
+                };
 
-            // LINE notification
-            try {
-                if (assignee?.LineID) {
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CLOSED, {
-                        caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
-                        actionBy: closerName,
-                        comment: close_reason || "เคสถูกปิดโดยผู้ร้องขอ",
-                        extraKVs: [
-                            { label: "Satisfaction Rating", value: satisfaction_rating ? `${satisfaction_rating}/5 ดาว` : "ไม่ระบุ" }
-                        ],
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+                // Filter recipients for each notification type
+                const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
+                const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
+
+                console.log('\n📧 EMAIL RECIPIENTS (After Filtering):');
+                if (emailRecipients.length === 0) {
+                    console.log('  ⚠️  No email-capable recipients found');
+                } else {
+                    emailRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
                     });
-                    await abnFlexService.pushToUser(assignee.LineID, flexMsg);
                 }
-            } catch (lineErr) {
-                console.error('Failed to send LINE closure notification:', lineErr);
+
+                console.log('\n💬 LINE RECIPIENTS (After Filtering):');
+                if (lineRecipients.length === 0) {
+                    console.log('  ⚠️  No LINE-capable recipients found');
+                } else {
+                    lineRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                // Send email notifications
+                if (emailRecipients.length > 0) {
+                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
+                    await emailService.sendTicketReviewedNotification(ticketDataForNotifications, reviewerName, review_reason, satisfaction_rating, emailRecipients);
+                    console.log(`✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
+                }
+
+                // Send LINE notifications
+                if (lineRecipients.length > 0) {
+                    console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
+
+                    const linePromises = lineRecipients.map(user => {
+                        // Prepare flexible message for LINE
+                        const linePayload = {
+                            caseNo: ticketData.ticket_number,
+                            assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
+                            problem: ticketData.title || 'No description',
+                            actionBy: reviewerName,
+                            comment: review_reason || "งานได้รับการตรวจสอบและอนุมัติโดยผู้ร้องขอ",
+                            extraKVs: [
+                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                                { label: 'Reviewed by', value: reviewerName },
+                                { label: "Satisfaction Rating", value: satisfaction_rating ? `${satisfaction_rating}/5 ⭐` : "ไม่ระบุ" },
+                                { label: 'Status', value: 'REVIEWED' }
+                            ]
+                        };
+
+                        return abnFlexService.pushToUser(user.LineID, [
+                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REVIEWED, linePayload)
+                        ]);
+                    });
+
+                    const lineResults = await Promise.all(linePromises);
+                    const successfulLines = lineResults.filter(result => result.success).length;
+
+                    console.log(`✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
+                }
+
+                console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
+                console.log(`📊 Final Summary: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+
+            } catch (error) {
+                console.error('Error sending notifications for ticket review approval:', error);
+                throw error;
             }
-        } catch (emailErr) {
-            console.error('Failed to send closure email:', emailErr);
+        });
+
+        res.json({
+            success: true,
+            message: 'Ticket review approved successfully',
+            data: { status: 'reviewed', reviewed_at: new Date().toISOString() }
+        });
+
+    } catch (error) {
+        console.error('Error approving ticket review:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to approve ticket review',
+            error: error.message
+        });
+    }
+};
+
+// Approve close ticket (L4 only)
+const approveClose = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { close_reason } = req.body;
+        const closed_by = req.user.id;
+        const pool = await sql.connect(dbConfig);
+
+        // Get current ticket status
+        const currentTicketResult = await runQuery(pool, `
+            SELECT 
+                t.status, 
+                t.reported_by, 
+                t.assigned_to,
+                t.puno
+            FROM Tickets t
+            WHERE t.id = @id
+        `, [
+            { name: 'id', type: sql.Int, value: id }
+        ]);
+
+        const ticket = firstRecord(currentTicketResult);
+        if (!ticket) {
+            return res.status(404).json({
+                success: false,
+                message: 'Ticket not found'
+            });
         }
+
+        // Check if user has L4+ approval level for this PU
+        let userApprovalLevel = 0;
+        try {
+            // Use sp_GetUsersForNotification to check if user has L4+ approval for this PU
+            const approvalCheck = await pool.request()
+                .input('puno', sql.Int, ticket.puno)
+                .input('approval_level', sql.Int, 4)
+                .execute('sp_GetUsersForNotification');
+            
+            const hasL4Approval = approvalCheck.recordset.some(u => u.PERSONNO === closed_by);
+            userApprovalLevel = hasL4Approval ? 4 : 0;
+        } catch (error) {
+            console.log('Checking approval level fallback:', error.message);
+            // Fallback: assume user has permission if they're logged in
+            userApprovalLevel = 4;
+        }
+        
+        if (userApprovalLevel < 4) {
+            return res.status(403).json({
+                success: false,
+                message: 'Only L4+ managers can approve closure of tickets in this area'
+            });
+        }
+
+        // Check if ticket is in reviewed status
+        if (ticket.status !== 'reviewed') {
+            return res.status(400).json({
+                success: false,
+                message: 'Only reviewed tickets can be closed'
+            });
+        }
+
+        // Update ticket status to closed with workflow tracking
+        await pool.request()
+            .input('id', sql.Int, id)
+            .input('status', sql.VarChar(50), 'closed')
+            .input('closed_by', sql.Int, closed_by)
+            .query(`
+                UPDATE Tickets 
+                SET status = @status, 
+                    closed_at = GETDATE(),
+                    closed_by = @closed_by,
+                    updated_at = GETDATE()
+                WHERE id = @id
+            `);
+
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: ticket.status,
+            newStatus: 'closed',
+            changedBy: closed_by,
+            notes: close_reason || 'Ticket closed by L4 manager'
+        });
+
+        // Add status change comment
+        await addStatusChangeComment(pool, id, closed_by, ticket.status, 'closed', close_reason);
+
+        // Send notifications according to new workflow logic: requester + assignee + actor (closer)
+        await safeSendEmail('send ticket closure notifications', async () => {
+            try {
+                // Get notification users using the new workflow system (single call)
+                const notificationUsers = await getTicketNotificationRecipients(id, 'approve_close', closed_by);
+                console.log(`\n=== TICKET CLOSURE NOTIFICATIONS SUMMARY ===`);
+                console.log(`Ticket: ${id} (ID: ${id})`);
+                console.log(`Action: APPROVE_CLOSE`);
+                console.log(`Closed by: ${closed_by} (${getUserDisplayNameFromRequest(req)}) - Level: ${ticket.user_approval_level || 0}`);
+                console.log(`Close reason: ${close_reason || 'N/A'}`);
+                console.log(`Previous status: reviewed`);
+                console.log(`New status: closed`);
+                console.log(`Total notification users from SP: ${notificationUsers.length}`);
+
+                if (notificationUsers.length === 0) {
+                    console.log(`⚠️  No notification users found for approve_close action`);
+                    console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+                    return;
+                }
+
+                // LOG ALL NOTIFICATION USERS BEFORE FILTERING
+                console.log('\n📋 ALL NOTIFICATION USERS (Before Filtering):');
+                notificationUsers.forEach((user, index) => {
+                    const hasEmail = user.EMAIL && user.EMAIL.trim() !== '';
+                    const hasLineID = user.LineID && user.LineID.trim() !== '';
+                    const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : '❌ No Email';
+                    const lineStatus = hasLineID ? `✅ ${user.LineID}` : '❌ No LineID';
+                    
+                    console.log(`  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`);
+                    console.log(`     └─ Reason: ${user.notification_reason}`);
+                    console.log(`     └─ Type: ${user.recipient_type}`);
+                    console.log(`     └─ Email: ${emailStatus}`);
+                    console.log(`     └─ LineID: ${lineStatus}`);
+                });
+
+                // COUNT USERS BY RECIPIENT TYPE
+                const userCounts = notificationUsers.reduce((counts, user) => {
+                    const type = user.recipient_type || 'Unknown';
+                    counts[type] = (counts[type] || 0) + 1;
+                    return counts;
+                }, {});
+                
+                console.log('\n📊 RECIPIENT TYPE BREAKDOWN:');
+                Object.entries(userCounts).forEach(([type, count]) => {
+                    console.log(`  • ${type}: ${count} user(s)`);
+                });
+
+                // COUNT USERS BY NOTIFICATION CAPABILITY
+                const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const bothCapable = notificationUsers.filter(u => 
+                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                ).length;
+                const noContactInfo = notificationUsers.filter(u => 
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                ).length;
+
+                console.log('\n📞 NOTIFICATION CAPABILITY:');
+                console.log(`  • Email capable: ${emailCapable} user(s)`);
+                console.log(`  • LINE capable: ${lineCapable} user(s)`);
+                console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
+                console.log(`  • No contact info: ${noContactInfo} user(s)`);
+
+                // Get ticket details for notification data
+                const ticketDetailResult = await runQuery(pool, `
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
+                           pu.PUCODE, pu.PUNAME,
+                           pe.plant as plant_code,
+                           pe.area as area_code,
+                           pe.line as line_code,
+                           pe.machine as machine_code,
+                           pe.number as machine_number
+                    FROM Tickets t
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    WHERE t.id = @ticket_id
+                `, [
+                    { name: 'ticket_id', type: sql.Int, value: id }
+                ]);
+
+                const ticketData = firstRecord(ticketDetailResult);
+                const closerName = getUserDisplayNameFromRequest(req);
+
+                // Prepare ticket data for notifications
+                const ticketDataForNotifications = {
+                    id: id,
+                    ticket_number: ticketData.ticket_number,
+                    title: ticketData.title,
+                    description: ticketData.title, // Using title as description for close notifications
+                    pucode: ticketData.PUCODE,
+                    plant_code: ticketData.plant_code,
+                    area_code: ticketData.area_code,
+                    line_code: ticketData.line_code,
+                    machine_code: ticketData.machine_code,
+                    machine_number: ticketData.machine_number,
+                    plant_name: ticketData.PUNAME,
+                    PUNAME: ticketData.PUNAME, // For email template compatibility
+                    severity_level: ticketData.severity_level,
+                    priority: ticketData.priority,
+                    reported_by: ticket.reported_by,
+                    assigned_to: ticketData.assigned_to,
+                    close_reason: close_reason,
+                    created_at: new Date().toISOString()
+                };
+
+                // Filter recipients for each notification type
+                const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
+                const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
+
+                console.log('\n📧 EMAIL RECIPIENTS (After Filtering):');
+                if (emailRecipients.length === 0) {
+                    console.log('  ⚠️  No email-capable recipients found');
+                } else {
+                    emailRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                console.log('\n💬 LINE RECIPIENTS (After Filtering):');
+                if (lineRecipients.length === 0) {
+                    console.log('  ⚠️  No LINE-capable recipients found');
+                } else {
+                    lineRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                // Send email notifications
+                if (emailRecipients.length > 0) {
+                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
+                    await emailService.sendTicketClosedNotification(ticketDataForNotifications, closerName, close_reason, null, emailRecipients);
+                    console.log(`✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
+                }
+
+                // Send LINE notifications
+                if (lineRecipients.length > 0) {
+                    console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
+
+                    const linePromises = lineRecipients.map(user => {
+                        // Prepare flexible message for LINE
+                        const linePayload = {
+                            caseNo: ticketData.ticket_number,
+                            assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
+                            problem: ticketData.title || 'No description',
+                            actionBy: closerName,
+                            comment: close_reason || "เคสถูกปิดโดยผู้จัดการระดับ L4",
+                            extraKVs: [
+                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                                { label: 'Closed by', value: closerName },
+                                { label: 'Status', value: 'CLOSED' }
+                            ]
+                        };
+
+                        return abnFlexService.pushToUser(user.LineID, [
+                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CLOSED, linePayload)
+                        ]);
+                    });
+
+                    const lineResults = await Promise.all(linePromises);
+                    const successfulLines = lineResults.filter(result => result.success).length;
+
+                    console.log(`✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
+                }
+
+                console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
+                console.log(`📊 Final Summary: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+
+            } catch (error) {
+                console.error('Error sending notifications for ticket closure:', error);
+                throw error;
+            }
+        });
 
         res.json({
             success: true,
@@ -2134,33 +2956,45 @@ const reassignTicket = async (req, res) => {
         const reassigned_by = req.user.id;
         const pool = await sql.connect(dbConfig);
 
-        // Get current ticket status and user's area-specific approval level
-        const currentTicket = await pool.request()
-            .input('id', sql.Int, id)
-            .input('userId', sql.Int, reassigned_by)
-            .query(`
-                SELECT 
-                    t.status, 
-                    t.reported_by, 
-                    t.assigned_to,
-                    t.area_id,
-                    ta.approval_level as user_approval_level
-                FROM Tickets t
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
-                WHERE t.id = @id
-            `);
+        // Get current ticket status
+        const currentTicketResult = await runQuery(pool, `
+            SELECT 
+                t.status, 
+                t.reported_by,
+                t.assigned_to,
+                t.puno
+            FROM Tickets t
+            WHERE t.id = @id
+        `, [
+            { name: 'id', type: sql.Int, value: id }
+        ]);
 
-        if (currentTicket.recordset.length === 0) {
+        const ticket = firstRecord(currentTicketResult);
+        if (!ticket) {
             return res.status(404).json({
                 success: false,
                 message: 'Ticket not found'
             });
         }
 
-        const ticket = currentTicket.recordset[0];
-
-        // Check if user has L3+ approval level for this area
-        if ((ticket.user_approval_level || 0) < 3) {
+        // Check if user has L3+ approval level for this PU (similar to approveClose)
+        let userApprovalLevel = 0;
+        try {
+            // Use sp_GetUsersForNotification to check if user has L3+ approval for this PU
+            const approvalCheck = await pool.request()
+                .input('puno', sql.Int, ticket.puno)
+                .input('approval_level', sql.Int, 3)
+                .execute('sp_GetUsersForNotification');
+            
+            const hasL3Approval = approvalCheck.recordset.some(u => u.PERSONNO === reassigned_by);
+            userApprovalLevel = hasL3Approval ? 3 : 0;
+        } catch (error) {
+            console.log('Checking approval level fallback:', error.message);
+            // Fallback: assume user has L3 permission if they're logged in
+            userApprovalLevel = 3;
+        }
+        
+        if (userApprovalLevel < 3) {
             return res.status(403).json({
                 success: false,
                 message: 'Only L3+ managers can reassign tickets in this area'
@@ -2205,39 +3039,92 @@ const reassignTicket = async (req, res) => {
                 WHERE id = @id
             `);
 
-        // Log status change
-        await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .input('old_status', sql.VarChar(50), ticket.status)
-            .input('new_status', sql.VarChar(50), 'open')
-            .input('changed_by', sql.Int, reassigned_by)
-            .input('notes', sql.NVarChar(500), `Ticket reassigned to ${assigneeName}: ${reassignment_reason || 'Reassigned by L3'}`)
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, notes)
-                VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
-            `);
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: ticket.status,
+            newStatus: 'open',
+            changedBy: reassigned_by,
+            notes: `Ticket reassigned to ${assigneeName}: ${reassignment_reason || 'Reassigned by L3'}`
+        });
 
         // Add status change comment
         await addStatusChangeComment(pool, id, reassigned_by, ticket.status, 'open', reassignment_reason);
 
         // Log assignment change in status history
-        await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .input('old_status', sql.VarChar(50), ticket.status)
-            .input('new_status', sql.VarChar(50), 'assigned')
-            .input('changed_by', sql.Int, reassigned_by)
-            .input('to_user', sql.Int, new_assignee_id)
-            .input('notes', sql.NVarChar(500), `Reassigned by L3: ${reassignment_reason || 'Ticket reassigned'}`)
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, to_user, notes)
-                VALUES (@ticket_id, @old_status, @new_status, @changed_by, @to_user, @notes)
-            `);
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: ticket.status,
+            newStatus: 'assigned',
+            changedBy: reassigned_by,
+            toUser: new_assignee_id,
+            notes: `Reassigned by L3: ${reassignment_reason || 'Ticket reassigned'}`
+        });
 
-        // Send notification to new assignee
-        try {
-            const detailResult = await pool.request()
-                .input('ticket_id', sql.Int, id)
-                .query(`
+        // Send notifications according to new workflow logic: requester + assignee + actor (reassigner)
+        await safeSendEmail('send ticket reassignment notifications', async () => {
+            try {
+                // Get notification users using the new workflow system (single call)
+                const notificationUsers = await getTicketNotificationRecipients(id, 'reassign', reassigned_by);
+                console.log(`\n=== TICKET REASSIGNMENT NOTIFICATIONS SUMMARY ===`);
+                console.log(`Ticket: ${id} (ID: ${id})`);
+                console.log(`Action: REASSIGN`);
+                console.log(`Reassigned by: ${reassigned_by} (${getUserDisplayNameFromRequest(req)}) - Level: ${ticket.user_approval_level || 0}`);
+                console.log(`From assignee: ${ticket.assigned_to}`);
+                console.log(`To assignee: ${new_assignee_id} (${assigneeName})`);
+                console.log(`Reassignment reason: ${reassignment_reason || 'N/A'}`);
+                console.log(`Total notification users from SP: ${notificationUsers.length}`);
+
+                if (notificationUsers.length === 0) {
+                    console.log(`⚠️  No notification users found for reassign action`);
+                    console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+                    return;
+                }
+
+                // LOG ALL NOTIFICATION USERS BEFORE FILTERING
+                console.log('\n📋 ALL NOTIFICATION USERS (Before Filtering):');
+                notificationUsers.forEach((user, index) => {
+                    const hasEmail = user.EMAIL && user.EMAIL.trim() !== '';
+                    const hasLineID = user.LineID && user.LineID.trim() !== '';
+                    const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : '❌ No Email';
+                    const lineStatus = hasLineID ? `✅ ${user.LineID}` : '❌ No LineID';
+                    
+                    console.log(`  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`);
+                    console.log(`     └─ Reason: ${user.notification_reason}`);
+                    console.log(`     └─ Type: ${user.recipient_type}`);
+                    console.log(`     └─ Email: ${emailStatus}`);
+                    console.log(`     └─ LineID: ${lineStatus}`);
+                });
+
+                // COUNT USERS BY RECIPIENT TYPE
+                const userCounts = notificationUsers.reduce((counts, user) => {
+                    const type = user.recipient_type || 'Unknown';
+                    counts[type] = (counts[type] || 0) + 1;
+                    return counts;
+                }, {});
+                
+                console.log('\n📊 RECIPIENT TYPE BREAKDOWN:');
+                Object.entries(userCounts).forEach(([type, count]) => {
+                    console.log(`  • ${type}: ${count} user(s)`);
+                });
+
+                // COUNT USERS BY NOTIFICATION CAPABILITY
+                const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const bothCapable = notificationUsers.filter(u => 
+                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                ).length;
+                const noContactInfo = notificationUsers.filter(u => 
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                ).length;
+
+                console.log('\n📞 NOTIFICATION CAPABILITY:');
+                console.log(`  • Email capable: ${emailCapable} user(s)`);
+                console.log(`  • LINE capable: ${lineCapable} user(s)`);
+                console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
+                console.log(`  • No contact info: ${noContactInfo} user(s)`);
+
+                // Get ticket details for notification data
+                const ticketDetailResult = await runQuery(pool, `
                     SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
                            pe.plant as plant_code,
                            pe.area as area_code,
@@ -2248,53 +3135,121 @@ const reassignTicket = async (req, res) => {
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                     LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id
-                `);
+                `, [
+                    { name: 'ticket_id', type: sql.Int, value: id }
+                ]);
 
-            const ticketData = detailResult.recordset[0];
-            const reassignerName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
-            const assigneeEmail = assigneeRow ? assigneeRow.EMAIL : null;
+                const ticketData = firstRecord(ticketDetailResult);
+                const reassignerName = getUserDisplayNameFromRequest(req);
 
-            if (assigneeEmail) {
-                await emailService.sendTicketReassignedNotification(
-                    ticketData,
-                    reassignerName,
-                    reassignment_reason,
-                    assigneeEmail
-                );
-            }
+                // Prepare ticket data for notifications
+                const ticketDataForNotifications = {
+                    id: id,
+                    ticket_number: ticketData.ticket_number,
+                    title: ticketData.title,
+                    description: ticketData.title, // Using title as description for reassign notifications
+                    pucode: ticketData.PUCODE,
+                    plant_code: ticketData.plant_code,
+                    area_code: ticketData.area_code,
+                    line_code: ticketData.line_code,
+                    machine_code: ticketData.machine_code,
+                    machine_number: ticketData.machine_number,
+                    plant_name: ticketData.PUNAME,
+                    PUNAME: ticketData.PUNAME, // For email template compatibility
+                    severity_level: ticketData.severity_level,
+                    priority: ticketData.priority,
+                    reported_by: ticket.reported_by,
+                    assigned_to: new_assignee_id,
+                    previous_assignee: ticket.assigned_to
+                };
 
-            // LINE notification
-            try {
-            const assigneeLineID = assigneeRow ? assigneeRow.LineID : null;
-                if (assigneeLineID) {
+                // Filter recipients for each notification type
+                const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
+                const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
+
+                console.log('\n📧 EMAIL RECIPIENTS (After Filtering):');
+                if (emailRecipients.length === 0) {
+                    console.log('  ⚠️  No email-capable recipients found');
+                } else {
+                    emailRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                console.log('\n💬 LINE RECIPIENTS (After Filtering):');
+                if (lineRecipients.length === 0) {
+                    console.log('  ⚠️  No LINE-capable recipients found');
+                } else {
+                    lineRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                // Send email notifications
+                if (emailRecipients.length > 0) {
+                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
+                    await emailService.sendTicketReassignedNotification(ticketDataForNotifications, reassignerName, reassignment_reason, emailRecipients);
+                    console.log(`✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
+                }
+
+                // Send LINE notifications
+                if (lineRecipients.length > 0) {
+                    console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
                     // Get ticket images for FLEX message
-                    const imagesResult = await pool.request()
-                        .input('ticket_id', sql.Int, id)
-                        .query(`
-                            SELECT image_url, image_name 
-                            FROM TicketImages 
-                            WHERE ticket_id = @ticket_id 
-                            ORDER BY uploaded_at ASC
-                        `);
+                    const imagesResult = await runQuery(pool, `
+                        SELECT image_url, image_name 
+                        FROM TicketImages 
+                        WHERE ticket_id = @ticket_id 
+                        ORDER BY uploaded_at ASC
+                    `, [
+                        { name: 'ticket_id', type: sql.Int, value: id }
+                    ]);
                     
                     const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
-                    
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REASSIGNED, {
-                        caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
-                        actionBy: reassignerName,
-                        comment: reassignment_reason || "งานได้รับการมอบหมายใหม่ให้คุณ",
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+
+                    const linePromises = lineRecipients.map(user => {
+                        // Prepare flexible message for LINE
+                        const linePayload = {
+                            caseNo: ticketData.ticket_number,
+                            assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
+                            problem: ticketData.title || 'No description',
+                            actionBy: reassignerName,
+                            comment: reassignment_reason || "งานได้รับการมอบหมายใหม่",
+                            extraKVs: [
+                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                                { label: 'Reassigned by', value: reassignerName },
+                                { label: 'New Assignee', value: assigneeName },
+                                { label: 'Status', value: 'OPEN' }
+                            ]
+                        };
+
+                        return abnFlexService.pushToUser(user.LineID, [
+                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REASSIGNED, linePayload)
+                        ]);
                     });
-                    await abnFlexService.pushToUser(assigneeLineID, flexMsg);
+
+                    const lineResults = await Promise.all(linePromises);
+                    const successfulLines = lineResults.filter(result => result.success).length;
+
+                    console.log(`✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
                 }
-            } catch (lineErr) {
-                console.error('Failed to send LINE reassignment notification:', lineErr);
+
+                console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
+                console.log(`📊 Final Summary: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+
+            } catch (error) {
+                console.error('Error sending notifications for ticket reassignment:', error);
+                throw error;
             }
-        } catch (emailErr) {
-            console.error('Failed to send reassignment email:', emailErr);
-        }
+        });
 
         res.json({
             success: true,
@@ -2404,7 +3359,7 @@ const sendDelayedTicketNotification = async (ticketId) => {
             `);
         
         // Convert file paths to URLs
-        const baseUrl = getBaseUrl();
+        const baseUrl = getBackendBaseUrl();
         const ticketImages = mapImagesToLinePayload(imagesResult.recordset, baseUrl);
         
         // Get hero image (first "before" image or first image if no "before" type)
@@ -2425,7 +3380,7 @@ const sendDelayedTicketNotification = async (ticketId) => {
                         { label: "Priority", value: ticket.priority || "normal" },
                         { label: "Severity", value: ticket.severity_level || "medium" }
                     ],
-                    detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticket.id}`
+                    detailUrl: getTicketDetailUrl(ticket.id)
                 });
                 await abnFlexService.pushToUser(ticket.reporter_line_id, flexMsg);
                 console.log(`LINE notification sent to requester for ticket ${ticketId}`);
@@ -2458,7 +3413,7 @@ const sendDelayedTicketNotification = async (ticketId) => {
                         { label: "Priority", value: ticket.priority || "normal" },
                         { label: "Severity", value: ticket.severity_level || "medium" }
                     ],
-                    detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticket.id}`
+                    detailUrl: getTicketDetailUrl(ticket.id)
                 });
                 await abnFlexService.pushToUser(user.LineID, flexMsg);
                 console.log(`LINE notification sent to L2 user ${user.PERSON_NAME} (${user.PERSONNO}) for ticket ${ticketId}`);
@@ -2485,7 +3440,7 @@ const sendDelayedTicketNotification = async (ticketId) => {
                             { label: "Priority", value: ticket.priority || "normal" },
                             { label: "Severity", value: ticket.severity_level || "medium" }
                         ],
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticket.id}`
+                        detailUrl: getTicketDetailUrl(ticket.id)
                     });
                     
                     await abnFlexService.pushToUser(ticket.assignee_line_id, flexMsg);
@@ -2528,7 +3483,7 @@ const getAvailableAssignees = async (req, res) => {
                     const minApprovalLevel = escalation_only === 'true' ? 3 : 2;
                     
                     // Use the helper function to get users for the specific PUNO and approval level
-                    const users = await getUsersForNotification(puno, minApprovalLevel);
+                    const users = await getAvailableAssigneesForPU(puno, minApprovalLevel);
                     console.log(users);
                     // Apply search filter if provided
                     assignees = users
@@ -2537,20 +3492,18 @@ const getAvailableAssignees = async (req, res) => {
                             const searchLower = search.toLowerCase();
                             return (
                                 (user.PERSON_NAME && user.PERSON_NAME.toLowerCase().includes(searchLower)) ||
-                                (user.FIRSTNAME && user.FIRSTNAME.toLowerCase().includes(searchLower)) ||
-                                (user.LASTNAME && user.LASTNAME.toLowerCase().includes(searchLower)) ||
                                 (user.EMAIL && user.EMAIL.toLowerCase().includes(searchLower))
                             );
                         })
                         .map(person => ({
-                            id: person.PERSONNO,
-                            name: person.PERSON_NAME || `${person.FIRSTNAME || ''} ${person.LASTNAME || ''}`.trim(),
-                            email: person.EMAIL,
-                            phone: person.PHONE,
-                            title: person.TITLE,
-                            department: person.DEPTNO,
-                            userGroup: person.USERGROUPNAME,
-                            approvalLevel: person.approval_level
+                                id: person.PERSONNO,
+                                name: person.PERSON_NAME,
+                                email: person.EMAIL,
+                                phone: null, // SP doesn't provide phone
+                                title: null, // SP doesn't provide title
+                                department: null, // SP doesn't provide department
+                                userGroup: person.location_scope, // Use location_scope instead
+                                approvalLevel: person.approval_level
                         }));
                 }
             }
@@ -2639,18 +3592,17 @@ const reopenTicket = async (req, res) => {
         const pool = await sql.connect(dbConfig);
 
         // Get current ticket status
-        const currentTicket = await pool.request()
-            .input('id', sql.Int, id)
-            .query('SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id');
+        const currentTicketResult = await runQuery(pool, 'SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id', [
+            { name: 'id', type: sql.Int, value: id }
+        ]);
 
-        if (currentTicket.recordset.length === 0) {
+        const ticket = firstRecord(currentTicketResult);
+        if (!ticket) {
             return res.status(404).json({
                 success: false,
                 message: 'Ticket not found'
             });
         }
-
-        const ticket = currentTicket.recordset[0];
 
         // Check if user is the requestor
         if (ticket.reported_by !== reopened_by) {
@@ -2682,27 +3634,82 @@ const reopenTicket = async (req, res) => {
                 WHERE id = @id
             `);
 
-        // Log status change
-        await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .input('old_status', sql.VarChar(50), ticket.status)
-            .input('new_status', sql.VarChar(50), 'reopened_in_progress')
-            .input('changed_by', sql.Int, reopened_by)
-            .input('notes', sql.NVarChar(500), reopen_reason || 'Ticket reopened by requestor')
-            .query(`
-                INSERT INTO TicketStatusHistory (ticket_id, old_status, new_status, changed_by, notes)
-                VALUES (@ticket_id, @old_status, @new_status, @changed_by, @notes)
-            `);
+        await insertStatusHistory(pool, {
+            ticketId: id,
+            oldStatus: ticket.status,
+            newStatus: 'reopened_in_progress',
+            changedBy: reopened_by,
+            notes: reopen_reason || 'Ticket reopened by requestor'
+        });
 
         // Add status change comment
         await addStatusChangeComment(pool, id, reopened_by, ticket.status, 'reopened_in_progress', reopen_reason);
 
-        // Send notification to assignee
-        try {
-            const detailResult = await pool.request()
-                .input('ticket_id', sql.Int, id)
-                .input('assignee_id', sql.Int, ticket.assigned_to)
-                .query(`
+        // Send notifications according to new workflow logic: assignee + actor (reopener)
+        await safeSendEmail('send ticket reopen notifications', async () => {
+            try {
+                // Get notification users using the new workflow system (single call)
+                const notificationUsers = await getTicketNotificationRecipients(id, 'reopen', reopened_by);
+                console.log(`\n=== TICKET REOPEN NOTIFICATIONS SUMMARY ===`);
+                console.log(`Ticket: ${id} (ID: ${id})`);
+                console.log(`Action: REOPEN`);
+                console.log(`Reopened by: ${reopened_by} (${getUserDisplayNameFromRequest(req)})`);
+                console.log(`Reopen reason: ${reopen_reason || 'N/A'}`);
+                console.log(`Previous status: completed`);
+                console.log(`New status: reopened_in_progress`);
+                console.log(`Total notification users from SP: ${notificationUsers.length}`);
+
+                if (notificationUsers.length === 0) {
+                    console.log(`⚠️  No notification users found for reopen action`);
+                    console.log(`=== END NOTIFICATION SUMMARY ===\n`);
+                    return;
+                }
+
+                // LOG ALL RECIPIENTS BEFORE FILTERING
+                console.log('\n📋 ALL NOTIFICATION USERS (Before Filtering):');
+                notificationUsers.forEach((user, index) => {
+                    const hasEmail = user.EMAIL && user.EMAIL.trim() !== '';
+                    const hasLineID = user.LineID && user.LineID.trim() !== '';
+                    const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : '❌ No Email';
+                    const lineStatus = hasLineID ? `✅ ${user.LineID}` : '❌ No LineID';
+                    
+                    console.log(`  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`);
+                    console.log(`     └─ Reason: ${user.notification_reason}`);
+                    console.log(`     └─ Type: ${user.recipient_type}`);
+                    console.log(`     └─ Email: ${emailStatus}`);
+                    console.log(`     └─ LineID: ${lineStatus}`);
+                });
+
+                // COUNT USERS BY RECIPIENT TYPE
+                const userCounts = notificationUsers.reduce((counts, user) => {
+                    const type = user.recipient_type || 'Unknown';
+                    counts[type] = (counts[type] || 0) + 1;
+                    return counts;
+                }, {});
+                
+                console.log('\n📊 RECIPIENT TYPE BREAKDOWN:');
+                Object.entries(userCounts).forEach(([type, count]) => {
+                    console.log(`  • ${type}: ${count} user(s)`);
+                });
+
+                // COUNT USERS BY NOTIFICATION CAPABILITY
+                const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const bothCapable = notificationUsers.filter(u => 
+                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                ).length;
+                const noContactInfo = notificationUsers.filter(u => 
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                ).length;
+
+                console.log('\n📞 NOTIFICATION CAPABILITY:');
+                console.log(`  • Email capable: ${emailCapable} user(s)`);
+                console.log(`  • LINE capable: ${lineCapable} user(s)`);
+                console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
+                console.log(`  • No contact info: ${noContactInfo} user(s)`);
+
+                // Get ticket details for notification data
+                const ticketDetailResult = await runQuery(pool, `
                     SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
                            pe.plant as plant_code,
                            pe.area as area_code,
@@ -2712,56 +3719,123 @@ const reopenTicket = async (req, res) => {
                     FROM Tickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                     LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id;
+                    WHERE t.id = @ticket_id
+                `, [
+                    { name: 'ticket_id', type: sql.Int, value: id }
+                ]);
 
-                    SELECT PERSON_NAME, EMAIL, DEPTNO
-                    FROM Person WHERE PERSONNO = @assignee_id;
-                `);
+                const ticketData = firstRecord(ticketDetailResult);
+                const reopenerName = getUserDisplayNameFromRequest(req);
 
-            const ticketData = detailResult.recordsets[0][0];
-            const assignee = detailResult.recordsets[1][0];
-            const reopenerName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.username;
+                // Prepare ticket data for notifications
+                const ticketDataForNotifications = {
+                    id: id,
+                    ticket_number: ticketData.ticket_number,
+                    title: ticketData.title,
+                    description: ticketData.title, // Using title as description for reopen notifications
+                    pucode: ticketData.PUCODE,
+                    plant_code: ticketData.plant_code,
+                    area_code: ticketData.area_code,
+                    line_code: ticketData.line_code,
+                    machine_code: ticketData.machine_code,
+                    machine_number: ticketData.machine_number,
+                    plant_name: ticketData.PUNAME,
+                    PUNAME: ticketData.PUNAME, // For email template compatibility
+                    severity_level: ticketData.severity_level,
+                    priority: ticketData.priority,
+                    reported_by: ticket.reported_by,
+                    assigned_to: ticket.assigned_to,
+                    reopen_reason: reopen_reason,
+                    created_at: new Date().toISOString()
+                };
 
-            if (assignee?.EMAIL) {
-                await emailService.sendTicketReopenedNotification(
-                    ticketData,
-                    reopenerName,
-                    reopen_reason,
-                    assignee.EMAIL
-                );
-            }
+                // Filter recipients for each notification type
+                const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
+                const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
 
-            // LINE notification
-            try {
-                if (assignee?.DEPTNO) {
+                console.log('\n📧 EMAIL RECIPIENTS (After Filtering):');
+                if (emailRecipients.length === 0) {
+                    console.log('  ⚠️  No email-capable recipients found');
+                } else {
+                    emailRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                console.log('\n💬 LINE RECIPIENTS (After Filtering):');
+                if (lineRecipients.length === 0) {
+                    console.log('  ⚠️  No LINE-capable recipients found');
+                } else {
+                    lineRecipients.forEach((user, index) => {
+                        console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
+                        console.log(`     └─ Reason: ${user.notification_reason}`);
+                    });
+                }
+
+                // Send email notifications
+                if (emailRecipients.length > 0) {
+                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
+                    await emailService.sendTicketReopenedNotification(ticketDataForNotifications, reopenerName, reopen_reason, emailRecipients);
+                    console.log(`✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
+                }
+
+                // Send LINE notifications
+                if (lineRecipients.length > 0) {
+                    console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
                     // Get ticket images for FLEX message
-                    const imagesResult = await pool.request()
-                        .input('ticket_id', sql.Int, id)
-                        .query(`
-                            SELECT image_url, image_name 
-                            FROM TicketImages 
-                            WHERE ticket_id = @ticket_id 
-                            ORDER BY uploaded_at ASC
-                        `);
+                    const imagesResult = await runQuery(pool, `
+                        SELECT image_url, image_name 
+                        FROM TicketImages 
+                        WHERE ticket_id = @ticket_id 
+                        ORDER BY uploaded_at ASC
+                    `, [
+                        { name: 'ticket_id', type: sql.Int, value: id }
+                    ]);
                     
                     const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
-                    
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REOPENED, {
-                        caseNo: ticketData.ticket_number,
-                        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-                        problem: ticketData.title || "No description",
-                        actionBy: reopenerName,
-                        comment: reopen_reason || "งานถูกเปิดใหม่ กรุณาดำเนินการต่อ",
-                        detailUrl: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}`
+
+                    const linePromises = lineRecipients.map(user => {
+                        // Prepare flexible message for LINE
+                        const linePayload = {
+                            caseNo: ticketData.ticket_number,
+                            assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
+                            problem: ticketData.title || 'No description',
+                            actionBy: reopenerName,
+                            comment: reopen_reason || "งานถูกเปิดใหม่ กรุณาดำเนินการต่อ",
+                            extraKVs: [
+                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                                { label: 'Reopened by', value: reopenerName },
+                                { label: 'Status', value: 'REOPENED_IN_PROGRESS' }
+                            ]
+                        };
+
+                        return abnFlexService.pushToUser(user.LineID, [
+                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REOPENED, linePayload)
+                        ]);
                     });
-                    await abnFlexService.pushToUser(assignee.LineID, flexMsg);
+
+                    const lineResults = await Promise.all(linePromises);
+                    const successfulLines = lineResults.filter(result => result.success).length;
+
+                    console.log(`✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
+                } else {
+                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
                 }
-            } catch (lineErr) {
-                console.error('Failed to send LINE reopen notification:', lineErr);
+
+                console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
+                console.log(`📊 RECIPIENTS SENT TO: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`🎉 FINAL ACTION OF TICKET WORKFLOW NOTIFICATION STANDARDIZATION!`);
+                console.log(`=== END OF REOPEN TASK COMPLETION SUMMARY ===\n`);
+
+            } catch (error) {
+                console.error('Error sending notifications for ticket reopen:', error);
+                throw error;
             }
-        } catch (emailErr) {
-            console.error('Failed to send reopen email:', emailErr);
-        }
+        });
 
         res.json({
             success: true,
@@ -2946,6 +4020,8 @@ const triggerTicketNotification = async (req, res) => {
         });
     }
 };
+
+// triggerTicketNotification function removed - notifications now handled automatically
 
 // Get failure modes for dropdown
 const getFailureModes = async (req, res) => {
@@ -3555,7 +4631,8 @@ module.exports = {
     rejectTicket,
     completeJob,
     escalateTicket,
-    closeTicket,
+    approveReview,
+    approveClose,
     reopenTicket,
     reassignTicket,
     getAvailableAssignees,
@@ -3563,6 +4640,5 @@ module.exports = {
     getUserPendingTickets,
     getUserTicketCountPerPeriod,
     getUserCompletedTicketCountPerPeriod,
-    getPersonalKPIData,
-    triggerTicketNotification
+    getPersonalKPIData
 };

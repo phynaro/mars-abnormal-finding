@@ -1109,6 +1109,7 @@ const TicketApprovalManagementPage: React.FC = () => {
                           ) : (
                             filteredAreas.map((area) => {
                               const plant = plants.find(p => p.id === area.plant_id);
+                              if (!plant) return null; // Skip if plant not found
                               return (
                                 <div key={area.id} className="flex items-center space-x-2">
                                   <Checkbox
@@ -1119,11 +1120,11 @@ const TicketApprovalManagementPage: React.FC = () => {
                                     }
                                   />
                                   <Label htmlFor={`area-${area.id}`} className="text-sm">
-                                    {plant?.name} - {area.name}
+                                    {plant.name} - {area.name}
                                   </Label>
                                 </div>
                               );
-                            })
+                            }).filter(Boolean)
                           )}
                         </div>
                       </CardContent>
@@ -1169,6 +1170,7 @@ const TicketApprovalManagementPage: React.FC = () => {
                             filteredLines.map((line) => {
                               const area = areas.find(a => a.id === line.area_id);
                               const plant = plants.find(p => p.id === line.plant_id);
+                              if (!area || !plant) return null; // Skip if area or plant not found
                               return (
                                 <div key={line.id} className="flex items-center space-x-2">
                                   <Checkbox
@@ -1179,11 +1181,11 @@ const TicketApprovalManagementPage: React.FC = () => {
                                     }
                                   />
                                   <Label htmlFor={`line-${line.id}`} className="text-sm">
-                                    {plant?.name} - {area?.name} - {line.name}
+                                    {plant.name} - {area.name} - {line.name}
                                   </Label>
                                 </div>
                               );
-                            })
+                            }).filter(Boolean)
                           )}
                         </div>
                       </CardContent>

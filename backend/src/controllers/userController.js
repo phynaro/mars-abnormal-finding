@@ -82,7 +82,20 @@ const userController = {
           UPDATE _secUsers SET AvatarUrl = @avatarUrl, UpdatedAt = GETDATE() WHERE UserID = @userID
         `);
 
-      res.status(201).json({ success: true, message: 'Avatar updated', data: { avatarUrl: relativePath } });
+      const compressionInfo = req.compressionInfo ? {
+        originalSizeKB: req.compressionInfo.originalSizeKB,
+        compressedSizeKB: req.compressionInfo.compressedSizeKB,
+        reductionPercentage: req.compressionInfo.reductionPercentage
+      } : null;
+
+      res.status(201).json({ 
+        success: true, 
+        message: 'Avatar updated', 
+        data: { 
+          avatarUrl: relativePath,
+          compression: compressionInfo
+        } 
+      });
     } catch (error) {
       console.error('Upload Avatar Error:', error);
       res.status(500).json({ success: false, message: 'Failed to upload avatar', error: error.message });

@@ -617,14 +617,20 @@ class EmailService {
    * @param {Array} approvers - Array of approver objects with email and name
    * @returns {Promise<Object>} - Resend API response
    */
-  async sendNewTicketNotification(ticketData, reporterName, approvers = []) {
+  async sendNewTicketNotification(ticketData, reporterName, notificationUsers = []) {
     try {
-      // Send to all L2 approvers
-      const emailPromises = approvers.map(approver => {
-        if (approver.EMAIL) {
+      if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
+        console.warn('No notification users provided for new ticket notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      // Send to all notification users (L2ForPU + actor)
+      const emailPromises = notificationUsers.map(user => {
+        if (user.EMAIL && user.EMAIL.trim() !== '') {
+          console.log(`Sending email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
           return resend.emails.send({
             from: this.fromEmail,
-            to: [approver.EMAIL],
+            to: [user.EMAIL],
             subject: EMAIL_TEMPLATES.newTicket.subject,
             html: EMAIL_TEMPLATES.newTicket.html(ticketData, reporterName),
           });
@@ -635,7 +641,7 @@ class EmailService {
       const results = await Promise.all(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
       
-      console.log(`Ticket notification emails sent successfully to ${successful.length} approvers`);
+      console.log(`Ticket notification emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
       return { success: true, sentCount: successful.length };
     } catch (error) {
       console.error('Email service error:', error);
@@ -692,11 +698,20 @@ class EmailService {
   /**
    * Send ticket accepted notification to requestor
    */
-  async sendTicketAcceptedNotification(ticketData, acceptorName, toEmail) {
+  async sendTicketAcceptedNotification(ticketData, acceptorName, notificationUsers = []) {
     try {
-      const { data, error } = await resend.emails.send({
-        from: this.fromEmail,
-        to: [toEmail],
+      if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
+        console.warn('No notification users provided for ticket acceptance notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      // Send to all notification users (requester + actor)
+      const emailPromises = notificationUsers.map(user => {
+        if (user.EMAIL && user.EMAIL.trim() !== '') {
+          console.log(`Sending acceptance email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
+          return resend.emails.send({
+            from: this.fromEmail,
+            to: [user.EMAIL],
         subject: `Ticket Accepted - ${ticketData.ticket_number}`,
         html: `
           <!DOCTYPE html>
@@ -801,13 +816,16 @@ class EmailService {
           </body>
           </html>
         `,
+          });
+        }
+        return Promise.resolve({ data: null, error: null });
       });
 
-      if (error) {
-        throw new Error(`Failed to send acceptance email: ${error.message}`);
-      }
+      const results = await Promise.all(emailPromises);
+      const successful = results.filter(result => result.data && !result.error);
 
-      return { success: true, messageId: data.id };
+      console.log(`Ticket acceptance emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
+      return { success: true, sentCount: successful.length };
     } catch (error) {
       console.error('Email service error (acceptance):', error);
       throw error;
@@ -817,11 +835,20 @@ class EmailService {
   /**
    * Send ticket rejected notification to requestor
    */
-  async sendTicketRejectedNotification(ticketData, rejectorName, rejectionReason, status, toEmail) {
+  async sendTicketRejectedNotification(ticketData, rejectorName, rejectionReason, status, notificationUsers = []) {
     try {
-      const { data, error } = await resend.emails.send({
-        from: this.fromEmail,
-        to: [toEmail],
+      if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
+        console.warn('No notification users provided for ticket rejection notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      // Send to all notification users (requester + L3ForPU + actor)
+      const emailPromises = notificationUsers.map(user => {
+        if (user.EMAIL && user.EMAIL.trim() !== '') {
+          console.log(`Sending rejection email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
+          return resend.emails.send({
+            from: this.fromEmail,
+            to: [user.EMAIL],
         subject: `Ticket Rejected - ${ticketData.ticket_number}`,
         html: `
           <!DOCTYPE html>
@@ -926,13 +953,16 @@ class EmailService {
           </body>
           </html>
         `,
+          });
+        }
+        return Promise.resolve({ data: null, error: null });
       });
 
-      if (error) {
-        throw new Error(`Failed to send rejection email: ${error.message}`);
-      }
+      const results = await Promise.all(emailPromises);
+      const successful = results.filter(result => result.data && !result.error);
 
-      return { success: true, messageId: data.id };
+      console.log(`Ticket rejection emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
+      return { success: true, sentCount: successful.length };
     } catch (error) {
       console.error('Email service error (rejection):', error);
       throw error;
@@ -942,11 +972,20 @@ class EmailService {
   /**
    * Send job completed notification to requestor
    */
-  async sendJobCompletedNotification(ticketData, completerName, completionNotes, downtimeAvoidance, costAvoidance, toEmail) {
+  async sendJobCompletedNotification(ticketData, completerName, completionNotes, downtimeAvoidance, costAvoidance, notificationUsers = []) {
     try {
-      const { data, error } = await resend.emails.send({
-        from: this.fromEmail,
-        to: [toEmail],
+      if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
+        console.warn('No notification users provided for job completion notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      // Send to all notification users (requester + actor)
+      const emailPromises = notificationUsers.map(user => {
+        if (user.EMAIL && user.EMAIL.trim() !== '') {
+          console.log(`Sending completion email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
+          return resend.emails.send({
+            from: this.fromEmail,
+            to: [user.EMAIL],
         subject: `Job Completed - ${ticketData.ticket_number}`,
         html: `
           <!DOCTYPE html>
@@ -1054,13 +1093,16 @@ class EmailService {
           </body>
           </html>
         `,
+          });
+        }
+        return Promise.resolve({ data: null, error: null });
       });
 
-      if (error) {
-        throw new Error(`Failed to send completion email: ${error.message}`);
-      }
+      const results = await Promise.all(emailPromises);
+      const successful = results.filter(result => result.data && !result.error);
 
-      return { success: true, messageId: data.id };
+      console.log(`Job completion emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
+      return { success: true, sentCount: successful.length };
     } catch (error) {
       console.error('Email service error (completion):', error);
       throw error;
@@ -1070,14 +1112,20 @@ class EmailService {
   /**
    * Send ticket escalated notification to L3 users (can reassign)
    */
-  async sendTicketEscalatedNotification(ticketData, escalatorName, escalationReason, approvers = []) {
+  async sendTicketEscalatedNotification(ticketData, escalatorName, escalationReason, notificationUsers = []) {
     try {
-      // Send to all L3 approvers
-      const emailPromises = approvers.map(approver => {
-        if (approver.EMAIL) {
+      if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
+        console.warn('No notification users provided for ticket escalation notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      // Send to all notification users (requester + L3ForPU + L4ForPU + actor)
+      const emailPromises = notificationUsers.map(user => {
+        if (user.EMAIL && user.EMAIL.trim() !== '') {
+          console.log(`Sending escalation email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
           return resend.emails.send({
             from: this.fromEmail,
-            to: [approver.EMAIL],
+            to: [user.EMAIL],
             subject: `Ticket Escalated - ${ticketData.ticket_number}`,
             html: `
           <!DOCTYPE html>
@@ -1326,11 +1374,20 @@ class EmailService {
   /**
    * Send ticket closed notification to assignee
    */
-  async sendTicketClosedNotification(ticketData, closerName, closeReason, satisfactionRating, toEmail) {
+  async sendTicketClosedNotification(ticketData, closerName, closeReason, satisfactionRating, notificationUsers = []) {
     try {
-      const { data, error } = await resend.emails.send({
-        from: this.fromEmail,
-        to: [toEmail],
+      if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
+        console.warn('No notification users provided for ticket closure notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      // Send to all notification users (requester + assignee + actor)
+      const emailPromises = notificationUsers.map(user => {
+        if (user.EMAIL && user.EMAIL.trim() !== '') {
+          console.log(`Sending closure email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
+          return resend.emails.send({
+            from: this.fromEmail,
+            to: [user.EMAIL],
         subject: `Ticket Closed - ${ticketData.ticket_number}`,
         html: `
           <!DOCTYPE html>
@@ -1436,13 +1493,16 @@ class EmailService {
           </body>
           </html>
         `,
+          });
+        }
+        return Promise.resolve({ data: null, error: null });
       });
 
-      if (error) {
-        throw new Error(`Failed to send closure email: ${error.message}`);
-      }
+      const results = await Promise.all(emailPromises);
+      const successful = results.filter(result => result.data && !result.error);
 
-      return { success: true, messageId: data.id };
+      console.log(`Ticket closure emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
+      return { success: true, sentCount: successful.length };
     } catch (error) {
       console.error('Email service error (closure):', error);
       throw error;
@@ -1450,13 +1510,164 @@ class EmailService {
   }
 
   /**
+   * Send ticket reviewed notification 
+   */
+  async sendTicketReviewedNotification(ticketData, reviewerName, reviewReason, satisfactionRating, notificationUsers = []) {
+    try {
+      if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
+        console.warn('No notification users provided for ticket review notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      // Send to all notification users (assignee + L4ForPU + actor)
+      const emailPromises = notificationUsers.map(user => {
+        if (user.EMAIL && user.EMAIL.trim() !== '') {
+          console.log(`Sending review email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
+          return resend.emails.send({
+            from: this.fromEmail,
+            to: [user.EMAIL],
+            subject: `Ticket Reviewed - ${ticketData.ticket_number}`,
+            html: `
+              <!DOCTYPE html>
+              <html lang="en">
+              <head>
+                <meta charset="UTF-8">
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <title>Ticket Reviewed</title>
+                <style>
+                  body {
+                    font-family: Arial, Helvetica, sans-serif;
+                    background-color: #f4f4f4;
+                    margin: 0;
+                    padding: 30px 0;
+                    color: #333333;
+                  }
+                  .container {
+                    max-width: 600px;
+                    margin: auto;
+                    background: #ffffff;
+                    border: 1px solid #e0e0e0;
+                    border-radius: 6px;
+                    padding: 30px 25px;
+                  }
+                  .header {
+                    text-align: center;
+                    margin-bottom: 20px;
+                  }
+                  h2 {
+                    font-size: 20px;
+                    font-weight: 600;
+                    margin: 0;
+                    color: #222222;
+                  }
+                  .content {
+                    margin-top: 20px;
+                    font-size: 14px;
+                    line-height: 1.6;
+                  }
+                  .content p {
+                    margin: 6px 0;
+
+
+                  }
+                  .highlight {
+                    font-weight: 600;
+                  }
+                  .ticket-info {
+                    background: #f8f9fa;
+                    padding: 20px;
+                    border-radius: 6px;
+                    margin: 20px 0;
+                    border: 1px solid #e9ecef;
+                  }
+                  .status-blue { color: #007BFF; }
+                  .btn {
+                    display: inline-block;
+                    margin-top: 20px;
+                    padding: 10px 22px;
+                    background: #007BFF;
+                    color: #ffffff !important;
+                    text-decoration: none;
+                    border-radius: 4px;
+                    font-size: 14px;
+                  }
+                  .footer {
+                    margin-top: 30px;
+                    font-size: 12px;
+                    color: #777777;
+                    text-align: center;
+                    border-top: 1px solid #eeeeee;
+                    padding-top: 15px;
+                  }
+                </style>
+              </head>
+              <body>
+                <div class="container">
+                  <div class="header">
+                    <h2>Ticket Reviewed</h2>
+                    <p>Ticket #${ticketData.ticket_number}</p>
+                  </div>
+                  
+                  <div class="content">
+                    <p>The requestor has reviewed and approved this completed ticket.</p>
+                    
+                    <div class="ticket-info">
+                      <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
+                      <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
+                      <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+                      <p><span class="highlight">Reviewed By:</span> ${reviewerName}</p>
+                      <p><span class="highlight">Status:</span> <span class="status-blue">Reviewed</span></p>
+                      <p><span class="highlight">Satisfaction Rating:</span> ${satisfactionRating ? `${satisfactionRating}/5 ดาว` : 'ไม่ระบุ'}</p>
+                      ${reviewReason ? `<p><span class="highlight">Review Note:</span> ${reviewReason}</p>` : ''}
+                    </div>
+                    
+                    <p><strong>Next Step:</strong> This ticket is now ready for L4 final closure approval.</p>
+                    
+                    <div style="text-align: center;">
+                      <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}" class="btn">View Ticket Details</a>
+                    </div>
+                  </div>
+                  
+                  <div class="footer">
+                    <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                  </div>
+                </div>
+              </body>
+              </html>
+            `,
+          });
+        }
+        return Promise.resolve({ data: null, error: null });
+      });
+
+      const results = await Promise.all(emailPromises);
+      const successful = results.filter(result => result.data && !result.error);
+
+      console.log(`Ticket review emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
+      return { success: true, sentCount: successful.length };
+    } catch (error) {
+      console.error('Email service error (review):', error);
+      throw error;
+    }
+  }
+
+  /**
    * Send ticket reopened notification to assignee
    */
-  async sendTicketReopenedNotification(ticketData, reopenerName, reopenReason, toEmail) {
+  async sendTicketReopenedNotification(ticketData, reopenerName, reopenReason, notificationUsers = []) {
     try {
-      const { data, error } = await resend.emails.send({
-        from: this.fromEmail,
-        to: [toEmail],
+      if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
+        console.warn('No notification users provided for ticket reopen notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      // Send to all notification users (assignee + actor)
+      const emailPromises = notificationUsers.map(user => {
+        if (user.EMAIL && user.EMAIL.trim() !== '') {
+          console.log(`Sending reopen email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
+          return resend.emails.send({
+            from: this.fromEmail,
+            to: [user.EMAIL],
         subject: `Ticket Reopened - ${ticketData.ticket_number}`,
         html: `
           <!DOCTYPE html>
@@ -1535,13 +1746,16 @@ class EmailService {
           </body>
           </html>
         `,
+          });
+        }
+        return Promise.resolve({ data: null, error: null });
       });
 
-      if (error) {
-        throw new Error(`Failed to send reopen email: ${error.message}`);
-      }
+      const results = await Promise.all(emailPromises);
+      const successful = results.filter(result => result.data && !result.error);
 
-      return { success: true, messageId: data.id };
+      console.log(`Ticket reopen emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
+      return { success: true, sentCount: successful.length };
     } catch (error) {
       console.error('Email service error (reopen):', error);
       throw error;
@@ -1651,11 +1865,20 @@ class EmailService {
   /**
    * Send ticket reassigned notification to new assignee
    */
-  async sendTicketReassignedNotification(ticketData, reassignerName, reassignmentReason, toEmail) {
+  async sendTicketReassignedNotification(ticketData, reassignerName, reassignmentReason, notificationUsers = []) {
     try {
-      const { data, error } = await resend.emails.send({
-        from: this.fromEmail,
-        to: [toEmail],
+      if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
+        console.warn('No notification users provided for ticket reassignment notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      // Send to all notification users (requester + assignee + actor)
+      const emailPromises = notificationUsers.map(user => {
+        if (user.EMAIL && user.EMAIL.trim() !== '') {
+          console.log(`Sending reassignment email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
+          return resend.emails.send({
+            from: this.fromEmail,
+            to: [user.EMAIL],
         subject: `Ticket Reassigned - ${ticketData.ticket_number}`,
         html: `
           <!DOCTYPE html>
@@ -1760,13 +1983,16 @@ class EmailService {
           </body>
           </html>
         `,
+          });
+        }
+        return Promise.resolve({ data: null, error: null });
       });
 
-      if (error) {
-        throw new Error(`Failed to send reassignment email: ${error.message}`);
-      }
+      const results = await Promise.all(emailPromises);
+      const successful = results.filter(result => result.data && !result.error);
 
-      return { success: true, messageId: data.id };
+      console.log(`Ticket reassignment emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
+      return { success: true, sentCount: successful.length };
     } catch (error) {
       console.error('Email service error (reassignment):', error);
       throw error;
