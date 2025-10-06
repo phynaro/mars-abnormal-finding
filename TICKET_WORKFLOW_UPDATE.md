@@ -15,8 +15,8 @@ Action Mapping
 
   L1: ['create', 'approve_review', 'reopen'],
   L2: ['accept', 'reject', 'escalate', 'complete'],
-  L3: ['reassign', 'reject_final'],
-  L4: ['approve_close']
+  L3: ['accept', 'reassign', 'reject_final'],
+  L4: ['accept', 'reassign', 'reject_final','approve_close']
 
 Email and Line Notification for action should be sent to who do that action plus
 1. create 

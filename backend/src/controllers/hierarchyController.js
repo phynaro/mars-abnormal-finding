@@ -469,9 +469,12 @@ const getDistinctPlants = async (req, res) => {
         const result = await pool.request().query(`
             SELECT DISTINCT 
                 plant as code,
-                plant as name
+                pudescription as name
             FROM PUExtension
-            WHERE plant IS NOT NULL AND plant != ''
+            WHERE plant IS NOT NULL 
+            AND plant != ''
+            AND digit_count = 1
+            AND area IS NULL
             ORDER BY plant
         `);
 
@@ -499,10 +502,14 @@ const getDistinctAreas = async (req, res) => {
         let query = `
             SELECT DISTINCT 
                 area as code,
-                area as name,
+                pudescription as name,
                 plant
             FROM PUExtension
-            WHERE area IS NOT NULL AND area != ''
+            WHERE area IS NOT NULL 
+            AND area != ''
+            AND digit_count = 2
+            AND line IS NULL
+            AND machine IS NULL
         `;
         
         const request = pool.request();

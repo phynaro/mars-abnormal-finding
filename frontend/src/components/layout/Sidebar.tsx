@@ -211,31 +211,6 @@ const Sidebar: React.FC<SidebarProps> = ({
               <nav className="py-4 flex-1 overflow-y-auto">
                 {menuItems.map(renderMenuItem)}
               </nav>
-
-              {/* User Info at Bottom */}
-              {/* <div className="p-4 border-t border-border bg-muted/50">
-                <div className="flex items-center space-x-3">
-                  <Avatar className="h-8 w-8">
-                    {user?.avatarUrl && (
-                      <AvatarImage
-                        src={`${(import.meta.env.VITE_API_URL || "http://localhost:3001/api").replace(/\/$/, "").replace(/\/api$/, "")}${user.avatarUrl}`}
-                      />
-                    )}
-                    <AvatarFallback className="bg-primary text-primary-foreground">
-                      {user?.firstName?.charAt(0)}
-                      {user?.lastName?.charAt(0)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {user?.firstName} {user?.lastName}
-                    </p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {user?.department} • {user?.shift}
-                    </p>
-                  </div>
-                </div>
-              </div> */}
             </div>
           </div>
         )}

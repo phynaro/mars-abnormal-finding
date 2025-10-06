@@ -134,27 +134,61 @@ const userController = {
     });
   },
 
-  // Send test LINE notification to current user's LineID
+  // Send test LINE notification to current user's LineID or provided LineID
   sendLineTest: async (req, res) => {
     try {
       const lineService = require('../services/lineService');
-      const pool = await sql.connect(dbConfig);
-      const result = await pool.request()
-        .input('userID', sql.VarChar(50), req.user.userId)
-        .query('SELECT LineID FROM _secUsers WHERE UserID = @userID');
-      if (result.recordset.length === 0) {
-        return res.status(404).json({ success: false, message: 'User not found' });
+      const { lineId } = req.body;
+      
+      let targetLineId = lineId;
+      
+      // If no lineId provided in body, get from user's saved LineID
+      if (!targetLineId) {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request()
+          .input('userID', sql.VarChar(50), req.user.userId)
+          .query('SELECT LineID FROM _secUsers WHERE UserID = @userID');
+        
+        if (result.recordset.length === 0) {
+          return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        
+        const row = result.recordset[0];
+        if (!row.LineID) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'No LineID set for user. Please set your LINE ID in profile first.' 
+          });
+        }
+        
+        targetLineId = row.LineID;
       }
-      const row = result.recordset[0];
-      if (!row.LineID) {
-        return res.status(400).json({ success: false, message: 'No LineID set for user' });
+      
+      // Validate LINE ID format
+      if (!lineService.isValidLineUserId(targetLineId)) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Invalid LINE ID format. LINE ID should start with "U" followed by 32 characters.' 
+        });
       }
-      const msg = `Test from CMMS: Hello ${req.user.firstName || ''}!`;
-      const r = await lineService.pushToUser(row.LineID, msg);
+      
+      const msg = `Test from CMMS: Hello ${req.user.firstName || req.user.username || 'User'}!`;
+      const r = await lineService.sendToUser(targetLineId, msg);
+      
       if (r.success || r.skipped) {
-        return res.json({ success: true, message: 'Test notification sent' });
+        return res.json({ 
+          success: true, 
+          message: 'Test notification sent successfully',
+          lineId: targetLineId,
+          skipped: r.skipped 
+        });
       }
-      return res.status(500).json({ success: false, message: 'Failed to send', error: r.error });
+      
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to send LINE notification', 
+        error: r.error 
+      });
     } catch (error) {
       console.error('Send LINE test error:', error);
       res.status(500).json({ success: false, message: 'Internal error' });

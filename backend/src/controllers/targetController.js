@@ -4,7 +4,7 @@ const dbConfig = require('../config/dbConfig');
 // Get all targets with optional filtering
 const getTargets = async (req, res) => {
   try {
-    const { area, year, type } = req.query;
+    const { plant, area, year, type } = req.query;
     
     let query = `
       SELECT 
@@ -14,18 +14,32 @@ const getTargets = async (req, res) => {
         t.year,
         t.target_value,
         t.unit,
+        t.plant,
         t.area,
         t.created_at,
         t.updated_at,
         t.created_by,
         t.updated_by,
-        a.name as area_name
+        pe_plant.pudescription as plant_name,
+        pe_area.pudescription as area_name
       FROM dbo.Target t
-      LEFT JOIN dbo.Area a ON t.area = a.code
+      LEFT JOIN PUExtension pe_plant ON t.plant = pe_plant.plant 
+        AND pe_plant.digit_count = 1 
+        AND pe_plant.area IS NULL
+      LEFT JOIN PUExtension pe_area ON t.area = pe_area.area 
+        AND pe_area.digit_count = 2 
+        AND pe_area.line IS NULL 
+        AND pe_area.machine IS NULL
+        AND (t.plant IS NULL OR t.plant = pe_area.plant)
       WHERE 1=1
     `;
     
     const params = [];
+    
+    if (plant && plant !== 'all') {
+      query += ` AND t.plant = @plant`;
+      params.push({ name: 'plant', value: plant });
+    }
     
     if (area && area !== 'all') {
       query += ` AND t.area = @area`;
@@ -42,7 +56,7 @@ const getTargets = async (req, res) => {
       params.push({ name: 'type', value: type });
     }
     
-    query += ` ORDER BY t.year DESC, t.type, t.period, t.area`;
+    query += ` ORDER BY t.year DESC, t.type, t.plant, t.area, t.period`;
     
     const pool = await sql.connect(dbConfig);
     const request = pool.request();
@@ -120,13 +134,21 @@ const getTargetById = async (req, res) => {
 // Create new target
 const createTarget = async (req, res) => {
   try {
-    const { type, year, target_value, unit, area, created_by } = req.body;
+    const { type, year, target_value, unit, plant, area, created_by } = req.body;
     
     // Validate required fields
-    if (!type || !year || !target_value || !unit || !area) {
+    if (!type || !year || !target_value || !unit) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields'
+        message: 'Missing required fields: type, year, target_value, and unit are required'
+      });
+    }
+    
+    // Validate that at least one location dimension is provided
+    if (!plant && !area) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one location dimension (plant or area) must be provided'
       });
     }
     
@@ -151,19 +173,22 @@ const createTarget = async (req, res) => {
     // Check if targets already exist for this combination (any period)
     const checkQuery = `
       SELECT COUNT(*) as count FROM dbo.Target 
-      WHERE type = @type AND year = @year AND area = @area
+      WHERE type = @type AND year = @year 
+      AND (plant = @plant OR (plant IS NULL AND @plant IS NULL))
+      AND (area = @area OR (area IS NULL AND @area IS NULL))
     `;
     
     const existingTargets = await pool.request()
       .input('type', sql.NVarChar, type)
       .input('year', sql.Int, year)
-      .input('area', sql.NVarChar, area)
+      .input('plant', sql.NVarChar, plant || null)
+      .input('area', sql.NVarChar, area || null)
       .query(checkQuery);
     
     if (existingTargets.recordset[0].count > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Targets already exist for this type, year, and area combination. Please delete existing targets first or choose a different combination.'
+        message: 'Targets already exist for this type, year, and location combination. Please delete existing targets first or choose a different combination.'
       });
     }
     
@@ -172,8 +197,8 @@ const createTarget = async (req, res) => {
     
     for (const period of periods) {
       const insertQuery = `
-        INSERT INTO dbo.Target (type, period, year, target_value, unit, area, created_by)
-        VALUES (@type, @period, @year, @target_value, @unit, @area, @created_by)
+        INSERT INTO dbo.Target (type, period, year, target_value, unit, plant, area, created_by)
+        VALUES (@type, @period, @year, @target_value, @unit, @plant, @area, @created_by)
       `;
       
       await pool.request()
@@ -182,7 +207,8 @@ const createTarget = async (req, res) => {
         .input('year', sql.Int, year)
         .input('target_value', sql.Decimal(18,2), target_value)
         .input('unit', sql.NVarChar, unit)
-        .input('area', sql.NVarChar, area)
+        .input('plant', sql.NVarChar, plant || null)
+        .input('area', sql.NVarChar, area || null)
         .input('created_by', sql.NVarChar, created_by || 'system')
         .query(insertQuery);
     }
@@ -205,7 +231,7 @@ const createTarget = async (req, res) => {
 const createTargetsBulk = async (req, res) => {
   try {
     const { targets } = req.body;
-    
+    console.log('targets', targets);
     if (!targets || !Array.isArray(targets) || targets.length === 0) {
       return res.status(400).json({
         success: false,
@@ -215,16 +241,27 @@ const createTargetsBulk = async (req, res) => {
 
     // Validate all targets
     for (const target of targets) {
-      const { type, year, target_value, unit, area, period, created_by } = target;
+      const { type, year, target_value, unit, plant, area, period, created_by } = target;
       
-      if (!type || !year || !target_value || !unit || !area || !period) {
+      if (!type || !year || !target_value || !unit || !period) {
+        console.log('Missing required fields: type, year, target_value, unit, and period are required');
         return res.status(400).json({
           success: false,
-          message: 'Missing required fields in target data'
+          message: 'Missing required fields: type, year, target_value, unit, and period are required'
         });
       }
       
+      // Validate that at least one location dimension is provided
+      // if (!plant && !area) {
+      //   console.log('At least one location dimension (plant or area) must be provided');
+      //   return res.status(400).json({ 
+      //     success: false,
+      //     message: 'At least one location dimension (plant or area) must be provided'
+      //   });
+      // }
+      
       if (!['open case', 'close case'].includes(type)) {
+        console.log('Invalid type. Must be "open case" or "close case"');
         return res.status(400).json({
           success: false,
           message: 'Invalid type. Must be "open case" or "close case"'
@@ -232,6 +269,7 @@ const createTargetsBulk = async (req, res) => {
       }
       
       if (!['case', 'THB', 'percent'].includes(unit)) {
+        console.log('Invalid unit. Must be "case", "THB", or "percent"');
         return res.status(400).json({
           success: false,
           message: 'Invalid unit. Must be "case", "THB", or "percent"'
@@ -245,27 +283,30 @@ const createTargetsBulk = async (req, res) => {
     const firstTarget = targets[0];
     const checkQuery = `
       SELECT COUNT(*) as count FROM dbo.Target 
-      WHERE type = @type AND year = @year AND area = @area
+      WHERE type = @type AND year = @year 
+      AND (plant = @plant OR (plant IS NULL AND @plant IS NULL))
+      AND (area = @area OR (area IS NULL AND @area IS NULL))
     `;
     
     const existingTargets = await pool.request()
       .input('type', sql.NVarChar, firstTarget.type)
       .input('year', sql.Int, firstTarget.year)
-      .input('area', sql.NVarChar, firstTarget.area)
+      .input('plant', sql.NVarChar, firstTarget.plant || null)
+      .input('area', sql.NVarChar, firstTarget.area || null)
       .query(checkQuery);
     
     if (existingTargets.recordset[0].count > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Targets already exist for this type, year, and area combination. Please delete existing targets first or choose a different combination.'
+        message: 'Targets already exist for this type, year, and location combination. Please delete existing targets first or choose a different combination.'
       });
     }
     
     // Insert all targets
     for (const target of targets) {
       const insertQuery = `
-        INSERT INTO dbo.Target (type, period, year, target_value, unit, area, created_by)
-        VALUES (@type, @period, @year, @target_value, @unit, @area, @created_by)
+        INSERT INTO dbo.Target (type, period, year, target_value, unit, plant, area, created_by)
+        VALUES (@type, @period, @year, @target_value, @unit, @plant, @area, @created_by)
       `;
       
       await pool.request()
@@ -274,7 +315,8 @@ const createTargetsBulk = async (req, res) => {
         .input('year', sql.Int, target.year)
         .input('target_value', sql.Decimal(18,2), target.target_value)
         .input('unit', sql.NVarChar, target.unit)
-        .input('area', sql.NVarChar, target.area)
+        .input('plant', sql.NVarChar, target.plant || null)
+        .input('area', sql.NVarChar, target.area || null)
         .input('created_by', sql.NVarChar, target.created_by || 'system')
         .query(insertQuery);
     }
@@ -361,13 +403,13 @@ const deleteTarget = async (req, res) => {
     
     // First get the target details to delete all related records
     const getQuery = `
-      SELECT type, year, area FROM dbo.Target WHERE id = @id
+      SELECT type, year, plant, area FROM dbo.Target WHERE id = @id
     `;
     
     const targetDetails = await pool.request()
       .input('id', sql.Int, id)
       .query(getQuery);
-    
+   
     if (targetDetails.recordset.length === 0) {
       return res.status(404).json({
         success: false,
@@ -375,18 +417,19 @@ const deleteTarget = async (req, res) => {
       });
     }
     
-    const { type, year, area } = targetDetails.recordset[0];
+    const { type, year, plant, area } = targetDetails.recordset[0];
     
     // Delete all periods for this type/year/area combination
     const deleteQuery = `
       DELETE FROM dbo.Target 
-      WHERE type = @type AND year = @year AND area = @area
+      WHERE type = @type AND year = @year AND (plant = @plant OR (plant IS NULL AND @plant IS NULL)) AND (area = @area OR (area IS NULL AND @area IS NULL))
     `;
-    
+   
     await pool.request()
       .input('type', sql.NVarChar, type)
       .input('year', sql.Int, year)
-      .input('area', sql.NVarChar, area)
+      .input('area', sql.NVarChar, area || null)
+      .input('plant', sql.NVarChar, plant || null)
       .query(deleteQuery);
     
     res.json({

@@ -87,11 +87,14 @@ const checkUserActionPermission = async (userId, puno, action) => {
             .input('puno', sql.Int, puno)
             .input('action', sql.NVarChar, action)
             .execute('sp_CheckUserActionPermission');
-
+       
         return {
+           
             hasPermission: result.recordset[0]?.has_permission || false,
             approvalLevel: result.recordset[0]?.approval_level || 0
+
         };
+       
     } catch (error) {
         console.error('Error checking user action permission:', error);
         return { hasPermission: false, approvalLevel: 0 };

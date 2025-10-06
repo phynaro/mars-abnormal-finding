@@ -21,7 +21,6 @@ const ProfilePage: React.FC = () => {
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState((user as any)?.phone || '');
-  const [title, setTitle] = useState((user as any)?.title || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
@@ -47,7 +46,7 @@ const ProfilePage: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
         },
-        body: JSON.stringify({ firstName, lastName, email, phone, title, lineId })
+        body: JSON.stringify({ firstName, lastName, email, phone, lineId })
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.message || t('profile.failedToUpdateProfile'));
@@ -213,35 +212,6 @@ const ProfilePage: React.FC = () => {
               <Label>{t('profile.phone')}</Label>
               <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
-            <div className="space-y-2">
-              <Label>{t('profile.jobTitle')}</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} className='text-muted-foreground bg-muted' readOnly/>
-            </div>
-            {/* Read-only derived fields */}
-            <div className="space-y-2">
-              <Label>{t('profile.department')}</Label>
-              <Input
-                value={(() => {
-                  const u: any = user || {};
-                  return (
-                    u.departmentName ||
-                    (u.departmentCode ? `${u.departmentName ? `${u.departmentName} ` : ''}(${u.departmentCode})` : '') ||
-                    (u.department !== undefined ? String(u.department) : '') ||
-                    ''
-                  );
-                })()}
-                readOnly
-                className='text-muted-foreground bg-muted'
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>{t('profile.group')}</Label>
-              <Input value={(user as any)?.groupName || ''} readOnly className='text-muted-foreground bg-muted'/>
-            </div>
-            <div className="space-y-2">
-              <Label>{t('profile.personCode')}</Label>
-              <Input value={(user as any)?.personCode || ''} readOnly className='text-muted-foreground bg-muted'/>
-            </div>
           </div>
           <div>
             <Button onClick={updateProfile} disabled={loading}>{t('profile.saveChanges')}</Button>
@@ -280,21 +250,48 @@ const ProfilePage: React.FC = () => {
                 variant="outline"
                 onClick={async () => {
                   try {
+                    // Use the current form value for testing, not the saved value
+                    const testLineId = lineId.trim();
+                    if (!testLineId) {
+                      alert(t('profile.pleaseEnterLineId'));
+                      return;
+                    }
+                    
                     const res = await fetch(`${API_BASE_URL}/users/line/test`, {
                       method: 'POST',
-                      headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` || '' }
+                      headers: { 
+                        'Authorization': `Bearer ${localStorage.getItem('token')}` || '',
+                        'Content-Type': 'application/json'
+                      },
+                      body: JSON.stringify({ lineId: testLineId })
                     });
-                  const result = await res.json();
-                  if (!res.ok) throw new Error(result.message || t('profile.failedToSendTestNotification'));
-                  alert(t('profile.testNotificationSent'));
-                } catch (e) {
-                  alert(e instanceof Error ? e.message : t('profile.failedToSendTestNotification'));
+                    const result = await res.json();
+                    if (!res.ok) throw new Error(result.message || t('profile.failedToSendTestNotification'));
+                    alert(t('profile.testNotificationSent'));
+                  } catch (e) {
+                    alert(e instanceof Error ? e.message : t('profile.failedToSendTestNotification'));
+                  }
+                }}
+                disabled={!lineId.trim()}
+              >
+                {t('profile.sendTestLineNotification')}
+              </Button>
+              
+              {/* Show warning if LINE ID has been changed but not saved */}
+              {lineId !== (user?.lineId || '') && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                  <p className="text-sm text-amber-800">
+                    <strong>{t('profile.note')}:</strong> {t('profile.lineIdChangedNotSaved')}
+                  </p>
+                </div>
+              )}
+              
+              <p className="text-sm text-muted-foreground">
+                {lineId.trim() ? 
+                  t('profile.testWillUseCurrentInput') : 
+                  t('profile.ensureLineIdSet')
                 }
-              }}
-            >
-              {t('profile.sendTestLineNotification')}
-            </Button>
-            <p className="text-sm text-muted-foreground">{t('profile.ensureLineIdSet')}</p>
+              </p>
             </div>
           </CardContent>
         </Card>

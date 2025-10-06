@@ -25,7 +25,7 @@ export const SubmenuPanel: React.FC<SubmenuPanelProps> = ({ activeId, collapsed 
     <div className={`sticky top-0 self-start h-[100dvh] border-r bg-card flex flex-col transition-[width] duration-300 ease-in-out overflow-hidden ${!active || !hasChildren ? 'w-0 min-w-0' : (collapsed ? 'w-0 min-w-0' : 'w-48 min-w-[128px]')}`}>
       {active && hasChildren && !collapsed && (
         <>
-          <div className="px-4 py-3 flex items-center justify-between border-b min-w-0">
+          <div className="px-4 py-4 flex items-center justify-between border-b min-w-0">
             <div className="font-medium truncate">{active.label}</div>
           </div>
           <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 transition-opacity duration-300 opacity-100">

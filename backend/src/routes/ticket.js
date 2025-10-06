@@ -72,16 +72,16 @@ router.get('/assignees/available', requireFormPermission('TKT', 'view'), ticketC
 // trigger-notification route removed - notifications now handled automatically
 
 // Test L2 users for an area (for testing)
-router.get('/test-l2-users/:area_id', requireFormPermission('TKT', 'view'), async (req, res) => {
+router.get('/test-l2-users/:area_code', requireFormPermission('TKT', 'view'), async (req, res) => {
     try {
-        const { area_id } = req.params;
+        const { area_code } = req.params;
         const sql = require('mssql');
         const dbConfig = require('../config/dbConfig');
         const pool = await sql.connect(dbConfig);
         
         // Use the same query as in the helper function
         const result = await pool.request()
-            .input('area_id', sql.Int, area_id)
+            .input('area_code', sql.NVarChar, area_code)
             .query(`
                 SELECT DISTINCT
                     p.PERSONNO,
@@ -94,7 +94,7 @@ router.get('/test-l2-users/:area_id', requireFormPermission('TKT', 'view'), asyn
                 FROM TicketApproval ta
                 INNER JOIN Person p ON ta.personno = p.PERSONNO
                 LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                WHERE ta.area_id = @area_id
+                WHERE ta.area_code = @area_code
                 AND ta.approval_level >= 2
                 AND ta.is_active = 1
                 AND p.FLAGDEL != 'Y'
@@ -103,7 +103,7 @@ router.get('/test-l2-users/:area_id', requireFormPermission('TKT', 'view'), asyn
         
         res.json({
             success: true,
-            message: `Found ${result.recordset.length} L2+ users for area ${area_id}`,
+            message: `Found ${result.recordset.length} L2+ users for area ${area_code}`,
             data: result.recordset
         });
     } catch (error) {

@@ -1,64 +1,86 @@
-const axios = require('axios');
-const messageBuilders = require('./line/messages');
-const {
-  buildImageMessages,
-  isImageAccessible,
-  getAccessibleImages,
-  debugImageAccessibility,
-  selectHeroImage,
-  getStatusColor,
-  getPriorityColor,
-  getNotificationTitle,
-  getNotificationSubtitle,
-  getStatusText,
-  getPriorityText,
-} = require('./line/utils');
+/**
+ * LINE Webhook Service
+ * Professional service for handling LINE webhook events and general LINE operations
+ * 
+ * Features:
+ * - Webhook event processing
+ * - User interaction handling
+ * - Test message functionality
+ * - Signature verification
+ * - Error handling and logging
+ * 
+ * Usage:
+ * const lineService = require('./lineService');
+ * await lineService.sendTestMessage(userId, message);
+ * await lineService.replyToWebhook(replyToken, message);
+ */
 
-class LineService {
+const axios = require('axios');
+
+/**
+ * Professional LINE webhook service
+ * Handles LINE API interactions for webhooks and general operations
+ */
+class LineWebhookService {
   constructor() {
     this.channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
+    this.channelSecret = process.env.LINE_CHANNEL_SECRET || '';
     this.apiBase = 'https://api.line.me/v2/bot/message';
-    this.allowLocalImages = process.env.LINE_ALLOW_LOCAL_IMAGES === 'true';
-    this.imageHostingService = process.env.LINE_IMAGE_HOSTING_SERVICE || 'none';
+    this.timeout = 10000; // 10 seconds
   }
 
+  /**
+   * Checks if the service is properly configured
+   * @returns {boolean} True if configured
+   */
   isConfigured() {
     return !!this.channelAccessToken;
   }
 
-  getFlexMessageOptions(overrides = {}) {
-    return {
-      allowLocalImages: this.allowLocalImages,
-      backendUrl: process.env.BACKEND_URL,
-      frontendUrl: process.env.FRONTEND_URL,
-      baseUrl: process.env.FRONTEND_URL,
-      ...overrides,
-    };
+  /**
+   * Validates LINE user ID format
+   * @param {string} lineUserId - The LINE user ID to validate
+   * @returns {boolean} True if valid format
+   */
+  isValidLineUserId(lineUserId) {
+    return typeof lineUserId === 'string' && 
+           lineUserId.startsWith('U') && 
+           lineUserId.length === 33;
   }
 
-  async pushToUser(lineUserId, messages) {
+  /**
+   * Sends a message to a LINE user
+   * @param {string} lineUserId - The LINE user ID
+   * @param {Object|Array|string} messages - Message(s) to send
+   * @returns {Promise<Object>} Result object with success status
+   */
+  async sendToUser(lineUserId, messages) {
     try {
+      // Validation
       if (!this.isConfigured()) {
-        console.warn('LINE_CHANNEL_ACCESS_TOKEN not set; skipping LINE push');
-        return { success: false, skipped: true };
-      }
-      if (!lineUserId) {
-        console.warn('No LineID provided; skipping LINE push');
-        return { success: false, skipped: true };
+        console.warn('LINE service not configured; skipping message send');
+        return { success: false, skipped: true, reason: 'not_configured' };
       }
 
-      if (typeof lineUserId !== 'string' || !lineUserId.startsWith('U') || lineUserId.length !== 33) {
+      if (!lineUserId) {
+        console.warn('No LineID provided; skipping message send');
+        return { success: false, skipped: true, reason: 'no_user_id' };
+      }
+
+      if (!this.isValidLineUserId(lineUserId)) {
         console.error(`Invalid LineID format: ${lineUserId}. Expected format: U followed by 32 characters.`);
         return { success: false, error: 'Invalid LineID format' };
       }
 
+      // Process messages
       const msgArray = Array.isArray(messages) ? messages : [messages];
-
       const processedMessages = [];
+
       for (const msg of msgArray) {
         if (typeof msg === 'string') {
           processedMessages.push({ type: 'text', text: msg });
         } else if (msg.text && msg.images) {
+          // Handle messages with both text and images
           processedMessages.push({ type: 'text', text: msg.text });
           processedMessages.push(...msg.images);
         } else {
@@ -66,12 +88,13 @@ class LineService {
         }
       }
 
+      // Send to LINE API
       const payload = {
         to: lineUserId,
         messages: processedMessages,
       };
 
-      const res = await axios.post(
+      const response = await axios.post(
         `${this.apiBase}/push`,
         payload,
         {
@@ -79,306 +102,269 @@ class LineService {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${this.channelAccessToken}`,
           },
-          timeout: 10000,
-        },
+          timeout: this.timeout,
+        }
       );
 
-      return { success: true, status: res.status };
+      return { 
+        success: true, 
+        status: response.status,
+        messageId: response.data?.messageId 
+      };
+
     } catch (error) {
-      console.error('LINE push error:', {
+      console.error('LINE send error:', {
         message: error?.response?.data || error.message,
         status: error?.response?.status,
-        statusText: error?.response?.statusText,
-        lineUserId,
-        messages: JSON.stringify(messages, null, 2),
+        lineUserId: lineUserId?.substring(0, 8) + '...', // Mask for privacy
+        timestamp: new Date().toISOString()
       });
-      return { success: false, error: error.message };
+      
+      return { 
+        success: false, 
+        error: error.message,
+        status: error?.response?.status 
+      };
     }
   }
 
-  async replyToToken(replyToken, messages) {
+  /**
+   * Replies to a LINE webhook event
+   * @param {string} replyToken - The reply token from webhook
+   * @param {Object|Array|string} messages - Message(s) to send
+   * @returns {Promise<Object>} Result object with success status
+   */
+  async replyToWebhook(replyToken, messages) {
     try {
       if (!this.isConfigured()) {
-        console.warn('LINE_CHANNEL_ACCESS_TOKEN not set; skipping LINE reply');
-        return { success: false, skipped: true };
+        console.warn('LINE service not configured; skipping webhook reply');
+        return { success: false, skipped: true, reason: 'not_configured' };
       }
+
+      if (!replyToken) {
+        console.warn('No reply token provided; skipping webhook reply');
+        return { success: false, skipped: true, reason: 'no_reply_token' };
+      }
+
       const msgArray = Array.isArray(messages) ? messages : [messages];
       const payload = {
         replyToken,
-        messages: msgArray.map((m) => (typeof m === 'string' ? { type: 'text', text: m } : m)),
+        messages: msgArray.map((m) => 
+          typeof m === 'string' ? { type: 'text', text: m } : m
+        ),
       };
-      const res = await axios.post(`${this.apiBase}/reply`, payload, {
+
+      const response = await axios.post(`${this.apiBase}/reply`, payload, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.channelAccessToken}`,
         },
-        timeout: 10000,
+        timeout: this.timeout,
       });
-      return { success: true, status: res.status };
+
+      return { 
+        success: true, 
+        status: response.status,
+        messageId: response.data?.messageId 
+      };
+
     } catch (error) {
-      console.error('LINE reply error:', error?.response?.data || error.message);
+      console.error('LINE webhook reply error:', {
+        message: error?.response?.data || error.message,
+        status: error?.response?.status,
+        replyToken: replyToken?.substring(0, 8) + '...', // Mask for privacy
+        timestamp: new Date().toISOString()
+      });
+      
+      return { 
+        success: false, 
+        error: error.message,
+        status: error?.response?.status 
+      };
+    }
+  }
+
+  /**
+   * Sends a test message to verify LINE integration
+   * @param {string} lineUserId - The LINE user ID
+   * @param {string} testMessage - Optional custom test message
+   * @returns {Promise<Object>} Result object with success status
+   */
+  async sendTestMessage(lineUserId, testMessage = null) {
+    const message = testMessage || 'Test message from CMMS system - LINE integration is working correctly!';
+    return await this.sendToUser(lineUserId, message);
+  }
+
+  /**
+   * Gets user profile information from LINE API
+   * @param {string} lineUserId - The LINE user ID
+   * @returns {Promise<Object>} User profile or error
+   */
+  async getUserProfile(lineUserId) {
+    try {
+      if (!this.isConfigured()) {
+        return { success: false, error: 'Service not configured' };
+      }
+
+      if (!this.isValidLineUserId(lineUserId)) {
+        return { success: false, error: 'Invalid LineID format' };
+      }
+
+      const response = await axios.get(
+        `https://api.line.me/v2/bot/profile/${lineUserId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${this.channelAccessToken}`,
+          },
+          timeout: this.timeout,
+        }
+      );
+
+      return { 
+        success: true, 
+        profile: response.data 
+      };
+
+    } catch (error) {
+      console.error('LINE profile fetch error:', {
+        message: error?.response?.data || error.message,
+        status: error?.response?.status,
+        lineUserId: lineUserId?.substring(0, 8) + '...',
+        timestamp: new Date().toISOString()
+      });
+      
+      return { 
+        success: false, 
+        error: error.message,
+        status: error?.response?.status 
+      };
+    }
+  }
+
+  /**
+   * Verifies webhook signature for security
+   * @param {string} signature - The signature from webhook headers
+   * @param {string} body - The raw request body
+   * @returns {boolean} True if signature is valid
+   */
+  verifyWebhookSignature(signature, body) {
+    try {
+      if (!this.channelSecret || !signature || !body) {
+        console.warn('Missing signature verification parameters');
+        return false;
+      }
+
+      const crypto = require('crypto');
+      const hmac = crypto.createHmac('sha256', this.channelSecret);
+      hmac.update(body);
+      const digest = hmac.digest('base64');
+      
+      return digest === signature;
+    } catch (error) {
+      console.error('Signature verification error:', error.message);
+      return false;
+    }
+  }
+
+  /**
+   * Processes incoming webhook events
+   * @param {Object} event - The webhook event object
+   * @returns {Promise<Object>} Processing result
+   */
+  async processWebhookEvent(event) {
+    try {
+      if (!event || !event.type) {
+        return { success: false, error: 'Invalid event object' };
+      }
+
+      switch (event.type) {
+        case 'message':
+          return await this.handleMessageEvent(event);
+        case 'follow':
+          return await this.handleFollowEvent(event);
+        case 'unfollow':
+          return await this.handleUnfollowEvent(event);
+        case 'postback':
+          return await this.handlePostbackEvent(event);
+        default:
+          console.log(`Unhandled event type: ${event.type}`);
+          return { success: true, handled: false, eventType: event.type };
+      }
+    } catch (error) {
+      console.error('Webhook event processing error:', error);
       return { success: false, error: error.message };
     }
   }
 
-  buildTicketCreatedMessage(ticket, reporterName) {
-    return messageBuilders.buildTicketCreatedMessage(ticket, reporterName);
+  /**
+   * Handles message events from webhook
+   * @param {Object} event - The message event
+   * @returns {Promise<Object>} Handling result
+   */
+  async handleMessageEvent(event) {
+    const { message, replyToken, source } = event;
+    
+    if (message.type === 'text') {
+      // Handle text messages
+      const response = `You sent: "${message.text}"`;
+      return await this.replyToWebhook(replyToken, response);
+    }
+    
+    return { success: true, handled: false, messageType: message.type };
   }
 
-  buildTicketCreatedFlexMessage(ticket, reporterName, images = []) {
-    return messageBuilders.buildTicketCreatedFlexMessage(
-      ticket,
-      reporterName,
-      images,
-      this.getFlexMessageOptions(),
-    );
+  /**
+   * Handles follow events (when user adds the bot)
+   * @param {Object} event - The follow event
+   * @returns {Promise<Object>} Handling result
+   */
+  async handleFollowEvent(event) {
+    const { replyToken } = event;
+    const welcomeMessage = 'Welcome to CMMS! Thank you for adding our bot.';
+    return await this.replyToWebhook(replyToken, welcomeMessage);
   }
 
-  buildAssignmentMessage(ticket) {
-    return messageBuilders.buildAssignmentMessage(ticket);
+  /**
+   * Handles unfollow events (when user removes the bot)
+   * @param {Object} event - The unfollow event
+   * @returns {Promise<Object>} Handling result
+   */
+  async handleUnfollowEvent(event) {
+    // No reply needed for unfollow events
+    console.log('User unfollowed the bot');
+    return { success: true, handled: true };
   }
 
-  buildTicketAssignedFlexMessage(ticket, assigneeName, images = []) {
-    return messageBuilders.buildTicketAssignedFlexMessage(
-      ticket,
-      assigneeName,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketStatusUpdateMessage(ticket, oldStatus, newStatus, changedByName) {
-    return messageBuilders.buildTicketStatusUpdateMessage(ticket, oldStatus, newStatus, changedByName);
-  }
-
-  buildTicketStatusUpdateFlexMessage(ticket, oldStatus, newStatus, changedByName, images = []) {
-    return messageBuilders.buildTicketStatusUpdateFlexMessage(
-      ticket,
-      oldStatus,
-      newStatus,
-      changedByName,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketPreAssignedMessage(ticket, reporterName) {
-    return messageBuilders.buildTicketPreAssignedMessage(ticket, reporterName);
-  }
-
-  buildTicketPreAssignedWithImagesMessage(ticket, reporterName, images = []) {
-    return messageBuilders.buildTicketPreAssignedWithImagesMessage(
-      ticket,
-      reporterName,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketAcceptedMessage(ticket, acceptorName) {
-    return messageBuilders.buildTicketAcceptedMessage(ticket, acceptorName);
-  }
-
-  buildTicketAcceptedFlexMessage(ticket, acceptorName, images = []) {
-    return messageBuilders.buildTicketAcceptedFlexMessage(
-      ticket,
-      acceptorName,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketAcceptedFlexMessageSimple(ticket, acceptorName) {
-    return messageBuilders.buildTicketAcceptedFlexMessageSimple(
-      ticket,
-      acceptorName,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketRejectedMessage(ticket, rejectorName, rejectionReason, status) {
-    return messageBuilders.buildTicketRejectedMessage(ticket, rejectorName, rejectionReason, status);
-  }
-
-  buildTicketRejectedFlexMessage(ticket, rejectorName, rejectionReason, status, images = []) {
-    return messageBuilders.buildTicketRejectedFlexMessage(
-      ticket,
-      rejectorName,
-      rejectionReason,
-      status,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketRejectedFlexMessageSimple(ticket, rejectorName, rejectionReason) {
-    return messageBuilders.buildTicketRejectedFlexMessageSimple(
-      ticket,
-      rejectorName,
-      rejectionReason,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildJobCompletedMessage(ticket, completerName, completionNotes, downtimeAvoidance, costAvoidance) {
-    return messageBuilders.buildJobCompletedMessage(
-      ticket,
-      completerName,
-      completionNotes,
-      downtimeAvoidance,
-      costAvoidance,
-    );
-  }
-
-  buildJobCompletedFlexMessage(ticket, completerName, completionNotes, downtimeAvoidance, costAvoidance, images = []) {
-    return messageBuilders.buildJobCompletedFlexMessage(
-      ticket,
-      completerName,
-      completionNotes,
-      downtimeAvoidance,
-      costAvoidance,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildJobCompletedFlexMessageWithHero(ticket, completerName, downtimeAvoidance, costAvoidance, images = []) {
-    return messageBuilders.buildJobCompletedFlexMessageWithHero(
-      ticket,
-      completerName,
-      downtimeAvoidance,
-      costAvoidance,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketEscalatedMessage(ticket, escalatorName, escalationReason) {
-    return messageBuilders.buildTicketEscalatedMessage(ticket, escalatorName, escalationReason);
-  }
-
-  buildTicketEscalatedToRequestorMessage(ticket, escalatorName, escalationReason) {
-    return messageBuilders.buildTicketEscalatedToRequestorMessage(ticket, escalatorName, escalationReason);
-  }
-
-  buildTicketEscalatedFlexMessage(ticket, escalatorName, escalationReason, images = []) {
-    return messageBuilders.buildTicketEscalatedFlexMessage(
-      ticket,
-      escalatorName,
-      escalationReason,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketEscalatedFlexMessageSimple(ticket, escalatorName, escalationReason, images = []) {
-    return messageBuilders.buildTicketEscalatedFlexMessageSimple(
-      ticket,
-      escalatorName,
-      escalationReason,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketClosedMessage(ticket, closerName, closeReason, satisfactionRating) {
-    return messageBuilders.buildTicketClosedMessage(ticket, closerName, closeReason, satisfactionRating);
-  }
-
-  buildTicketClosedFlexMessage(ticket, closerName, closeReason, satisfactionRating, images = []) {
-    return messageBuilders.buildTicketClosedFlexMessage(
-      ticket,
-      closerName,
-      closeReason,
-      satisfactionRating,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketClosedFlexMessageSimple(ticket, closerName, satisfactionRating) {
-    return messageBuilders.buildTicketClosedFlexMessageSimple(
-      ticket,
-      closerName,
-      satisfactionRating,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketReopenedMessage(ticket, reopenerName, reopenReason) {
-    return messageBuilders.buildTicketReopenedMessage(ticket, reopenerName, reopenReason);
-  }
-
-  buildTicketReopenedFlexMessage(ticket, reopenerName, reopenReason, images = []) {
-    return messageBuilders.buildTicketReopenedFlexMessage(
-      ticket,
-      reopenerName,
-      reopenReason,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildTicketReassignedMessage(ticket, reassignerName, reassignmentReason) {
-    return messageBuilders.buildTicketReassignedMessage(ticket, reassignerName, reassignmentReason);
-  }
-
-  buildTicketReassignedFlexMessage(ticket, reassignerName, reassignmentReason, images = []) {
-    return messageBuilders.buildTicketReassignedFlexMessage(
-      ticket,
-      reassignerName,
-      reassignmentReason,
-      images,
-      this.getFlexMessageOptions(),
-    );
-  }
-
-  buildImageMessages(images) {
-    return buildImageMessages(images);
-  }
-
-  isImageAccessible(url) {
-    return isImageAccessible(url);
-  }
-
-  getAccessibleImages(images) {
-    return getAccessibleImages(images, this.allowLocalImages);
-  }
-
-  debugImageAccessibility(images) {
-    return debugImageAccessibility(images, {
-      allowLocalImages: this.allowLocalImages,
-      imageHostingService: this.imageHostingService,
-    });
-  }
-
-  selectHeroImage(images) {
-    return selectHeroImage(images, this.getFlexMessageOptions());
-  }
-
-  getStatusColor(status) {
-    return getStatusColor(status);
-  }
-
-  getPriorityColor(priority) {
-    return getPriorityColor(priority);
-  }
-
-  getNotificationTitle(messageType) {
-    return getNotificationTitle(messageType);
-  }
-
-  getNotificationSubtitle(messageType) {
-    return getNotificationSubtitle(messageType);
-  }
-
-  getStatusText(status) {
-    return getStatusText(status);
-  }
-
-  getPriorityText(priority) {
-    return getPriorityText(priority);
+  /**
+   * Handles postback events (button clicks, etc.)
+   * @param {Object} event - The postback event
+   * @returns {Promise<Object>} Handling result
+   */
+  async handlePostbackEvent(event) {
+    const { postback, replyToken } = event;
+    const response = `Postback received: ${postback.data}`;
+    return await this.replyToWebhook(replyToken, response);
   }
 }
 
-module.exports = new LineService();
+// ===== EXPORTS =====
+
+// Create singleton instance
+const service = new LineWebhookService();
+
+module.exports = {
+  // Service methods
+  sendToUser: (lineUserId, messages) => service.sendToUser(lineUserId, messages),
+  replyToWebhook: (replyToken, messages) => service.replyToWebhook(replyToken, messages),
+  sendTestMessage: (lineUserId, testMessage) => service.sendTestMessage(lineUserId, testMessage),
+  getUserProfile: (lineUserId) => service.getUserProfile(lineUserId),
+  verifyWebhookSignature: (signature, body) => service.verifyWebhookSignature(signature, body),
+  processWebhookEvent: (event) => service.processWebhookEvent(event),
+  
+  // Utility methods
+  isValidLineUserId: (lineUserId) => service.isValidLineUserId(lineUserId),
+  isConfigured: () => service.isConfigured(),
+  
+  // Export the service class for advanced usage
+  LineWebhookService
+};

@@ -1,4 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import authService from './authService';
 
 export interface Target {
   id: number;
@@ -7,7 +8,9 @@ export interface Target {
   year: number;
   target_value: number;
   unit: 'case' | 'THB' | 'percent';
-  area: string;
+  plant: string | null;
+  area: string | null;
+  plant_name?: string;
   area_name?: string;
   created_at: string;
   updated_at: string;
@@ -20,7 +23,8 @@ export interface CreateTargetRequest {
   year: number;
   target_value: number;
   unit: 'case' | 'THB' | 'percent';
-  area: string;
+  plant?: string | null;
+  area?: string | null;
   period?: string;
   created_by?: string;
 }
@@ -34,11 +38,13 @@ export interface UpdateTargetRequest {
 export interface CopyP1Request {
   type: 'open case' | 'close case';
   year: number;
-  area: string;
+  plant?: string | null;
+  area?: string | null;
   updated_by?: string;
 }
 
 export interface TargetFilters {
+  plant?: string;
   area?: string;
   year?: number;
   type?: 'open case' | 'close case';
@@ -77,6 +83,7 @@ class TargetService {
   async getTargets(filters?: TargetFilters): Promise<{ success: boolean; data: Target[] }> {
     const params = new URLSearchParams();
     
+    if (filters?.plant) params.append('plant', filters.plant);
     if (filters?.area) params.append('area', filters.area);
     if (filters?.year) params.append('year', filters.year.toString());
     if (filters?.type) params.append('type', filters.type);
@@ -129,13 +136,39 @@ class TargetService {
     return this.request<{ success: boolean; data: number[] }>('/meta/years');
   }
 
-  // Helper method to get targets grouped by type and area
+  // Get distinct plants from hierarchy
+  async getPlants(): Promise<{ success: boolean; data: { code: string; name: string }[] }> {
+    const url = `${API_BASE_URL}/hierarchy/distinct/plants`;
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...authService.getAuthHeaders()
+      }
+    });
+    return await response.json();
+  }
+
+  // Get distinct areas from hierarchy
+  async getAreas(plantCode?: string): Promise<{ success: boolean; data: { code: string; name: string; plant: string }[] }> {
+    const url = plantCode 
+      ? `${API_BASE_URL}/hierarchy/distinct/areas?plant=${plantCode}`
+      : `${API_BASE_URL}/hierarchy/distinct/areas`;
+    const response = await fetch(url, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...authService.getAuthHeaders()
+      }
+    });
+    return await response.json();
+  }
+
+  // Helper method to get targets grouped by type, plant, and area
   async getTargetsGrouped(filters?: TargetFilters): Promise<{ [key: string]: Target[] }> {
     const response = await this.getTargets(filters);
     const grouped: { [key: string]: Target[] } = {};
     
     response.data.forEach(target => {
-      const key = `${target.type}-${target.area}-${target.year}`;
+      const key = `${target.type}-${target.plant || 'all'}-${target.area || 'all'}-${target.year}`;
       if (!grouped[key]) {
         grouped[key] = [];
       }
@@ -145,16 +178,19 @@ class TargetService {
     return grouped;
   }
 
-  // Helper method to get targets as a matrix (periods x areas)
-  async getTargetsMatrix(filters?: TargetFilters): Promise<{ [period: string]: { [area: string]: Target } }> {
+  // Helper method to get targets as a matrix (periods x locations)
+  async getTargetsMatrix(filters?: TargetFilters): Promise<{ [period: string]: { [location: string]: Target } }> {
     const response = await this.getTargets(filters);
-    const matrix: { [period: string]: { [area: string]: Target } } = {};
+    const matrix: { [period: string]: { [location: string]: Target } } = {};
     
     response.data.forEach(target => {
       if (!matrix[target.period]) {
         matrix[target.period] = {};
       }
-      matrix[target.period][target.area] = target;
+      const locationKey = target.plant && target.area 
+        ? `${target.plant}-${target.area}` 
+        : target.plant || target.area || 'all';
+      matrix[target.period][locationKey] = target;
     });
     
     return matrix;

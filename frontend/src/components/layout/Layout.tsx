@@ -91,7 +91,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <div className="relative sticky top-0 self-start h-[100dvh]">
                 <SubmenuPanel activeId={activeId} collapsed={submenuCollapsed} />
                 <button
-                  className="absolute top-10 -right-3 z-20 h-7 w-7 flex items-center justify-center rounded-full bg-background border shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors ring-1 ring-black/5"
+                  className="absolute top-11 -right-3 z-20 h-7 w-7 flex items-center justify-center rounded-full bg-background border shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors ring-1 ring-black/5"
                   onClick={() => setSubmenuCollapsed(v => !v)}
                   title={submenuCollapsed ? 'Expand menu' : 'Collapse menu'}
                 >
@@ -121,12 +121,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         {isMobile && (
           <div className="sticky top-0 z-50 bg-background">
             <TopNavbar isMobile={isMobile} onMobileMenuToggle={handleToggleMobileMenu} />
-            <Breadcrumbs />
+            {/* <Breadcrumbs /> */}
           </div>
         )}
         {!isMobile && (
           <>
-            <Breadcrumbs />
+            {/* <Breadcrumbs /> */}
           </>
         )}
         <main className="flex-1 overflow-auto bg-background">

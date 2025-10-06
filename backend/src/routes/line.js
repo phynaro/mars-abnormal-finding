@@ -34,7 +34,7 @@ router.post('/webhook', async (req, res) => {
         if (needsLineId) {
           const userId = event.source?.userId;
           if (userId && event.replyToken) {
-            await lineService.replyToToken(event.replyToken, `Your LINE userId: ${userId}`);
+            await lineService.replyToWebhook(event.replyToken, `Your LINE userId: ${userId}`);
           }
         }
       }

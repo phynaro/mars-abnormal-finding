@@ -30,6 +30,9 @@ router.get('/af', requireFormPermission('TKT', 'view'), dashboardController.getA
 // Get Tickets Count Per Period (requires TKT form view permission)
 router.get('/tickets-count-per-period', requireFormPermission('TKT', 'view'), dashboardController.getTicketsCountPerPeriod);
 
+// Get Tickets Closed Per Period (requires TKT form view permission)
+router.get('/tickets-closed-per-period', requireFormPermission('TKT', 'view'), dashboardController.getTicketsClosedPerPeriod);
+
 // Get Area Activity Data (requires TKT form view permission)
 router.get('/area-activity', requireFormPermission('TKT', 'view'), dashboardController.getAreaActivityData);
 
@@ -47,6 +50,9 @@ router.get('/cost-avoidance', requireFormPermission('TKT', 'view'), dashboardCon
 
 // Get Downtime Impact Leaderboard Data (requires TKT form view permission)
 router.get('/downtime-impact-leaderboard', requireFormPermission('TKT', 'view'), dashboardController.getDowntimeImpactLeaderboard);
+
+// Debug endpoint for plant/area data consistency
+router.get('/debug-plant-area-data', requireFormPermission('TKT', 'view'), dashboardController.debugPlantAreaData);
 
 // Get Cost Impact Leaderboard Data (requires TKT form view permission)
 router.get('/cost-impact-leaderboard', requireFormPermission('TKT', 'view'), dashboardController.getCostImpactLeaderboard);

@@ -1,4 +1,4 @@
-# LINE Image Configuration Guide
+# LINE Bot Configuration Guide
 
 ## Environment Variables
 
@@ -7,6 +7,7 @@ Add these to your `.env` file:
 ```bash
 # LINE Bot Configuration
 LINE_CHANNEL_ACCESS_TOKEN=your_line_channel_access_token_here
+LINE_CHANNEL_SECRET=your_line_channel_secret_here  # Get this from LINE Bot Console
 
 # LINE Image Configuration
 # Set to 'true' to allow local images (NOT recommended for production)

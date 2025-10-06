@@ -26,6 +26,7 @@ import {
   Circle,
   Play,
   UserPlus,
+  Phone,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -345,16 +346,29 @@ const TicketDetailsPage: React.FC = () => {
     ticket?.images?.filter((img) => img.image_type === "after") || [];
   const locationHierarchy = ticket
     ? [
-        { label: "Plant", value: ticket.plant_code },
-        { label: "Area", value: ticket.area_code },
-        { label: "Line", value: ticket.line_code },
+        { 
+          label: "Plant", 
+          code: ticket.plant_code,
+          value: ticket.plant_name || ticket.plant_code 
+        },
+        { 
+          label: "Area", 
+          code: ticket.area_code,
+          value: ticket.area_name || ticket.area_code 
+        },
+        { 
+          label: "Line/Sub Area", 
+          code: ticket.line_code,
+          value: ticket.line_name || ticket.line_code 
+        },
         {
           label: "Machine",
-          value: ticket.machine_code
+          code: ticket.machine_code,
+          value: ticket.machine_name || (ticket.machine_code
             ? `${ticket.machine_code}${ticket.machine_number ? `-${ticket.machine_number}` : ""}`
-            : undefined,
+            : undefined),
         },
-      ].filter((item) => Boolean(item.value))
+      ].filter((item) => Boolean(item.code))
     : [];
 
   const renderImageCard = (
@@ -1007,8 +1021,17 @@ const TicketDetailsPage: React.FC = () => {
                   <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     {t('ticket.reporter')}
                   </dt>
-                  <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                    {ticket.reporter_name}
+                  <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                    <span>{ticket.reporter_name}</span>
+                    {ticket.reporter_phone && (
+                      <a
+                        href={`tel:${ticket.reporter_phone}`}
+                        className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-700 dark:text-green-300 transition-colors"
+                        title={`Call ${ticket.reporter_name}: ${ticket.reporter_phone}`}
+                      >
+                        <Phone className="h-3 w-3" />
+                      </a>
+                    )}
                   </dd>
                 </div>
                 {ticket.assignee_name && (
@@ -1016,8 +1039,17 @@ const TicketDetailsPage: React.FC = () => {
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                       {t('ticket.assignedTo')}
                     </dt>
-                    <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                      {ticket.assignee_name}
+                    <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                      <span>{ticket.assignee_name}</span>
+                      {ticket.assignee_phone && (
+                        <a
+                          href={`tel:${ticket.assignee_phone}`}
+                          className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-700 dark:text-green-300 transition-colors"
+                          title={`Call ${ticket.assignee_name}: ${ticket.assignee_phone}`}
+                        >
+                          <Phone className="h-3 w-3" />
+                        </a>
+                      )}
                     </dd>
                   </div>
                 )}
@@ -1032,7 +1064,7 @@ const TicketDetailsPage: React.FC = () => {
                 {ticket.scheduled_complete && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      {t('ticket.scheduledComplete')}
+                      {t('ticket.scheduledCompleteDate')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                       {new Date(ticket.scheduled_complete).toLocaleDateString('th-TH')}
@@ -1086,9 +1118,14 @@ const TicketDetailsPage: React.FC = () => {
                         <span className="font-medium text-gray-600 dark:text-gray-300">
                           {item.label}
                         </span>
-                        <span className="text-gray-900 dark:text-gray-100">
-                          {item.value}
-                        </span>
+                        <div className="text-right">
+                          <div className="text-gray-900 dark:text-gray-100 font-medium">
+                            {item.value}
+                          </div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            {item.code}
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>

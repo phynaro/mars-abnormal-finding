@@ -1171,17 +1171,22 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
     // Extract query parameters
     const {
       year = new Date().getFullYear(),
-      area_id
+      plant,
+      area
     } = req.query;
 
-    // Build WHERE clause for tickets
+    // Build WHERE clause for tickets with plant/area filtering via PUExtension
     let ticketsWhereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)}`;
     
-    if (area_id && area_id !== 'all') {
-      ticketsWhereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    if (plant && plant !== 'all') {
+      ticketsWhereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      ticketsWhereClause += ` AND pe.area = '${area}'`;
     }
 
-    // Get tickets count per period
+    // Get tickets count per period with plant/area filtering
     const ticketsQuery = `
       SELECT 
         CASE 
@@ -1202,6 +1207,7 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
         COUNT(*) as tickets,
         COUNT(DISTINCT t.reported_by) as uniqueReporters
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       ${ticketsWhereClause}
       GROUP BY 
         CASE 
@@ -1222,18 +1228,21 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
       ORDER BY period
     `;
 
-    // Get targets for the same year and area
+    // Get targets for the same year, plant, and area
     let targetsWhereClause = `WHERE t.year = ${parseInt(year)} AND t.type = 'open case'`;
+
+    if (plant) {
+      targetsWhereClause += ` AND t.plant = '${plant}'`;
+    } else  {
+      // When plant = 'all', look for targets with plant = 'all' or NULL
+      targetsWhereClause += ` AND (t.plant = 'all' OR t.plant IS NULL)`;
+    }
     
-    if (area_id && area_id !== 'all') {
-      // Get area code from area_id
-      const areaQuery = `SELECT code FROM Area WHERE id = ${parseInt(area_id)}`;
-      const areaResult = await pool.request().query(areaQuery);
-      
-      if (areaResult.recordset.length > 0) {
-        const areaCode = areaResult.recordset[0].code;
-        targetsWhereClause += ` AND t.area = '${areaCode}'`;
-      }
+    if (area) {
+      targetsWhereClause += ` AND t.area = '${area}'`;
+    } else {
+      // When area = 'all', look for targets with area = 'all' or NULL
+      targetsWhereClause += ` AND (t.area = 'all' OR t.area IS NULL)`;
     }
 
     const targetsQuery = `
@@ -1245,13 +1254,13 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
       ${targetsWhereClause}
       ORDER BY t.period
     `;
-
+   
     // Execute queries
     const [ticketsResult, targetsResult] = await Promise.all([
       pool.request().query(ticketsQuery),
       pool.request().query(targetsQuery)
     ]);
-
+   
     // Create a map of all periods (P1-P13)
     const allPeriods = Array.from({ length: 13 }, (_, i) => `P${i + 1}`);
     
@@ -1296,7 +1305,8 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
           averageTarget: Math.round(participationData.reduce((sum, item) => sum + item.target, 0) / participationData.length),
           appliedFilters: {
             year: parseInt(year),
-            area_id: area_id ? parseInt(area_id) : null
+            plant: plant || null,
+            area: area || null
           }
         }
       }
@@ -1313,9 +1323,168 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
 };
 
 /**
+ * Get Total Tickets Closed Per Period Data
+ * Returns count of tickets completed (closed/resolved) per period
+ * Uses completed_at field to determine completion date
+ * Supports plant/area filtering via PUExtension
+ */
+exports.getTicketsClosedPerPeriod = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      year = new Date().getFullYear(),
+      plant,
+      area
+    } = req.query;
+
+    // Build WHERE clause for completed tickets with plant/area filtering via PUExtension
+    let ticketsWhereClause = `WHERE YEAR(t.completed_at) = ${parseInt(year)} AND t.status IN ('closed', 'resolved') AND t.completed_at IS NOT NULL`;
+    
+    if (plant && plant !== 'all') {
+      ticketsWhereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      ticketsWhereClause += ` AND pe.area = '${area}'`;
+    }
+
+    // Get tickets closed count per period with plant/area filtering
+    const ticketsQuery = `
+      SELECT 
+        CASE 
+          WHEN MONTH(t.completed_at) = 1 THEN 'P1'
+          WHEN MONTH(t.completed_at) = 2 THEN 'P2'
+          WHEN MONTH(t.completed_at) = 3 THEN 'P3'
+          WHEN MONTH(t.completed_at) = 4 THEN 'P4'
+          WHEN MONTH(t.completed_at) = 5 THEN 'P5'
+          WHEN MONTH(t.completed_at) = 6 THEN 'P6'
+          WHEN MONTH(t.completed_at) = 7 THEN 'P7'
+          WHEN MONTH(t.completed_at) = 8 THEN 'P8'
+          WHEN MONTH(t.completed_at) = 9 THEN 'P9'
+          WHEN MONTH(t.completed_at) = 10 THEN 'P10'
+          WHEN MONTH(t.completed_at) = 11 THEN 'P11'
+          WHEN MONTH(t.completed_at) = 12 THEN 'P12'
+          ELSE 'P13'
+        END as period,
+        COUNT(*) as ticketsClosed
+      FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      ${ticketsWhereClause}
+      GROUP BY 
+        CASE 
+          WHEN MONTH(t.completed_at) = 1 THEN 'P1'
+          WHEN MONTH(t.completed_at) = 2 THEN 'P2'
+          WHEN MONTH(t.completed_at) = 3 THEN 'P3'
+          WHEN MONTH(t.completed_at) = 4 THEN 'P4'
+          WHEN MONTH(t.completed_at) = 5 THEN 'P5'
+          WHEN MONTH(t.completed_at) = 6 THEN 'P6'
+          WHEN MONTH(t.completed_at) = 7 THEN 'P7'
+          WHEN MONTH(t.completed_at) = 8 THEN 'P8'
+          WHEN MONTH(t.completed_at) = 9 THEN 'P9'
+          WHEN MONTH(t.completed_at) = 10 THEN 'P10'
+          WHEN MONTH(t.completed_at) = 11 THEN 'P11'
+          WHEN MONTH(t.completed_at) = 12 THEN 'P12'
+          ELSE 'P13'
+        END
+      ORDER BY period
+    `;
+
+    // Get targets for the same year, plant, and area (type = 'close case')
+    let targetsWhereClause = `WHERE t.year = ${parseInt(year)} AND t.type = 'close case'`;
+    
+    if (plant && plant !== 'all') {
+      targetsWhereClause += ` AND t.plant = '${plant}'`;
+    } else{
+      // When plant = 'all', look for targets with plant = 'all' or NULL
+      targetsWhereClause += ` AND (t.plant = 'all' OR t.plant IS NULL)`;
+    }
+    
+    if (area && area !== 'all') {
+      targetsWhereClause += ` AND t.area = '${area}'`;
+    } else{
+      // When area = 'all', look for targets with area = 'all' or NULL
+      targetsWhereClause += ` AND (t.area = 'all' OR t.area IS NULL)`;
+    }
+
+    const targetsQuery = `
+      SELECT 
+        t.period,
+        t.target_value,
+        t.unit
+      FROM dbo.Target t
+      ${targetsWhereClause}
+      ORDER BY t.period
+    `;
+
+    // Execute queries
+    const [ticketsResult, targetsResult] = await Promise.all([
+      pool.request().query(ticketsQuery),
+      pool.request().query(targetsQuery)
+    ]);
+    
+    // Create a map of all periods (P1-P13)
+    const allPeriods = Array.from({ length: 13 }, (_, i) => `P${i + 1}`);
+    
+    // Create maps for easy lookup
+    const ticketsClosedMap = {};
+    ticketsResult.recordset.forEach(row => {
+      ticketsClosedMap[row.period] = row.ticketsClosed;
+    });
+
+    const targetsMap = {};
+    targetsResult.recordset.forEach(row => {
+      targetsMap[row.period] = row.target_value;
+    });
+
+    // Build the response data with all periods, filling missing ones with 0
+    const ticketsClosedData = allPeriods.map(period => {
+      const ticketsClosed = ticketsClosedMap[period] || 0;
+      const targetValue = targetsMap[period] || 0; // Default to 0 if no target
+      
+      return {
+        period: period,
+        ticketsClosed: ticketsClosed,
+        target: Math.round(targetValue)
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        ticketsClosedData,
+        summary: {
+          totalPeriods: ticketsClosedData.length,
+          totalTicketsClosed: ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0),
+          totalTarget: ticketsClosedData.reduce((sum, item) => sum + item.target, 0),
+          averageTicketsClosedPerPeriod: Math.round(ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0) / ticketsClosedData.length),
+          averageTargetPerPeriod: Math.round(ticketsClosedData.reduce((sum, item) => sum + item.target, 0) / ticketsClosedData.length),
+          appliedFilters: {
+            year: parseInt(year),
+            plant: plant || null,
+            area: area || null
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getTicketsClosedPerPeriod:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Get Area Activity Data
- * Returns ticket counts grouped by area for the "Who Active (Area)" chart
- * This chart is not affected by area filter - shows all areas
+ * Returns ticket counts grouped by plant/area/machine based on filter conditions:
+ * 1. Group by plant if all plant filter is selected
+ * 2. Group by area if any plant selected but no area selected  
+ * 3. Group by machine if any area filter is selected
  */
 exports.getAreaActivityData = async (req, res) => {
   try {
@@ -1323,32 +1492,99 @@ exports.getAreaActivityData = async (req, res) => {
     
     // Extract query parameters
     const {
-      year = new Date().getFullYear()
+      year = new Date().getFullYear(),
+      plant,
+      area
     } = req.query;
 
-    // Get ticket counts by area for the specified year
-    const areaActivityQuery = `
-      SELECT TOP 10
-        a.id as area_id,
-        a.name as area_name,
-        a.code as area_code,
-        COUNT(t.id) as ticket_count
-      FROM Area a
-      INNER JOIN Tickets t ON a.id = t.area_id 
-        AND YEAR(t.created_at) = ${parseInt(year)}
-      WHERE a.is_active = 1
-      GROUP BY a.id, a.name, a.code
-      HAVING COUNT(t.id) > 0
-      ORDER BY ticket_count DESC, a.name ASC
-    `;
+    let areaActivityQuery;
+    let groupByField;
+    let displayNameField;
+    let summaryLabel;
+
+    // Determine grouping based on filter conditions
+    if (!plant || plant === 'all') {
+      // Condition 1: Show group by plant if all plant filter is selected
+      groupByField = 'pe.plant';
+      displayNameField = 'pe.plant as display_name';
+      summaryLabel = 'Plants';
+      
+      areaActivityQuery = `
+        SELECT TOP 10
+          pe.plant as display_name,
+          pe.plant,
+          COUNT(t.id) as ticket_count
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE YEAR(t.created_at) = ${parseInt(year)}
+          AND pe.plant IS NOT NULL
+        GROUP BY pe.plant
+        HAVING COUNT(t.id) > 0
+        ORDER BY ticket_count DESC, pe.plant ASC
+      `;
+    } else if (!area || area === 'all') {
+      // Condition 2: Show group by area if any plant selected but no area selected
+      groupByField = 'pe.area';
+      displayNameField = 'pe.area as display_name';
+      summaryLabel = 'Areas';
+      
+      areaActivityQuery = `
+        SELECT TOP 10
+          pe.area as display_name,
+          pe.plant,
+          pe.area,
+          COUNT(t.id) as ticket_count
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE YEAR(t.created_at) = ${parseInt(year)}
+          AND pe.plant = '${plant}'
+          AND pe.area IS NOT NULL
+        GROUP BY pe.plant, pe.area
+        HAVING COUNT(t.id) > 0
+        ORDER BY ticket_count DESC, pe.area ASC
+      `;
+    } else {
+      // Condition 3: Show group by equipment (machine/line) if any area filter is selected
+      groupByField = 'pe.machine';
+      displayNameField = 'pe.machine as display_name';
+      summaryLabel = 'Equipment';
+      
+      areaActivityQuery = `
+        SELECT TOP 10
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END as display_name,
+          pe.plant,
+          pe.area,
+          pe.machine,
+          pe.line,
+          COUNT(t.id) as ticket_count
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE YEAR(t.created_at) = ${parseInt(year)}
+          AND pe.plant = '${plant}'
+          AND pe.area = '${area}'
+        GROUP BY pe.plant, pe.area, pe.machine, pe.line
+        HAVING COUNT(t.id) > 0
+        ORDER BY ticket_count DESC, 
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END ASC
+      `;
+    }
 
     const result = await pool.request().query(areaActivityQuery);
     
     // Transform the data for frontend consumption
     const areaActivityData = result.recordset.map(row => ({
-      area_id: row.area_id,
-      area_name: row.area_name,
-      area_code: row.area_code,
+      display_name: row.display_name,
+      plant: row.plant,
+      area: row.area,
+      machine: row.machine,
       tickets: row.ticket_count
     }));
 
@@ -1357,13 +1593,16 @@ exports.getAreaActivityData = async (req, res) => {
       data: {
         areaActivityData,
         summary: {
-          totalAreas: areaActivityData.length,
+          totalItems: areaActivityData.length,
           totalTickets: areaActivityData.reduce((sum, item) => sum + item.tickets, 0),
-          averageTicketsPerArea: areaActivityData.length > 0 
+          averageTicketsPerItem: areaActivityData.length > 0 
             ? Math.round(areaActivityData.reduce((sum, item) => sum + item.tickets, 0) / areaActivityData.length)
             : 0,
+          groupBy: summaryLabel,
           appliedFilters: {
-            year: parseInt(year)
+            year: parseInt(year),
+            plant: plant || null,
+            area: area || null
           }
         }
       }
@@ -1382,7 +1621,7 @@ exports.getAreaActivityData = async (req, res) => {
 /**
  * Get User Activity Data
  * Returns ticket counts grouped by user for the "Who Active (User)" chart
- * This chart is affected by time range and area filters
+ * This chart is affected by time range and plant/area filters
  */
 exports.getUserActivityData = async (req, res) => {
   try {
@@ -1392,7 +1631,8 @@ exports.getUserActivityData = async (req, res) => {
     const {
       startDate,
       endDate,
-      area_id
+      plant,
+      area
     } = req.query;
 
     // Validate required parameters
@@ -1411,14 +1651,18 @@ exports.getUserActivityData = async (req, res) => {
     const startDateFormatted = formatDateForSQL(startDate);
     const endDateFormatted = formatDateForSQL(endDate);
 
-    // Build WHERE clause for tickets
+    // Build WHERE clause for tickets with plant/area filtering via PUExtension
     let whereClause = `WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'`;
     
-    if (area_id && area_id !== 'all') {
-      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
     }
 
-    // Get ticket counts by user for the specified time range and area
+    // Get ticket counts by user for the specified time range and plant/area
     const userActivityQuery = `
       SELECT TOP 10
         t.reported_by as user_id,
@@ -1426,6 +1670,7 @@ exports.getUserActivityData = async (req, res) => {
         u.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.reported_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${whereClause}
@@ -1473,7 +1718,8 @@ exports.getUserActivityData = async (req, res) => {
           appliedFilters: {
             startDate,
             endDate,
-            area_id: area_id ? parseInt(area_id) : null
+            plant: plant || null,
+            area: area || null
           }
         }
       }
@@ -1491,8 +1737,10 @@ exports.getUserActivityData = async (req, res) => {
 
 /**
  * Get Downtime Avoidance Trend Data
- * Returns downtime avoidance data by period and area
- * This chart is affected by year filter only (not area filter)
+ * Returns downtime avoidance data by period and plant/area/machine based on filter conditions:
+ * 1. Group by plant if all plant filter is selected
+ * 2. Group by area if any plant selected but no area selected  
+ * 3. Group by machine if any area filter is selected
  */
 exports.getDowntimeAvoidanceTrend = async (req, res) => {
   try {
@@ -1500,85 +1748,214 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
     
     // Extract query parameters
     const {
-      year = new Date().getFullYear()
+      year = new Date().getFullYear(),
+      plant,
+      area
     } = req.query;
 
-    // Get downtime avoidance data by period and area for the specified year
-    const downtimeQuery = `
-      SELECT 
-        CASE 
-          WHEN MONTH(t.created_at) = 1 THEN 'P1'
-          WHEN MONTH(t.created_at) = 2 THEN 'P2'
-          WHEN MONTH(t.created_at) = 3 THEN 'P3'
-          WHEN MONTH(t.created_at) = 4 THEN 'P4'
-          WHEN MONTH(t.created_at) = 5 THEN 'P5'
-          WHEN MONTH(t.created_at) = 6 THEN 'P6'
-          WHEN MONTH(t.created_at) = 7 THEN 'P7'
-          WHEN MONTH(t.created_at) = 8 THEN 'P8'
-          WHEN MONTH(t.created_at) = 9 THEN 'P9'
-          WHEN MONTH(t.created_at) = 10 THEN 'P10'
-          WHEN MONTH(t.created_at) = 11 THEN 'P11'
-          WHEN MONTH(t.created_at) = 12 THEN 'P12'
-          ELSE 'P13'
-        END as period,
-        CONCAT(p.code, '-', a.code) as area_display_name,
-        COUNT(t.id) as ticket_count,
-        SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-      FROM Tickets t
-      INNER JOIN Area a ON t.area_id = a.id
-      INNER JOIN Plant p ON a.plant_id = p.id
-      WHERE YEAR(t.created_at) = ${parseInt(year)}
-        AND t.status IN ('closed', 'resolved')
-      GROUP BY 
-        CASE 
-          WHEN MONTH(t.created_at) = 1 THEN 'P1'
-          WHEN MONTH(t.created_at) = 2 THEN 'P2'
-          WHEN MONTH(t.created_at) = 3 THEN 'P3'
-          WHEN MONTH(t.created_at) = 4 THEN 'P4'
-          WHEN MONTH(t.created_at) = 5 THEN 'P5'
-          WHEN MONTH(t.created_at) = 6 THEN 'P6'
-          WHEN MONTH(t.created_at) = 7 THEN 'P7'
-          WHEN MONTH(t.created_at) = 8 THEN 'P8'
-          WHEN MONTH(t.created_at) = 9 THEN 'P9'
-          WHEN MONTH(t.created_at) = 10 THEN 'P10'
-          WHEN MONTH(t.created_at) = 11 THEN 'P11'
-          WHEN MONTH(t.created_at) = 12 THEN 'P12'
-          ELSE 'P13'
-        END,
-        CONCAT(p.code, '-', a.code)
-      ORDER BY period, area_display_name
-    `;
+    let downtimeQuery;
+    let groupByField;
+    let displayNameField;
+    let summaryLabel;
+
+    // Determine grouping based on filter conditions
+    if (!plant || plant === 'all') {
+      // Condition 1: Show group by plant if all plant filter is selected
+      groupByField = 'pe.plant';
+      displayNameField = 'pe.plant as display_name';
+      summaryLabel = 'Plants';
+      
+      downtimeQuery = `
+        SELECT 
+          CASE 
+            WHEN MONTH(t.created_at) = 1 THEN 'P1'
+            WHEN MONTH(t.created_at) = 2 THEN 'P2'
+            WHEN MONTH(t.created_at) = 3 THEN 'P3'
+            WHEN MONTH(t.created_at) = 4 THEN 'P4'
+            WHEN MONTH(t.created_at) = 5 THEN 'P5'
+            WHEN MONTH(t.created_at) = 6 THEN 'P6'
+            WHEN MONTH(t.created_at) = 7 THEN 'P7'
+            WHEN MONTH(t.created_at) = 8 THEN 'P8'
+            WHEN MONTH(t.created_at) = 9 THEN 'P9'
+            WHEN MONTH(t.created_at) = 10 THEN 'P10'
+            WHEN MONTH(t.created_at) = 11 THEN 'P11'
+            WHEN MONTH(t.created_at) = 12 THEN 'P12'
+            ELSE 'P13'
+          END as period,
+          pe.plant as display_name,
+          COUNT(t.id) as ticket_count,
+          SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE YEAR(t.created_at) = ${parseInt(year)}
+          AND t.status IN ('closed', 'resolved')
+          AND pe.plant IS NOT NULL
+        GROUP BY 
+          CASE 
+            WHEN MONTH(t.created_at) = 1 THEN 'P1'
+            WHEN MONTH(t.created_at) = 2 THEN 'P2'
+            WHEN MONTH(t.created_at) = 3 THEN 'P3'
+            WHEN MONTH(t.created_at) = 4 THEN 'P4'
+            WHEN MONTH(t.created_at) = 5 THEN 'P5'
+            WHEN MONTH(t.created_at) = 6 THEN 'P6'
+            WHEN MONTH(t.created_at) = 7 THEN 'P7'
+            WHEN MONTH(t.created_at) = 8 THEN 'P8'
+            WHEN MONTH(t.created_at) = 9 THEN 'P9'
+            WHEN MONTH(t.created_at) = 10 THEN 'P10'
+            WHEN MONTH(t.created_at) = 11 THEN 'P11'
+            WHEN MONTH(t.created_at) = 12 THEN 'P12'
+            ELSE 'P13'
+          END,
+          pe.plant
+        ORDER BY period, pe.plant
+      `;
+    } else if (!area || area === 'all') {
+      // Condition 2: Show group by area if any plant selected but no area selected
+      groupByField = 'pe.area';
+      displayNameField = 'pe.area as display_name';
+      summaryLabel = 'Areas';
+      
+      downtimeQuery = `
+        SELECT 
+          CASE 
+            WHEN MONTH(t.created_at) = 1 THEN 'P1'
+            WHEN MONTH(t.created_at) = 2 THEN 'P2'
+            WHEN MONTH(t.created_at) = 3 THEN 'P3'
+            WHEN MONTH(t.created_at) = 4 THEN 'P4'
+            WHEN MONTH(t.created_at) = 5 THEN 'P5'
+            WHEN MONTH(t.created_at) = 6 THEN 'P6'
+            WHEN MONTH(t.created_at) = 7 THEN 'P7'
+            WHEN MONTH(t.created_at) = 8 THEN 'P8'
+            WHEN MONTH(t.created_at) = 9 THEN 'P9'
+            WHEN MONTH(t.created_at) = 10 THEN 'P10'
+            WHEN MONTH(t.created_at) = 11 THEN 'P11'
+            WHEN MONTH(t.created_at) = 12 THEN 'P12'
+            ELSE 'P13'
+          END as period,
+          pe.area as display_name,
+          COUNT(t.id) as ticket_count,
+          SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE YEAR(t.created_at) = ${parseInt(year)}
+          AND t.status IN ('closed', 'resolved')
+          AND pe.plant = '${plant}'
+          AND pe.area IS NOT NULL
+        GROUP BY 
+          CASE 
+            WHEN MONTH(t.created_at) = 1 THEN 'P1'
+            WHEN MONTH(t.created_at) = 2 THEN 'P2'
+            WHEN MONTH(t.created_at) = 3 THEN 'P3'
+            WHEN MONTH(t.created_at) = 4 THEN 'P4'
+            WHEN MONTH(t.created_at) = 5 THEN 'P5'
+            WHEN MONTH(t.created_at) = 6 THEN 'P6'
+            WHEN MONTH(t.created_at) = 7 THEN 'P7'
+            WHEN MONTH(t.created_at) = 8 THEN 'P8'
+            WHEN MONTH(t.created_at) = 9 THEN 'P9'
+            WHEN MONTH(t.created_at) = 10 THEN 'P10'
+            WHEN MONTH(t.created_at) = 11 THEN 'P11'
+            WHEN MONTH(t.created_at) = 12 THEN 'P12'
+            ELSE 'P13'
+          END,
+          pe.area
+        ORDER BY period, pe.area
+      `;
+    } else {
+      // Condition 3: Show group by equipment (machine/line) if any area filter is selected
+      groupByField = 'pe.machine';
+      displayNameField = 'pe.machine as display_name';
+      summaryLabel = 'Equipment';
+      
+      downtimeQuery = `
+        SELECT 
+          CASE 
+            WHEN MONTH(t.created_at) = 1 THEN 'P1'
+            WHEN MONTH(t.created_at) = 2 THEN 'P2'
+            WHEN MONTH(t.created_at) = 3 THEN 'P3'
+            WHEN MONTH(t.created_at) = 4 THEN 'P4'
+            WHEN MONTH(t.created_at) = 5 THEN 'P5'
+            WHEN MONTH(t.created_at) = 6 THEN 'P6'
+            WHEN MONTH(t.created_at) = 7 THEN 'P7'
+            WHEN MONTH(t.created_at) = 8 THEN 'P8'
+            WHEN MONTH(t.created_at) = 9 THEN 'P9'
+            WHEN MONTH(t.created_at) = 10 THEN 'P10'
+            WHEN MONTH(t.created_at) = 11 THEN 'P11'
+            WHEN MONTH(t.created_at) = 12 THEN 'P12'
+            ELSE 'P13'
+          END as period,
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END as display_name,
+          COUNT(t.id) as ticket_count,
+          SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE YEAR(t.created_at) = ${parseInt(year)}
+          AND t.status IN ('closed', 'resolved')
+          AND pe.plant = '${plant}'
+          AND pe.area = '${area}'
+        GROUP BY 
+          CASE 
+            WHEN MONTH(t.created_at) = 1 THEN 'P1'
+            WHEN MONTH(t.created_at) = 2 THEN 'P2'
+            WHEN MONTH(t.created_at) = 3 THEN 'P3'
+            WHEN MONTH(t.created_at) = 4 THEN 'P4'
+            WHEN MONTH(t.created_at) = 5 THEN 'P5'
+            WHEN MONTH(t.created_at) = 6 THEN 'P6'
+            WHEN MONTH(t.created_at) = 7 THEN 'P7'
+            WHEN MONTH(t.created_at) = 8 THEN 'P8'
+            WHEN MONTH(t.created_at) = 9 THEN 'P9'
+            WHEN MONTH(t.created_at) = 10 THEN 'P10'
+            WHEN MONTH(t.created_at) = 11 THEN 'P11'
+            WHEN MONTH(t.created_at) = 12 THEN 'P12'
+            ELSE 'P13'
+          END,
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END
+        ORDER BY period, 
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END
+      `;
+    }
 
     const result = await pool.request().query(downtimeQuery);
     
-    // Create a map of data by period and area
+    // Create a map of data by period and grouping field
     const dataMap = {};
     result.recordset.forEach(row => {
       if (!dataMap[row.period]) {
         dataMap[row.period] = {};
       }
-      dataMap[row.period][row.area_display_name] = {
+      dataMap[row.period][row.display_name] = {
         ticket_count: row.ticket_count,
         downtime_hours: row.total_downtime_hours
       };
     });
 
-    // Get all unique areas from the data
-    const allAreas = new Set();
+    // Get all unique grouping items from the data
+    const allItems = new Set();
     result.recordset.forEach(row => {
-      allAreas.add(row.area_display_name);
+      allItems.add(row.display_name);
     });
-    const sortedAreas = Array.from(allAreas).sort();
+    const sortedItems = Array.from(allItems).sort();
 
-    // Generate data for all periods (P1-P12) with all areas
+    // Generate data for all periods (P1-P12) with all grouping items
     const periods = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12'];
     const downtimeTrendData = periods.map(period => {
       const periodData = { period };
       
-      // Add data for each area (use 0 if no data)
-      sortedAreas.forEach(area => {
-        const areaData = dataMap[period]?.[area];
-        periodData[area] = areaData ? areaData.downtime_hours : 0;
+      // Add data for each grouping item (use 0 if no data)
+      sortedItems.forEach(item => {
+        const itemData = dataMap[period]?.[item];
+        periodData[item] = itemData ? itemData.downtime_hours : 0;
       });
       
       return periodData;
@@ -1590,10 +1967,13 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
         downtimeTrendData,
         summary: {
           totalPeriods: downtimeTrendData.length,
-          totalAreas: sortedAreas.length,
-          areas: sortedAreas,
+          totalItems: sortedItems.length,
+          items: sortedItems,
+          groupBy: summaryLabel,
           appliedFilters: {
-            year: parseInt(year)
+            year: parseInt(year),
+            plant: plant || null,
+            area: area || null
           }
         }
       }
@@ -1612,7 +1992,7 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
 /**
  * Get Cost Avoidance Data
  * Returns cost avoidance data by period
- * This chart is affected by area filter and year filter
+ * This chart is affected by plant/area filter and year filter
  */
 exports.getCostAvoidanceData = async (req, res) => {
   try {
@@ -1621,16 +2001,22 @@ exports.getCostAvoidanceData = async (req, res) => {
     // Extract query parameters
     const {
       year = new Date().getFullYear(),
-      area_id
+      plant,
+      area
     } = req.query;
 
-    // Build WHERE clause based on filters
+    // Build WHERE clause based on filters with plant/area filtering via PUExtension
     let whereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)} AND t.status IN ('closed', 'resolved')`;
-    if (area_id && area_id !== 'all') {
-      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
     }
 
-    // Get cost avoidance data by period for the specified year and area
+    // Get cost avoidance data by period for the specified year and plant/area
     const costAvoidanceQuery = `
       SELECT 
         CASE 
@@ -1652,6 +2038,7 @@ exports.getCostAvoidanceData = async (req, res) => {
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance,
         AVG(ISNULL(t.cost_avoidance, 0)) as avg_cost_per_case
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       ${whereClause}
       GROUP BY 
         CASE 
@@ -1706,7 +2093,8 @@ exports.getCostAvoidanceData = async (req, res) => {
           totalTickets: costAvoidanceData.reduce((sum, item) => sum + item.ticketCount, 0),
           appliedFilters: {
             year: parseInt(year),
-            area_id: area_id ? parseInt(area_id) : null
+            plant: plant || null,
+            area: area || null
           }
         }
       }
@@ -1723,10 +2111,108 @@ exports.getCostAvoidanceData = async (req, res) => {
 };
 
 /**
- * Get Downtime Impact Leaderboard Data
- * Returns top 10 areas ranked by downtime impact
- * This chart is NOT affected by area filter, but affected by selected period
+ * Debug endpoint to check data consistency for plant/area/machine filtering
+ * This helps diagnose discrepancies in totals across different filter levels
  */
+exports.debugPlantAreaData = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    const {
+      plant,
+      startDate,
+      endDate
+    } = req.query;
+
+    if (!plant) {
+      return res.status(400).json({
+        success: false,
+        message: 'plant parameter is required'
+      });
+    }
+
+    // Get detailed breakdown for the specified plant
+    const debugQuery = `
+      SELECT 
+        'Plant Level' as level,
+        pe.plant as name,
+        COUNT(t.id) as ticket_count,
+        SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+      FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      WHERE pe.plant = '${plant}'
+        AND t.status IN ('closed', 'resolved')
+        ${startDate ? `AND t.created_at >= '${startDate}'` : ''}
+        ${endDate ? `AND t.created_at <= '${endDate}'` : ''}
+      GROUP BY pe.plant
+
+      UNION ALL
+
+      SELECT 
+        'Area Level' as level,
+        CASE 
+          WHEN pe.area IS NULL THEN 'NULL Area'
+          ELSE pe.area
+        END as name,
+        COUNT(t.id) as ticket_count,
+        SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+      FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      WHERE pe.plant = '${plant}'
+        AND t.status IN ('closed', 'resolved')
+        ${startDate ? `AND t.created_at >= '${startDate}'` : ''}
+        ${endDate ? `AND t.created_at <= '${endDate}'` : ''}
+      GROUP BY pe.area
+
+      UNION ALL
+
+      SELECT 
+        'Machine/Line Level' as level,
+        CASE 
+          WHEN pe.machine IS NOT NULL THEN pe.machine
+          WHEN pe.line IS NOT NULL THEN pe.line
+          ELSE 'Unknown Equipment'
+        END as name,
+        COUNT(t.id) as ticket_count,
+        SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+      FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      WHERE pe.plant = '${plant}'
+        AND pe.area = '${area}'
+        AND t.status IN ('closed', 'resolved')
+        ${startDate ? `AND t.created_at >= '${startDate}'` : ''}
+        ${endDate ? `AND t.created_at <= '${endDate}'` : ''}
+      GROUP BY 
+        CASE 
+          WHEN pe.machine IS NOT NULL THEN pe.machine
+          WHEN pe.line IS NOT NULL THEN pe.line
+          ELSE 'Unknown Equipment'
+        END
+
+      ORDER BY level, total_downtime_hours DESC
+    `;
+
+    const result = await pool.request().query(debugQuery);
+    
+    res.json({
+      success: true,
+      data: {
+        plant,
+        startDate: startDate || 'No date filter',
+        endDate: endDate || 'No date filter',
+        breakdown: result.recordset
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in debugPlantAreaData:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
 exports.getDowntimeImpactLeaderboard = async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
@@ -1734,7 +2220,9 @@ exports.getDowntimeImpactLeaderboard = async (req, res) => {
     // Extract query parameters
     const {
       startDate,
-      endDate
+      endDate,
+      plant,
+      area
     } = req.query;
 
     if (!startDate || !endDate) {
@@ -1744,28 +2232,95 @@ exports.getDowntimeImpactLeaderboard = async (req, res) => {
       });
     }
 
-    // Get downtime impact data by area for the specified period
-    const downtimeImpactQuery = `
-      SELECT TOP 10
-        CONCAT(p.code, '-', a.code) as area_display_name,
-        COUNT(t.id) as ticket_count,
-        SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-      FROM Tickets t
-      INNER JOIN Area a ON t.area_id = a.id
-      INNER JOIN Plant p ON a.plant_id = p.id
-      WHERE t.created_at >= '${startDate}' 
-        AND t.created_at <= '${endDate}'
-        AND t.status IN ('closed', 'resolved')
-      GROUP BY CONCAT(p.code, '-', a.code)
-      HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
-      ORDER BY total_downtime_hours DESC
-    `;
+    let downtimeImpactQuery;
+    let groupByField;
+    let displayNameField;
+    let summaryLabel;
+
+    // Determine grouping based on filter conditions
+    if (!plant || plant === 'all') {
+      // Condition 1: Show group by plant if all plant filter is selected
+      groupByField = 'pe.plant';
+      displayNameField = 'pe.plant as display_name';
+      summaryLabel = 'Plants';
+      
+      downtimeImpactQuery = `
+        SELECT TOP 10
+          pe.plant as display_name,
+          COUNT(t.id) as ticket_count,
+          SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}'
+          AND t.status IN ('closed', 'resolved')
+          AND pe.plant IS NOT NULL
+        GROUP BY pe.plant
+        HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
+        ORDER BY total_downtime_hours DESC
+      `;
+    } else if (!area || area === 'all') {
+      // Condition 2: Show group by area if any plant selected but no area selected
+      groupByField = 'pe.area';
+      displayNameField = 'pe.area as display_name';
+      summaryLabel = 'Areas';
+      
+      downtimeImpactQuery = `
+        SELECT TOP 10
+          CASE 
+            WHEN pe.area IS NULL THEN 'Unknown Area'
+            ELSE pe.area
+          END as display_name,
+          COUNT(t.id) as ticket_count,
+          SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}'
+          AND t.status IN ('closed', 'resolved')
+          AND pe.plant = '${plant}'
+        GROUP BY pe.area
+        HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
+        ORDER BY total_downtime_hours DESC
+      `;
+    } else {
+      // Condition 3: Show group by equipment (machine/line) if any area filter is selected
+      groupByField = 'pe.machine';
+      displayNameField = 'pe.machine as display_name';
+      summaryLabel = 'Equipment';
+      
+      downtimeImpactQuery = `
+        SELECT TOP 10
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END as display_name,
+          COUNT(t.id) as ticket_count,
+          SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}'
+          AND t.status IN ('closed', 'resolved')
+          AND pe.plant = '${plant}'
+          AND pe.area = '${area}'
+        GROUP BY 
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END
+        HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
+        ORDER BY total_downtime_hours DESC
+      `;
+    }
 
     const result = await pool.request().query(downtimeImpactQuery);
     
     // Transform data for the chart
     const downtimeImpactData = result.recordset.map(row => ({
-      area: row.area_display_name,
+      display_name: row.display_name,
       hours: row.total_downtime_hours,
       ticketCount: row.ticket_count
     }));
@@ -1775,12 +2330,15 @@ exports.getDowntimeImpactLeaderboard = async (req, res) => {
       data: {
         downtimeImpactData,
         summary: {
-          totalAreas: downtimeImpactData.length,
+          totalItems: downtimeImpactData.length,
           totalDowntimeHours: downtimeImpactData.reduce((sum, item) => sum + item.hours, 0),
           totalTickets: downtimeImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
+          groupBy: summaryLabel,
           appliedFilters: {
             startDate,
-            endDate
+            endDate,
+            plant: plant || null,
+            area: area || null
           }
         }
       }
@@ -1798,8 +2356,10 @@ exports.getDowntimeImpactLeaderboard = async (req, res) => {
 
 /**
  * Get Cost Impact Leaderboard Data
- * Returns top 10 areas ranked by cost impact
- * This chart is NOT affected by area filter, but affected by selected period
+ * Returns top 10 plant/area/equipment ranked by cost impact based on filter conditions:
+ * 1. Group by plant if all plant filter is selected
+ * 2. Group by area if any plant selected but no area selected  
+ * 3. Group by equipment (machine/line) if any area filter is selected
  */
 exports.getCostImpactLeaderboard = async (req, res) => {
   try {
@@ -1808,7 +2368,9 @@ exports.getCostImpactLeaderboard = async (req, res) => {
     // Extract query parameters
     const {
       startDate,
-      endDate
+      endDate,
+      plant,
+      area
     } = req.query;
 
     if (!startDate || !endDate) {
@@ -1818,28 +2380,95 @@ exports.getCostImpactLeaderboard = async (req, res) => {
       });
     }
 
-    // Get cost impact data by area for the specified period
-    const costImpactQuery = `
-      SELECT TOP 10
-        CONCAT(p.code, '-', a.code) as area_display_name,
-        COUNT(t.id) as ticket_count,
-        SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
-      FROM Tickets t
-      INNER JOIN Area a ON t.area_id = a.id
-      INNER JOIN Plant p ON a.plant_id = p.id
-      WHERE t.created_at >= '${startDate}' 
-        AND t.created_at <= '${endDate}'
-        AND t.status IN ('closed', 'resolved')
-      GROUP BY CONCAT(p.code, '-', a.code)
-      HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
-      ORDER BY total_cost_avoidance DESC
-    `;
+    let costImpactQuery;
+    let groupByField;
+    let displayNameField;
+    let summaryLabel;
+
+    // Determine grouping based on filter conditions
+    if (!plant || plant === 'all') {
+      // Condition 1: Show group by plant if all plant filter is selected
+      groupByField = 'pe.plant';
+      displayNameField = 'pe.plant as display_name';
+      summaryLabel = 'Plants';
+      
+      costImpactQuery = `
+        SELECT TOP 10
+          pe.plant as display_name,
+          COUNT(t.id) as ticket_count,
+          SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}'
+          AND t.status IN ('closed', 'resolved')
+          AND pe.plant IS NOT NULL
+        GROUP BY pe.plant
+        HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
+        ORDER BY total_cost_avoidance DESC
+      `;
+    } else if (!area || area === 'all') {
+      // Condition 2: Show group by area if any plant selected but no area selected
+      groupByField = 'pe.area';
+      displayNameField = 'pe.area as display_name';
+      summaryLabel = 'Areas';
+      
+      costImpactQuery = `
+        SELECT TOP 10
+          CASE 
+            WHEN pe.area IS NULL THEN 'Unknown Area'
+            ELSE pe.area
+          END as display_name,
+          COUNT(t.id) as ticket_count,
+          SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}'
+          AND t.status IN ('closed', 'resolved')
+          AND pe.plant = '${plant}'
+        GROUP BY pe.area
+        HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
+        ORDER BY total_cost_avoidance DESC
+      `;
+    } else {
+      // Condition 3: Show group by equipment (machine/line) if any area filter is selected
+      groupByField = 'pe.machine';
+      displayNameField = 'pe.machine as display_name';
+      summaryLabel = 'Equipment';
+      
+      costImpactQuery = `
+        SELECT TOP 10
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END as display_name,
+          COUNT(t.id) as ticket_count,
+          SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}'
+          AND t.status IN ('closed', 'resolved')
+          AND pe.plant = '${plant}'
+          AND pe.area = '${area}'
+        GROUP BY 
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END
+        HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
+        ORDER BY total_cost_avoidance DESC
+      `;
+    }
 
     const result = await pool.request().query(costImpactQuery);
     
     // Transform data for the chart
     const costImpactData = result.recordset.map(row => ({
-      area: row.area_display_name,
+      display_name: row.display_name,
       cost: row.total_cost_avoidance,
       ticketCount: row.ticket_count
     }));
@@ -1849,12 +2478,15 @@ exports.getCostImpactLeaderboard = async (req, res) => {
       data: {
         costImpactData,
         summary: {
-          totalAreas: costImpactData.length,
+          totalItems: costImpactData.length,
           totalCostAvoidance: costImpactData.reduce((sum, item) => sum + item.cost, 0),
           totalTickets: costImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
+          groupBy: summaryLabel,
           appliedFilters: {
             startDate,
-            endDate
+            endDate,
+            plant: plant || null,
+            area: area || null
           }
         }
       }
@@ -1872,10 +2504,10 @@ exports.getCostImpactLeaderboard = async (req, res) => {
 
 /**
  * Get Ontime Rate by Area Data
- * Returns percentage of tickets completed on time (completed_at < scheduled_complete)
- * Grouped by area using plant-area code format
- * Sorted from max to min (best performance first)
- * Only shown when "All Area" is selected
+ * Returns ontime completion rate grouped by plant/area/equipment based on filter conditions:
+ * 1. Group by plant if all plant filter is selected
+ * 2. Group by area if any plant selected but no area selected  
+ * 3. Group by equipment (machine/line) if any area filter is selected
  */
 exports.getOntimeRateByArea = async (req, res) => {
   try {
@@ -1884,7 +2516,9 @@ exports.getOntimeRateByArea = async (req, res) => {
     // Extract query parameters
     const {
       startDate,
-      endDate
+      endDate,
+      plant,
+      area
     } = req.query;
 
     // Validate required parameters
@@ -1895,37 +2529,116 @@ exports.getOntimeRateByArea = async (req, res) => {
       });
     }
 
-    // Get ontime rate data by area for the specified period
-    const ontimeRateByAreaQuery = `
-      SELECT 
-        CONCAT(p.code, '-', a.code) as area_code,
-        COUNT(t.id) as total_completed,
-        COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
-        CASE 
-          WHEN COUNT(t.id) > 0 THEN 
-            ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
-          ELSE 0 
-        END as ontime_rate_percentage
-      FROM Tickets t
-      LEFT JOIN Area a ON t.area_id = a.id
-      LEFT JOIN Plant p ON a.plant_id = p.id
-      WHERE t.created_at >= '${startDate}' 
-        AND t.created_at <= '${endDate}' 
-        AND t.status = 'closed' 
-        AND t.completed_at IS NOT NULL
-        AND t.scheduled_complete IS NOT NULL
-        AND a.code IS NOT NULL 
-        AND p.code IS NOT NULL
-      GROUP BY p.code, a.code
-      HAVING COUNT(t.id) > 0
-      ORDER BY ontime_rate_percentage DESC
-    `;
+    let ontimeRateQuery;
+    let groupByField;
+    let displayNameField;
+    let summaryLabel;
 
-    const result = await pool.request().query(ontimeRateByAreaQuery);
+    // Determine grouping based on filter conditions
+    if (!plant || plant === 'all') {
+      // Condition 1: Show group by plant if all plant filter is selected
+      groupByField = 'pe.plant';
+      displayNameField = 'pe.plant as display_name';
+      summaryLabel = 'Plants';
+      
+      ontimeRateQuery = `
+        SELECT 
+          pe.plant as display_name,
+          COUNT(t.id) as total_completed,
+          COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
+          CASE 
+            WHEN COUNT(t.id) > 0 THEN 
+              ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
+            ELSE 0 
+          END as ontime_rate_percentage
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}' 
+          AND t.status = 'closed' 
+          AND t.completed_at IS NOT NULL
+          AND t.scheduled_complete IS NOT NULL
+          AND pe.plant IS NOT NULL
+        GROUP BY pe.plant
+        HAVING COUNT(t.id) > 0
+        ORDER BY ontime_rate_percentage DESC
+      `;
+    } else if (!area || area === 'all') {
+      // Condition 2: Show group by area if any plant selected but no area selected
+      groupByField = 'pe.area';
+      displayNameField = 'pe.area as display_name';
+      summaryLabel = 'Areas';
+      
+      ontimeRateQuery = `
+        SELECT 
+          CASE 
+            WHEN pe.area IS NULL THEN 'Unknown Area'
+            ELSE pe.area
+          END as display_name,
+          COUNT(t.id) as total_completed,
+          COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
+          CASE 
+            WHEN COUNT(t.id) > 0 THEN 
+              ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
+            ELSE 0 
+          END as ontime_rate_percentage
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}' 
+          AND t.status = 'closed' 
+          AND t.completed_at IS NOT NULL
+          AND t.scheduled_complete IS NOT NULL
+          AND pe.plant = '${plant}'
+        GROUP BY pe.area
+        HAVING COUNT(t.id) > 0
+        ORDER BY ontime_rate_percentage DESC
+      `;
+    } else {
+      // Condition 3: Show group by equipment (machine/line) if any area filter is selected
+      groupByField = 'pe.machine';
+      displayNameField = 'pe.machine as display_name';
+      summaryLabel = 'Equipment';
+      
+      ontimeRateQuery = `
+        SELECT 
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END as display_name,
+          COUNT(t.id) as total_completed,
+          COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
+          CASE 
+            WHEN COUNT(t.id) > 0 THEN 
+              ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
+            ELSE 0 
+          END as ontime_rate_percentage
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}' 
+          AND t.status = 'closed' 
+          AND t.completed_at IS NOT NULL
+          AND t.scheduled_complete IS NOT NULL
+          AND pe.plant = '${plant}'
+          AND pe.area = '${area}'
+        GROUP BY 
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END
+        HAVING COUNT(t.id) > 0
+        ORDER BY ontime_rate_percentage DESC
+      `;
+    }
+
+    const result = await pool.request().query(ontimeRateQuery);
     
     // Transform data for the chart
     const ontimeRateByAreaData = result.recordset.map(row => ({
-      areaCode: row.area_code,
+      display_name: row.display_name,
       ontimeRate: row.ontime_rate_percentage,
       totalCompleted: row.total_completed,
       ontimeCompleted: row.ontime_completed
@@ -1936,12 +2649,19 @@ exports.getOntimeRateByArea = async (req, res) => {
       data: {
         ontimeRateByAreaData,
         summary: {
-          totalAreas: ontimeRateByAreaData.length,
+          totalItems: ontimeRateByAreaData.length,
           totalCompleted: ontimeRateByAreaData.reduce((sum, item) => sum + item.totalCompleted, 0),
           totalOntimeCompleted: ontimeRateByAreaData.reduce((sum, item) => sum + item.ontimeCompleted, 0),
           overallOntimeRate: ontimeRateByAreaData.length > 0 
             ? Math.round((ontimeRateByAreaData.reduce((sum, item) => sum + item.ontimeCompleted, 0) / ontimeRateByAreaData.reduce((sum, item) => sum + item.totalCompleted, 0)) * 10000) / 100
-            : 0
+            : 0,
+          groupBy: summaryLabel,
+          appliedFilters: {
+            startDate,
+            endDate,
+            plant: plant || null,
+            area: area || null
+          }
         }
       }
     });
@@ -1961,7 +2681,7 @@ exports.getOntimeRateByArea = async (req, res) => {
  * Returns percentage of tickets completed on time (completed_at < scheduled_complete)
  * Grouped by user with avatar support
  * Sorted from max to min (best performance first)
- * Only shown when specific area is selected
+ * Only shown when specific plant/area is selected
  */
 exports.getOntimeRateByUser = async (req, res) => {
   try {
@@ -1971,18 +2691,35 @@ exports.getOntimeRateByUser = async (req, res) => {
     const {
       startDate,
       endDate,
-      area_id
+      plant,
+      area
     } = req.query;
 
     // Validate required parameters
-    if (!startDate || !endDate || !area_id || area_id === 'all') {
+    if (!startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: 'startDate, endDate, and area_id (not "all") are required'
+        message: 'startDate and endDate are required'
       });
     }
 
-    // Get ontime rate data by user for the specified period and area
+    // Build WHERE clause for tickets with plant/area filtering via PUExtension
+    let whereClause = `WHERE t.created_at >= '${startDate}' 
+        AND t.created_at <= '${endDate}' 
+        AND t.status = 'closed' 
+        AND t.completed_at IS NOT NULL
+        AND t.scheduled_complete IS NOT NULL
+        AND t.completed_by IS NOT NULL`;
+    
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
+    }
+
+    // Get ontime rate data by user for the specified period and plant/area
     const ontimeRateByUserQuery = `
       SELECT 
         t.completed_by as user_id,
@@ -1996,15 +2733,10 @@ exports.getOntimeRateByUser = async (req, res) => {
           ELSE 0 
         END as ontime_rate_percentage
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.completed_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-      WHERE t.created_at >= '${startDate}' 
-        AND t.created_at <= '${endDate}' 
-        AND t.status = 'closed' 
-        AND t.completed_at IS NOT NULL
-        AND t.scheduled_complete IS NOT NULL
-        AND t.area_id = ${parseInt(area_id)}
-        AND t.completed_by IS NOT NULL
+      ${whereClause}
       GROUP BY t.completed_by, p.PERSON_NAME, u.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY ontime_rate_percentage DESC
@@ -2068,7 +2800,7 @@ exports.getOntimeRateByUser = async (req, res) => {
  * Returns average resolve time from created_at to completed_at for closed tickets
  * Grouped by user with avatar support
  * Sorted from min to max (best performance first)
- * Only shown when specific area is selected
+ * Only shown when specific plant/area is selected
  */
 exports.getTicketResolveDurationByUser = async (req, res) => {
   try {
@@ -2078,18 +2810,34 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
     const {
       startDate,
       endDate,
-      area_id
+      plant,
+      area
     } = req.query;
 
     // Validate required parameters
-    if (!startDate || !endDate || !area_id || area_id === 'all') {
+    if (!startDate || !endDate) {
       return res.status(400).json({
         success: false,
-        message: 'startDate, endDate, and area_id (not "all") are required'
+        message: 'startDate and endDate are required'
       });
     }
 
-    // Get ticket resolve duration data by user for the specified period and area
+    // Build WHERE clause for tickets with plant/area filtering via PUExtension
+    let whereClause = `WHERE t.created_at >= '${startDate}' 
+        AND t.created_at <= '${endDate}' 
+        AND t.status = 'closed' 
+        AND t.completed_at IS NOT NULL
+        AND t.completed_by IS NOT NULL`;
+    
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
+    }
+
+    // Get ticket resolve duration data by user for the specified period and plant/area
     const resolveDurationByUserQuery = `
       SELECT 
         t.completed_by as user_id,
@@ -2098,14 +2846,10 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
         COUNT(t.id) as ticket_count,
         AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.completed_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-      WHERE t.created_at >= '${startDate}' 
-        AND t.created_at <= '${endDate}' 
-        AND t.status = 'closed' 
-        AND t.completed_at IS NOT NULL
-        AND t.area_id = ${parseInt(area_id)}
-        AND t.completed_by IS NOT NULL
+      ${whereClause}
       GROUP BY t.completed_by, p.PERSON_NAME, u.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY avg_resolve_hours ASC
@@ -2164,10 +2908,10 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
 
 /**
  * Get Ticket Average Resolve Duration by Area Data
- * Returns average resolve time from created_at to completed_at for closed tickets
- * Grouped by area using plant-area code format
- * Sorted from min to max (best performance first)
- * Only shown when "All Area" is selected
+ * Returns average resolve duration grouped by plant/area/equipment based on filter conditions:
+ * 1. Group by plant if all plant filter is selected
+ * 2. Group by area if any plant selected but no area selected  
+ * 3. Group by equipment (machine/line) if any area filter is selected
  */
 exports.getTicketResolveDurationByArea = async (req, res) => {
   try {
@@ -2176,7 +2920,9 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
     // Extract query parameters
     const {
       startDate,
-      endDate
+      endDate,
+      plant,
+      area
     } = req.query;
 
     // Validate required parameters
@@ -2187,31 +2933,98 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
       });
     }
 
-    // Get ticket resolve duration data by area for the specified period
-    const resolveDurationByAreaQuery = `
-      SELECT 
-        CONCAT(p.code, '-', a.code) as area_code,
-        COUNT(t.id) as ticket_count,
-        AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
-      FROM Tickets t
-      LEFT JOIN Area a ON t.area_id = a.id
-      LEFT JOIN Plant p ON a.plant_id = p.id
-      WHERE t.created_at >= '${startDate}' 
-        AND t.created_at <= '${endDate}' 
-        AND t.status = 'closed' 
-        AND t.completed_at IS NOT NULL
-        AND a.code IS NOT NULL 
-        AND p.code IS NOT NULL
-      GROUP BY p.code, a.code
-      HAVING COUNT(t.id) > 0
-      ORDER BY avg_resolve_hours ASC
-    `;
+    let resolveDurationQuery;
+    let groupByField;
+    let displayNameField;
+    let summaryLabel;
 
-    const result = await pool.request().query(resolveDurationByAreaQuery);
+    // Determine grouping based on filter conditions
+    if (!plant || plant === 'all') {
+      // Condition 1: Show group by plant if all plant filter is selected
+      groupByField = 'pe.plant';
+      displayNameField = 'pe.plant as display_name';
+      summaryLabel = 'Plants';
+      
+      resolveDurationQuery = `
+        SELECT 
+          pe.plant as display_name,
+          COUNT(t.id) as ticket_count,
+          AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}' 
+          AND t.status = 'closed' 
+          AND t.completed_at IS NOT NULL
+          AND pe.plant IS NOT NULL
+        GROUP BY pe.plant
+        HAVING COUNT(t.id) > 0
+        ORDER BY avg_resolve_hours ASC
+      `;
+    } else if (!area || area === 'all') {
+      // Condition 2: Show group by area if any plant selected but no area selected
+      groupByField = 'pe.area';
+      displayNameField = 'pe.area as display_name';
+      summaryLabel = 'Areas';
+      
+      resolveDurationQuery = `
+        SELECT 
+          CASE 
+            WHEN pe.area IS NULL THEN 'Unknown Area'
+            ELSE pe.area
+          END as display_name,
+          COUNT(t.id) as ticket_count,
+          AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}' 
+          AND t.status = 'closed' 
+          AND t.completed_at IS NOT NULL
+          AND pe.plant = '${plant}'
+        GROUP BY pe.area
+        HAVING COUNT(t.id) > 0
+        ORDER BY avg_resolve_hours ASC
+      `;
+    } else {
+      // Condition 3: Show group by equipment (machine/line) if any area filter is selected
+      groupByField = 'pe.machine';
+      displayNameField = 'pe.machine as display_name';
+      summaryLabel = 'Equipment';
+      
+      resolveDurationQuery = `
+        SELECT 
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END as display_name,
+          COUNT(t.id) as ticket_count,
+          AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
+        FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        WHERE t.created_at >= '${startDate}' 
+          AND t.created_at <= '${endDate}' 
+          AND t.status = 'closed' 
+          AND t.completed_at IS NOT NULL
+          AND pe.plant = '${plant}'
+          AND pe.area = '${area}'
+        GROUP BY 
+          CASE 
+            WHEN pe.machine IS NOT NULL THEN pe.machine
+            WHEN pe.line IS NOT NULL THEN pe.line
+            ELSE 'Unknown Equipment'
+          END
+        HAVING COUNT(t.id) > 0
+        ORDER BY avg_resolve_hours ASC
+      `;
+    }
+
+    const result = await pool.request().query(resolveDurationQuery);
     
     // Transform data for the chart
     const resolveDurationByAreaData = result.recordset.map(row => ({
-      areaCode: row.area_code,
+      display_name: row.display_name,
       avgResolveHours: Math.round(row.avg_resolve_hours * 100) / 100, // Round to 2 decimal places
       ticketCount: row.ticket_count
     }));
@@ -2221,11 +3034,18 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
       data: {
         resolveDurationByAreaData,
         summary: {
-          totalAreas: resolveDurationByAreaData.length,
+          totalItems: resolveDurationByAreaData.length,
           totalTickets: resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0),
           overallAvgResolveHours: resolveDurationByAreaData.length > 0 
             ? Math.round((resolveDurationByAreaData.reduce((sum, item) => sum + (item.avgResolveHours * item.ticketCount), 0) / resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0)) * 100) / 100
-            : 0
+            : 0,
+          groupBy: summaryLabel,
+          appliedFilters: {
+            startDate,
+            endDate,
+            plant: plant || null,
+            area: area || null
+          }
         }
       }
     });
@@ -2243,7 +3063,7 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
 /**
  * Get Cost Impact by Failure Mode Data
  * Returns cost impact data grouped by failure mode
- * This chart is affected by area filter and exact time range
+ * This chart is affected by plant/area filter and exact time range
  * Sorted by cost accumulation (max to min)
  */
 exports.getCostImpactByFailureMode = async (req, res) => {
@@ -2254,7 +3074,8 @@ exports.getCostImpactByFailureMode = async (req, res) => {
     const {
       startDate,
       endDate,
-      area_id
+      plant,
+      area
     } = req.query;
 
     // Validate required parameters
@@ -2265,13 +3086,18 @@ exports.getCostImpactByFailureMode = async (req, res) => {
       });
     }
 
-    // Build WHERE clause for tickets
+    // Build WHERE clause for tickets with plant/area filtering via PUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
-    if (area_id && area_id !== 'all') {
-      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
     }
 
-    // Get cost impact data by failure mode for the specified period and area
+    // Get cost impact data by failure mode for the specified period and plant/area
     const costByFailureModeQuery = `
       SELECT 
         fm.FailureModeCode as failure_mode_code,
@@ -2279,6 +3105,7 @@ exports.getCostImpactByFailureMode = async (req, res) => {
         COUNT(t.id) as case_count,
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo
       ${whereClause}
       GROUP BY fm.FailureModeCode, fm.FailureModeName
@@ -2324,7 +3151,7 @@ exports.getCostImpactByFailureMode = async (req, res) => {
 /**
  * Get Downtime Impact by Failure Mode Data
  * Returns downtime impact data grouped by failure mode
- * This chart is affected by area filter and exact time range
+ * This chart is affected by plant/area filter and exact time range
  * Sorted by downtime accumulation (max to min)
  */
 exports.getDowntimeImpactByFailureMode = async (req, res) => {
@@ -2335,7 +3162,8 @@ exports.getDowntimeImpactByFailureMode = async (req, res) => {
     const {
       startDate,
       endDate,
-      area_id
+      plant,
+      area
     } = req.query;
 
     // Validate required parameters
@@ -2346,13 +3174,18 @@ exports.getDowntimeImpactByFailureMode = async (req, res) => {
       });
     }
 
-    // Build WHERE clause for tickets
+    // Build WHERE clause for tickets with plant/area filtering via PUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
-    if (area_id && area_id !== 'all') {
-      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
     }
 
-    // Get downtime impact data by failure mode for the specified period and area
+    // Get downtime impact data by failure mode for the specified period and plant/area
     const downtimeByFailureModeQuery = `
       SELECT 
         fm.FailureModeCode as failure_mode_code,
@@ -2360,6 +3193,7 @@ exports.getDowntimeImpactByFailureMode = async (req, res) => {
         COUNT(t.id) as case_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo
       ${whereClause}
       GROUP BY fm.FailureModeCode, fm.FailureModeName
@@ -2405,7 +3239,7 @@ exports.getDowntimeImpactByFailureMode = async (req, res) => {
 /**
  * Get Cost Impact Reporter Leaderboard Data
  * Returns top 10 users ranked by cost impact
- * This chart is affected by time range and area filters
+ * This chart is affected by time range and plant/area filters
  */
 exports.getCostImpactReporterLeaderboard = async (req, res) => {
   try {
@@ -2415,7 +3249,8 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
     const {
       startDate,
       endDate,
-      area_id
+      plant,
+      area
     } = req.query;
 
     // Validate required parameters
@@ -2426,13 +3261,18 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
       });
     }
 
-    // Build WHERE clause for tickets
+    // Build WHERE clause for tickets with plant/area filtering via PUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
-    if (area_id && area_id !== 'all') {
-      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
     }
 
-    // Get cost impact data by reporter for the specified period and area
+    // Get cost impact data by reporter for the specified period and plant/area
     const costImpactReporterQuery = `
       SELECT TOP 10
         t.reported_by as user_id,
@@ -2441,6 +3281,7 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.reported_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${whereClause}
@@ -2503,7 +3344,7 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
 /**
  * Get Downtime Impact Reporter Leaderboard Data
  * Returns top 10 users ranked by downtime impact
- * This chart is affected by both time range and area filter
+ * This chart is affected by both time range and plant/area filter
  */
 exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
   try {
@@ -2513,7 +3354,8 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
     const {
       startDate,
       endDate,
-      area_id
+      plant,
+      area
     } = req.query;
 
     if (!startDate || !endDate) {
@@ -2523,13 +3365,18 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
       });
     }
 
-    // Build WHERE clause based on filters
+    // Build WHERE clause based on filters with plant/area filtering via PUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
-    if (area_id && area_id !== 'all') {
-      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
     }
 
-    // Get downtime impact data by reporter for the specified period and area
+    // Get downtime impact data by reporter for the specified period and plant/area
     const downtimeImpactReporterQuery = `
       SELECT TOP 10
         t.reported_by as user_id,
@@ -2538,6 +3385,7 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.reported_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${whereClause}
@@ -2584,7 +3432,8 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
           appliedFilters: {
             startDate,
             endDate,
-            area_id: area_id ? parseInt(area_id) : null
+            plant: plant || null,
+            area: area || null
           }
         }
       }
@@ -2603,7 +3452,7 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
 /**
  * Get Calendar Heatmap Data
  * Returns ticket counts by date for the calendar heatmap
- * This chart is affected by area filter and year (from time filter)
+ * This chart is affected by plant/area filter and year (from time filter)
  */
 exports.getCalendarHeatmapData = async (req, res) => {
   try {
@@ -2612,22 +3461,28 @@ exports.getCalendarHeatmapData = async (req, res) => {
     // Extract query parameters
     const {
       year = new Date().getFullYear(),
-      area_id
+      plant,
+      area
     } = req.query;
 
-    // Build WHERE clause for tickets
+    // Build WHERE clause for tickets with plant/area filtering via PUExtension
     let whereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)}`;
     
-    if (area_id && area_id !== 'all') {
-      whereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
     }
 
-    // Get ticket counts by date for the specified year and area
+    // Get ticket counts by date for the specified year and plant/area
     const calendarQuery = `
       SELECT 
         CAST(t.created_at AS DATE) as date,
         COUNT(t.id) as count
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       ${whereClause}
       GROUP BY CAST(t.created_at AS DATE)
       ORDER BY date
@@ -2678,7 +3533,8 @@ exports.getCalendarHeatmapData = async (req, res) => {
           maxTicketsPerDay: calendarData.length > 0 ? Math.max(...calendarData.map(item => item.count)) : 0,
           appliedFilters: {
             year: parseInt(year),
-            area_id: area_id ? parseInt(area_id) : null
+            plant: plant || null,
+            area: area || null
           }
         }
       }
@@ -2708,7 +3564,8 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       endDate,
       compare_startDate,
       compare_endDate,
-      area_id
+      plant,
+      area
     } = req.query;
 
     // Validate required parameters
@@ -2729,11 +3586,15 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     const compareStartDateFormatted = compare_startDate ? formatDateForSQL(compare_startDate) : null;
     const compareEndDateFormatted = compare_endDate ? formatDateForSQL(compare_endDate) : null;
 
-    // Build WHERE clause for current period - use proper date comparison
+    // Build WHERE clause for current period - use proper date comparison with plant/area filtering via PUExtension
     let currentWhereClause = `WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'`;
     
-    if (area_id) {
-      currentWhereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+    if (plant && plant !== 'all') {
+      currentWhereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      currentWhereClause += ` AND pe.area = '${area}'`;
     }
 
     // Build WHERE clause for comparison period
@@ -2741,8 +3602,12 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     if (compareStartDateFormatted && compareEndDateFormatted) {
       compareWhereClause = `WHERE CAST(t.created_at AS DATE) >= '${compare_startDate}' AND CAST(t.created_at AS DATE) <= '${compare_endDate}'`;
       
-      if (area_id) {
-        compareWhereClause += ` AND t.area_id = ${parseInt(area_id)}`;
+      if (plant && plant !== 'all') {
+        compareWhereClause += ` AND pe.plant = '${plant}'`;
+      }
+      
+      if (area && area !== 'all') {
+        compareWhereClause += ` AND pe.area = '${area}'`;
       }
     }
 
@@ -2751,10 +3616,12 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       SELECT 
         COUNT(*) as totalTickets,
         SUM(CASE WHEN t.status IN ('closed', 'completed') THEN 1 ELSE 0 END) as closedTickets,
-        SUM(CASE WHEN t.status IN ('open', 'in_progress') THEN 1 ELSE 0 END) as pendingTickets,
+        SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
+        SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
         ISNULL(SUM(t.cost_avoidance), 0) as totalCostAvoidance
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       ${currentWhereClause}
     `;
 
@@ -2765,10 +3632,12 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
         SELECT 
           COUNT(*) as totalTickets,
           SUM(CASE WHEN t.status IN ('closed', 'completed') THEN 1 ELSE 0 END) as closedTickets,
-          SUM(CASE WHEN t.status IN ('open', 'in_progress') THEN 1 ELSE 0 END) as pendingTickets,
+          SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
+          SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
           ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
           ISNULL(SUM(t.cost_avoidance), 0) as totalCostAvoidance
         FROM Tickets t
+        LEFT JOIN PUExtension pe ON t.puno = pe.puno
         ${compareWhereClause}
       `;
     }
@@ -2781,6 +3650,7 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
         u.AvatarUrl as avatarUrl,
         COUNT(*) as ticketCount
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.reported_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${currentWhereClause}
@@ -2795,11 +3665,12 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
         u.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.cost_avoidance), 0) as totalSavings
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.reported_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${currentWhereClause}
       GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
-      ORDER BY ISNULL(SUM(t.cost_avoidance), 0) DESC
+      ORDER BY totalSavings DESC
     `;
 
     const topDowntimeSaverQuery = `
@@ -2809,11 +3680,12 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
         u.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeSaved
       FROM Tickets t
+      LEFT JOIN PUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.reported_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${currentWhereClause}
       GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
-      ORDER BY ISNULL(SUM(t.downtime_avoidance_hours), 0) DESC
+      ORDER BY totalDowntimeSaved DESC
     `;
 
     // Execute all queries
@@ -2876,6 +3748,7 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     const comparisonMetrics = {
       ticketGrowthRate: calculateGrowthRate(currentKPIs.totalTickets, compareKPIs.totalTickets),
       closureRateImprovement: calculateGrowthRate(currentKPIs.closedTickets, compareKPIs.closedTickets),
+      waitingTicketsChange: calculateGrowthRate(currentKPIs.waitingTickets, compareKPIs.waitingTickets),
       costAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalCostAvoidance, compareKPIs.totalCostAvoidance),
       downtimeAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalDowntimeAvoidance, compareKPIs.totalDowntimeAvoidance)
     };
@@ -2889,6 +3762,8 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
           totalTicketsLastPeriod: compareKPIs.totalTickets,
           closedTicketsThisPeriod: currentKPIs.closedTickets,
           closedTicketsLastPeriod: compareKPIs.closedTickets,
+          waitingTicketsThisPeriod: currentKPIs.waitingTickets,
+          waitingTicketsLastPeriod: compareKPIs.waitingTickets,
           pendingTicketsThisPeriod: currentKPIs.pendingTickets,
           pendingTicketsLastPeriod: compareKPIs.pendingTickets,
           totalDowntimeAvoidanceThisPeriod: currentKPIs.totalDowntimeAvoidance,
@@ -2932,7 +3807,8 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
             endDate,
             compare_startDate,
             compare_endDate,
-            area_id: area_id ? parseInt(area_id) : null
+            plant: plant || null,
+            area: area || null
           },
           comparisonMetrics
         }

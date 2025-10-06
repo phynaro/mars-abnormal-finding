@@ -116,6 +116,7 @@ export const TicketList: React.FC = () => {
       const result = await response.json();
       if (result.success) {
         setPlants(result.data);
+       
       }
     } catch (error) {
       console.error('Failed to fetch plants:', error);
@@ -393,18 +394,18 @@ export const TicketList: React.FC = () => {
                       <SelectItem value="open">{t('ticket.open')}</SelectItem>
                       <SelectItem value="assigned">{t('ticket.assigned')}</SelectItem>
                       <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
-                      <SelectItem value="resolved">{t('ticket.resolved')}</SelectItem>
+                      <SelectItem value="reviewed">{t('ticket.reviewed')}</SelectItem>
                       <SelectItem value="closed">{t('ticket.closed')}</SelectItem>
                       <SelectItem value="rejected_pending_l3_review">
-                        Rejected (L3 Review)
+                        {t('ticket.rejectedPendingL3Review')}
                       </SelectItem>
                       <SelectItem value="rejected_final">
-                        Rejected (Final)
+                        {t('ticket.rejectedFinal')}
                       </SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="escalated">Escalated</SelectItem>
+                      <SelectItem value="completed">{t('ticket.completed')}</SelectItem>
+                      <SelectItem value="escalated">{t('ticket.escalated')}</SelectItem>
                       <SelectItem value="reopened_in_progress">
-                        Reopened
+                        {t('ticket.reopenedInProgress')}
                       </SelectItem>
                     </SelectContent>
                   </Select>
@@ -462,7 +463,7 @@ export const TicketList: React.FC = () => {
                       <SelectItem value="all">All Plants</SelectItem>
                       {plants.map((plant) => (
                         <SelectItem key={plant.code} value={plant.code}>
-                          {plant.code}
+                          {plant.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -483,7 +484,7 @@ export const TicketList: React.FC = () => {
                       <SelectItem value="all">{t('ticket.allAreas')}</SelectItem>
                       {areas.map((area) => (
                         <SelectItem key={area.code} value={area.code}>
-                          {area.code}
+                          {area.name}
                         </SelectItem>
                       ))}
                     </SelectContent>

@@ -1,20 +1,31 @@
 /**
  * Abnormal Finding Flex Message Service
- * Clean implementation based on flexmessge-design.md
+ * Professional LINE notification service for ticket management system
+ * 
+ * Features:
+ * - Unified flex message system for all ticket states
+ * - Consistent design and branding
+ * - Multi-language support (Thai/English)
+ * - Image handling with hero image support
+ * - Error handling and validation
  * 
  * Usage:
  * const flexService = require('./abnormalFindingFlexService');
- * const msg = flexService.buildAbnFlexMinimal(flexService.AbnCaseState.CREATED, payload);
- * await flexService.pushToUser(lineUserId, msg);
+ * const message = flexService.buildTicketFlexMessage(TicketState.CREATED, payload);
+ * await flexService.sendToUser(lineUserId, message);
  */
 
 const axios = require('axios');
 
 // ===== CONSTANTS =====
 
-const AbnCaseState = Object.freeze({
+/**
+ * Ticket states enumeration
+ * Maps to the ticket workflow states in the system
+ */
+const TicketState = Object.freeze({
   CREATED: "CREATED",
-  ACCEPTED: "ACCEPTED",
+  ACCEPTED: "ACCEPTED", 
   REJECT_TO_MANAGER: "REJECT_TO_MANAGER",
   REJECT_FINAL: "REJECT_FINAL",
   COMPLETED: "COMPLETED",
@@ -25,37 +36,66 @@ const AbnCaseState = Object.freeze({
   REOPENED: "REOPENED",
 });
 
-// 🎨 สีของแต่ละสถานะ
-const stateColorMap = Object.freeze({
-  [AbnCaseState.CREATED]: "#0EA5E9",          // blue
-  [AbnCaseState.ACCEPTED]: "#22C55E",         // green
-  [AbnCaseState.REJECT_TO_MANAGER]: "#F59E0B",// amber
-  [AbnCaseState.REJECT_FINAL]: "#EF4444",     // red
-  [AbnCaseState.COMPLETED]: "#10B981",        // emerald
-  [AbnCaseState.REVIEWED]: "#8B5CF6",         // purple
-  [AbnCaseState.REASSIGNED]: "#A855F7",       // violet
-  [AbnCaseState.ESCALATED]: "#FB7185",        // rose
-  [AbnCaseState.CLOSED]: "#64748B",           // slate
-  [AbnCaseState.REOPENED]: "#F97316",         // orange
+/**
+ * Color scheme for ticket states
+ * Uses professional color palette for better UX
+ */
+const STATE_COLORS = Object.freeze({
+  [TicketState.OPEN]: "#0EA5E9",          // Professional blue
+  [TicketState.ACCEPTED]: "#22C55E",           // Success green
+  [TicketState.REJECT_TO_MANAGER]: "#F59E0B",  // Warning amber
+  [TicketState.REJECT_FINAL]: "#EF4444",       // Error red
+  [TicketState.COMPLETED]: "#10B981",          // Emerald green
+  [TicketState.REVIEWED]: "#8B5CF6",           // Purple
+  [TicketState.REASSIGNED]: "#A855F7",         // Violet
+  [TicketState.ESCALATED]: "#FB7185",          // Rose
+  [TicketState.CLOSED]: "#64748B",             // Slate gray
+  [TicketState.REOPENED]: "#F97316",           // Orange
 });
 
-// Thai status labels
-const stateLabels = Object.freeze({
-  [AbnCaseState.CREATED]: "สร้างเคสใหม่",
-  [AbnCaseState.ACCEPTED]: "รับงาน",
-  [AbnCaseState.REJECT_TO_MANAGER]: "ปฏิเสธ รอการอนุมัติจากหัวหน้างาน",
-  [AbnCaseState.REJECT_FINAL]: "ปฏิเสธขั้นสุดท้าย",
-  [AbnCaseState.COMPLETED]: "เสร็จสิ้น",
-  [AbnCaseState.REVIEWED]: "ตรวจสอบแล้ว รอการปิด",
-  [AbnCaseState.REASSIGNED]: "มอบหมายใหม่",
-  [AbnCaseState.ESCALATED]: "ส่งต่อให้หัวหน้างาน",
-  [AbnCaseState.CLOSED]: "ปิดเคส",
-  [AbnCaseState.REOPENED]: "เปิดเคสใหม่",
+/**
+ * Thai language labels for ticket states
+ * Provides localized user experience
+ */
+const STATE_LABELS_TH = Object.freeze({
+  [TicketState.OPEN]: "สร้างเคสใหม่",
+  [TicketState.ACCEPTED]: "รับงาน",
+  [TicketState.REJECT_TO_MANAGER]: "ปฏิเสธ รอการอนุมัติจากหัวหน้างาน",
+  [TicketState.REJECT_FINAL]: "ปฏิเสธขั้นสุดท้าย",
+  [TicketState.COMPLETED]: "เสร็จสิ้น",
+  [TicketState.REVIEWED]: "ตรวจสอบแล้ว รอการปิด",
+  [TicketState.REASSIGNED]: "มอบหมายใหม่",
+  [TicketState.ESCALATED]: "ส่งต่อให้หัวหน้างาน",
+  [TicketState.CLOSED]: "ปิดเคส",
+  [TicketState.REOPENED]: "เปิดเคสใหม่",
+});
+
+/**
+ * English language labels for ticket states
+ * Fallback for international users
+ */
+const STATE_LABELS_EN = Object.freeze({
+  [TicketState.OPEN]: "New Ticket Created",
+  [TicketState.ACCEPTED]: "Ticket Accepted",
+  [TicketState.REJECT_TO_MANAGER]: "Rejected - Pending Manager Review",
+  [TicketState.REJECT_FINAL]: "Rejected - Final Decision",
+  [TicketState.COMPLETED]: "Work Completed",
+  [TicketState.REVIEWED]: "Reviewed - Pending Closure",
+  [TicketState.REASSIGNED]: "Reassigned",
+  [TicketState.ESCALATED]: "Escalated to Manager",
+  [TicketState.CLOSED]: "Ticket Closed",
+  [TicketState.REOPENED]: "Ticket Reopened",
 });
 
 // ===== HELPER FUNCTIONS =====
 
-const kvRow = (label, value) => ({
+/**
+ * Creates a key-value row component for flex message
+ * @param {string} label - The label text
+ * @param {string} value - The value text
+ * @returns {Object} Flex message component
+ */
+const createKeyValueRow = (label, value) => ({
   type: "box",
   layout: "baseline",
   contents: [
@@ -78,16 +118,52 @@ const kvRow = (label, value) => ({
   ]
 });
 
+/**
+ * Validates LINE user ID format
+ * @param {string} lineUserId - The LINE user ID to validate
+ * @returns {boolean} True if valid format
+ */
+const isValidLineUserId = (lineUserId) => {
+  return typeof lineUserId === 'string' && 
+         lineUserId.startsWith('U') && 
+         lineUserId.length === 33;
+};
+
+/**
+ * Gets the appropriate label for a ticket state
+ * @param {string} state - The ticket state
+ * @param {string} language - Language preference ('th' or 'en')
+ * @returns {string} Localized label
+ */
+const getStateLabel = (state, language = 'th') => {
+  const labels = language === 'en' ? STATE_LABELS_EN : STATE_LABELS_TH;
+  return labels[state] || state;
+};
+
 // ===== MAIN FLEX MESSAGE BUILDER =====
 
-function buildAbnFlexMinimal(state, payload) {
-  const statusColor = stateColorMap[state] || "#6B7280";
-  const statusLabel = stateLabels[state] || state;
+/**
+ * Builds a professional flex message for ticket notifications
+ * @param {string} state - The ticket state
+ * @param {Object} payload - Ticket data payload
+ * @param {Object} options - Additional options
+ * @returns {Object} LINE flex message object
+ */
+function buildTicketFlexMessage(state, payload, options = {}) {
+  const {
+    language = 'th',
+    includeHeroImage = true,
+    includeCallButton = false,
+    includeViewDetailsButton = true
+  } = options;
+
+  const statusColor = STATE_COLORS[state] || "#6B7280";
+  const statusLabel = getStateLabel(state, language);
 
   const contents = {
     type: "bubble",
-    // Add hero image if provided
-    ...(payload.heroImageUrl ? {
+    // Add hero image if provided and enabled
+    ...(includeHeroImage && payload.heroImageUrl ? {
       hero: {
         type: "image",
         url: payload.heroImageUrl,
@@ -102,7 +178,7 @@ function buildAbnFlexMinimal(state, payload) {
       spacing: "md",
       paddingAll: "16px",
       contents: [
-        // สถานะ
+        // Status indicator
         {
           type: "text",
           text: statusLabel,
@@ -110,14 +186,14 @@ function buildAbnFlexMinimal(state, payload) {
           weight: "bold",
           color: statusColor
         },
-        // Case No
+        // Ticket number
         {
           type: "text",
           text: String(payload.caseNo || "-"),
           size: "xl",
           weight: "bold"
         },
-        // Asset
+        // Asset/Equipment name
         {
           type: "text",
           text: String(payload.assetName || "-"),
@@ -126,21 +202,23 @@ function buildAbnFlexMinimal(state, payload) {
         },
         { type: "separator", margin: "md" },
 
-        // Body key-value
+        // Key-value information
         {
           type: "box",
           layout: "vertical",
           spacing: "sm",
           contents: [
-            kvRow("Problem", payload.problem),
-            kvRow("Action by", payload.actionBy),
-            ...(payload.extraKVs || []).map(({ label, value }) => kvRow(label, value))
+            createKeyValueRow("Problem", payload.problem),
+            //createKeyValueRow("Action by", payload.actionBy),
+            ...(payload.extraKVs || []).map(({ label, value }) => 
+              createKeyValueRow(label, value)
+            )
           ]
         },
 
         { type: "separator", margin: "md" },
 
-        // Comment
+        // Comment section
         ...(payload.comment
           ? [
               { type: "text", text: "Comment", size: "sm", color: "#6B7280" },
@@ -154,8 +232,8 @@ function buildAbnFlexMinimal(state, payload) {
             ]
           : []),
 
-        // Call button
-        ...(payload.callUri
+        // Call button (optional)
+        ...(includeCallButton && payload.callUri
           ? [
               {
                 type: "box",
@@ -184,29 +262,33 @@ function buildAbnFlexMinimal(state, payload) {
           : []),
 
         // View details button
-        {
-          type: "box",
-          layout: "vertical",
-          backgroundColor: "#F3F4F6",
-          cornerRadius: "6px",
-          paddingAll: "12px",
-          margin: "md",
-          action: {
-            type: "uri",
-            label: "View details",
-            uri: payload.detailUrl || "https://example.com"
-          },
-          contents: [
-            {
-              type: "text",
-              text: "View details",
-              size: "sm",
-              align: "center",
-              color: "#374151",
-              weight: "bold"
-            }
-          ]
-        }
+        ...(includeViewDetailsButton
+          ? [
+              {
+                type: "box",
+                layout: "vertical",
+                backgroundColor: "#000099",
+                cornerRadius: "6px",
+                paddingAll: "12px",
+                margin: "md",
+                action: {
+                  type: "uri",
+                  label: "View details",
+                  uri: payload.detailUrl || "https://example.com"
+                },
+                contents: [
+                  {
+                    type: "text",
+                    text: "View details",
+                    size: "sm",
+                    align: "center",
+                    color: "#FFFFFF",
+                    weight: "bold"
+                  }
+                ]
+              }
+            ]
+          : [])
       ]
     }
   };
@@ -220,46 +302,62 @@ function buildAbnFlexMinimal(state, payload) {
 
 // ===== LINE SERVICE CLASS =====
 
-class AbnormalFindingFlexService {
+/**
+ * Professional LINE notification service
+ * Handles all LINE API interactions with proper error handling
+ */
+class TicketNotificationService {
   constructor() {
     this.channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
     this.apiBase = 'https://api.line.me/v2/bot/message';
+    this.timeout = 10000; // 10 seconds
   }
 
+  /**
+   * Checks if the service is properly configured
+   * @returns {boolean} True if configured
+   */
   isConfigured() {
     return !!this.channelAccessToken;
   }
 
-  async pushToUser(lineUserId, messages) {
+  /**
+   * Sends a message to a LINE user
+   * @param {string} lineUserId - The LINE user ID
+   * @param {Object|Array|string} messages - Message(s) to send
+   * @returns {Promise<Object>} Result object with success status
+   */
+  async sendToUser(lineUserId, messages) {
     try {
+      // Validation
       if (!this.isConfigured()) {
-        console.warn('LINE_CHANNEL_ACCESS_TOKEN not set; skipping LINE push');
-        return { success: false, skipped: true };
-      }
-      if (!lineUserId) {
-        console.warn('No LineID provided; skipping LINE push');
-        return { success: false, skipped: true };
+        console.warn('LINE_CHANNEL_ACCESS_TOKEN not configured; skipping LINE notification');
+        return { success: false, skipped: true, reason: 'not_configured' };
       }
 
-      if (typeof lineUserId !== 'string' || !lineUserId.startsWith('U') || lineUserId.length !== 33) {
+      if (!lineUserId) {
+        console.warn('No LineID provided; skipping LINE notification');
+        return { success: false, skipped: true, reason: 'no_user_id' };
+      }
+
+      if (!isValidLineUserId(lineUserId)) {
         console.error(`Invalid LineID format: ${lineUserId}. Expected format: U followed by 32 characters.`);
         return { success: false, error: 'Invalid LineID format' };
       }
-      console.log('LINE push messages:', messages);
-      // Ensure messages is an array
+
+      // Process messages
       const msgArray = Array.isArray(messages) ? messages : [messages];
-      
-      // Process messages - convert strings to text messages
       const processedMessages = msgArray.map((m) => 
         typeof m === 'string' ? { type: 'text', text: m } : m
       );
 
+      // Send to LINE API
       const payload = {
         to: lineUserId,
         messages: processedMessages,
       };
-      //console.log('LINE push payload:', payload);
-      const res = await axios.post(
+
+      const response = await axios.post(
         `${this.apiBase}/push`,
         payload,
         {
@@ -267,67 +365,121 @@ class AbnormalFindingFlexService {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${this.channelAccessToken}`,
           },
-          timeout: 10000,
-        },
+          timeout: this.timeout,
+        }
       );
 
-      return { success: true, status: res.status };
+      return { 
+        success: true, 
+        status: response.status,
+        messageId: response.data?.messageId 
+      };
+
     } catch (error) {
-      console.error('LINE push error:', error?.response?.data || error.message);
-      return { success: false, error: error.message };
+      console.error('LINE notification error:', {
+        message: error?.response?.data || error.message,
+        status: error?.response?.status,
+        lineUserId: lineUserId?.substring(0, 8) + '...', // Mask for privacy
+        timestamp: new Date().toISOString()
+      });
+      
+      return { 
+        success: false, 
+        error: error.message,
+        status: error?.response?.status 
+      };
     }
   }
 
-  async replyToUser(replyToken, messages) {
+  /**
+   * Replies to a LINE webhook event
+   * @param {string} replyToken - The reply token from webhook
+   * @param {Object|Array|string} messages - Message(s) to send
+   * @returns {Promise<Object>} Result object with success status
+   */
+  async replyToEvent(replyToken, messages) {
     try {
       if (!this.isConfigured()) {
-        console.warn('LINE_CHANNEL_ACCESS_TOKEN not set; skipping LINE reply');
-        return { success: false, skipped: true };
+        console.warn('LINE_CHANNEL_ACCESS_TOKEN not configured; skipping LINE reply');
+        return { success: false, skipped: true, reason: 'not_configured' };
+      }
+
+      if (!replyToken) {
+        console.warn('No reply token provided; skipping LINE reply');
+        return { success: false, skipped: true, reason: 'no_reply_token' };
       }
 
       const msgArray = Array.isArray(messages) ? messages : [messages];
       const payload = {
         replyToken,
-        messages: msgArray.map((m) => (typeof m === 'string' ? { type: 'text', text: m } : m)),
+        messages: msgArray.map((m) => 
+          typeof m === 'string' ? { type: 'text', text: m } : m
+        ),
       };
       
-      const res = await axios.post(`${this.apiBase}/reply`, payload, {
+      const response = await axios.post(`${this.apiBase}/reply`, payload, {
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${this.channelAccessToken}`,
         },
-        timeout: 10000,
+        timeout: this.timeout,
       });
       
-      return { success: true, status: res.status };
+      return { 
+        success: true, 
+        status: response.status,
+        messageId: response.data?.messageId 
+      };
+
     } catch (error) {
-      console.error('LINE reply error:', error?.response?.data || error.message);
-      return { success: false, error: error.message };
+      console.error('LINE reply error:', {
+        message: error?.response?.data || error.message,
+        status: error?.response?.status,
+        replyToken: replyToken?.substring(0, 8) + '...', // Mask for privacy
+        timestamp: new Date().toISOString()
+      });
+      
+      return { 
+        success: false, 
+        error: error.message,
+        status: error?.response?.status 
+      };
     }
   }
 
-  // Main builder method - follows the design doc exactly
-  buildAbnFlexMinimal(state, payload) {
-    return buildAbnFlexMinimal(state, payload);
+  /**
+   * Builds a ticket flex message (delegates to main builder)
+   * @param {string} state - The ticket state
+   * @param {Object} payload - Ticket data payload
+   * @param {Object} options - Additional options
+   * @returns {Object} LINE flex message object
+   */
+  buildTicketFlexMessage(state, payload, options = {}) {
+    return buildTicketFlexMessage(state, payload, options);
   }
 }
 
 // ===== EXPORTS =====
 
-// Create a singleton instance
-const service = new AbnormalFindingFlexService();
+// Create singleton instance
+const service = new TicketNotificationService();
 
 module.exports = {
-  // Export the service methods
-  buildAbnFlexMinimal: (state, payload) => service.buildAbnFlexMinimal(state, payload),
-  pushToUser: (lineUserId, messages) => service.pushToUser(lineUserId, messages),
-  replyToUser: (replyToken, messages) => service.replyToUser(replyToken, messages),
+  // Service methods
+  sendToUser: (lineUserId, messages) => service.sendToUser(lineUserId, messages),
+  replyToEvent: (replyToken, messages) => service.replyToEvent(replyToken, messages),
+  buildTicketFlexMessage: (state, payload, options) => service.buildTicketFlexMessage(state, payload, options),
   
-  // Export constants for use in ticket controller
-  AbnCaseState,
-  stateColorMap,
-  stateLabels,
+  // Constants for use in controllers
+  TicketState,
+  STATE_COLORS,
+  STATE_LABELS_TH,
+  STATE_LABELS_EN,
   
-  // Export the service class if needed
-  AbnormalFindingFlexService
+  // Utility functions
+  isValidLineUserId,
+  getStateLabel,
+  
+  // Export the service class for advanced usage
+  TicketNotificationService
 };

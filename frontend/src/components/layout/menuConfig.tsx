@@ -49,7 +49,7 @@ export const menuItems: MenuItem[] = [
       // { id: 'dashboard-calibration', label: 'Calibration', icon: <FileText className="h-4 w-4" />, path: '/dashboard/calibration', permissionLevel: 1 },
       // { id: 'dashboard-mcc', label: 'MCC', icon: <FileText className="h-4 w-4" />, path: '/dashboard/mcc', permissionLevel: 1 },
       // { id: 'dashboard-spare-part', label: 'Spare Part', icon: <Boxes className="h-4 w-4" />, path: '/dashboard/spare-part', permissionLevel: 1 },
-      { id: 'dashboard-targets', label: 'Target Management', icon: <Target className="h-4 w-4" />, path: '/dashboard/targets', permissionLevel: 1 },
+     
     ]
   },
   // {
@@ -98,15 +98,17 @@ export const menuItems: MenuItem[] = [
   },
   {
     id: 'assets',
-    label: 'Assets',
+    label: 'Settings',
     icon: <Settings className="h-5 w-5" />,
     path: '/assets',
     permissionLevel: 1,
     children: [
       { id: 'assets-hierarchy', label: 'Hierarchy View', icon: <TrendingUp className="h-4 w-4" />, path: '/assets/hierarchy', permissionLevel: 1 },
       { id: 'assets-ticket-approvals', label: 'Ticket Approvals', icon: <UserCheck className="h-4 w-4" />, path: '/assets/ticket-approvals', permissionLevel: 1 },
+      { id: 'dashboard-targets', label: 'Target Management', icon: <Target className="h-4 w-4" />, path: '/dashboard/targets', permissionLevel: 1 },
     ]
   },
+  
 
   // {
   //   id: 'maintenance',

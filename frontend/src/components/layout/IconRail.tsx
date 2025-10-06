@@ -53,7 +53,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
                     }}
                   >
                     {isActive && (
-                      <span className="absolute right-0 h-6 w-1 bg-primary-foreground rounded-full" />
+                      <span className="absolute left-0 h-6 w-1 bg-primary-foreground rounded-full" />
                     )}
                     <span className="[&>*]:text-primary-foreground">{item.icon}</span>
                   </button>
@@ -64,15 +64,6 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
           })}
         </div>
         <div className="flex flex-col items-center py-3 gap-2">
-          {/* Settings shortcut */}
-          {/* <Tooltip>
-            <TooltipTrigger asChild>
-              <button className="flex h-10 w-10 items-center justify-center rounded-md hover:bg-primary-foreground/10" onClick={() => navigate('/settings')}>
-                <SettingsIcon className="h-5 w-5" />
-              </button>
-            </TooltipTrigger>
-            <TooltipContent side="right">Settings</TooltipContent>
-          </Tooltip> */}
           {/* Theme toggle */}
           <Tooltip>
             <TooltipTrigger asChild>

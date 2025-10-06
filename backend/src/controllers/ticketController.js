@@ -354,6 +354,20 @@ const createTicket = async (req, res) => {
 
                 // Send LINE notifications
                 if (lineRecipients.length > 0) {
+
+                     // Get ticket images for FLEX message (after images for completion)
+                     const imagesResult = await runQuery(pool, `
+                        SELECT image_url, image_name, image_type
+                        FROM TicketImages 
+                        WHERE ticket_id = @ticket_id 
+                        ORDER BY uploaded_at ASC
+                    `, [
+                        { name: 'ticket_id', type: sql.Int, value: ticketId }
+                    ]);
+
+                     // Get hero image from "after" images, fallback to any image
+                    const beforeImages = imagesResult.recordset.filter(img => img.image_type === 'before');
+                    const heroImageUrl = getHeroImageUrl(beforeImages.length > 0 ? beforeImages : imagesResult.recordset);
                     // Prepare flexible message for LINE
                     const linePayload = {
                         caseNo: ticket_number,
@@ -361,6 +375,8 @@ const createTicket = async (req, res) => {
                         problem: title,
                         actionBy: reporterName,
                         comment: description,
+                        heroImageUrl: heroImageUrl,
+                        detailUrl: `${process.env.FRONTEND_URL}/tickets/${ticketId}`,
                         extraKVs: [
                             { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
                             { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },
@@ -369,8 +385,8 @@ const createTicket = async (req, res) => {
                     };
 
                     const linePromises = lineRecipients.map(user => {
-                        return abnFlexService.pushToUser(user.LineID, [
-                            abnFlexService.buildAbnFlexMinimal('open', linePayload)
+                        return abnFlexService.sendToUser(user.LineID, [
+                            abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.OPEN, linePayload)
                         ]);
                     });
 
@@ -398,14 +414,26 @@ const createTicket = async (req, res) => {
             data: {
                 id: ticketId,
                 ticket_number: ticket_number,
-                title,
-                pucode: pucode,
-                plant_id: ticketData.plant_id,
-                area_id: ticketData.area_id,
-                line_id: ticketData.line_id,
-                machine_id: ticketData.machine_id,
+                title: ticketData.title,
+                description: ticketData.description,
+                puno: ticketData.puno,
+                pucode: ticketData.pucode,
+                plant_code: ticketData.plant_code,
+                area_code: ticketData.area_code,
+                line_code: ticketData.line_code,
+                machine_code: ticketData.machine_code,
                 machine_number: ticketData.machine_number,
-                status: 'open'
+                plant_name: ticketData.plant_name,
+                pudescription: ticketData.pudescription,
+                equipment_id: ticketData.equipment_id,
+                equipment_code: ticketData.equipment_code,
+                equipment_name: ticketData.equipment_name,
+                severity_level: ticketData.severity_level,
+                priority: ticketData.priority,
+                status: ticketData.status,
+                reported_by: ticketData.reported_by,
+                created_at: ticketData.created_at,
+                updated_at: ticketData.updated_at
             }
         });
 
@@ -504,8 +532,10 @@ const getTickets = async (req, res) => {
                 t.*,
                 r.PERSON_NAME as reporter_name,
                 r.EMAIL as reporter_email,
+                r.PHONE as reporter_phone,
                 a.PERSON_NAME as assignee_name,
                 a.EMAIL as assignee_email,
+                a.PHONE as assignee_phone,
                 -- Hierarchy information from PUExtension
                 pe.pucode,
                 pe.plant as plant_code,
@@ -513,10 +543,33 @@ const getTickets = async (req, res) => {
                 pe.line as line_code,
                 pe.machine as machine_code,
                 pe.number as machine_number,
-                pe.puname as plant_name,
                 pe.pudescription as pudescription,
                 pe.digit_count,
-                -- Hierarchy codes from PUExtension
+                -- Hierarchy names based on digit patterns
+                (SELECT TOP 1 pudescription 
+                 FROM PUExtension pe2 
+                 WHERE pe2.plant = pe.plant 
+                 AND pe2.area IS NULL 
+                 AND pe2.line IS NULL 
+                 AND pe2.machine IS NULL) as plant_name,
+                (SELECT TOP 1 pudescription 
+                 FROM PUExtension pe2 
+                 WHERE pe2.plant = pe.plant 
+                 AND pe2.area = pe.area 
+                 AND pe2.line IS NULL 
+                 AND pe2.machine IS NULL) as area_name,
+                (SELECT TOP 1 pudescription 
+                 FROM PUExtension pe2 
+                 WHERE pe2.plant = pe.plant 
+                 AND pe2.area = pe.area 
+                 AND pe2.line = pe.line 
+                 AND pe2.machine IS NULL) as line_name,
+                (SELECT TOP 1 pudescription 
+                 FROM PUExtension pe2 
+                 WHERE pe2.plant = pe.plant 
+                 AND pe2.area = pe.area 
+                 AND pe2.line = pe.line 
+                 AND pe2.machine = pe.machine) as machine_name,
                 -- PU information
                 pu.PUCODE as pu_pucode,
                 pu.PUNAME as pu_name
@@ -570,8 +623,10 @@ const getTicketById = async (req, res) => {
                     t.*,
                     r.PERSON_NAME as reporter_name,
                     r.EMAIL as reporter_email,
+                    r.PHONE as reporter_phone,
                     a.PERSON_NAME as assignee_name,
                     a.EMAIL as assignee_email,
+                    a.PHONE as assignee_phone,
                     -- Workflow tracking fields
                     accepted_user.PERSON_NAME as accepted_by_name,
                     rejected_user.PERSON_NAME as rejected_by_name,
@@ -587,9 +642,33 @@ const getTicketById = async (req, res) => {
                     pe.line as line_code,
                     pe.machine as machine_code,
                     pe.number as machine_number,
-                    pe.puname as plant_name,
                     pe.pudescription as pudescription,
                     pe.digit_count,
+                    -- Hierarchy names based on digit patterns
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area IS NULL 
+                     AND pe2.line IS NULL 
+                     AND pe2.machine IS NULL) as plant_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line IS NULL 
+                     AND pe2.machine IS NULL) as area_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line = pe.line 
+                     AND pe2.machine IS NULL) as line_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line = pe.line 
+                     AND pe2.machine = pe.machine) as machine_name,
                     -- PU information
                     pu.PUCODE as pu_pucode,
                     pu.PUNAME as pu_name,
@@ -808,31 +887,31 @@ const updateTicket = async (req, res) => {
                     switch (updateData.status) {
                         case 'accepted':
                         case 'in_progress':
-                            abnState = abnFlexService.AbnCaseState.ACCEPTED;
+                            abnState = abnFlexService.TicketState.ACCEPTED;
                             break;
                         case 'completed':
-                            abnState = abnFlexService.AbnCaseState.COMPLETED;
+                            abnState = abnFlexService.TicketState.COMPLETED;
                             break;
                         case 'rejected_final':
-                            abnState = abnFlexService.AbnCaseState.REJECT_FINAL;
+                            abnState = abnFlexService.TicketState.REJECT_FINAL;
                             break;
                         case 'rejected_pending_l3_review':
-                            abnState = abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
+                            abnState = abnFlexService.TicketState.REJECT_TO_MANAGER;
                             break;
                         case 'escalated':
-                            abnState = abnFlexService.AbnCaseState.ESCALATED;
+                            abnState = abnFlexService.TicketState.ESCALATED;
                             break;
                         case 'closed':
-                            abnState = abnFlexService.AbnCaseState.CLOSED;
+                            abnState = abnFlexService.TicketState.CLOSED;
                             break;
                         case 'reopened_in_progress':
-                            abnState = abnFlexService.AbnCaseState.REOPENED;
+                            abnState = abnFlexService.TicketState.REOPENED;
                             break;
                         default:
-                            abnState = abnFlexService.AbnCaseState.CREATED;
+                            abnState = abnFlexService.TicketState.CREATED;
                     }
 
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnState, {
+                    const flexMsg = abnFlexService.buildTicketFlexMessage(abnState, {
                         caseNo: ticketData.ticket_number,
                         assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
                         problem: ticketData.title || "No description",
@@ -840,7 +919,7 @@ const updateTicket = async (req, res) => {
                         comment: updateData.status_notes || `สถานะเปลี่ยนจาก ${oldStatus} เป็น ${updateData.status}`,
                         detailUrl: getTicketDetailUrl(ticketData.id)
                     });
-                    await abnFlexService.pushToUser(reporter.LineID, flexMsg);
+                    await abnFlexService.sendToUser(reporter.LineID, flexMsg);
                 }
             });
         }
@@ -977,7 +1056,7 @@ const assignTicket = async (req, res) => {
 
                 const ticketImages = mapImagesToLinePayload(mapRecordset(imagesResult));
 
-                const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REASSIGNED, {
+                const flexMsg = abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.REASSIGNED, {
                     caseNo: ticketData.ticket_number,
                     assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
                     problem: ticketData.title || "No description",
@@ -985,7 +1064,7 @@ const assignTicket = async (req, res) => {
                     comment: notes || "งานได้รับการมอบหมายให้คุณแล้ว",
                     detailUrl: getTicketDetailUrl(ticketData.id)
                 });
-                await abnFlexService.pushToUser(assignee.LineID, flexMsg);
+                await abnFlexService.sendToUser(assignee.LineID, flexMsg);
             }
         });
 
@@ -1180,10 +1259,16 @@ const deleteTicketImage = async (req, res) => {
                 SELECT 
                     t.reported_by, 
                     t.assigned_to,
-                    t.area_id,
+                    pe.area as area_code,
                     ta.approval_level as user_approval_level
                 FROM Tickets t
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                    AND ta.plant_code = pe.plant 
+                    AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
+                    AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
+                    AND ta.is_active = 1
                 WHERE t.id = @ticket_id
             `);
         const ticketRow = ticketResult.recordset[0];
@@ -1458,26 +1543,21 @@ const acceptTicket = async (req, res) => {
                         caseNo: ticketData.ticket_number,
                         assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
                         problem: ticketData.title || 'No description',
-                        actionBy: acceptorName,
+                        //actionBy: acceptorName,
+                        detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
                         comment: notes || `งานได้รับการยอมรับแล้ว โดย ${acceptorName}`,
                         extraKVs: [
-                            { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                            { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-                            { label: 'Accepted by', value: acceptorName }
+                           // { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                           // { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                            { label: 'Scheduled Complete', value: new Date(scheduled_complete).toLocaleDateString('th-TH') },
+                            { label: 'Status', value: 'IN PROGRESS' },
+                            { label: 'Accepted by', value: acceptorName },
                         ]
                     };
 
-                    // Add scheduled completion date if provided
-                    if (scheduled_complete) {
-                        linePayload.extraKVs.push({
-                            label: 'Scheduled Complete',
-                            value: new Date(scheduled_complete).toLocaleDateString('th-TH')
-                        });
-                    }
-
                     const linePromises = lineRecipients.map(user => {
-                        return abnFlexService.pushToUser(user.LineID, [
-                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ACCEPTED, linePayload)
+                        return abnFlexService.sendToUser(user.LineID, [
+                            abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.ACCEPTED, linePayload)
                         ]);
                     });
 
@@ -1542,44 +1622,25 @@ const rejectTicket = async (req, res) => {
                 message: 'Ticket not found'
             });
         }
-        // Check if user has L3+ approval level for this PU (similar to approveClose)
-        let userApprovalLevel = 0;
-        try {
-            // Use sp_GetUsersForNotification to check if user has L3+ approval for this PU
-            // Check levels 3, 4, 5 etc. to cover L3+ users
-            const approvalCheckL3 = await pool.request()
-                .input('puno', sql.Int, ticket.puno)
-                .input('approval_level', sql.Int, 3)
-                .execute('sp_GetUsersForNotification');
-            
-            const approvalCheckL4 = await pool.request()
-                .input('puno', sql.Int, ticket.puno)
-                .input('approval_level', sql.Int, 4)
-                .execute('sp_GetUsersForNotification');
-            
-            const hasL3Approval = approvalCheckL3.recordset.some(u => u.PERSONNO === rejected_by);
-            const hasL4Approval = approvalCheckL4.recordset.some(u => u.PERSONNO === rejected_by);
-            
-            userApprovalLevel = hasL4Approval ? 4 : (hasL3Approval ? 3 : 0);
-        } catch (error) {
-            console.log('Checking approval level fallback:', error.message);
-            // Fallback: assume user has L2 permission if they're logged in
-            userApprovalLevel = 2;
-        }
-        
-        let newStatus = 'rejected_pending_l3_review'; // Default to L3 review for L2 rejections
-        let statusNotes = 'Ticket rejected by L2, escalated to L3 for review';
 
-        // Handle different rejection scenarios
-        if (userApprovalLevel >= 3) {
-            // L3 rejecting (final) - only L3 can make final rejections
-            newStatus = 'rejected_final';
-            statusNotes = 'Ticket rejected by L3 (final decision)';
-        } else {
-            // L2 rejecting - always goes to L3 review
-            newStatus = 'rejected_pending_l3_review';
-            statusNotes = 'Ticket rejected by L2, escalated to L3 for review';
+
+        // Check if user has permission for final rejection
+        const finalRejectCheck = await checkUserActionPermission(rejected_by, ticket.puno, 'reject_final');
+        // Check if user has L3+ approval level for this PU (similar to approveClose)
+        // Check user permission to reject tickets
+        const permissionCheck = await checkUserActionPermission(rejected_by, ticket.puno, 'reject');
+   
+        if (!permissionCheck.hasPermission && !finalRejectCheck.hasPermission) {
+            return res.status(403).json({
+                success: false,
+                message: 'You do not have permission to reject tickets for this location'
+            });
         }
+
+        let newStatus = finalRejectCheck.hasPermission ? 'rejected_final' : 'rejected_pending_l3_review';
+        let statusNotes = finalRejectCheck.hasPermission ? 
+            'Ticket rejected by L3 (final decision)' : 
+            'Ticket rejected by L2, escalated to L3 for review';
 
         // Update ticket status and rejection reason with workflow tracking
         await pool.request()
@@ -1712,8 +1773,8 @@ const rejectTicket = async (req, res) => {
 
                 // Determine rejection state based on rejector level
                 const rejectionState = (ticket.user_approval_level || 0) >= 3
-                    ? abnFlexService.AbnCaseState.REJECT_FINAL
-                    : abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
+                    ? abnFlexService.TicketState.REJECT_FINAL
+                    : abnFlexService.TicketState.REJECT_TO_MANAGER;
 
                 // Prepare ticket data<｜tool▁call▁begin｜>for notifications
                 const ticketDataForNotifications = {
@@ -1781,24 +1842,27 @@ const rejectTicket = async (req, res) => {
                         problem: ticketData.title || 'No description',
                         actionBy: rejectorName,
                         comment: rejection_reason || "งานถูกปฏิเสธ",
+                        detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
                         extraKVs: [
-                            { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                            { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                            //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                            //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                           
+                            { label: 'Status', value: newStatus.toUpperCase() },
                             { label: 'Rejected by', value: rejectorName },
-                            { label: 'Status', value: newStatus.toUpperCase() }
+                          
                         ]
                     };
 
                     let rejectionState;
                     if (newStatus === 'rejected_final') {
-                        rejectionState = abnFlexService.AbnCaseState.REJECT_FINAL;
+                        rejectionState = abnFlexService.TicketState.REJECT_FINAL;
                     } else {
-                        rejectionState = abnFlexService.AbnCaseState.REJECT_TO_MANAGER;
+                        rejectionState = abnFlexService.TicketState.REJECT_TO_MANAGER;
                     }
 
                     const linePromises = lineRecipients.map(user => {
-                        return abnFlexService.pushToUser(user.LineID, [
-                            abnFlexService.buildAbnFlexMinimal(rejectionState, linePayload)
+                        return abnFlexService.sendToUser(user.LineID, [
+                            abnFlexService.buildTicketFlexMessage(rejectionState, linePayload)
                         ]);
                     });
 
@@ -2068,21 +2132,23 @@ const completeJob = async (req, res) => {
                             caseNo: ticketData.ticket_number,
                             assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
                             problem: ticketData.title || 'No description',
-                            actionBy: completerName,
+                            //actionBy: completerName,
                             comment: completion_notes || "งานเสร็จสมบูรณ์แล้ว",
                             heroImageUrl: heroImageUrl,
+                            detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
                             extraKVs: [
-                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-                                { label: 'Completed by', value: completerName },
+                                //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
                                 { label: "Cost Avoidance", value: cost_avoidance ? `${cost_avoidance.toLocaleString()} บาท` : "-" },
                                 { label: "Downtime Avoidance", value: downtime_avoidance_hours ? `${downtime_avoidance_hours} ชั่วโมง` : "-" },
-                                { label: "Failure Mode", value: ticketData.FailureModeName || "-" }
+                                { label: "Failure Mode", value: ticketData.FailureModeName || "-" },
+                                { label: 'Status', value: 'COMPLETED' },
+                                { label: 'Completed by', value: completerName },
                             ]
                         };
 
-                        return abnFlexService.pushToUser(user.LineID, [
-                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.COMPLETED, linePayload)
+                        return abnFlexService.sendToUser(user.LineID, [
+                            abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.COMPLETED, linePayload)
                         ]);
                     });
 
@@ -2354,17 +2420,18 @@ const escalateTicket = async (req, res) => {
                             actionBy: escalatorName,
                             comment: escalation_reason || "งานถูกส่งต่อให้หัวหน้างานพิจารณา",
                             heroImageUrl: heroImageUrl,
+                            detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
                             extraKVs: [
                                 { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
                                 { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-                                { label: 'Escalated by', value: escalatorName },
                                 { label: 'Escalated to', value: escalated_to },
-                                { label: 'Status', value: 'ESCALATED' }
+                                { label: 'Status', value: 'ESCALATED' },
+                                { label: 'Escalated by', value: escalatorName },
                             ]
                         };
 
-                        return abnFlexService.pushToUser(user.LineID, [
-                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.ESCALATED, linePayload)
+                        return abnFlexService.sendToUser(user.LineID, [
+                            abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.ESCALATED, linePayload)
                         ]);
                     });
 
@@ -2411,7 +2478,7 @@ const approveReview = async (req, res) => {
         const pool = await sql.connect(dbConfig);
 
         // Get current ticket status
-        const currentTicketResult = await runQuery(pool, 'SELECT status, reported_by, assigned_to FROM Tickets WHERE id = @id', [
+        const currentTicketResult = await runQuery(pool, 'SELECT status, reported_by, assigned_to, puno FROM Tickets WHERE id = @id', [
             { name: 'id', type: sql.Int, value: id }
         ]);
 
@@ -2422,8 +2489,20 @@ const approveReview = async (req, res) => {
                 message: 'Ticket not found'
             });
         }
+        console.log('puno', ticket.puno);
+        console.log('reviewed_by', reviewed_by);
+        console.log('ticket.reported_by', ticket.reported_by);
 
-        // Check if user is the requestor
+        // Check if user has permission to approve review
+        const permissionCheck = await checkUserActionPermission(reviewed_by, ticket.puno, 'approve_review');
+        if (!permissionCheck.hasPermission) {
+            return res.status(403).json({
+                success: false,
+                message: 'You do not have permission to approve review tickets'
+            });
+        }
+        
+        // Separate check for requester
         if (ticket.reported_by !== reviewed_by) {
             return res.status(403).json({
                 success: false,
@@ -2615,19 +2694,21 @@ const approveReview = async (req, res) => {
                             caseNo: ticketData.ticket_number,
                             assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
                             problem: ticketData.title || 'No description',
-                            actionBy: reviewerName,
+                           // actionBy: reviewerName,
                             comment: review_reason || "งานได้รับการตรวจสอบและอนุมัติโดยผู้ร้องขอ",
+                            detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
                             extraKVs: [
-                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-                                { label: 'Reviewed by', value: reviewerName },
+                                //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                               
                                 { label: "Satisfaction Rating", value: satisfaction_rating ? `${satisfaction_rating}/5 ⭐` : "ไม่ระบุ" },
-                                { label: 'Status', value: 'REVIEWED' }
+                                { label: 'Status', value: 'REVIEWED' },
+                                { label: 'Reviewed by', value: reviewerName }
                             ]
                         };
 
-                        return abnFlexService.pushToUser(user.LineID, [
-                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REVIEWED, linePayload)
+                        return abnFlexService.sendToUser(user.LineID, [
+                            abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.REVIEWED, linePayload)
                         ]);
                     });
 
@@ -2694,24 +2775,9 @@ const approveClose = async (req, res) => {
             });
         }
 
-        // Check if user has L4+ approval level for this PU
-        let userApprovalLevel = 0;
-        try {
-            // Use sp_GetUsersForNotification to check if user has L4+ approval for this PU
-            const approvalCheck = await pool.request()
-                .input('puno', sql.Int, ticket.puno)
-                .input('approval_level', sql.Int, 4)
-                .execute('sp_GetUsersForNotification');
-            
-            const hasL4Approval = approvalCheck.recordset.some(u => u.PERSONNO === closed_by);
-            userApprovalLevel = hasL4Approval ? 4 : 0;
-        } catch (error) {
-            console.log('Checking approval level fallback:', error.message);
-            // Fallback: assume user has permission if they're logged in
-            userApprovalLevel = 4;
-        }
-        
-        if (userApprovalLevel < 4) {
+        // Check if user has permission to approve closure
+        const permissionCheck = await checkUserActionPermission(closed_by, ticket.puno, 'approve_close');
+        if (!permissionCheck.hasPermission) {
             return res.status(403).json({
                 success: false,
                 message: 'Only L4+ managers can approve closure of tickets in this area'
@@ -2900,17 +2966,19 @@ const approveClose = async (req, res) => {
                             assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
                             problem: ticketData.title || 'No description',
                             actionBy: closerName,
-                            comment: close_reason || "เคสถูกปิดโดยผู้จัดการระดับ L4",
+                            detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+                            comment: close_reason || "เคสถูกปิดโดยผู้จัดการ",
                             extraKVs: [
-                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-                                { label: 'Closed by', value: closerName },
-                                { label: 'Status', value: 'CLOSED' }
+                                //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                               
+                                { label: 'Status', value: 'CLOSED' },
+                                { label: 'Closed by', value: closerName }
                             ]
                         };
 
-                        return abnFlexService.pushToUser(user.LineID, [
-                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CLOSED, linePayload)
+                        return abnFlexService.sendToUser(user.LineID, [
+                            abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.CLOSED, linePayload)
                         ]);
                     });
 
@@ -2977,24 +3045,9 @@ const reassignTicket = async (req, res) => {
             });
         }
 
-        // Check if user has L3+ approval level for this PU (similar to approveClose)
-        let userApprovalLevel = 0;
-        try {
-            // Use sp_GetUsersForNotification to check if user has L3+ approval for this PU
-            const approvalCheck = await pool.request()
-                .input('puno', sql.Int, ticket.puno)
-                .input('approval_level', sql.Int, 3)
-                .execute('sp_GetUsersForNotification');
-            
-            const hasL3Approval = approvalCheck.recordset.some(u => u.PERSONNO === reassigned_by);
-            userApprovalLevel = hasL3Approval ? 3 : 0;
-        } catch (error) {
-            console.log('Checking approval level fallback:', error.message);
-            // Fallback: assume user has L3 permission if they're logged in
-            userApprovalLevel = 3;
-        }
-        
-        if (userApprovalLevel < 3) {
+        // Check if user has permission to reassign tickets
+        const permissionCheck = await checkUserActionPermission(reassigned_by, ticket.puno, 'reassign');
+        if (!permissionCheck.hasPermission) {
             return res.status(403).json({
                 success: false,
                 message: 'Only L3+ managers can reassign tickets in this area'
@@ -3219,17 +3272,18 @@ const reassignTicket = async (req, res) => {
                             problem: ticketData.title || 'No description',
                             actionBy: reassignerName,
                             comment: reassignment_reason || "งานได้รับการมอบหมายใหม่",
+                            detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
                             extraKVs: [
                                 { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
                                 { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-                                { label: 'Reassigned by', value: reassignerName },
                                 { label: 'New Assignee', value: assigneeName },
-                                { label: 'Status', value: 'OPEN' }
+                                { label: 'Status', value: 'OPEN' },
+                                { label: 'Reassigned by', value: reassignerName },
                             ]
                         };
 
-                        return abnFlexService.pushToUser(user.LineID, [
-                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REASSIGNED, linePayload)
+                        return abnFlexService.sendToUser(user.LineID, [
+                            abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.REASSIGNED, linePayload)
                         ]);
                     });
 
@@ -3272,10 +3326,10 @@ const reassignTicket = async (req, res) => {
 };
 
 // Helper function to get L2+ authorized users for an area
-const getL2AuthorizedUsersForArea = async (pool, areaId) => {
+const getL2AuthorizedUsersForArea = async (pool, areaCode) => {
     try {
         const result = await pool.request()
-            .input('area_id', sql.Int, areaId)
+            .input('area_code', sql.NVarChar, areaCode)
             .query(`
                 SELECT DISTINCT
                     p.PERSONNO,
@@ -3287,7 +3341,7 @@ const getL2AuthorizedUsersForArea = async (pool, areaId) => {
                 FROM TicketApproval ta
                 INNER JOIN Person p ON ta.personno = p.PERSONNO
                 LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                WHERE ta.area_id = @area_id
+                WHERE ta.area_code = @area_code
                 AND ta.approval_level >= 2
                 AND ta.is_active = 1
                 AND p.FLAGDEL != 'Y'
@@ -3302,163 +3356,163 @@ const getL2AuthorizedUsersForArea = async (pool, areaId) => {
     }
 };
 
-// Send delayed ticket notification with images (called after image uploads)
-const sendDelayedTicketNotification = async (ticketId) => {
-    try {
-        const pool = await sql.connect(dbConfig);
+// // Send delayed ticket notification with images (called after image uploads)
+// const sendDelayedTicketNotification = async (ticketId) => {
+//     try {
+//         const pool = await sql.connect(dbConfig);
         
-        // Get ticket information with hierarchy
-        const ticketResult = await pool.request()
-            .input('ticket_id', sql.Int, ticketId)
-            .query(`
-                SELECT t.*, 
-                       r.PERSON_NAME as reporter_name,
-                       ur.LineID as reporter_line_id,
-                       r.EMAIL as reporter_email,
-                       a.PERSON_NAME as assignee_name,
-                       ua.LineID as assignee_line_id,
-                       a.EMAIL as assignee_email,
-                       pu.PUCODE as pu_pucode, 
-                       pu.PUNAME as pu_name,
-                       -- Hierarchy information from PUExtension
-                       pe.pucode,
-                       pe.plant as plant_code,
-                       pe.area as area_code,
-                       pe.line as line_code,
-                       pe.machine as machine_code,
-                       pe.number as machine_number,
-                       pe.puname as plant_name,
-                       pe.pudescription as pudescription,
-                       pe.digit_count,
-                       -- Hierarchy codes from PUExtension
-                FROM Tickets t
-                LEFT JOIN Person r ON t.reported_by = r.PERSONNO
-                LEFT JOIN _secUsers ur ON r.PERSONNO = ur.PersonNo
-                LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
-                LEFT JOIN _secUsers ua ON a.PERSONNO = ua.PersonNo
-                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                WHERE t.id = @ticket_id
-            `);
+//         // Get ticket information with hierarchy
+//         const ticketResult = await pool.request()
+//             .input('ticket_id', sql.Int, ticketId)
+//             .query(`
+//                 SELECT t.*, 
+//                        r.PERSON_NAME as reporter_name,
+//                        ur.LineID as reporter_line_id,
+//                        r.EMAIL as reporter_email,
+//                        a.PERSON_NAME as assignee_name,
+//                        ua.LineID as assignee_line_id,
+//                        a.EMAIL as assignee_email,
+//                        pu.PUCODE as pu_pucode, 
+//                        pu.PUNAME as pu_name,
+//                        -- Hierarchy information from PUExtension
+//                        pe.pucode,
+//                        pe.plant as plant_code,
+//                        pe.area as area_code,
+//                        pe.line as line_code,
+//                        pe.machine as machine_code,
+//                        pe.number as machine_number,
+//                        pe.puname as plant_name,
+//                        pe.pudescription as pudescription,
+//                        pe.digit_count,
+//                        -- Hierarchy codes from PUExtension
+//                 FROM Tickets t
+//                 LEFT JOIN Person r ON t.reported_by = r.PERSONNO
+//                 LEFT JOIN _secUsers ur ON r.PERSONNO = ur.PersonNo
+//                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
+//                 LEFT JOIN _secUsers ua ON a.PERSONNO = ua.PersonNo
+//                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+//                 LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+//                 WHERE t.id = @ticket_id
+//             `);
         
-        if (ticketResult.recordset.length === 0) {
-            console.log(`Ticket ${ticketId} not found for delayed notification`);
-            return;
-        }
+//         if (ticketResult.recordset.length === 0) {
+//             console.log(`Ticket ${ticketId} not found for delayed notification`);
+//             return;
+//         }
         
-        const ticket = ticketResult.recordset[0];
+//         const ticket = ticketResult.recordset[0];
         
-        // Get all ticket images (before images for hero)
-        const imagesResult = await pool.request()
-            .input('ticket_id', sql.Int, ticketId)
-            .query(`
-                SELECT image_url, image_name, image_type
-                FROM TicketImages 
-                WHERE ticket_id = @ticket_id 
-                ORDER BY uploaded_at ASC
-            `);
+//         // Get all ticket images (before images for hero)
+//         const imagesResult = await pool.request()
+//             .input('ticket_id', sql.Int, ticketId)
+//             .query(`
+//                 SELECT image_url, image_name, image_type
+//                 FROM TicketImages 
+//                 WHERE ticket_id = @ticket_id 
+//                 ORDER BY uploaded_at ASC
+//             `);
         
-        // Convert file paths to URLs
-        const baseUrl = getBackendBaseUrl();
-        const ticketImages = mapImagesToLinePayload(imagesResult.recordset, baseUrl);
+//         // Convert file paths to URLs
+//         const baseUrl = getBackendBaseUrl();
+//         const ticketImages = mapImagesToLinePayload(imagesResult.recordset, baseUrl);
         
-        // Get hero image (first "before" image or first image if no "before" type)
-        const beforeImages = imagesResult.recordset.filter(img => img.image_type === 'before');
-        const heroImageUrl = getHeroImageUrl(beforeImages.length > 0 ? beforeImages : imagesResult.recordset);
+//         // Get hero image (first "before" image or first image if no "before" type)
+//         const beforeImages = imagesResult.recordset.filter(img => img.image_type === 'before');
+//         const heroImageUrl = getHeroImageUrl(beforeImages.length > 0 ? beforeImages : imagesResult.recordset);
         
-        // 1. Send LINE notification to requester (reporter)
-        if (ticket.reporter_line_id) {
-            try {
-                const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CREATED, {
-                    caseNo: ticket.ticket_number,
-                    assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
-                    problem: ticket.title || "No description",
-                    actionBy: ticket.reporter_name,
-                    comment: "เคสใหม่ รอการยอมรับจากผู้รับผิดชอบ",
-                    heroImageUrl: heroImageUrl,
-                    extraKVs: [
-                        { label: "Priority", value: ticket.priority || "normal" },
-                        { label: "Severity", value: ticket.severity_level || "medium" }
-                    ],
-                    detailUrl: getTicketDetailUrl(ticket.id)
-                });
-                await abnFlexService.pushToUser(ticket.reporter_line_id, flexMsg);
-                console.log(`LINE notification sent to requester for ticket ${ticketId}`);
-            } catch (reporterLineErr) {
-                console.error(`Failed to send LINE notification to requester for ticket ${ticketId}:`, reporterLineErr);
-            }
-        }
+//         // 1. Send LINE notification to requester (reporter)
+//         if (ticket.reporter_line_id) {
+//             try {
+//                 const flexMsg = abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.CREATED, {
+//                     caseNo: ticket.ticket_number,
+//                     assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
+//                     problem: ticket.title || "No description",
+//                     actionBy: ticket.reporter_name,
+//                     comment: "เคสใหม่ รอการยอมรับจากผู้รับผิดชอบ",
+//                     heroImageUrl: heroImageUrl,
+//                     extraKVs: [
+//                         { label: "Priority", value: ticket.priority || "normal" },
+//                         { label: "Severity", value: ticket.severity_level || "medium" }
+//                     ],
+//                     detailUrl: getTicketDetailUrl(ticket.id)
+//                 });
+//                 await abnFlexService.sendToUser(ticket.reporter_line_id, flexMsg);
+//                 console.log(`LINE notification sent to requester for ticket ${ticketId}`);
+//             } catch (reporterLineErr) {
+//                 console.error(`Failed to send LINE notification to requester for ticket ${ticketId}:`, reporterLineErr);
+//             }
+//         }
         
-        // 2. Send LINE notification to all L2+ authorized users in the area
-        const l2Users = await getL2AuthorizedUsersForArea(pool, ticket.area_id);
-        console.log(`Found ${l2Users.length} L2+ authorized users for area ${ticket.area_id}:`, 
-            l2Users.map(u => `${u.PERSON_NAME} (${u.PERSONNO})`).join(', '));
+//         // 2. Send LINE notification to all L2+ authorized users in the area
+//         const l2Users = await getL2AuthorizedUsersForArea(pool, ticket.area_id);
+//         console.log(`Found ${l2Users.length} L2+ authorized users for area ${ticket.area_id}:`, 
+//             l2Users.map(u => `${u.PERSON_NAME} (${u.PERSONNO})`).join(', '));
         
-        for (const user of l2Users) {
-            // Skip if this is the same person as the reporter (already notified above)
-            if (user.PERSONNO === ticket.reported_by) {
-                console.log(`Skipping L2 notification for reporter (already notified): ${user.PERSON_NAME}`);
-                continue;
-            }
+//         for (const user of l2Users) {
+//             // Skip if this is the same person as the reporter (already notified above)
+//             if (user.PERSONNO === ticket.reported_by) {
+//                 console.log(`Skipping L2 notification for reporter (already notified): ${user.PERSON_NAME}`);
+//                 continue;
+//             }
             
-            try {
-                const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CREATED, {
-                    caseNo: ticket.ticket_number,
-                    assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
-                    problem: ticket.title || "No description",
-                    actionBy: ticket.reporter_name,
-                    comment: "เคสใหม่ รอการยอมรับจากผู้รับผิดชอบ",
-                    heroImageUrl: heroImageUrl,
-                    extraKVs: [
-                        { label: "Priority", value: ticket.priority || "normal" },
-                        { label: "Severity", value: ticket.severity_level || "medium" }
-                    ],
-                    detailUrl: getTicketDetailUrl(ticket.id)
-                });
-                await abnFlexService.pushToUser(user.LineID, flexMsg);
-                console.log(`LINE notification sent to L2 user ${user.PERSON_NAME} (${user.PERSONNO}) for ticket ${ticketId}`);
-            } catch (l2UserLineErr) {
-                console.error(`Failed to send LINE notification to L2 user ${user.PERSON_NAME} for ticket ${ticketId}:`, l2UserLineErr);
-            }
-        }
+//             try {
+//                 const flexMsg = abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.CREATED, {
+//                     caseNo: ticket.ticket_number,
+//                     assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
+//                     problem: ticket.title || "No description",
+//                     actionBy: ticket.reporter_name,
+//                     comment: "เคสใหม่ รอการยอมรับจากผู้รับผิดชอบ",
+//                     heroImageUrl: heroImageUrl,
+//                     extraKVs: [
+//                         { label: "Priority", value: ticket.priority || "normal" },
+//                         { label: "Severity", value: ticket.severity_level || "medium" }
+//                     ],
+//                     detailUrl: getTicketDetailUrl(ticket.id)
+//                 });
+//                 await abnFlexService.sendToUser(user.LineID, flexMsg);
+//                 console.log(`LINE notification sent to L2 user ${user.PERSON_NAME} (${user.PERSONNO}) for ticket ${ticketId}`);
+//             } catch (l2UserLineErr) {
+//                 console.error(`Failed to send LINE notification to L2 user ${user.PERSON_NAME} for ticket ${ticketId}:`, l2UserLineErr);
+//             }
+//         }
         
-        // 3. Send LINE notification to pre-assigned user if applicable (separate from L2 users)
-        if (ticket.assigned_to && ticket.assignee_line_id) {
-            // Check if assignee is already in L2 users list to avoid duplicate notifications
-            const isAssigneeInL2Users = l2Users.some(user => user.PERSONNO === ticket.assigned_to);
+//         // 3. Send LINE notification to pre-assigned user if applicable (separate from L2 users)
+//         if (ticket.assigned_to && ticket.assignee_line_id) {
+//             // Check if assignee is already in L2 users list to avoid duplicate notifications
+//             const isAssigneeInL2Users = l2Users.some(user => user.PERSONNO === ticket.assigned_to);
             
-            if (!isAssigneeInL2Users) {
-                try {
-                    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.CREATED, {
-                        caseNo: ticket.ticket_number,
-                        assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
-                        problem: ticket.title || "No description",
-                        actionBy: ticket.reporter_name,
-                        comment: "เคสใหม่ - คุณได้รับมอบหมายงานนี้แล้ว",
-                        heroImageUrl: heroImageUrl,
-                        extraKVs: [
-                            { label: "Priority", value: ticket.priority || "normal" },
-                            { label: "Severity", value: ticket.severity_level || "medium" }
-                        ],
-                        detailUrl: getTicketDetailUrl(ticket.id)
-                    });
+//             if (!isAssigneeInL2Users) {
+//                 try {
+//                     const flexMsg = abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.CREATED, {
+//                         caseNo: ticket.ticket_number,
+//                         assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
+//                         problem: ticket.title || "No description",
+//                         actionBy: ticket.reporter_name,
+//                         comment: "เคสใหม่ - คุณได้รับมอบหมายงานนี้แล้ว",
+//                         heroImageUrl: heroImageUrl,
+//                         extraKVs: [
+//                             { label: "Priority", value: ticket.priority || "normal" },
+//                             { label: "Severity", value: ticket.severity_level || "medium" }
+//                         ],
+//                         detailUrl: getTicketDetailUrl(ticket.id)
+//                     });
                     
-                    await abnFlexService.pushToUser(ticket.assignee_line_id, flexMsg);
-                    console.log(`LINE notification sent to pre-assigned user for ticket ${ticketId}`);
+//                     await abnFlexService.sendToUser(ticket.assignee_line_id, flexMsg);
+//                     console.log(`LINE notification sent to pre-assigned user for ticket ${ticketId}`);
                     
-                } catch (assigneeLineErr) {
-                    console.error(`Failed to send LINE notification to pre-assigned user for ticket ${ticketId}:`, assigneeLineErr);
-                }
-            } else {
-                console.log(`Pre-assigned user already notified as L2 user for ticket ${ticketId}`);
-            }
-        }
+//                 } catch (assigneeLineErr) {
+//                     console.error(`Failed to send LINE notification to pre-assigned user for ticket ${ticketId}:`, assigneeLineErr);
+//                 }
+//             } else {
+//                 console.log(`Pre-assigned user already notified as L2 user for ticket ${ticketId}`);
+//             }
+//         }
         
-    } catch (error) {
-        console.error(`Error sending delayed ticket notification for ticket ${ticketId}:`, error);
-        throw error;
-    }
-};
+//     } catch (error) {
+//         console.error(`Error sending delayed ticket notification for ticket ${ticketId}:`, error);
+//         throw error;
+//     }
+// };
 
 // Get available L2+ users for assignment
 const getAvailableAssignees = async (req, res) => {
@@ -3604,7 +3658,16 @@ const reopenTicket = async (req, res) => {
             });
         }
 
-        // Check if user is the requestor
+        // Check if user has permission to reopen tickets
+        const permissionCheck = await checkUserActionPermission(reopened_by, ticket.puno, 'reopen');
+        if (!permissionCheck.hasPermission) {
+            return res.status(403).json({
+                success: false,
+                message: 'You do not have permission to reopen tickets'
+            });
+        }
+        
+        // Separate check for requester
         if (ticket.reported_by !== reopened_by) {
             return res.status(403).json({
                 success: false,
@@ -3803,18 +3866,19 @@ const reopenTicket = async (req, res) => {
                             caseNo: ticketData.ticket_number,
                             assetName: ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset',
                             problem: ticketData.title || 'No description',
-                            actionBy: reopenerName,
+                           // actionBy: reopenerName,
                             comment: reopen_reason || "งานถูกเปิดใหม่ กรุณาดำเนินการต่อ",
+                            detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
                             extraKVs: [
-                                { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                                { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                                //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
+                                //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
+                                { label: 'Status', value: 'REOPENED_IN_PROGRESS' },
                                 { label: 'Reopened by', value: reopenerName },
-                                { label: 'Status', value: 'REOPENED_IN_PROGRESS' }
                             ]
                         };
 
-                        return abnFlexService.pushToUser(user.LineID, [
-                            abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.REOPENED, linePayload)
+                        return abnFlexService.sendToUser(user.LineID, [
+                            abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.REOPENED, linePayload)
                         ]);
                     });
 
@@ -3922,7 +3986,10 @@ const getUserPendingTickets = async (req, res) => {
             LEFT JOIN Person creator ON creator.PERSONNO = t.reported_by
             LEFT JOIN Person assignee ON assignee.PERSONNO = t.assigned_to
             LEFT JOIN TicketApproval ta ON ta.personno = @userId 
-            LEFT JOIN Line l ON ta.line_id = l.id AND l.code = pe.line AND ta.is_active = 1
+                AND ta.plant_code = pe.plant 
+                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
+                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
+                AND ta.is_active = 1
             WHERE (
                 -- Tickets created by the user
                 t.reported_by = @userId
@@ -3952,15 +4019,16 @@ const getUserPendingTickets = async (req, res) => {
             updated_at: ticket.updated_at,
             assigned_to: ticket.assigned_to,
             reported_by: ticket.reported_by,
-            plant_id: ticket.plant_id,
+            // Map PUExtension fields to expected interface
             plant_name: ticket.plant_name,
             plant_code: ticket.plant_code,
-            area_id: ticket.area_id,
-            area_name: ticket.area_name,
+            area_name: ticket.area_code, // Use area_code as area_name for now
             area_code: ticket.area_code,
-            line_id: ticket.line_id,
-            line_name: ticket.line_name,
+            line_name: ticket.line_code, // Use line_code as line_name for now
             line_code: ticket.line_code,
+            // Add dummy IDs for backward compatibility
+            area_id: 1, // Dummy ID since we don't have separate area table anymore
+            line_id: 1, // Dummy ID since we don't have separate line table anymore
             creator_name: ticket.creator_name,
             creator_id: ticket.creator_id,
             assignee_name: ticket.assignee_name,
@@ -3985,41 +4053,41 @@ const getUserPendingTickets = async (req, res) => {
     }
 };
 
-// Trigger LINE notification for ticket (called after image uploads)
-const triggerTicketNotification = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const pool = await sql.connect(dbConfig);
+// // Trigger LINE notification for ticket (called after image uploads)
+// const triggerTicketNotification = async (req, res) => {
+//     try {
+//         const { id } = req.params;
+//         const pool = await sql.connect(dbConfig);
 
-        // Verify ticket exists
-        const ticketCheck = await pool.request()
-            .input('ticket_id', sql.Int, id)
-            .query('SELECT id FROM Tickets WHERE id = @ticket_id');
+//         // Verify ticket exists
+//         const ticketCheck = await pool.request()
+//             .input('ticket_id', sql.Int, id)
+//             .query('SELECT id FROM Tickets WHERE id = @ticket_id');
 
-        if (ticketCheck.recordset.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Ticket not found'
-            });
-        }
+//         if (ticketCheck.recordset.length === 0) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: 'Ticket not found'
+//             });
+//         }
 
-        // Send delayed notification with images
-        await sendDelayedTicketNotification(id);
+//         // Send delayed notification with images
+//         await sendDelayedTicketNotification(id);
         
-        res.json({
-            success: true,
-            message: 'LINE notification sent successfully'
-        });
+//         res.json({
+//             success: true,
+//             message: 'LINE notification sent successfully'
+//         });
 
-    } catch (error) {
-        console.error('Error triggering ticket notification:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to send LINE notification',
-            error: error.message
-        });
-    }
-};
+//     } catch (error) {
+//         console.error('Error triggering ticket notification:', error);
+//         res.status(500).json({
+//             success: false,
+//             message: 'Failed to send LINE notification',
+//             error: error.message
+//         });
+//     }
+// };
 
 // triggerTicketNotification function removed - notifications now handled automatically
 
@@ -4111,7 +4179,13 @@ const getUserTicketCountPerPeriod = async (req, res) => {
                 END as period,
                 COUNT(*) as tickets
             FROM Tickets t
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                AND ta.plant_code = pe.plant 
+                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
+                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
+                AND ta.is_active = 1
             ${whereClause}
             GROUP BY 
                 CASE 
@@ -4252,7 +4326,13 @@ const getUserCompletedTicketCountPerPeriod = async (req, res) => {
                 END as period,
                 COUNT(*) as tickets
             FROM Tickets t
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                AND ta.plant_code = pe.plant 
+                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
+                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
+                AND ta.is_active = 1
             ${whereClause}
             GROUP BY 
                 CASE 
@@ -4365,7 +4445,13 @@ const getPersonalKPIData = async (req, res) => {
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsThisPeriod
             FROM Tickets t
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                AND ta.plant_code = pe.plant 
+                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
+                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
+                AND ta.is_active = 1
             WHERE (
                 -- Tickets created by the user
                 t.reported_by = @userId
@@ -4390,7 +4476,13 @@ const getPersonalKPIData = async (req, res) => {
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsLastPeriod
             FROM Tickets t
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                AND ta.plant_code = pe.plant 
+                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
+                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
+                AND ta.is_active = 1
             WHERE (
                 -- Tickets created by the user
                 t.reported_by = @userId
@@ -4433,7 +4525,13 @@ const getPersonalKPIData = async (req, res) => {
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesThisPeriod
                 FROM Tickets t
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                AND ta.plant_code = pe.plant 
+                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
+                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
+                AND ta.is_active = 1
                 WHERE (
                     -- Tickets completed by the user
                     t.completed_by = @userId
@@ -4455,7 +4553,13 @@ const getPersonalKPIData = async (req, res) => {
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesLastPeriod
                 FROM Tickets t
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId AND ta.line_id = t.line_id
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                AND ta.plant_code = pe.plant 
+                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
+                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
+                AND ta.is_active = 1
                 WHERE (
                     -- Tickets completed by the user
                     t.completed_by = @userId
@@ -4636,7 +4740,7 @@ module.exports = {
     reopenTicket,
     reassignTicket,
     getAvailableAssignees,
-    sendDelayedTicketNotification,
+   
     getUserPendingTickets,
     getUserTicketCountPerPeriod,
     getUserCompletedTicketCountPerPeriod,

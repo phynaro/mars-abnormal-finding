@@ -46,8 +46,10 @@ export interface Ticket {
   l3_override_by?: number;
   reporter_name?: string;
   reporter_email?: string;
+  reporter_phone?: string;
   assignee_name?: string;
   assignee_email?: string;
+  assignee_phone?: string;
   // Workflow user names
   accepted_by_name?: string;
   rejected_by_name?: string;
@@ -174,14 +176,16 @@ export interface PendingTicket {
   updated_at: string;
   assigned_to?: number;
   reported_by: number;
-  area_id: number;
-  area_name: string;
-  area_code: string;
-  line_id: number;
-  line_name: string;
-  line_code: string;
+  // Updated to use PUExtension hierarchy
   plant_name: string;
   plant_code: string;
+  area_name: string;
+  area_code: string;
+  line_name: string;
+  line_code: string;
+  // Keep dummy IDs for backward compatibility
+  area_id: number;
+  line_id: number;
   creator_name: string;
   creator_id: number;
   assignee_name?: string;
@@ -652,13 +656,13 @@ class TicketService {
   }
 
   async getUserTicketCountPerPeriod(params: {
-    userId: number;
+    year: number;
     startDate: string;
     endDate: string;
   }): Promise<{ success: boolean; data: any }> {
     const headers = await this.getAuthHeaders();
     const url = new URL(`${API_BASE_URL}/tickets/user/count-per-period`);
-    url.searchParams.set('userId', params.userId.toString());
+    url.searchParams.set('year', params.year.toString());
     url.searchParams.set('startDate', params.startDate);
     url.searchParams.set('endDate', params.endDate);
     
@@ -669,13 +673,13 @@ class TicketService {
   }
 
   async getUserCompletedTicketCountPerPeriod(params: {
-    userId: number;
+    year: number;
     startDate: string;
     endDate: string;
   }): Promise<{ success: boolean; data: any }> {
     const headers = await this.getAuthHeaders();
     const url = new URL(`${API_BASE_URL}/tickets/user/completed-count-per-period`);
-    url.searchParams.set('userId', params.userId.toString());
+    url.searchParams.set('year', params.year.toString());
     url.searchParams.set('startDate', params.startDate);
     url.searchParams.set('endDate', params.endDate);
     
@@ -685,9 +689,20 @@ class TicketService {
     return result;
   }
 
-  async getPersonalKPIData(): Promise<{ success: boolean; data: any }> {
+  async getPersonalKPIData(params: {
+    startDate: string;
+    endDate: string;
+    compare_startDate: string;
+    compare_endDate: string;
+  }): Promise<{ success: boolean; data: any }> {
     const headers = await this.getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}/tickets/user/personal-kpi`, { headers });
+    const url = new URL(`${API_BASE_URL}/tickets/user/personal-kpi`);
+    url.searchParams.set('startDate', params.startDate);
+    url.searchParams.set('endDate', params.endDate);
+    url.searchParams.set('compare_startDate', params.compare_startDate);
+    url.searchParams.set('compare_endDate', params.compare_endDate);
+    
+    const res = await fetch(url.toString(), { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch personal KPI data');
     return result;

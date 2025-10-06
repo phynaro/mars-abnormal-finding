@@ -19,24 +19,33 @@ import {
 } from 'lucide-react';
 import targetService, { type Target, type CreateTargetRequest } from '@/services/targetService';
 import dashboardService, { type AreaData } from '@/services/dashboardService';
+import authService from '@/services/authService';
 
 const PERIODS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13'];
 const TARGET_TYPES = ['open case', 'close case'] as const;
 const UNITS = ['case', 'THB', 'percent'] as const;
+const LOCATION_DIMENSIONS = [
+  { value: 'all', label: 'All Plants' },
+  { value: 'plant', label: 'Plant Only' },
+  { value: 'plant_area', label: 'Plant + Area' }
+] as const;
 
 const TargetManagementPage: React.FC = () => {
   const { toast } = useToast();
   
   // State
   const [targets, setTargets] = useState<Target[]>([]);
-  const [areas, setAreas] = useState<AreaData[]>([]);
+  const [plants, setPlants] = useState<{ code: string; name: string }[]>([]);
+  const [areas, setAreas] = useState<{ code: string; name: string; plant: string }[]>([]);
   const [availableYears, setAvailableYears] = useState<number[]>([]);
   const [loading, setLoading] = useState(false);
+  const [plantsLoading, setPlantsLoading] = useState(false);
   const [areasLoading, setAreasLoading] = useState(false);
   
   // Filters
+  const [locationDimension, setLocationDimension] = useState<string>('all');
+  const [plantFilter, setPlantFilter] = useState<string>('all');
   const [areaFilter, setAreaFilter] = useState<string>('all');
-  const [areaFilterId, setAreaFilterId] = useState<string>('all');
   const [yearFilter, setYearFilter] = useState<number>(new Date().getFullYear());
   const [typeFilter, setTypeFilter] = useState<string>('open case');
   
@@ -51,22 +60,52 @@ const TargetManagementPage: React.FC = () => {
     year: new Date().getFullYear(),
     target_value: 0,
     unit: 'case',
-    area: '',
+    plant: null,
+    area: null,
     created_by: 'admin'
   });
   
+  const [selectedPlantId, setSelectedPlantId] = useState<string>('');
   const [selectedAreaId, setSelectedAreaId] = useState<string>('');
   
   const [periodValues, setPeriodValues] = useState<{ [period: string]: number }>({});
 
+  // Fetch plants
+  const fetchPlants = async () => {
+    try {
+      setPlantsLoading(true);
+      const response = await targetService.getPlants();
+      if (response.success) {
+        setPlants(response.data);
+      } else {
+        setPlants([]);
+      }
+    } catch (error) {
+      console.error('Error fetching plants:', error);
+      setPlants([]);
+      toast({
+        title: 'Error',
+        description: 'Failed to fetch plants',
+        variant: 'destructive',
+      });
+    } finally {
+      setPlantsLoading(false);
+    }
+  };
+
   // Fetch areas
-  const fetchAreas = async () => {
+  const fetchAreas = async (plantCode?: string) => {
     try {
       setAreasLoading(true);
-      const response = await dashboardService.getAllAreas();
-      setAreas(response.data);
+      const response = await targetService.getAreas(plantCode);
+      if (response.success) {
+        setAreas(response.data);
+      } else {
+        setAreas([]);
+      }
     } catch (error) {
       console.error('Error fetching areas:', error);
+      setAreas([]);
       toast({
         title: 'Error',
         description: 'Failed to fetch areas',
@@ -81,9 +120,14 @@ const TargetManagementPage: React.FC = () => {
   const fetchAvailableYears = async () => {
     try {
       const response = await targetService.getAvailableYears();
-      setAvailableYears(response.data);
+      if (response.success) {
+        setAvailableYears(response.data);
+      } else {
+        setAvailableYears([]);
+      }
     } catch (error) {
       console.error('Error fetching years:', error);
+      setAvailableYears([]);
     }
   };
 
@@ -92,15 +136,21 @@ const TargetManagementPage: React.FC = () => {
     try {
       setLoading(true);
       const filters = {
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
         area: areaFilter !== 'all' ? areaFilter : undefined,
         year: yearFilter,
         type: typeFilter as 'open case' | 'close case'
       };
       
       const response = await targetService.getTargets(filters);
-      setTargets(response.data);
+      if (response.success) {
+        setTargets(response.data);
+      } else {
+        setTargets([]);
+      }
     } catch (error) {
       console.error('Error fetching targets:', error);
+      setTargets([]);
       toast({
         title: 'Error',
         description: 'Failed to fetch targets',
@@ -113,50 +163,88 @@ const TargetManagementPage: React.FC = () => {
 
   // Initialize data
   useEffect(() => {
+    fetchPlants();
     fetchAreas();
     fetchAvailableYears();
   }, []);
 
   useEffect(() => {
     fetchTargets();
-  }, [areaFilter, yearFilter, typeFilter]);
+  }, [plantFilter, areaFilter, yearFilter, typeFilter]);
 
-  // Group targets by area for matrix display
-  const targetsByArea = useMemo(() => {
-    const grouped: { [area: string]: { [period: string]: Target } } = {};
+  // Refetch areas when plant filter changes
+  useEffect(() => {
+    if (plantFilter && plantFilter !== 'all') {
+      fetchAreas(plantFilter);
+    } else {
+      fetchAreas();
+    }
+  }, [plantFilter]);
+
+  // Group targets by location for matrix display
+  const targetsByLocation = useMemo(() => {
+    const grouped: { [location: string]: { [period: string]: Target } } = {};
     
     targets.forEach(target => {
-      if (!grouped[target.area]) {
-        grouped[target.area] = {};
+      const locationKey = target.plant && target.area 
+        ? `${target.plant}-${target.area}` 
+        : target.plant || target.area || 'all';
+      
+      if (!grouped[locationKey]) {
+        grouped[locationKey] = {};
       }
-      grouped[target.area][target.period] = target;
+      grouped[locationKey][target.period] = target;
     });
     
     return grouped;
   }, [targets]);
 
-  // Get area name with plant information
-  const getAreaName = (areaCode: string) => {
-    const area = areas.find(a => a.code === areaCode);
-    if (area) {
-      return `${area.name} (${area.code}) - ${area.plant_name || `Plant ${area.plant_id}`}`;
+  // Get location name with plant information
+  const getLocationName = (locationKey: string) => {
+    if (locationKey === 'all') {
+      return 'All Plants';
     }
-    return areaCode;
+    
+    const [plantCode, areaCode] = locationKey.split('-');
+    
+    // Handle 'all' values
+    if (plantCode === 'all' && areaCode === 'all') {
+      return 'All Plants';
+    } else if (plantCode === 'all') {
+      return 'All Plants';
+    }
+    
+    if (areaCode) {
+      // Plant + Area or Plant + 'all'
+      if (areaCode === 'all') {
+        // Plant only (area = 'all')
+        const plant = plants.find(p => p.code === plantCode);
+        if (plant) {
+          return `${plant.name} (All Areas)`;
+        }
+      } else {
+        // Plant + specific Area
+        const plant = plants.find(p => p.code === plantCode);
+        const area = areas.find(a => a.code === areaCode && a.plant === plantCode);
+        if (plant && area) {
+          return `${plant.name} - ${area.name}`;
+        }
+      }
+    } else {
+      // Plant only (legacy format)
+      const plant = plants.find(p => p.code === plantCode);
+      if (plant) {
+        return plant.name;
+      }
+    }
+    
+    return locationKey;
   };
 
   // Handle create target
   const handleCreateTarget = async () => {
     try {
       // Validate required fields
-      if (!selectedAreaId) {
-        toast({
-          title: 'Validation Error',
-          description: 'Please select an area',
-          variant: 'destructive',
-        });
-        return;
-      }
-
       if (!createForm.type) {
         toast({
           title: 'Validation Error',
@@ -175,6 +263,25 @@ const TargetManagementPage: React.FC = () => {
         return;
       }
 
+      // Validate location dimension based on selection
+      if (locationDimension === 'plant' && !selectedPlantId) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please select a plant',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (locationDimension === 'plant_area' && (!selectedPlantId || !selectedAreaId)) {
+        toast({
+          title: 'Validation Error',
+          description: 'Please select both plant and area',
+          variant: 'destructive',
+        });
+        return;
+      }
+
       // Validate that all periods have values
       const missingPeriods = PERIODS.filter(period => !periodValues[period] && periodValues[period] !== 0);
       if (missingPeriods.length > 0) {
@@ -186,10 +293,33 @@ const TargetManagementPage: React.FC = () => {
         return;
       }
 
+      // Determine plant and area values based on location dimension
+      let plantValue = null;
+      let areaValue = null;
+
+      if (locationDimension === 'all') {
+        // When "All Plants" is selected, store 'all' as literal values
+        plantValue = 'all';
+        areaValue = 'all';
+      } else if (locationDimension === 'plant') {
+        // When "Plant Only" is selected, store specific plant and 'all' for area
+        const selectedPlant = plants.find(p => p.code === selectedPlantId);
+        plantValue = selectedPlant?.code || null;
+        areaValue = 'all';
+      } else if (locationDimension === 'plant_area') {
+        // When "Plant + Area" is selected, store specific plant and area
+        const selectedPlant = plants.find(p => p.code === selectedPlantId);
+        const selectedArea = areas.find(a => a.code === selectedAreaId && a.plant === selectedPlantId);
+        plantValue = selectedPlant?.code || null;
+        areaValue = selectedArea?.code || null;
+      }
+
       // Create targets for all periods in a single API call
       const targetsToCreate = PERIODS.map(period => ({
         ...createForm,
         target_value: periodValues[period] || 0,
+        plant: plantValue,
+        area: areaValue,
         period: period
       }));
 
@@ -207,9 +337,11 @@ const TargetManagementPage: React.FC = () => {
         year: new Date().getFullYear(),
         target_value: 0,
         unit: 'case',
-        area: '',
+        plant: null,
+        area: null,
         created_by: 'admin'
       });
+      setSelectedPlantId('');
       setSelectedAreaId('');
       setPeriodValues({});
       fetchTargets();
@@ -225,7 +357,13 @@ const TargetManagementPage: React.FC = () => {
 
   // Handle delete target
   const handleDeleteTarget = async (target: Target) => {
-    if (!confirm(`Are you sure you want to delete all targets for ${target.type} in ${getAreaName(target.area)} for ${target.year}?`)) {
+    const locationName = getLocationName(
+      target.plant && target.area 
+        ? `${target.plant}-${target.area}` 
+        : target.plant || target.area || 'all'
+    );
+    
+    if (!confirm(`Are you sure you want to delete all targets for ${target.type} in ${locationName} for ${target.year}?`)) {
       return;
     }
 
@@ -304,49 +442,151 @@ const TargetManagementPage: React.FC = () => {
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="area">Area (Select one area only)</Label>
-                  <div className="flex gap-2">
-                    <Select 
-                      value={selectedAreaId} 
-                      onValueChange={(value) => {
-                        setSelectedAreaId(value);
-                        const selectedArea = areas.find(a => a.id.toString() === value);
-                        if (selectedArea) {
-                          setCreateForm({ ...createForm, area: selectedArea.code });
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="flex-1">
-                        <SelectValue placeholder="Select area" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {areas.map(area => (
-                          <SelectItem key={area.id} value={area.id.toString()}>
-                            {area.name} ({area.code}) - {area.plant_name || `Plant ${area.plant_id}`}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    {selectedAreaId && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedAreaId('');
-                          setCreateForm({ ...createForm, area: '' });
+                  <Label htmlFor="locationDimension">Location Dimension</Label>
+                  <Select 
+                    value={locationDimension} 
+                    onValueChange={(value) => {
+                      setLocationDimension(value);
+                      setSelectedPlantId('');
+                      setSelectedAreaId('');
+                    }}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LOCATION_DIMENSIONS.map(dimension => (
+                        <SelectItem key={dimension.value} value={dimension.value}>
+                          {dimension.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                {locationDimension === 'plant' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="plant">Plant</Label>
+                    <div className="flex gap-2">
+                      <Select 
+                        value={selectedPlantId} 
+                        onValueChange={(value) => {
+                          setSelectedPlantId(value);
                         }}
                       >
-                        Clear
-                      </Button>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder={plantsLoading ? "Loading..." : "Select plant"} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {plants.map(plant => (
+                            <SelectItem key={plant.code} value={plant.code}>
+                              {plant.name} ({plant.code})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedPlantId && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedPlantId('');
+                          }}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                    {selectedPlantId && (
+                      <p className="text-xs text-muted-foreground">
+                        Selected: {plants.find(p => p.code === selectedPlantId)?.name} ({plants.find(p => p.code === selectedPlantId)?.code})
+                      </p>
                     )}
                   </div>
-                  {selectedAreaId && (
-                    <p className="text-xs text-muted-foreground">
-                      Selected: {areas.find(a => a.id.toString() === selectedAreaId)?.name} ({areas.find(a => a.id.toString() === selectedAreaId)?.code}) - {areas.find(a => a.id.toString() === selectedAreaId)?.plant_name || `Plant ${areas.find(a => a.id.toString() === selectedAreaId)?.plant_id}`}
-                    </p>
-                  )}
-                </div>
+                )}
+                
+                {locationDimension === 'plant_area' && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="plant">Plant</Label>
+                      <div className="flex gap-2">
+                        <Select 
+                          value={selectedPlantId} 
+                          onValueChange={(value) => {
+                            setSelectedPlantId(value);
+                            setSelectedAreaId(''); // Reset area when plant changes
+                          }}
+                        >
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder={plantsLoading ? "Loading..." : "Select plant"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {plants.map(plant => (
+                              <SelectItem key={plant.code} value={plant.code}>
+                                {plant.name} ({plant.code})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {selectedPlantId && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedPlantId('');
+                              setSelectedAreaId('');
+                            }}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="space-y-2">
+                      <Label htmlFor="area">Area</Label>
+                      <div className="flex gap-2">
+                        <Select 
+                          value={selectedAreaId} 
+                          onValueChange={(value) => {
+                            setSelectedAreaId(value);
+                          }}
+                          disabled={!selectedPlantId}
+                        >
+                          <SelectTrigger className="flex-1">
+                            <SelectValue placeholder={!selectedPlantId ? "Select plant first" : areasLoading ? "Loading..." : "Select area"} />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {areas.filter(area => area.plant === selectedPlantId).map(area => (
+                              <SelectItem key={area.code} value={area.code}>
+                                {area.name} ({area.code})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {selectedAreaId && (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedAreaId('');
+                            }}
+                          >
+                            Clear
+                          </Button>
+                        )}
+                      </div>
+                      {selectedAreaId && (
+                        <p className="text-xs text-muted-foreground">
+                          Selected: {areas.find(a => a.code === selectedAreaId)?.name} ({areas.find(a => a.code === selectedAreaId)?.code})
+                        </p>
+                      )}
+                    </div>
+                  </>
+                )}
                 
                 <div className="space-y-2">
                   <Label htmlFor="year">Year</Label>
@@ -439,28 +679,42 @@ const TargetManagementPage: React.FC = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             <div className="space-y-2">
-              <Label>Area</Label>
-              <Select value={areaFilterId} onValueChange={(value) => {
-                setAreaFilterId(value);
+              <Label>Plant</Label>
+              <Select value={plantFilter} onValueChange={(value) => {
+                setPlantFilter(value);
                 if (value === 'all') {
                   setAreaFilter('all');
-                } else {
-                  const selectedArea = areas.find(a => a.id.toString() === value);
-                  if (selectedArea) {
-                    setAreaFilter(selectedArea.code);
-                  }
                 }
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder={plantsLoading ? "Loading..." : "Select plant"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Plants</SelectItem>
+                  {plants.map(plant => (
+                    <SelectItem key={plant.code} value={plant.code}>
+                      {plant.name} ({plant.code})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="space-y-2">
+              <Label>Area</Label>
+              <Select value={areaFilter} onValueChange={(value) => {
+                setAreaFilter(value);
               }}>
                 <SelectTrigger>
                   <SelectValue placeholder={areasLoading ? "Loading..." : "Select area"} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Areas</SelectItem>
-                  {areas.map(area => (
-                    <SelectItem key={area.id} value={area.id.toString()}>
-                      {area.name} ({area.code}) - {area.plant_name || `Plant ${area.plant_id}`}
+                  {areas.filter(area => plantFilter === 'all' || area.plant === plantFilter).map(area => (
+                    <SelectItem key={area.code} value={area.code}>
+                      {area.name} ({area.code})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -524,7 +778,7 @@ const TargetManagementPage: React.FC = () => {
               <RefreshCw className="h-6 w-6 animate-spin mr-2" />
               Loading targets...
             </div>
-          ) : Object.keys(targetsByArea).length === 0 ? (
+          ) : Object.keys(targetsByLocation).length === 0 ? (
             <Alert>
               <AlertDescription>
                 No targets found for the selected filters. Create a new target to get started.
@@ -535,7 +789,7 @@ const TargetManagementPage: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="sticky left-0 bg-background z-10">Area</TableHead>
+                    <TableHead className="sticky left-0 bg-background z-10">Location</TableHead>
                     {PERIODS.map(period => (
                       <TableHead key={period} className="text-center min-w-[80px]">
                         {period}
@@ -545,16 +799,16 @@ const TargetManagementPage: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {Object.entries(targetsByArea).map(([areaCode, areaTargets]) => (
-                    <TableRow key={areaCode}>
+                  {Object.entries(targetsByLocation).map(([locationKey, locationTargets]) => (
+                    <TableRow key={locationKey}>
                       <TableCell className="sticky left-0 bg-background z-10 font-medium">
-                        {getAreaName(areaCode)}
+                        {getLocationName(locationKey)}
                       </TableCell>
                       {PERIODS.map(period => (
                         <TableCell key={period} className="text-center">
-                          {areaTargets[period] ? (
+                          {locationTargets[period] ? (
                             <span className="font-mono text-sm">
-                              {areaTargets[period].target_value}
+                              {locationTargets[period].target_value}
                             </span>
                           ) : (
                             <span className="text-muted-foreground text-xs">-</span>
@@ -566,7 +820,7 @@ const TargetManagementPage: React.FC = () => {
                           variant="ghost"
                           size="sm"
                           onClick={() => {
-                            const firstTarget = Object.values(areaTargets)[0];
+                            const firstTarget = Object.values(locationTargets)[0];
                             if (firstTarget) {
                               handleDeleteTarget(firstTarget);
                             }

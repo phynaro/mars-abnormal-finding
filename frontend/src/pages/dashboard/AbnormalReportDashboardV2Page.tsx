@@ -5,6 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend,
   ComposedChart, AreaChart, Area, Line, LabelList
@@ -14,12 +15,15 @@ import 'react-calendar-heatmap/dist/styles.css';
 import { 
   TrendingUp, TrendingDown, Clock, DollarSign, 
   AlertTriangle, CheckCircle, User, Award,
-  BarChart3, Filter
+  BarChart3, Filter, X
 } from 'lucide-react';
-import dashboardService, { type AbnormalFindingKPIResponse, type AreaData, type TicketsCountPerPeriodResponse, type AreaActivityResponse, type UserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse } from '@/services/dashboardService';
+import dashboardService, { type AbnormalFindingKPIResponse, type AreaData, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityResponse, type UserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse } from '@/services/dashboardService';
 import { KPITileSkeleton } from '@/components/ui/kpi-tile-skeleton';
 import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
+import authService from '@/services/authService';
+
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 // Utility function for dynamic currency formatting
 const formatCurrencyDynamic = (amount: number): { display: string; tooltip: string } => {
@@ -273,6 +277,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   
   // Global Filters
   const [timeFilter, setTimeFilter] = useState<string>('this-period');
+  const [plantFilter, setPlantFilter] = useState<string>('all');
   const [areaFilter, setAreaFilter] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedPeriod, setSelectedPeriod] = useState<number>(1);
@@ -282,6 +287,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const [kpiData, setKpiData] = useState<AbnormalFindingKPIResponse['data'] | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
+  const [plants, setPlants] = useState<Array<{code: string; name: string}>>([]);
+  const [plantsLoading, setPlantsLoading] = useState<boolean>(false);
   const [areas, setAreas] = useState<AreaData[]>([]);
   const [areasLoading, setAreasLoading] = useState<boolean>(false);
   const [participationData, setParticipationData] = useState<TicketsCountPerPeriodResponse['data']['participationData']>([]);
@@ -324,6 +331,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   const [ontimeRateByUserData, setOntimeRateByUserData] = useState<OntimeRateByUserResponse['data']['ontimeRateByUserData']>([]);
   const [ontimeRateByUserLoading, setOntimeRateByUserLoading] = useState<boolean>(false);
+
+  // Tickets Closed Per Period Data
+  const [ticketsClosedData, setTicketsClosedData] = useState<TicketsClosedPerPeriodResponse['data']['ticketsClosedData']>([]);
+  const [ticketsClosedLoading, setTicketsClosedLoading] = useState<boolean>(false);
 
   // Minimum loading time to prevent UI blinking (in milliseconds)
   const MIN_LOADING_TIME = 800;
@@ -474,16 +485,67 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   };
 
+  // Helper functions for active filters
+  const hasActiveFilters = () => {
+    return plantFilter !== 'all' || areaFilter !== 'all';
+  };
+
+  const clearFilter = (filterType: 'plant' | 'area') => {
+    if (filterType === 'plant') {
+      setPlantFilter('all');
+      setAreaFilter('all'); // Also reset area when plant is cleared
+    } else if (filterType === 'area') {
+      setAreaFilter('all');
+    }
+  };
+
+  const clearAllFilters = () => {
+    setPlantFilter('all');
+    setAreaFilter('all');
+  };
+
+  // Fetch plants data
+  const fetchPlants = async () => {
+    try {
+      setPlantsLoading(true);
+      
+      const response = await fetch(`${API_BASE_URL}/hierarchy/distinct/plants`, {
+        headers: authService.getAuthHeaders()
+      });
+      const result = await response.json();
+      if (result.success) {
+        setPlants(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch plants:', error);
+      // Set fallback plants if API fails
+      setPlants([
+        { code: 'PLANT1', name: 'Plant 1' },
+        { code: 'PLANT2', name: 'Plant 2' }
+      ]);
+    } finally {
+      setPlantsLoading(false);
+    }
+  };
+
   // Fetch areas data
-  const fetchAreas = async () => {
+  const fetchAreas = async (plantCode?: string) => {
     try {
       setAreasLoading(true);
       
       // Record start time for minimum loading duration
       const startTime = Date.now();
       
-      const response = await dashboardService.getAllAreas();
-      setAreas(response.data);
+      const url = plantCode 
+        ? `${API_BASE_URL}/hierarchy/distinct/areas?plant=${plantCode}`
+        : `${API_BASE_URL}/hierarchy/distinct/areas`;
+      const response = await fetch(url, {
+        headers: authService.getAuthHeaders()
+      });
+      const result = await response.json();
+      if (result.success) {
+        setAreas(result.data);
+      }
       
       // Calculate elapsed time and ensure minimum loading duration
       const elapsedTime = Date.now() - startTime;
@@ -524,7 +586,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         endDate: dateRange.endDate,
         compare_startDate: dateRange.compare_startDate,
         compare_endDate: dateRange.compare_endDate,
-        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
       
       const response = await dashboardService.getAbnormalFindingKPIs(params);
@@ -545,7 +608,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [timeFilter, areaFilter, selectedYear, selectedPeriod, MIN_LOADING_TIME]);
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, MIN_LOADING_TIME]);
 
   // Fetch participation data
   const fetchParticipationData = useCallback(async () => {
@@ -554,10 +617,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
       const params = {
         year: selectedYear,
-        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
       
       const response = await dashboardService.getTicketsCountPerPeriod(params);
+      
       setParticipationData(response.data.participationData);
       
     } catch (err: any) {
@@ -567,7 +632,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setParticipationLoading(false);
     }
-  }, [selectedYear, areaFilter]);
+  }, [selectedYear, plantFilter, areaFilter]);
 
   // Fetch area activity data
   const fetchAreaActivityData = useCallback(async () => {
@@ -575,7 +640,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setAreaActivityLoading(true);
       
       const params = {
-        year: selectedYear
+        year: selectedYear,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
       
       const response = await dashboardService.getAreaActivityData(params);
@@ -588,7 +655,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setAreaActivityLoading(false);
     }
-  }, [selectedYear]);
+  }, [selectedYear, plantFilter, areaFilter]);
 
   // Fetch user activity data
   const fetchUserActivityData = useCallback(async () => {
@@ -599,7 +666,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
       
       const response = await dashboardService.getUserActivityData(params);
@@ -612,7 +680,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setUserActivityLoading(false);
     }
-  }, [timeFilter, areaFilter, selectedYear, selectedPeriod]);
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod]);
 
   // Fetch calendar heatmap data
   const fetchCalendarHeatmapData = useCallback(async () => {
@@ -626,7 +694,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
       const params = {
         year: yearFromDateRange,
-        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getCalendarHeatmapData(params);
@@ -640,7 +709,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCalendarHeatmapLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch downtime avoidance trend data
   const fetchDowntimeTrendData = useCallback(async () => {
@@ -652,14 +721,16 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
       
       const params = {
-        year: yearFromDateRange
+        year: yearFromDateRange,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getDowntimeAvoidanceTrend(params);
       
       if (response.success) {
         setDowntimeTrendData(response.data.downtimeTrendData);
-        setDowntimeTrendAreas(response.data.summary.areas);
+        setDowntimeTrendAreas(response.data.summary.items);
       }
     } catch (error) {
       console.error('Error fetching downtime trend data:', error);
@@ -667,7 +738,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setDowntimeTrendLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch cost avoidance data
   const fetchCostAvoidanceData = useCallback(async () => {
@@ -680,7 +751,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
       const params = {
         year: yearFromDateRange,
-        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getCostAvoidanceData(params);
@@ -694,7 +766,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCostAvoidanceLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch downtime impact leaderboard data
   const fetchDowntimeImpactData = useCallback(async () => {
@@ -706,12 +778,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
       const params = {
         startDate: dateRange.startDate,
-        endDate: dateRange.endDate
+        endDate: dateRange.endDate,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getDowntimeImpactLeaderboard(params);
       
       if (response.success) {
+        console.log('Downtime Impact Data:', response.data);
         setDowntimeImpactData(response.data.downtimeImpactData);
       }
     } catch (error) {
@@ -720,7 +795,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setDowntimeImpactLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch cost impact leaderboard data
   const fetchCostImpactData = useCallback(async () => {
@@ -732,7 +807,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
       const params = {
         startDate: dateRange.startDate,
-        endDate: dateRange.endDate
+        endDate: dateRange.endDate,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getCostImpactLeaderboard(params);
@@ -746,7 +823,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCostImpactLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch Ontime Rate by Area Data
   const fetchOntimeRateByAreaData = useCallback(async () => {
@@ -758,7 +835,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
       const params = {
         startDate: dateRange.startDate,
-        endDate: dateRange.endDate
+        endDate: dateRange.endDate,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getOntimeRateByArea(params);
@@ -772,7 +851,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setOntimeRateByAreaLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch Ontime Rate by User Data
   const fetchOntimeRateByUserData = useCallback(async () => {
@@ -806,7 +885,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setOntimeRateByUserLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch Ticket Resolve Duration by User Data
   const fetchResolveDurationByUserData = useCallback(async () => {
@@ -840,7 +919,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setResolveDurationByUserLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch Ticket Resolve Duration by Area Data
   const fetchResolveDurationByAreaData = useCallback(async () => {
@@ -852,7 +931,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
       const params = {
         startDate: dateRange.startDate,
-        endDate: dateRange.endDate
+        endDate: dateRange.endDate,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getTicketResolveDurationByArea(params);
@@ -866,7 +947,31 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setResolveDurationByAreaLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+
+  // Fetch Tickets Closed Per Period Data
+  const fetchTicketsClosedData = useCallback(async () => {
+    try {
+      setTicketsClosedLoading(true);
+      
+      const params = {
+        year: selectedYear,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
+      };
+
+      const response = await dashboardService.getTicketsClosedPerPeriod(params);
+      
+      if (response.success) {
+        setTicketsClosedData(response.data.ticketsClosedData);
+      }
+    } catch (error) {
+      console.error('Error fetching tickets closed per period data:', error);
+      setTicketsClosedData([]);
+    } finally {
+      setTicketsClosedLoading(false);
+    }
+  }, [selectedYear, plantFilter, areaFilter]);
 
   // Fetch Cost Impact by Failure Mode Data
   const fetchCostByFailureModeData = useCallback(async () => {
@@ -879,7 +984,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getCostImpactByFailureMode(params);
@@ -893,7 +999,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCostByFailureModeLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch Downtime Impact by Failure Mode Data
   const fetchDowntimeByFailureModeData = useCallback(async () => {
@@ -906,7 +1012,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getDowntimeImpactByFailureMode(params);
@@ -920,7 +1027,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setDowntimeByFailureModeLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch Cost Impact Reporter Data
   const fetchCostImpactReporterData = useCallback(async () => {
@@ -933,7 +1040,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getCostImpactReporterLeaderboard(params);
@@ -947,7 +1055,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCostImpactReporterLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch downtime impact reporter leaderboard data
   const fetchDowntimeImpactReporterData = useCallback(async () => {
@@ -960,7 +1068,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        area_id: areaFilter !== 'all' ? parseInt(areaFilter) : undefined
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
       };
 
       const response = await dashboardService.getDowntimeImpactReporterLeaderboard(params);
@@ -974,10 +1083,11 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setDowntimeImpactReporterLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Fetch areas on component mount
   useEffect(() => {
+    fetchPlants();
     fetchAreas();
     fetchParticipationData();
     fetchAreaActivityData();
@@ -995,33 +1105,34 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     fetchResolveDurationByUserData();
     fetchOntimeRateByAreaData();
     fetchOntimeRateByUserData();
+    fetchTicketsClosedData();
   }, []);
 
   // Fetch data when filters change
   useEffect(() => {
     fetchKPIData();
     fetchUserActivityData();
-  }, [timeFilter, areaFilter, selectedYear, selectedPeriod, fetchKPIData, fetchUserActivityData]);
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, fetchKPIData, fetchUserActivityData]);
 
   // Fetch calendar heatmap data when time filter, year, or area changes
   useEffect(() => {
     fetchCalendarHeatmapData();
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchCalendarHeatmapData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCalendarHeatmapData]);
 
-  // Fetch downtime trend data when time filter or year changes (not affected by area filter)
+  // Fetch downtime trend data when time filter, year, or filters change
   useEffect(() => {
     fetchDowntimeTrendData();
-  }, [timeFilter, selectedYear, selectedPeriod, fetchDowntimeTrendData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchDowntimeTrendData]);
 
   // Fetch cost avoidance data when time filter, year, or area changes
   useEffect(() => {
     fetchCostAvoidanceData();
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchCostAvoidanceData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCostAvoidanceData]);
 
-  // Fetch downtime impact data when time filter or period changes (not affected by area filter)
+  // Fetch downtime impact data when time filter, period, or filters change
   useEffect(() => {
     fetchDowntimeImpactData();
-  }, [timeFilter, selectedYear, selectedPeriod, fetchDowntimeImpactData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchDowntimeImpactData]);
 
   // Fetch cost impact data when time filter or period changes (not affected by area filter)
   useEffect(() => {
@@ -1031,22 +1142,22 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   // Fetch downtime impact reporter data when time filter, period, or area changes
   useEffect(() => {
     fetchDowntimeImpactReporterData();
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchDowntimeImpactReporterData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchDowntimeImpactReporterData]);
 
   // Fetch cost impact reporter data when time filter, period, or area changes
   useEffect(() => {
     fetchCostImpactReporterData();
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchCostImpactReporterData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCostImpactReporterData]);
 
   // Fetch downtime by failure mode data when time filter, period, or area changes
   useEffect(() => {
     fetchDowntimeByFailureModeData();
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchDowntimeByFailureModeData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchDowntimeByFailureModeData]);
 
   // Fetch cost by failure mode data when time filter, period, or area changes
   useEffect(() => {
     fetchCostByFailureModeData();
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchCostByFailureModeData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCostByFailureModeData]);
 
   // Fetch resolve duration by area data when time filter or period changes (only when "All Area" is selected)
   useEffect(() => {
@@ -1055,7 +1166,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } else {
       setResolveDurationByAreaData([]);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchResolveDurationByAreaData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchResolveDurationByAreaData]);
 
   // Fetch resolve duration by user data when time filter, period, or area changes (only when specific area is selected)
   useEffect(() => {
@@ -1064,7 +1175,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } else {
       setResolveDurationByUserData([]);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchResolveDurationByUserData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchResolveDurationByUserData]);
 
   // Fetch ontime rate by area data when time filter or period changes (only when "All Area" is selected)
   useEffect(() => {
@@ -1073,7 +1184,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } else {
       setOntimeRateByAreaData([]);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchOntimeRateByAreaData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchOntimeRateByAreaData]);
 
   // Fetch ontime rate by user data when time filter, period, or area changes (only when specific area is selected)
   useEffect(() => {
@@ -1082,17 +1193,31 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } else {
       setOntimeRateByUserData([]);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, areaFilter, fetchOntimeRateByUserData]);
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchOntimeRateByUserData]);
+
+  // Fetch tickets closed per period data when year or filters change
+  useEffect(() => {
+    fetchTicketsClosedData();
+  }, [selectedYear, plantFilter, areaFilter, fetchTicketsClosedData]);
 
   // Fetch participation data when year or area changes
   useEffect(() => {
     fetchParticipationData();
-  }, [selectedYear, areaFilter, fetchParticipationData]);
+  }, [selectedYear, plantFilter, areaFilter, fetchParticipationData]);
 
-  // Fetch area activity data when year changes (not affected by area filter)
+  // Refetch areas when plant filter changes
+  useEffect(() => {
+    if (plantFilter !== 'all') {
+      fetchAreas(plantFilter);
+    } else {
+      fetchAreas();
+    }
+  }, [plantFilter]);
+
+  // Fetch area activity data when year or filters change
   useEffect(() => {
     fetchAreaActivityData();
-  }, [selectedYear, fetchAreaActivityData]);
+  }, [selectedYear, plantFilter, areaFilter, fetchAreaActivityData]);
 
   // KPI Tiles - Dynamic data from API
   const kpiTiles: KPITile[] = useMemo(() => {
@@ -1120,6 +1245,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         changeType: summary.comparisonMetrics.closureRateImprovement.type,
         icon: <CheckCircle className="h-4 w-4" />,
         color: 'text-success'
+      },
+      {
+        title: t('dashboard.waitingTickets'),
+        value: kpis.waitingTicketsThisPeriod,
+        change: summary.comparisonMetrics.waitingTicketsChange.percentage,
+        changeDescription: summary.comparisonMetrics.waitingTicketsChange.description,
+        changeType: summary.comparisonMetrics.waitingTicketsChange.type,
+        icon: <Clock className="h-4 w-4" />,
+        color: 'text-orange-500'
       },
       {
         title: t('dashboard.pendingTickets'),
@@ -1213,12 +1347,26 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }));
   }, [participationData]);
 
-  // Area Activity Data - Use real API data
+  // Tickets Closed Per Period Data - Use real API data
+  const ticketsClosedChartData = useMemo(() => {
+    // If we have API data, use it; otherwise return empty array for loading state
+    if (ticketsClosedData.length > 0) {
+      return ticketsClosedData;
+    }
+    
+    // Fallback: create empty data structure for loading state
+    return Array.from({ length: 13 }, (_, i) => ({
+      period: `P${i + 1}`,
+      ticketsClosed: 0
+    }));
+  }, [ticketsClosedData]);
+
+  // Area Activity Data - Use real API data with dynamic grouping
   const areaActivityChartData = useMemo(() => {
     // If we have API data, transform it for the chart; otherwise return empty array for loading state
     if (areaActivityData.length > 0) {
       return areaActivityData.map(item => ({
-        area: item.area_name,
+        display_name: item.display_name,
         tickets: item.tickets
       })).sort((a, b) => b.tickets - a.tickets);
     }
@@ -1226,6 +1374,39 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     // Fallback: return empty array for loading state
     return [];
   }, [areaActivityData]);
+
+  // Dynamic chart title based on filter conditions
+  const areaActivityChartTitle = useMemo(() => {
+    if (!plantFilter || plantFilter === 'all') {
+      return t('dashboard.whoActivePlant');
+    } else if (!areaFilter || areaFilter === 'all') {
+      return t('dashboard.whoActiveArea');
+    } else {
+      return t('dashboard.whoActiveEquipment');
+    }
+  }, [plantFilter, areaFilter, t]);
+
+  // Dynamic chart title for downtime trend based on filter conditions
+  const downtimeTrendChartTitle = useMemo(() => {
+    if (!plantFilter || plantFilter === 'all') {
+      return t('dashboard.downtimeAvoidanceTrendByPlant');
+    } else if (!areaFilter || areaFilter === 'all') {
+      return t('dashboard.downtimeAvoidanceTrendByArea');
+    } else {
+      return t('dashboard.downtimeAvoidanceTrendByEquipment');
+    }
+  }, [plantFilter, areaFilter, t]);
+
+  // Dynamic chart title for downtime impact leaderboard based on filter conditions
+  const downtimeImpactChartTitle = useMemo(() => {
+    if (!plantFilter || plantFilter === 'all') {
+      return t('dashboard.downtimeImpactLeaderboardByPlant');
+    } else if (!areaFilter || areaFilter === 'all') {
+      return t('dashboard.downtimeImpactLeaderboardByArea');
+    } else {
+      return t('dashboard.downtimeImpactLeaderboardByEquipment');
+    }
+  }, [plantFilter, areaFilter, t]);
 
   // User Activity Data - Use real API data
   const userActivityChartData = useMemo(() => {
@@ -1251,6 +1432,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   }, [costAvoidanceData]);
 
   const downtimeImpactChartData = useMemo(() => {
+    console.log('Downtime Impact Chart Data:', downtimeImpactData);
     return downtimeImpactData;
   }, [downtimeImpactData]);
 
@@ -1466,6 +1648,42 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               )}
             </div>
           </div>
+          
+          {/* Compact Active Filters Display */}
+          {hasActiveFilters() && (
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-muted-foreground">Filters:</span>
+              <div className="flex items-center gap-1">
+                {plantFilter !== 'all' && (
+                  <Badge variant="secondary" className="gap-1 text-xs">
+                    Plant: {plants.find(p => p.code === plantFilter)?.name || plantFilter}
+                    <X
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                      onClick={() => clearFilter("plant")}
+                    />
+                  </Badge>
+                )}
+                {areaFilter !== 'all' && (
+                  <Badge variant="secondary" className="gap-1 text-xs">
+                    Area: {areas.find(a => a.code === areaFilter)?.name || areaFilter}
+                    <X
+                      className="h-3 w-3 cursor-pointer hover:text-destructive"
+                      onClick={() => clearFilter("area")}
+                    />
+                  </Badge>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllFilters}
+                  className="h-5 text-xs px-2"
+                >
+                  Clear All
+                </Button>
+              </div>
+            </div>
+          )}
+          
           <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" className="flex items-center gap-2">
@@ -1529,6 +1747,26 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               )}
 
               <div className="space-y-2">
+                <label className="text-sm font-medium">Plant</label>
+                <Select value={plantFilter} onValueChange={(value) => {
+                  setPlantFilter(value);
+                  setAreaFilter('all'); // Reset area when plant changes
+                }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder={plantsLoading ? 'Loading Plants...' : 'Plant'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Plants</SelectItem>
+                    {plants.map(plant => (
+                      <SelectItem key={plant.code} value={plant.code}>
+                        {plant.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
                 <label className="text-sm font-medium">{t('dashboard.area')}</label>
                 <Select value={areaFilter} onValueChange={setAreaFilter}>
                   <SelectTrigger>
@@ -1537,8 +1775,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   <SelectContent>
                     <SelectItem value="all">{t('dashboard.allAreas')}</SelectItem>
                     {areas.map(area => (
-                      <SelectItem key={area.id} value={area.id.toString()}>
-                        {area.name} {area.plant_name && `(${area.plant_name})`}
+                      <SelectItem key={area.code} value={area.code}>
+                        {area.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1570,9 +1808,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
 
       {/* KPI Tiles */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
         {loading ? (
-          <KPITileSkeleton count={5} />
+          <KPITileSkeleton count={6} />
         ) : (
           kpiTiles.map((kpi, index) => (
             <Card key={index}>
@@ -1739,28 +1977,34 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Unique Reporter & Coverage Rate */}
+          {/* Total Tickets Closed Per Period */}
           <Card>
             <CardHeader>
-              <CardTitle>{t('dashboard.uniqueReporterCoverageRate')}</CardTitle>
+              <CardTitle>{t('dashboard.totalTicketsClosedPerPeriod')}</CardTitle>
             </CardHeader>
             <CardContent>
-              {participationLoading ? (
+              {ticketsClosedLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={participationChartData}>
+                  <ComposedChart data={ticketsClosedChartData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="period" />
-                    <YAxis yAxisId="left" />
-                    <YAxis yAxisId="right" orientation="right" />
+                    <YAxis />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar yAxisId="left" dataKey="uniqueReporters" fill="hsl(var(--primary))" name={t('dashboard.uniqueReporters')} />
-                    <Bar yAxisId="right" dataKey="coverageRate" fill="hsl(var(--accent))" name={t('dashboard.coverageRate')} />
-                  </BarChart>
+                    <Bar dataKey="ticketsClosed" fill="hsl(var(--primary))" name={t('dashboard.ticketsClosed')} />
+                    <Line
+                      type="monotone"
+                      dataKey="target"
+                      stroke="hsl(var(--destructive))"
+                      strokeWidth={2}
+                      name={t('dashboard.target')}
+                      dot={false}
+                    />
+                  </ComposedChart>
                 </ResponsiveContainer>
               )}
             </CardContent>
@@ -1768,10 +2012,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Who Active (Area) */}
+          {/* Who Active (Dynamic Grouping) */}
           <Card>
             <CardHeader>
-              <CardTitle>{t('dashboard.whoActiveArea')}</CardTitle>
+              <CardTitle>{areaActivityChartTitle}</CardTitle>
             </CardHeader>
             <CardContent>
               {areaActivityLoading ? (
@@ -1789,7 +2033,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   >
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" allowDecimals={false} />
-                    <YAxis dataKey="area" type="category" width={80} />
+                    <YAxis dataKey="display_name" type="category" width={80} />
                     <RechartsTooltip />
                     <Bar dataKey="tickets" fill="hsl(var(--primary))" />
                   </BarChart>
@@ -1804,7 +2048,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             const params = new URLSearchParams({
               startDate: dateRange.startDate,
               endDate: dateRange.endDate,
-              area_id: areaFilter
+              plant: plantFilter,
+              area: areaFilter
             });
             window.open(`/charts/user-activity?${params.toString()}`, '_blank');
           }}>
@@ -1941,10 +2186,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         <h2 className="text-2xl font-bold">{t('dashboard.impactAndValue')}</h2>
         
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Downtime Avoidance Trend */}
+          {/* Downtime Avoidance Trend (Dynamic Grouping) */}
           <Card>
             <CardHeader>
-              <CardTitle>{t('dashboard.downtimeAvoidanceTrend')}</CardTitle>
+              <CardTitle>{downtimeTrendChartTitle}</CardTitle>
             </CardHeader>
             <CardContent>
               {downtimeTrendLoading ? (
@@ -2017,22 +2262,26 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Downtime Impact Leaderboard (Area) */}
+          {/* Downtime Impact Leaderboard (Dynamic Grouping) */}
           <Card>
             <CardHeader>
-              <CardTitle>{t('dashboard.downtimeImpactLeaderboardArea')}</CardTitle>
+              <CardTitle>{downtimeImpactChartTitle}</CardTitle>
             </CardHeader>
             <CardContent>
               {downtimeImpactLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
+              ) : downtimeImpactChartData.length === 0 ? (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  {t('dashboard.noDataAvailable')}
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={downtimeImpactChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" allowDecimals={false} />
-                    <YAxis dataKey="area" type="category" width={80} />
+                    <YAxis dataKey="display_name" type="category" width={80} />
                     <RechartsTooltip />
                     <Bar dataKey="hours" fill="hsl(var(--primary))" />
                   </BarChart>
@@ -2056,7 +2305,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   <BarChart data={costImpactChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis type="number" allowDecimals={false} />
-                    <YAxis dataKey="area" type="category" width={80} />
+                    <YAxis dataKey="display_name" type="category" width={80} />
                     <RechartsTooltip />
                     <Bar dataKey="cost" fill="hsl(var(--accent))" />
                   </BarChart>
@@ -2357,7 +2606,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         tickFormatter={(value) => `${value}h`}
                       />
                       <YAxis 
-                        dataKey="areaCode" 
+                        dataKey="display_name" 
                         type="category" 
                         width={80}
                       />
@@ -2465,7 +2714,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         domain={[0, 100]}
                       />
                       <YAxis 
-                        dataKey="areaCode" 
+                        dataKey="display_name" 
                         type="category" 
                         width={80}
                       />

@@ -67,6 +67,7 @@ export interface ComparisonMetric {
   description: string;
 }
 
+// Updated interface with waiting tickets support
 export interface AbnormalFindingKPIResponse {
   success: boolean;
   data: {
@@ -75,6 +76,8 @@ export interface AbnormalFindingKPIResponse {
       totalTicketsLastPeriod: number;
       closedTicketsThisPeriod: number;
       closedTicketsLastPeriod: number;
+      waitingTicketsThisPeriod: number;
+      waitingTicketsLastPeriod: number;
       pendingTicketsThisPeriod: number;
       pendingTicketsLastPeriod: number;
       totalDowntimeAvoidanceThisPeriod: number;
@@ -103,11 +106,13 @@ export interface AbnormalFindingKPIResponse {
         endDate: string;
         compare_startDate?: string;
         compare_endDate?: string;
-        area_id?: number;
+        plant?: string;
+        area?: string;
       };
       comparisonMetrics: {
         ticketGrowthRate: ComparisonMetric;
         closureRateImprovement: ComparisonMetric;
+        waitingTicketsChange: ComparisonMetric;
         costAvoidanceGrowth: ComparisonMetric;
         downtimeAvoidanceGrowth: ComparisonMetric;
       };
@@ -133,16 +138,43 @@ export interface TicketsCountPerPeriodResponse {
       averageTarget: number;
       appliedFilters: {
         year: number;
-        area_id: number | null;
+        plant: string | null;
+        area: string | null;
       };
     };
   };
 }
 
+export interface TicketsClosedPerPeriodResponse {
+  success: boolean;
+  data: {
+    ticketsClosedData: TicketsClosedDataPoint[];
+    summary: {
+      totalPeriods: number;
+      totalTicketsClosed: number;
+      totalTarget: number;
+      averageTicketsClosedPerPeriod: number;
+      averageTargetPerPeriod: number;
+      appliedFilters: {
+        year: number;
+        plant: string | null;
+        area: string | null;
+      };
+    };
+  };
+}
+
+export interface TicketsClosedDataPoint {
+  period: string;
+  ticketsClosed: number;
+  target: number;
+}
+
 export interface AreaActivityDataPoint {
-  area_id: number;
-  area_name: string;
-  area_code: string;
+  display_name: string;
+  plant?: string;
+  area?: string;
+  machine?: string;
   tickets: number;
 }
 
@@ -151,11 +183,14 @@ export interface AreaActivityResponse {
   data: {
     areaActivityData: AreaActivityDataPoint[];
     summary: {
-      totalAreas: number;
+      totalItems: number;
       totalTickets: number;
-      averageTicketsPerArea: number;
+      averageTicketsPerItem: number;
+      groupBy: string;
       appliedFilters: {
         year: number;
+        plant: string | null;
+        area: string | null;
       };
     };
   };
@@ -181,7 +216,8 @@ export interface UserActivityResponse {
       appliedFilters: {
         startDate: string;
         endDate: string;
-        area_id: number | null;
+        plant: string | null;
+        area: string | null;
       };
     };
   };
@@ -203,7 +239,8 @@ export interface CalendarHeatmapResponse {
       maxTicketsPerDay: number;
       appliedFilters: {
         year: number;
-        area_id: number | null;
+        plant: string | null;
+        area: string | null;
       };
     };
   };
@@ -220,10 +257,13 @@ export interface DowntimeAvoidanceTrendResponse {
     downtimeTrendData: DowntimeTrendDataPoint[];
     summary: {
       totalPeriods: number;
-      totalAreas: number;
-      areas: string[];
+      totalItems: number;
+      items: string[];
+      groupBy: string;
       appliedFilters: {
         year: number;
+        plant: string | null;
+        area: string | null;
       };
     };
   };
@@ -246,14 +286,15 @@ export interface CostAvoidanceResponse {
       totalTickets: number;
       appliedFilters: {
         year: number;
-        area_id: number | null;
+        plant: string | null;
+        area: string | null;
       };
     };
   };
 }
 
 export interface DowntimeImpactDataPoint {
-  area: string;
+  display_name: string;
   hours: number;
   ticketCount: number;
 }
@@ -263,19 +304,22 @@ export interface DowntimeImpactLeaderboardResponse {
   data: {
     downtimeImpactData: DowntimeImpactDataPoint[];
     summary: {
-      totalAreas: number;
+      totalItems: number;
       totalDowntimeHours: number;
       totalTickets: number;
+      groupBy: string;
       appliedFilters: {
         startDate: string;
         endDate: string;
+        plant: string | null;
+        area: string | null;
       };
     };
   };
 }
 
 export interface CostImpactDataPoint {
-  area: string;
+  display_name: string;
   cost: number;
   ticketCount: number;
 }
@@ -285,19 +329,22 @@ export interface CostImpactLeaderboardResponse {
   data: {
     costImpactData: CostImpactDataPoint[];
     summary: {
-      totalAreas: number;
+      totalItems: number;
       totalCostAvoidance: number;
       totalTickets: number;
+      groupBy: string;
       appliedFilters: {
         startDate: string;
         endDate: string;
+        plant: string | null;
+        area: string | null;
       };
     };
   };
 }
 
 export interface OntimeRateByAreaDataPoint {
-  areaCode: string;
+  display_name: string;
   ontimeRate: number;
   totalCompleted: number;
   ontimeCompleted: number;
@@ -308,10 +355,17 @@ export interface OntimeRateByAreaResponse {
   data: {
     ontimeRateByAreaData: OntimeRateByAreaDataPoint[];
     summary: {
-      totalAreas: number;
+      totalItems: number;
       totalCompleted: number;
       totalOntimeCompleted: number;
       overallOntimeRate: number;
+      groupBy: string;
+      appliedFilters: {
+        startDate: string;
+        endDate: string;
+        plant: string | null;
+        area: string | null;
+      };
     };
   };
 }
@@ -363,7 +417,7 @@ export interface TicketResolveDurationByUserResponse {
 }
 
 export interface TicketResolveDurationByAreaDataPoint {
-  areaCode: string;
+  display_name: string;
   avgResolveHours: number;
   ticketCount: number;
 }
@@ -373,9 +427,16 @@ export interface TicketResolveDurationByAreaResponse {
   data: {
     resolveDurationByAreaData: TicketResolveDurationByAreaDataPoint[];
     summary: {
-      totalAreas: number;
+      totalItems: number;
       totalTickets: number;
       overallAvgResolveHours: number;
+      groupBy: string;
+      appliedFilters: {
+        startDate: string;
+        endDate: string;
+        plant: string | null;
+        area: string | null;
+      };
     };
   };
 }
@@ -463,7 +524,8 @@ export interface DowntimeImpactReporterLeaderboardResponse {
       appliedFilters: {
         startDate: string;
         endDate: string;
-        area_id: number | null;
+        plant: string | null;
+        area: string | null;
       };
     };
   };
@@ -509,7 +571,8 @@ class DashboardService {
     endDate: string;   // YYYY-MM-DD (required)
     compare_startDate?: string; // YYYY-MM-DD
     compare_endDate?: string;   // YYYY-MM-DD
-    area_id?: number;
+    plant?: string;
+    area?: string;
   }): Promise<AbnormalFindingKPIResponse> {
     const url = new URL(`${this.baseURL}/af`);
     Object.entries(params).forEach(([k, v]) => {
@@ -522,7 +585,8 @@ class DashboardService {
 
   async getTicketsCountPerPeriod(params: {
     year?: number;
-    area_id?: number;
+    plant?: string;
+    area?: string;
   } = {}): Promise<TicketsCountPerPeriodResponse> {
     const url = new URL(`${this.baseURL}/tickets-count-per-period`);
     Object.entries(params).forEach(([k, v]) => {
@@ -533,8 +597,24 @@ class DashboardService {
     return res.json();
   }
 
+  async getTicketsClosedPerPeriod(params: {
+    year?: number;
+    plant?: string;
+    area?: string;
+  } = {}): Promise<TicketsClosedPerPeriodResponse> {
+    const url = new URL(`${this.baseURL}/tickets-closed-per-period`);
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+    });
+    const res = await fetch(url.toString(), { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch tickets closed per period');
+    return res.json();
+  }
+
   async getAreaActivityData(params: {
     year?: number;
+    plant?: string;
+    area?: string;
   } = {}): Promise<AreaActivityResponse> {
     const url = new URL(`${this.baseURL}/area-activity`);
     Object.entries(params).forEach(([k, v]) => {
@@ -548,7 +628,8 @@ class DashboardService {
   async getUserActivityData(params: {
     startDate: string;
     endDate: string;
-    area_id?: number;
+    plant?: string;
+    area?: string;
   }): Promise<UserActivityResponse> {
     const url = new URL(`${this.baseURL}/user-activity`);
     Object.entries(params).forEach(([k, v]) => {
@@ -561,7 +642,8 @@ class DashboardService {
 
   async getCalendarHeatmapData(params: {
     year?: number;
-    area_id?: number;
+    plant?: string;
+    area?: string;
   } = {}): Promise<CalendarHeatmapResponse> {
     const url = new URL(`${this.baseURL}/calendar-heatmap`);
     Object.entries(params).forEach(([k, v]) => {
@@ -574,6 +656,8 @@ class DashboardService {
 
   async getDowntimeAvoidanceTrend(params: {
     year?: number;
+    plant?: string;
+    area?: string;
   } = {}): Promise<DowntimeAvoidanceTrendResponse> {
     const url = new URL(`${this.baseURL}/downtime-avoidance-trend`);
     Object.entries(params).forEach(([k, v]) => {
@@ -586,7 +670,8 @@ class DashboardService {
 
   async getCostAvoidanceData(params: {
     year?: number;
-    area_id?: number;
+    plant?: string;
+    area?: string;
   } = {}): Promise<CostAvoidanceResponse> {
     const url = new URL(`${this.baseURL}/cost-avoidance`);
     Object.entries(params).forEach(([k, v]) => {
@@ -600,6 +685,8 @@ class DashboardService {
   async getDowntimeImpactLeaderboard(params: {
     startDate: string;
     endDate: string;
+    plant?: string;
+    area?: string;
   }): Promise<DowntimeImpactLeaderboardResponse> {
     const url = new URL(`${this.baseURL}/downtime-impact-leaderboard`);
     Object.entries(params).forEach(([k, v]) => {
@@ -613,6 +700,8 @@ class DashboardService {
   async getCostImpactLeaderboard(params: {
     startDate: string;
     endDate: string;
+    plant?: string;
+    area?: string;
   }): Promise<CostImpactLeaderboardResponse> {
     const url = new URL(`${this.baseURL}/cost-impact-leaderboard`);
     Object.entries(params).forEach(([k, v]) => {
@@ -627,11 +716,13 @@ class DashboardService {
   async getOntimeRateByArea(params: {
     startDate: string;
     endDate: string;
+    plant?: string;
+    area?: string;
   }): Promise<OntimeRateByAreaResponse> {
     const url = new URL(`${this.baseURL}/ontime-rate-by-area`);
-    url.searchParams.append('startDate', params.startDate);
-    url.searchParams.append('endDate', params.endDate);
-
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+    });
     const res = await fetch(url.toString(), { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch ontime rate by area data');
     return res.json();
@@ -641,12 +732,18 @@ class DashboardService {
   async getOntimeRateByUser(params: {
     startDate: string;
     endDate: string;
-    area_id: number;
+    plant?: string;
+    area?: string;
   }): Promise<OntimeRateByUserResponse> {
     const url = new URL(`${this.baseURL}/ontime-rate-by-user`);
     url.searchParams.append('startDate', params.startDate);
     url.searchParams.append('endDate', params.endDate);
-    url.searchParams.append('area_id', params.area_id.toString());
+    if (params.plant !== undefined) {
+      url.searchParams.append('plant', params.plant);
+    }
+    if (params.area !== undefined) {
+      url.searchParams.append('area', params.area);
+    }
 
     const res = await fetch(url.toString(), { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch ontime rate by user data');
@@ -657,12 +754,18 @@ class DashboardService {
   async getTicketResolveDurationByUser(params: {
     startDate: string;
     endDate: string;
-    area_id: number;
+    plant?: string;
+    area?: string;
   }): Promise<TicketResolveDurationByUserResponse> {
     const url = new URL(`${this.baseURL}/ticket-resolve-duration-by-user`);
     url.searchParams.append('startDate', params.startDate);
     url.searchParams.append('endDate', params.endDate);
-    url.searchParams.append('area_id', params.area_id.toString());
+    if (params.plant !== undefined) {
+      url.searchParams.append('plant', params.plant);
+    }
+    if (params.area !== undefined) {
+      url.searchParams.append('area', params.area);
+    }
 
     const res = await fetch(url.toString(), { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch ticket resolve duration by user data');
@@ -673,11 +776,13 @@ class DashboardService {
   async getTicketResolveDurationByArea(params: {
     startDate: string;
     endDate: string;
+    plant?: string;
+    area?: string;
   }): Promise<TicketResolveDurationByAreaResponse> {
     const url = new URL(`${this.baseURL}/ticket-resolve-duration-by-area`);
-    url.searchParams.append('startDate', params.startDate);
-    url.searchParams.append('endDate', params.endDate);
-
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+    });
     const res = await fetch(url.toString(), { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch ticket resolve duration by area data');
     return res.json();
@@ -687,13 +792,17 @@ class DashboardService {
   async getCostImpactByFailureMode(params: {
     startDate: string;
     endDate: string;
-    area_id?: number;
+    plant?: string;
+    area?: string;
   }): Promise<CostByFailureModeResponse> {
     const url = new URL(`${this.baseURL}/cost-impact-by-failure-mode`);
     url.searchParams.append('startDate', params.startDate);
     url.searchParams.append('endDate', params.endDate);
-    if (params.area_id !== undefined) {
-      url.searchParams.append('area_id', params.area_id.toString());
+    if (params.plant !== undefined) {
+      url.searchParams.append('plant', params.plant);
+    }
+    if (params.area !== undefined) {
+      url.searchParams.append('area', params.area);
     }
 
     const res = await fetch(url.toString(), { headers: this.headers() });
@@ -705,13 +814,17 @@ class DashboardService {
   async getDowntimeImpactByFailureMode(params: {
     startDate: string;
     endDate: string;
-    area_id?: number;
+    plant?: string;
+    area?: string;
   }): Promise<DowntimeByFailureModeResponse> {
     const url = new URL(`${this.baseURL}/downtime-impact-by-failure-mode`);
     url.searchParams.append('startDate', params.startDate);
     url.searchParams.append('endDate', params.endDate);
-    if (params.area_id !== undefined) {
-      url.searchParams.append('area_id', params.area_id.toString());
+    if (params.plant !== undefined) {
+      url.searchParams.append('plant', params.plant);
+    }
+    if (params.area !== undefined) {
+      url.searchParams.append('area', params.area);
     }
 
     const res = await fetch(url.toString(), { headers: this.headers() });
@@ -723,13 +836,17 @@ class DashboardService {
   async getCostImpactReporterLeaderboard(params: {
     startDate: string;
     endDate: string;
-    area_id?: number;
+    plant?: string;
+    area?: string;
   }): Promise<CostImpactReporterLeaderboardResponse> {
     const url = new URL(`${this.baseURL}/cost-impact-reporter-leaderboard`);
     url.searchParams.append('startDate', params.startDate);
     url.searchParams.append('endDate', params.endDate);
-    if (params.area_id !== undefined) {
-      url.searchParams.append('area_id', params.area_id.toString());
+    if (params.plant !== undefined) {
+      url.searchParams.append('plant', params.plant);
+    }
+    if (params.area !== undefined) {
+      url.searchParams.append('area', params.area);
     }
 
     const res = await fetch(url.toString(), { headers: this.headers() });
@@ -740,7 +857,8 @@ class DashboardService {
   async getDowntimeImpactReporterLeaderboard(params: {
     startDate: string;
     endDate: string;
-    area_id?: number;
+    plant?: string;
+    area?: string;
   }): Promise<DowntimeImpactReporterLeaderboardResponse> {
     const url = new URL(`${this.baseURL}/downtime-impact-reporter-leaderboard`);
     Object.entries(params).forEach(([k, v]) => {
