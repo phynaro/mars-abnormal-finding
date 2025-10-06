@@ -19,31 +19,32 @@ export interface Ticket {
   failure_mode_code?: string;
   failure_mode_name?: string;
   severity_level: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'in_progress' | 'rejected_pending_l3_review' | 'rejected_final' | 'completed' | 'reviewed' | 'escalated' | 'closed' | 'reopened_in_progress';
+  status: 'open' | 'accepted' | 'planed' | 'in_progress' | 'rejected_pending_l3_review' | 'rejected_final' | 'finished' | 'reviewed' | 'escalated' | 'closed' | 'reopened_in_progress';
   priority: 'low' | 'normal' | 'high' | 'urgent';
-  reported_by: number;
+  created_by: number;
   assigned_to?: number;
   created_at: string;
   updated_at: string;
-  resolved_at?: string;
-  closed_at?: string;
-  scheduled_complete?: string;
+  approved_at?: string;
+  schedule_finish?: string;
+  schedule_start?: string;
+  planed_at?: string;
   // Workflow tracking fields
   accepted_at?: string;
   accepted_by?: number;
   rejected_at?: string;
   rejected_by?: number;
-  completed_at?: string;
-  completed_by?: number;
+  finished_at?: string;
+  finished_by?: number;
   escalated_at?: string;
   escalated_by?: number;
   reopened_at?: string;
   reopened_by?: number;
   reviewed_at?: string;
   reviewed_by?: number;
-  closed_by?: number;
-  l3_override_at?: string;
-  l3_override_by?: number;
+  approved_by?: number;
+  actual_start_at?: string;
+  actual_finish_at?: string;
   reporter_name?: string;
   reporter_email?: string;
   reporter_phone?: string;
@@ -53,12 +54,12 @@ export interface Ticket {
   // Workflow user names
   accepted_by_name?: string;
   rejected_by_name?: string;
-  completed_by_name?: string;
+  finished_by_name?: string;
   reviewed_by_name?: string;
   escalated_by_name?: string;
-  closed_by_name?: string;
+  approved_by_name?: string;
   reopened_by_name?: string;
-  l3_override_by_name?: string;
+ 
   // Hierarchy names
   plant_name?: string;
   plant_code?: string;
@@ -133,7 +134,7 @@ export interface CreateTicketRequest {
   severity_level?: 'low' | 'medium' | 'high' | 'critical';
   priority?: 'low' | 'normal' | 'high' | 'urgent';
   suggested_assignee_id?: number;
-  scheduled_complete?: string;
+  schedule_finish?: string;
 }
 
 export interface UpdateTicketRequest {
@@ -155,7 +156,7 @@ export interface TicketFilters {
   priority?: string;
   severity_level?: string;
   assigned_to?: number;
-  reported_by?: number;
+  created_by?: number;
   search?: string;
   plant?: string;  // Plant code from PUExtension
   area?: string;   // Area code from PUExtension
@@ -175,7 +176,7 @@ export interface PendingTicket {
   created_at: string;
   updated_at: string;
   assigned_to?: number;
-  reported_by: number;
+  created_by: number;
   // Updated to use PUExtension hierarchy
   plant_name: string;
   plant_code: string;
@@ -533,15 +534,49 @@ class TicketService {
   }
 
   // Workflow actions
-  async acceptTicket(id: number, notes?: string, scheduled_complete?: string): Promise<{ success: boolean; message: string }> {
+  async acceptTicket(id: number, notes?: string, schedule_finish?: string): Promise<{ success: boolean; message: string }> {
     const headers = await this.getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/accept`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ notes, scheduled_complete })
+      body: JSON.stringify({ notes, schedule_finish })
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to accept ticket');
+    return result;
+  }
+
+  async planTicket(
+    id: number, 
+    schedule_start: string, 
+    schedule_finish: string, 
+    assigned_to: number,
+    notes?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const headers = await this.getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/tickets/${id}/plan`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ notes, schedule_start, schedule_finish, assigned_to })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Failed to plan ticket');
+    return result;
+  }
+
+  async startTicket(
+    id: number, 
+    actual_start_at: string, 
+    notes?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const headers = await this.getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/tickets/${id}/start`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ notes, actual_start_at })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Failed to start ticket');
     return result;
   }
 
@@ -557,20 +592,30 @@ class TicketService {
     return result;
   }
 
-  async completeTicket(id: number, completion_notes?: string, downtime_avoidance_hours?: number, cost_avoidance?: number, failure_mode_id?: number): Promise<{ success: boolean; message: string }> {
+  async finishTicket(
+    id: number, 
+    completion_notes?: string, 
+    downtime_avoidance_hours?: number, 
+    cost_avoidance?: number, 
+    failure_mode_id?: number,
+    actual_finish_at?: string,
+    actual_start_at?: string
+  ): Promise<{ success: boolean; message: string }> {
     const headers = await this.getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}/tickets/${id}/complete`, {
+    const res = await fetch(`${API_BASE_URL}/tickets/${id}/finish`, {
       method: 'POST',
       headers,
       body: JSON.stringify({ 
         completion_notes, 
         downtime_avoidance_hours,
         cost_avoidance,
-        failure_mode_id
+        failure_mode_id,
+        actual_finish_at,
+        actual_start_at
       })
     });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.message || 'Failed to complete job');
+    if (!res.ok) throw new Error(result.message || 'Failed to finish job');
     return result;
   }
 
@@ -635,12 +680,17 @@ class TicketService {
     return result;
   }
 
-  async reassignTicket(id: number, new_assigned_to: number, notes?: string): Promise<{ success: boolean; message: string }> {
+  async reassignTicket(id: number, schedule_start: string, schedule_finish: string, assigned_to: number, notes?: string): Promise<{ success: boolean; message: string }> {
     const headers = await this.getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/reassign`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ assigned_to: new_assigned_to, notes })
+      body: JSON.stringify({ 
+        schedule_start, 
+        schedule_finish, 
+        assigned_to, 
+        notes 
+      })
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to reassign ticket');
@@ -672,20 +722,20 @@ class TicketService {
     return result;
   }
 
-  async getUserCompletedTicketCountPerPeriod(params: {
+  async getUserFinishedTicketCountPerPeriod(params: {
     year: number;
     startDate: string;
     endDate: string;
   }): Promise<{ success: boolean; data: any }> {
     const headers = await this.getAuthHeaders();
-    const url = new URL(`${API_BASE_URL}/tickets/user/completed-count-per-period`);
+    const url = new URL(`${API_BASE_URL}/tickets/user/Finished-count-per-period`);
     url.searchParams.set('year', params.year.toString());
     url.searchParams.set('startDate', params.startDate);
     url.searchParams.set('endDate', params.endDate);
     
     const res = await fetch(url.toString(), { headers });
     const result = await res.json();
-    if (!res.ok) throw new Error(result.message || 'Failed to fetch user completed ticket count per period');
+    if (!res.ok) throw new Error(result.message || 'Failed to fetch user Finished ticket count per period');
     return result;
   }
 

@@ -161,7 +161,7 @@ The system automatically creates the necessary tables on first run. The database
 
 ### Supported Languages
 - **English**: Primary language with full feature support
-- **Thai**: Complete translation for Thai users
+- **Thai**: Finish translation for Thai users
 - **Extensible**: Easy to add more languages
 
 ### Translation Features

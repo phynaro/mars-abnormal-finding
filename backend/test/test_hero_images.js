@@ -59,8 +59,8 @@ async function testHeroImages() {
       }
     },
     {
-      name: "COMPLETE TICKET (with after image)",
-      state: abnFlexService.AbnCaseState.COMPLETED,
+      name: "FINISH TICKET (with after image)",
+      state: abnFlexService.AbnCaseState.Finished,
       payload: {
         caseNo: "TKT-20250921-104",
         assetName: "Compressor Unit A",
@@ -138,12 +138,12 @@ async function testHeroImages() {
     console.error(`💥 Error in no-hero test:`, error.message);
   }
 
-  console.log('\n🎉 Hero image testing completed!');
+  console.log('\n🎉 Hero image testing Finished!');
   console.log('\n📋 Summary:');
   console.log('✅ CREATE TICKET - Before image as hero');
   console.log('✅ ESCALATE TICKET - Before image as hero');
   console.log('✅ REJECT TO L3 - Before image as hero');
-  console.log('✅ COMPLETE TICKET - After image as hero');
+  console.log('✅ FINISH TICKET - After image as hero');
   console.log('✅ Message without hero image also works');
 }
 

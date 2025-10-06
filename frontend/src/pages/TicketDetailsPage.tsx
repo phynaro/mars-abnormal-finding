@@ -70,8 +70,10 @@ const TicketDetailsPage: React.FC = () => {
   // Action modal hooks must be declared before any early returns
   type ActionType =
     | "accept"
+    | "plan"
+    | "start"
     | "reject"
-    | "complete"
+    | "finish"
     | "escalate"
     | "approve-review"
     | "approve-close"
@@ -84,12 +86,20 @@ const TicketDetailsPage: React.FC = () => {
   const [actionNumber, setActionNumber] = useState("");
   const [actionExtraId, setActionExtraId] = useState("");
   const [acting, setActing] = useState(false);
-  const [scheduledComplete, setScheduledComplete] = useState("");
+  
+  // Plan action specific state
+  const [scheduleStart, setScheduleStart] = useState("");
+  const [scheduleFinish, setScheduleFinish] = useState("");
+  
+  // Start action specific state
+  const [actualStartAt, setActualStartAt] = useState("");
 
-  // Additional state for complete action
+  // Additional state for finish action
   const [downtimeAvoidance, setDowntimeAvoidance] = useState("1");
   const [costAvoidance, setCostAvoidance] = useState("10000");
   const [failureModeId, setFailureModeId] = useState("");
+  const [actualFinishAt, setActualFinishAt] = useState("");
+  const [actualStartAtEdit, setActualStartAtEdit] = useState("");
   const [failureModes, setFailureModes] = useState<
     Array<{ id: number; code: string; name: string }>
   >([]);
@@ -125,9 +135,9 @@ const TicketDetailsPage: React.FC = () => {
     }
   }, [ticketId]);
 
-  // Load failure modes only when complete modal opens
+  // Load failure modes only when finish modal opens
   useEffect(() => {
-    if (!actionOpen || actionType !== "complete") return;
+    if (!actionOpen || actionType !== "finish") return;
     
     const loadFailureModes = async () => {
       try {
@@ -166,8 +176,8 @@ const TicketDetailsPage: React.FC = () => {
   const uploadsBase = apiBase.endsWith("/api") ? apiBase.slice(0, -4) : apiBase;
   // Load assignees only when modal is open with specific actions
   useEffect(() => {
-    // Only load when the modal is open and we need assignees (reassign/escalate)
-    if (!actionOpen || !ticket?.id || (actionType !== 'reassign' && actionType !== 'escalate')) {
+    // Only load when the modal is open and we need assignees (plan/reassign/escalate)
+    if (!actionOpen || !ticket?.id || (actionType !== 'plan' && actionType !== 'reassign' && actionType !== 'escalate')) {
       setAssignees([]);
       return;
     }
@@ -176,7 +186,7 @@ const TicketDetailsPage: React.FC = () => {
     (async () => {
       try {
         setAssigneesLoading(true);
-        // For escalate action, only show L3 users; for reassign, show L2+ users
+        // For escalate action, only show L3 users; for plan and reassign, show L2+ users
         const escalationOnly = actionType === "escalate";
         const res = await ticketService.getAvailableAssignees(
           assigneeQuery || undefined,
@@ -429,11 +439,52 @@ const TicketDetailsPage: React.FC = () => {
     setActionComment("");
     setActionNumber("");
     setActionExtraId("");
-    setScheduledComplete("");
-    // Reset complete action fields to defaults
+    // Reset plan action fields
+    setScheduleStart("");
+    setScheduleFinish("");
+    // Reset start action fields
+    if (type === "start") {
+      // Set current datetime as default, but allow user to change
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      setActualStartAt(`${year}-${month}-${day}T${hours}:${minutes}`);
+    } else {
+      setActualStartAt("");
+    }
+    // Reset finish action fields to defaults
     setDowntimeAvoidance("1");
     setCostAvoidance("10000");
     setFailureModeId("");
+    if (type === "finish") {
+      // Set current datetime as default for actual finish time
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      setActualFinishAt(`${year}-${month}-${day}T${hours}:${minutes}`);
+      
+      // Pre-populate actual start time with existing value if available
+      if (ticket?.actual_start_at) {
+        const startDate = new Date(ticket.actual_start_at);
+        const startYear = startDate.getFullYear();
+        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0');
+        const startDay = String(startDate.getDate()).padStart(2, '0');
+        const startHours = String(startDate.getHours()).padStart(2, '0');
+        const startMinutes = String(startDate.getMinutes()).padStart(2, '0');
+        setActualStartAtEdit(`${startYear}-${startMonth}-${startDay}T${startHours}:${startMinutes}`);
+      } else {
+        setActualStartAtEdit("");
+      }
+    } else {
+      setActualFinishAt("");
+      setActualStartAtEdit("");
+    }
     setActionOpen(true);
   };
 
@@ -443,13 +494,37 @@ const TicketDetailsPage: React.FC = () => {
     try {
       switch (actionType) {
         case "accept":
-          if (!scheduledComplete) {
-            throw new Error("Scheduled completion date is required");
-          }
           await ticketService.acceptTicket(
             ticket.id,
             actionComment || undefined,
-            new Date(scheduledComplete + 'T23:59:59').toISOString(),
+            undefined, // No scheduled completion date - will be set in planning phase
+          );
+          break;
+        case "plan":
+          if (!scheduleStart || !scheduleFinish) {
+            throw new Error("Schedule start and schedule finish are required");
+          }
+          // For L2 users, automatically assign to themselves
+          const assigneeId = (isL2Plus && !isL3Plus) ? user?.id : parseInt(actionExtraId, 10);
+          if (!assigneeId) {
+            throw new Error("Assigned user is required");
+          }
+          await ticketService.planTicket(
+            ticket.id,
+            scheduleStart,
+            scheduleFinish,
+            assigneeId,
+            actionComment || undefined
+          );
+          break;
+        case "start":
+          if (!actualStartAt) {
+            throw new Error("Actual start time is required");
+          }
+          await ticketService.startTicket(
+            ticket.id,
+            actualStartAt,
+            actionComment || undefined
           );
           break;
         case "reject":
@@ -462,11 +537,11 @@ const TicketDetailsPage: React.FC = () => {
             true,
           );
           break;
-        case "complete": {
+        case "finish": {
           // Validate required fields
-          if (!downtimeAvoidance || !costAvoidance || !failureModeId) {
+          if (!downtimeAvoidance || !costAvoidance || !failureModeId || !actualFinishAt) {
             throw new Error(
-              "All fields are required: Downtime Avoidance, Cost Avoidance, and Failure Mode",
+              "All fields are required: Downtime Avoidance, Cost Avoidance, Failure Mode, and Actual Finish Time",
             );
           }
 
@@ -474,12 +549,14 @@ const TicketDetailsPage: React.FC = () => {
           const costAvoidanceAmount = parseFloat(costAvoidance);
           const failureMode = parseInt(failureModeId, 10);
 
-          await ticketService.completeTicket(
+          await ticketService.finishTicket(
             ticket.id,
             actionComment || undefined,
             downtimeAvoidanceHours,
             costAvoidanceAmount,
             failureMode,
+            actualFinishAt,
+            actualStartAtEdit || undefined
           );
           break;
         }
@@ -518,11 +595,16 @@ const TicketDetailsPage: React.FC = () => {
           );
           break;
         case "reassign": {
+          if (!scheduleStart || !scheduleFinish || !actionExtraId) {
+            throw new Error("Schedule start, schedule finish, and assigned user are required for reassignment");
+          }
           const toId = parseInt(actionExtraId || "0", 10);
           if (!toId)
             throw new Error("Please select a new assignee from the dropdown list");
           await ticketService.reassignTicket(
             ticket.id,
+            scheduleStart,
+            scheduleFinish,
             toId,
             actionComment || undefined,
           );
@@ -560,7 +642,19 @@ const TicketDetailsPage: React.FC = () => {
                 <CheckCircle2 className="mr-2 h-4 w-4" /> {t('ticket.overrideAccept')}
               </Button>
             )}
-            {/* Reject button - L2 can reject open tickets, L3 can reject tickets in any status except rejected_final and closed */}
+            {/* Plan button - L2+ can plan accepted tickets */}
+            {isL2Plus && ticket.status === "accepted" && (
+              <Button onClick={() => openAction("plan")}>
+                <Clock className="mr-2 h-4 w-4" /> {t('ticket.plan')}
+              </Button>
+            )}
+            {/* Start button - Only assigned L2+ user can start planed tickets */}
+            {isL2Plus && isAssignedUser && ticket.status === "planed" && (
+              <Button onClick={() => openAction("start")}>
+                <Play className="mr-2 h-4 w-4" /> {t('ticket.start')}
+              </Button>
+            )}
+            {/* Reject button - L2 can only reject open tickets */}
             {isL2Plus && !isL3Plus && ticket.status === "open" && (
               <Button
                 variant="destructive"
@@ -569,10 +663,9 @@ const TicketDetailsPage: React.FC = () => {
                 <XCircle className="mr-2 h-4 w-4" /> {t('ticket.reject')}
               </Button>
             )}
-            {/* L3 Reject button - Only L3 can reject tickets in any status except rejected_final and closed */}
+            {/* L3 Reject button - Only L3 can reject open tickets and tickets pending L3 review */}
             {isL3Plus &&
-              ticket.status !== "rejected_final" &&
-              ticket.status !== "closed" && (
+              (ticket.status === "open" || ticket.status === "rejected_pending_l3_review") && (
                 <Button
                   variant="destructive"
                   onClick={() => openAction("reject")}
@@ -583,14 +676,14 @@ const TicketDetailsPage: React.FC = () => {
                     : t('ticket.reject')}
                 </Button>
               )}
-            {/* Complete and Escalate buttons - Only assigned L2 user can complete/escalate when ticket is in-progress or reopened_in_progress */}
+            {/* Finish and Escalate buttons - Only assigned L2 user can finish/escalate when ticket is in-progress or reopened_in_progress */}
             {isL2Plus &&
               isAssignedUser &&
               (ticket.status === "in_progress" ||
                 ticket.status === "reopened_in_progress") && (
                 <>
-                  <Button onClick={() => openAction("complete")}>
-                    {t('ticket.complete')}
+                  <Button onClick={() => openAction("finish")}>
+                    {t('ticket.finish')}
                   </Button>
                   <Button
                     variant="outline"
@@ -600,8 +693,8 @@ const TicketDetailsPage: React.FC = () => {
                   </Button>
                 </>
               )}
-            {/* Approve Review button - Creator can approve review when ticket is completed */}
-            {isCreator && ticket.status === "completed" && (
+            {/* Approve Review button - Creator can approve review when ticket is finished */}
+            {isCreator && ticket.status === "finished" && (
               <>
                 <Button onClick={() => openAction("approve-review")}>
                   {t('ticket.approveReview')}
@@ -1058,16 +1151,48 @@ const TicketDetailsPage: React.FC = () => {
                     {t('ticket.created')}
                   </dt>
                   <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                    {formatCommentTime(ticket.created_at).split(" ")[0]}
+                    {formatCommentTime(ticket.created_at)}
                   </dd>
                 </div>
-                {ticket.scheduled_complete && (
+               
+
+                {ticket.schedule_start && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      {t('ticket.scheduledCompleteDate')}
+                      {t('ticket.scheduledStartdate')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                      {new Date(ticket.scheduled_complete).toLocaleDateString('th-TH')}
+                    {formatCommentTime(ticket.schedule_start)}
+                    </dd>
+                  </div>
+                )}
+                {ticket.schedule_finish && (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      {t('ticket.scheduledFinishedate')}
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                    {formatCommentTime(ticket.schedule_finish)}
+                    </dd>
+                  </div>
+                )}
+                {ticket.actual_finish_at && (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      {t('ticket.actualFinishedate')}
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                    {formatCommentTime(ticket.actual_finish_at)}
+                    </dd>
+                  </div>
+                )}
+                {ticket.actual_start_at && (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      {t('ticket.actualStartdate')}
+                    </dt>
+                    <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
+                    {formatCommentTime(ticket.actual_start_at)}
                     </dd>
                   </div>
                 )}
@@ -1158,7 +1283,7 @@ const TicketDetailsPage: React.FC = () => {
                       | "assignment"
                       | "accepted"
                       | "rejected"
-                      | "completed"
+                      | "finished"
                       | "escalated"
                       | "closed"
                       | "reopened"
@@ -1195,7 +1320,7 @@ const TicketDetailsPage: React.FC = () => {
                             return <Plus className="h-4 w-4" />;
                           case "in_progress":
                             return <Play className="h-4 w-4" />;
-                          case "completed":
+                          case "finished":
                             return <CheckCircle className="h-4 w-4" />;
                           case "closed":
                             return <Lock className="h-4 w-4" />;
@@ -1218,7 +1343,7 @@ const TicketDetailsPage: React.FC = () => {
                             return "bg-blue-100 dark:bg-blue-900";
                           case "in_progress":
                             return "bg-yellow-100 dark:bg-yellow-900";
-                          case "completed":
+                          case "finished":
                             return "bg-emerald-100 dark:bg-emerald-900";
                           case "closed":
                             return "bg-gray-100 dark:bg-gray-800";
@@ -1241,7 +1366,7 @@ const TicketDetailsPage: React.FC = () => {
                             return "text-blue-600 dark:text-blue-400";
                           case "in_progress":
                             return "text-yellow-600 dark:text-yellow-400";
-                          case "completed":
+                          case "finished":
                             return "text-emerald-600 dark:text-emerald-400";
                           case "closed":
                             return "text-gray-600 dark:text-gray-400";
@@ -1389,22 +1514,141 @@ const TicketDetailsPage: React.FC = () => {
                 <p className="text-xs text-red-500">{t('ticket.rejectionReasonRequired')}</p>
               )}
             </div>
-            {actionType === "accept" && (
-              <div className="space-y-2">
-                <Label>{t('ticket.scheduledCompleteDate')}</Label>
-                <Input
-                  type="date"
-                  value={scheduledComplete}
-                  onChange={(e) => setScheduledComplete(e.target.value)}
-                  required
-                />
-                {!scheduledComplete && (
-                  <p className="text-xs text-red-500">{t('ticket.scheduledCompleteDateRequired')}</p>
-                )}
+            {actionType === "plan" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>{t('ticket.scheduleStart')}</Label>
+                  <Input
+                    type="datetime-local"
+                    value={scheduleStart}
+                    onChange={(e) => setScheduleStart(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('ticket.scheduleFinish')}</Label>
+                  <Input
+                    type="datetime-local"
+                    value={scheduleFinish}
+                    onChange={(e) => setScheduleFinish(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('ticket.assignTo')}</Label>
+                  {/* L2 users can only assign themselves when planning */}
+                  {isL2Plus && !isL3Plus ? (
+                    <div className="rounded-md border bg-gray-50 p-3 dark:bg-gray-800">
+                      <div className="flex items-center gap-2">
+                        <UserPlus className="h-4 w-4 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {user?.email || 'You'}
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        L2 users can only assign themselves when planning tickets
+                      </p>
+                      <input type="hidden" value={user?.id} />
+                    </div>
+                  ) : (
+                    /* L3+ users can select any assignee */
+                    <div className="relative" ref={assigneeDropdownRef}>
+                      <Input
+                        value={assigneeQuery}
+                        onChange={(e) => {
+                          setAssigneeQuery(e.target.value);
+                          setAssigneeDropdownOpen(true);
+                        }}
+                        onFocus={() => setAssigneeDropdownOpen(true)}
+                        placeholder={t('ticket.searchL2L3User')}
+                        required
+                      />
+                      {assigneeDropdownOpen && (
+                        <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+                          {assigneesLoading ? (
+                            <div className="p-3 text-sm text-gray-500">
+                              {t('ticket.searching')}
+                            </div>
+                          ) : assignees.length === 0 ? (
+                            <div className="p-3 text-sm text-gray-500">
+                              {t('ticket.noUsersFound')}
+                            </div>
+                          ) : (
+                            assignees.map((u) => (
+                              <button
+                                type="button"
+                                key={u.id}
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                                onClick={() => {
+                                  setActionExtraId(String(u.id));
+                                  setAssigneeQuery(u.name);
+                                  setAssigneeDropdownOpen(false);
+                                }}
+                              >
+                                <div className="font-medium">{u.name}</div>
+                                <div className="text-xs text-gray-500">
+                                  {u.email}
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {!actionExtraId && !(isL2Plus && !isL3Plus) && (
+                    <p className="text-xs text-red-500">{t('ticket.pleaseSelectAssignee')}</p>
+                  )}
+                  {actionExtraId && (
+                    <div className="text-xs text-gray-600">
+                      {t('ticket.selectedUserId')}: {actionExtraId}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
-            {actionType === "complete" && (
+            {actionType === "start" && (
               <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>{t('ticket.actualStartTime')}</Label>
+                  <Input
+                    type="datetime-local"
+                    value={actualStartAt}
+                    onChange={(e) => setActualStartAt(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-gray-500">
+                    {t('ticket.actualStartTimeHelp')}
+                  </p>
+                </div>
+              </div>
+            )}
+            {actionType === "finish" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>{t('ticket.actualStartTime')}</Label>
+                  <Input
+                    type="datetime-local"
+                    value={actualStartAtEdit}
+                    onChange={(e) => setActualStartAtEdit(e.target.value)}
+                    placeholder={t('ticket.actualStartTimeHelp')}
+                  />
+                  <p className="text-xs text-gray-500">
+                    {t('ticket.actualStartTimeEditHelp')}
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('ticket.actualFinishTime')}</Label>
+                  <Input
+                    type="datetime-local"
+                    value={actualFinishAt}
+                    onChange={(e) => setActualFinishAt(e.target.value)}
+                    required
+                  />
+                  <p className="text-xs text-gray-500">
+                    {t('ticket.actualFinishTimeHelp')}
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label>{t('ticket.downtimeAvoidanceHours')}</Label>
                   <Input
@@ -1461,59 +1705,79 @@ const TicketDetailsPage: React.FC = () => {
               </div>
             )}
             {actionType === "reassign" && (
-              <div className="space-y-2">
-                <Label>{t('ticket.newAssignee')}</Label>
-                <div className="relative" ref={assigneeDropdownRef}>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>{t('ticket.scheduleStart')}</Label>
                   <Input
-                    value={assigneeQuery}
-                    onChange={(e) => {
-                      setAssigneeQuery(e.target.value);
-                      setAssigneeDropdownOpen(true);
-                    }}
-                    onFocus={() => setAssigneeDropdownOpen(true)}
-                    placeholder={t('ticket.searchL2L3User')}
+                    type="datetime-local"
+                    value={scheduleStart}
+                    onChange={(e) => setScheduleStart(e.target.value)}
                     required
                   />
-                  {assigneeDropdownOpen && (
-                    <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
-                      {assigneesLoading ? (
-                        <div className="p-3 text-sm text-gray-500">
-                          {t('ticket.searching')}
-                        </div>
-                      ) : assignees.length === 0 ? (
-                        <div className="p-3 text-sm text-gray-500">
-                          {t('ticket.noUsersFound')}
-                        </div>
-                      ) : (
-                        assignees.map((u) => (
-                          <button
-                            type="button"
-                            key={u.id}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
-                            onClick={() => {
-                              setActionExtraId(String(u.id));
-                              setAssigneeQuery(u.name);
-                              setAssigneeDropdownOpen(false);
-                            }}
-                          >
-                            <div className="font-medium">{u.name}</div>
-                            <div className="text-xs text-gray-500">
-                              {u.email}
-                            </div>
-                          </button>
-                        ))
-                      )}
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('ticket.scheduleFinish')}</Label>
+                  <Input
+                    type="datetime-local"
+                    value={scheduleFinish}
+                    onChange={(e) => setScheduleFinish(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('ticket.newAssignee')}</Label>
+                  <div className="relative" ref={assigneeDropdownRef}>
+                    <Input
+                      value={assigneeQuery}
+                      onChange={(e) => {
+                        setAssigneeQuery(e.target.value);
+                        setAssigneeDropdownOpen(true);
+                      }}
+                      onFocus={() => setAssigneeDropdownOpen(true)}
+                      placeholder={t('ticket.searchL2L3User')}
+                      required
+                    />
+                    {assigneeDropdownOpen && (
+                      <div className="absolute z-20 mt-1 w-full max-h-56 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+                        {assigneesLoading ? (
+                          <div className="p-3 text-sm text-gray-500">
+                            {t('ticket.searching')}
+                          </div>
+                        ) : assignees.length === 0 ? (
+                          <div className="p-3 text-sm text-gray-500">
+                            {t('ticket.noUsersFound')}
+                          </div>
+                        ) : (
+                          assignees.map((u) => (
+                            <button
+                              type="button"
+                              key={u.id}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                              onClick={() => {
+                                setActionExtraId(String(u.id));
+                                setAssigneeQuery(u.name);
+                                setAssigneeDropdownOpen(false);
+                              }}
+                            >
+                              <div className="font-medium">{u.name}</div>
+                              <div className="text-xs text-gray-500">
+                                {u.email}
+                              </div>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {!actionExtraId && (
+                    <p className="text-xs text-red-500">{t('ticket.pleaseSelectNewAssignee')}</p>
+                  )}
+                  {actionExtraId && (
+                    <div className="text-xs text-gray-600">
+                      {t('ticket.selectedUserId')}: {actionExtraId}
                     </div>
                   )}
                 </div>
-                {!actionExtraId && (
-                  <p className="text-xs text-red-500">{t('ticket.pleaseSelectNewAssignee')}</p>
-                )}
-                {actionExtraId && (
-                  <div className="text-xs text-gray-600">
-                    {t('ticket.selectedUserId')}: {actionExtraId}
-                  </div>
-                )}
               </div>
             )}
             {actionType === "escalate" && (
@@ -1587,9 +1851,11 @@ const TicketDetailsPage: React.FC = () => {
                 onClick={performAction}
                 disabled={
                   acting ||
-                  (actionType === "accept" && !scheduledComplete) ||
+                  (actionType === "plan" && (!scheduleStart || !scheduleFinish || (!actionExtraId && !(isL2Plus && !isL3Plus)))) ||
+                  (actionType === "start" && !actualStartAt) ||
+                  (actionType === "finish" && (!downtimeAvoidance || !costAvoidance || !failureModeId || !actualFinishAt)) ||
                   (actionType === "reject" && (!actionComment || actionComment.trim() === "")) ||
-                  (actionType === "reassign" && !actionExtraId) ||
+                  (actionType === "reassign" && (!scheduleStart || !scheduleFinish || !actionExtraId)) ||
                   (actionType === "escalate" && !actionExtraId)
                 }
               >

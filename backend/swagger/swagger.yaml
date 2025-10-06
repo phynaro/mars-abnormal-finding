@@ -317,7 +317,7 @@ paths:
                   example: "view"
       responses:
         '200':
-          description: Permission check completed
+          description: Permission check Finished
           content:
             application/json:
               schema:
@@ -1137,7 +1137,7 @@ paths:
       summary: Get user's workflow tasks
       description: |
         Retrieve workflow tasks assigned to the current user.
-        Tasks can be filtered by type (pending, completed, all).
+        Tasks can be filtered by type (pending, Finished, all).
       security:
         - bearerAuth: []
       parameters:
@@ -1162,7 +1162,7 @@ paths:
           schema:
             type: string
             default: pending
-            enum: [pending, completed, all]
+            enum: [pending, Finished, all]
       responses:
         '200':
           description: Tasks retrieved successfully
@@ -2012,11 +2012,11 @@ paths:
                               example: 2
                             hasWR_OnTime:
                               type: integer
-                              description: Count of work orders with WR completed on time
+                              description: Count of work orders with WR Finished on time
                               example: 30
                             hasWR_Late:
                               type: integer
-                              description: Count of work orders with WR completed late
+                              description: Count of work orders with WR Finished late
                               example: 8
                             onTimeRatePct:
                               type: number
@@ -2109,11 +2109,11 @@ paths:
                             example: 494
                           totalOnTime:
                             type: integer
-                            description: Total work orders completed on time
+                            description: Total work orders Finished on time
                             example: 390
                           totalLate:
                             type: integer
-                            description: Total work orders completed late
+                            description: Total work orders Finished late
                             example: 104
                           totalDowntime:
                             type: number
@@ -2306,7 +2306,7 @@ paths:
                               example: 38
                             history:
                               type: integer
-                              description: Count of completed work orders
+                              description: Count of Finished work orders
                               example: 32
                             closeToHistory:
                               type: integer
@@ -2342,11 +2342,11 @@ paths:
                               example: 0
                             hasWR_OnTime:
                               type: integer
-                              description: Count of work orders with WR completed on time
+                              description: Count of work orders with WR Finished on time
                               example: 30
                             hasWR_Late:
                               type: integer
-                              description: Count of work orders with WR completed late
+                              description: Count of work orders with WR Finished late
                               example: 8
                             onTimeRatePct:
                               type: number
@@ -2375,11 +2375,11 @@ paths:
                             example: 156
                           totalOnTime:
                             type: integer
-                            description: Total work orders completed on time
+                            description: Total work orders Finished on time
                             example: 120
                           totalLate:
                             type: integer
-                            description: Total work orders completed late
+                            description: Total work orders Finished late
                             example: 36
                           totalDowntime:
                             type: number
@@ -2556,7 +2556,7 @@ paths:
                               example: 12
                             history:
                               type: integer
-                              description: Count of completed work orders
+                              description: Count of Finished work orders
                               example: 10
                             closeToHistory:
                               type: integer
@@ -2592,11 +2592,11 @@ paths:
                               example: 0
                             hasWR_OnTime:
                               type: integer
-                              description: Count of work orders with WR completed on time
+                              description: Count of work orders with WR Finished on time
                               example: 8
                             hasWR_Late:
                               type: integer
-                              description: Count of work orders with WR completed late
+                              description: Count of work orders with WR Finished late
                               example: 4
                             onTimeRatePct:
                               type: number
@@ -2625,11 +2625,11 @@ paths:
                             example: 156
                           totalOnTime:
                             type: integer
-                            description: Total work orders completed on time
+                            description: Total work orders Finished on time
                             example: 120
                           totalLate:
                             type: integer
-                            description: Total work orders completed late
+                            description: Total work orders Finished late
                             example: 36
                           totalDowntime:
                             type: number
@@ -2992,7 +2992,7 @@ paths:
         - Growth rate calculations for all metrics
         
         **Status Definitions**:
-        - **Closed**: status IN ('closed', 'completed')
+        - **Closed**: status IN ('closed', 'Finished')
         - **Pending**: status IN ('open', 'in_progress')
         
         **Permissions**: Requires TKT form view permission
@@ -3323,7 +3323,7 @@ paths:
         1. Tickets created by the user
         2. Tickets where the user has approval_level > 2 for the ticket's area_id
         
-        Tickets are filtered to exclude 'closed', 'completed', or 'canceled' status.
+        Tickets are filtered to exclude 'closed', 'Finished', or 'canceled' status.
         Results are ordered by priority (urgent → high → medium → low) and creation date.
         
         **Approval Level Meanings:**
@@ -5713,7 +5713,7 @@ components:
             readed:
               type: boolean
               example: false
-            actionCompleted:
+            actionFinished:
               type: boolean
               example: false
 
@@ -5831,7 +5831,7 @@ components:
             flags:
               type: object
               properties:
-                actionCompleted:
+                actionFinished:
                   type: boolean
                   example: false
                 approved:
@@ -5884,7 +5884,7 @@ components:
                 pending:
                   type: integer
                   example: 45
-                completed:
+                Finished:
                   type: integer
                   example: 1180
                 initiated:

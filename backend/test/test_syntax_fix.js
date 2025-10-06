@@ -16,7 +16,7 @@ function testSyntaxFix() {
   const downtime_avoidance_hours = 8.5;
 
   try {
-    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.COMPLETED, {
+    const flexMsg = abnFlexService.buildAbnFlexMinimal(abnFlexService.AbnCaseState.Finished, {
       caseNo: "TKT-20250921-999",
       assetName: "Test Asset",
       problem: "Syntax test",

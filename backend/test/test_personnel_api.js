@@ -106,7 +106,7 @@ async function testPersonnelAPI() {
       console.log('');
     }
 
-    console.log('🎉 All tests completed successfully!');
+    console.log('🎉 All tests Finished successfully!');
 
   } catch (error) {
     console.error('❌ Test failed:', error.message);
@@ -175,7 +175,7 @@ async function performanceTest() {
   try {
     await Promise.all(promises);
     const endTime = Date.now();
-    console.log(`✅ All 5 endpoints completed in ${endTime - startTime}ms`);
+    console.log(`✅ All 5 endpoints Finished in ${endTime - startTime}ms`);
   } catch (error) {
     console.error('❌ Performance test failed:', error.message);
   }

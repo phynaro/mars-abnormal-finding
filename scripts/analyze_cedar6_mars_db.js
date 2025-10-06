@@ -261,7 +261,7 @@ async function main() {
     }
   }
 
-  console.log('\n=== Analysis Complete ===');
+  console.log('\n=== Analysis Finish ===');
 }
 
 main().catch((e) => {

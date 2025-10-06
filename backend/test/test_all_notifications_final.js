@@ -56,9 +56,9 @@ async function testAllNotifications() {
       comment: "งานถูกปฏิเสธขั้นสุดท้าย"
     },
     {
-      name: "COMPLETE TICKET",
-      state: abnFlexService.AbnCaseState.COMPLETED,
-      caseNo: "TKT-TEST-COMPLETE",
+      name: "FINISH TICKET",
+      state: abnFlexService.AbnCaseState.Finished,
+      caseNo: "TKT-TEST-FINISH",
       comment: "งานเสร็จสมบูรณ์แล้ว",
       extraKVs: [
         { label: "Cost Avoidance", value: "50,000 บาท" },

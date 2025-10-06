@@ -497,7 +497,7 @@ exports.getWorkRequestById = async (req, res) => {
       note: wr.Note,
       budgetCost: wr.BudgetCost,
       
-      // Complete work request data structure similar to getWorkRequests
+      // Finish work request data structure similar to getWorkRequests
       // ... (same mapping as above)
       
       // All additional fields from the WR table
@@ -528,7 +528,7 @@ exports.getWorkRequestStats = async (req, res) => {
       SELECT 
         COUNT(*) as totalWorkRequests,
         SUM(CASE WHEN ws.STATUSTYPE = 'U' THEN 1 ELSE 0 END) as pendingWorkRequests,
-        SUM(CASE WHEN ws.STATUSTYPE = 'S' THEN 1 ELSE 0 END) as completedWorkRequests,
+        SUM(CASE WHEN ws.STATUSTYPE = 'S' THEN 1 ELSE 0 END) as FinishedWorkRequests,
         SUM(CASE WHEN wr.WRSTATUSNO = 1 THEN 1 ELSE 0 END) as initiatedWorkRequests,
         SUM(CASE WHEN wr.WRSTATUSNO = 3 THEN 1 ELSE 0 END) as approvedWorkRequests,
         SUM(CASE WHEN wr.WRSTATUSNO = 6 THEN 1 ELSE 0 END) as woGeneratedWorkRequests,
@@ -577,7 +577,7 @@ exports.getWorkRequestStats = async (req, res) => {
         overview: {
           total: stats.totalWorkRequests,
           pending: stats.pendingWorkRequests,
-          completed: stats.completedWorkRequests,
+          Finished: stats.FinishedWorkRequests,
           initiated: stats.initiatedWorkRequests,
           approved: stats.approvedWorkRequests,
           woGenerated: stats.woGeneratedWorkRequests,
@@ -1461,7 +1461,7 @@ exports.getWorkflowStatus = async (req, res) => {
     // Check if current user can perform actions
     const canApprove = wr.NODETYPE === 'A' && wr.STATUSTYPE === 'U'; // Approval node and status is Under process
     const canReject = canApprove;
-    const canCancel = wr.STATUSTYPE === 'U' && !['7', '8'].includes(wr.WRSTATUSNO?.toString()); // Not already cancelled or completed
+    const canCancel = wr.STATUSTYPE === 'U' && !['7', '8'].includes(wr.WRSTATUSNO?.toString()); // Not already cancelled or Finished
     const canGenerateWO = wr.WRSTATUSNO === 3; // Approved status
 
     res.json({
@@ -1520,7 +1520,7 @@ exports.getWorkflowStatus = async (req, res) => {
             approved: track.Approved_Flag === 'T',
             notApproved: track.NotApproved_Flag === 'T',
             readed: track.Readed_Flag === 'T',
-            actionCompleted: track.Action_Flag === 'T'
+            actionFinished: track.Action_Flag === 'T'
           }
         })),
         userContext: {
@@ -1557,7 +1557,7 @@ exports.getMyWorkflowTasks = async (req, res) => {
     const {
       page = 1,
       limit = 20,
-      taskType = 'pending' // 'pending', 'completed', 'all'
+      taskType = 'pending' // 'pending', 'Finished', 'all'
     } = req.query;
 
     const offset = (page - 1) * limit;
@@ -1575,7 +1575,7 @@ exports.getMyWorkflowTasks = async (req, res) => {
 
     if (taskType === 'pending') {
       whereClause += ` AND wft.Action_Flag = 'F' AND wft.Send_for = 1`;
-    } else if (taskType === 'completed') {
+    } else if (taskType === 'Finished') {
       whereClause += ` AND wft.Action_Flag = 'T'`;
     }
 
@@ -1650,7 +1650,7 @@ exports.getMyWorkflowTasks = async (req, res) => {
         eventTime: task.Event_Time,
         sendFor: task.Send_for,
         flags: {
-          actionCompleted: task.Action_Flag === 'T',
+          actionFinished: task.Action_Flag === 'T',
           approved: task.Approved_Flag === 'T',
           read: task.Readed_Flag === 'T'
         }

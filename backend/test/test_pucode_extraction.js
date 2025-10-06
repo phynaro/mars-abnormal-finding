@@ -76,7 +76,7 @@ async function testPUCODEExtraction() {
         console.log('- @cost_avoidance: DECIMAL(15,2)');
         console.log('- @downtime_avoidance_hours: DECIMAL(8,2)');
         console.log('- @failure_mode_id: INT');
-        console.log('- @reported_by: INT');
+        console.log('- @created_by: INT');
         console.log('- @assigned_to: INT (optional)');
         
         // Test 4: Backend validation function
@@ -128,7 +128,7 @@ async function testPUCODEExtraction() {
         const validation3 = validatePUCODE('PLANT-AREA-A-LINE-A1');
         console.log('Invalid PUCODE test (too few parts):', validation3);
         
-        console.log('\n✅ PUCODE extraction and validation tests completed successfully!');
+        console.log('\n✅ PUCODE extraction and validation tests Finished successfully!');
         console.log('\n📋 Summary:');
         console.log('1. ✅ PUCODE parsing logic works correctly');
         console.log('2. ✅ Database validation queries work');

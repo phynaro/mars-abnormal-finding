@@ -90,7 +90,7 @@ async function testCloseTicket() {
     console.error(error.stack);
   }
 
-  console.log('\n🎉 Close ticket notification test completed!');
+  console.log('\n🎉 Close ticket notification test Finished!');
   console.log('✅ Updated to use new abnormalFindingFlexService');
   console.log('✅ Shows satisfaction rating properly');
   console.log('✅ Uses CLOSED state with proper Thai label');

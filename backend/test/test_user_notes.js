@@ -52,8 +52,8 @@ async function testUserNotes() {
       note: "Detailed rejection reason"
     },
     {
-      name: "COMPLETE with completion notes",
-      state: abnFlexService.AbnCaseState.COMPLETED,
+      name: "FINISH with completion notes",
+      state: abnFlexService.AbnCaseState.Finished,
       payload: {
         caseNo: "TKT-NOTES-004",
         assetName: "Motor Unit", 
@@ -175,7 +175,7 @@ async function testUserNotes() {
     console.log(''); // Empty line
   }
 
-  console.log('🎉 USER NOTES TESTING COMPLETED!');
+  console.log('🎉 USER NOTES TESTING Finished!');
   console.log('='.repeat(50));
   console.log('✅ All notifications now use user-provided notes/reasons');
   console.log('✅ Fallback to generic messages when no user input');
@@ -185,7 +185,7 @@ async function testUserNotes() {
   console.log('• acceptTicket - uses notes from req.body');
   console.log('• escalateTicket - uses escalation_reason ✓');
   console.log('• rejectTicket - uses rejection_reason ✓');
-  console.log('• completeJob - uses completion_notes ✓');
+  console.log('• finishTicket - uses completion_notes ✓');
   console.log('• closeTicket - uses close_reason ✓');
   console.log('• assignTicket - uses notes from req.body');
   console.log('• reassignTicket - uses reassignment_reason ✓');

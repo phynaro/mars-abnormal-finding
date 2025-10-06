@@ -13,7 +13,7 @@ const AbnCaseState = Object.freeze({
   ACCEPTED: "ACCEPTED",
   REJECT_TO_MANAGER: "REJECT_TO_MANAGER",
   REJECT_FINAL: "REJECT_FINAL",
-  COMPLETED: "COMPLETED",
+  Finished: "FINISHED",
   REASSIGNED: "REASSIGNED",
   ESCALATED: "ESCALATED",
   CLOSED: "CLOSED",
@@ -26,7 +26,7 @@ const stateColorMap = Object.freeze({
   [AbnCaseState.ACCEPTED]: "#22C55E",         // green
   [AbnCaseState.REJECT_TO_MANAGER]: "#F59E0B",// amber
   [AbnCaseState.REJECT_FINAL]: "#EF4444",     // red
-  [AbnCaseState.COMPLETED]: "#10B981",        // emerald
+  [AbnCaseState.Finished]: "#10B981",        // emerald
   [AbnCaseState.REASSIGNED]: "#A855F7",       // violet
   [AbnCaseState.ESCALATED]: "#FB7185",        // rose
   [AbnCaseState.CLOSED]: "#64748B",           // slate

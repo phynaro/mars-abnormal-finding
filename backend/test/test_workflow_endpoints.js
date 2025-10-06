@@ -64,24 +64,24 @@ const testWorkflow = async () => {
         console.log('❌ Failed to accept ticket');
     }
 
-    // 3. Complete the job (L2)
+    // 3. Finish the job (L2)
     console.log('\n3. Completing job...');
-    const completeResult = await makeRequest('POST', `/tickets/${ticketId}/complete`, {
-        completion_notes: 'Job completed for testing',
+    const finishResult = await makeRequest('POST', `/tickets/${ticketId}/finish`, {
+        completion_notes: 'Job Finished for testing',
         downtime_avoidance_hours: 1,
         cost_avoidance: 10000,
         failure_mode_id: 1
     });
-    if (completeResult?.success) {
-        console.log('✅ Job completed successfully');
+    if (finishResult?.success) {
+        console.log('✅ Job Finished successfully');
     } else {
-        console.log('❌ Failed to complete job');
+        console.log('❌ Failed to finish job');
     }
 
     // 4. Close the ticket (Requestor)
     console.log('\n4. Closing ticket...');
     const closeResult = await makeRequest('POST', `/tickets/${ticketId}/close`, {
-        close_reason: 'Testing completed successfully',
+        close_reason: 'Testing Finished successfully',
         satisfaction_rating: 5
     });
     if (closeResult?.success) {
@@ -151,11 +151,11 @@ const testWorkflow = async () => {
         }
     }
 
-    console.log('\n🎉 Workflow testing completed!');
+    console.log('\n🎉 Workflow testing Finished!');
     console.log('\n📋 Summary of tested endpoints:');
     console.log('✅ POST /tickets (create)');
     console.log('✅ POST /tickets/:id/accept');
-    console.log('✅ POST /tickets/:id/complete');
+    console.log('✅ POST /tickets/:id/finish');
     console.log('✅ POST /tickets/:id/close');
     console.log('✅ POST /tickets/:id/reject');
     console.log('✅ POST /tickets/:id/escalate');

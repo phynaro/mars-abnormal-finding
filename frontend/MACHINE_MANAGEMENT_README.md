@@ -227,7 +227,7 @@ npm run dev
 - `backend/src/routes/machine.js` - Backend routes
 
 ### **API Reference**
-- Complete endpoint documentation
+- Finish endpoint documentation
 - Request/response examples
 - Error handling guide
 - Authentication requirements

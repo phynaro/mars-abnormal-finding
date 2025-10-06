@@ -318,9 +318,9 @@ const PendingTicketsSection: React.FC<{
   );
 };
 
-// Personal Completed Ticket Count Chart Component (L2+ users only)
-// Personal Completed Ticket Chart Component
-const PersonalCompletedTicketChart: React.FC<{
+// Personal Finished Ticket Count Chart Component (L2+ users only)
+// Personal Finished Ticket Chart Component
+const PersonalFinishedTicketChart: React.FC<{
   data: Array<{ period: string; tickets: number; target: number }>;
   loading: boolean;
   error: string | null;
@@ -365,7 +365,7 @@ const PersonalCompletedTicketChart: React.FC<{
           </p>
           <div className="space-y-1">
             <p className="text-sm">
-              <span className="text-success font-medium">Completed Tickets:</span> {data.tickets}
+              <span className="text-success font-medium">Finished Tickets:</span> {data.tickets}
             </p>
             <p className="text-sm">
               <span className="text-destructive font-medium">Target:</span> {data.target}
@@ -383,7 +383,7 @@ const PersonalCompletedTicketChart: React.FC<{
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <BarChart3 className="h-5 w-5" />
-            <span>{t('homepage.myCompleteCasesPerPeriod')}</span>
+            <span>{t('homepage.myFinishCasesPerPeriod')}</span>
           </div>
           <Button
             variant="outline"
@@ -416,7 +416,7 @@ const PersonalCompletedTicketChart: React.FC<{
               <YAxis />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Bar dataKey="tickets" fill="hsl(var(--accent))" name={t('homepage.completedTickets')} />
+              <Bar dataKey="tickets" fill="hsl(var(--accent))" name={t('homepage.FinishedTickets')} />
               <Line
                 type="monotone"
                 dataKey="target"
@@ -431,8 +431,8 @@ const PersonalCompletedTicketChart: React.FC<{
           <div className="flex items-center justify-center h-[300px] text-gray-500">
             <div className="text-center">
               <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p>{t('homepage.noCompletedTicketData')}</p>
-              <p className="text-sm">{t('homepage.completeSomeTickets')}</p>
+              <p>{t('homepage.noFinishedTicketData')}</p>
+              <p className="text-sm">{t('homepage.finishSomeTickets')}</p>
             </div>
           </div>
         )}
@@ -812,9 +812,9 @@ const PersonalKPISection: React.FC<{
   personalTicketData: Array<{ period: string; tickets: number; target: number }>;
   personalTicketLoading: boolean;
   personalTicketError: string | null;
-  personalCompletedTicketData: Array<{ period: string; tickets: number; target: number }>;
-  personalCompletedTicketLoading: boolean;
-  personalCompletedTicketError: string | null;
+  personalFinishedTicketData: Array<{ period: string; tickets: number; target: number }>;
+  personalFinishedTicketLoading: boolean;
+  personalFinishedTicketError: string | null;
   personalKPIData: any;
   personalKPILoading: boolean;
   personalKPIError: string | null;
@@ -827,9 +827,9 @@ const PersonalKPISection: React.FC<{
   personalTicketData,
   personalTicketLoading,
   personalTicketError,
-  personalCompletedTicketData,
-  personalCompletedTicketLoading,
-  personalCompletedTicketError,
+  personalFinishedTicketData,
+  personalFinishedTicketLoading,
+  personalFinishedTicketError,
   personalKPIData,
   personalKPILoading,
   personalKPIError,
@@ -852,11 +852,11 @@ const PersonalKPISection: React.FC<{
       selectedYear={selectedYear}
     />
     
-    {/* Personal Completed Ticket Count Chart (L2+ users only) */}
-    <PersonalCompletedTicketChart 
-      data={personalCompletedTicketData}
-      loading={personalCompletedTicketLoading}
-      error={personalCompletedTicketError}
+    {/* Personal Finished Ticket Count Chart (L2+ users only) */}
+    <PersonalFinishedTicketChart 
+      data={personalFinishedTicketData}
+      loading={personalFinishedTicketLoading}
+      error={personalFinishedTicketError}
       onKpiSetupClick={() => onKpiSetupClick('fix')}
       selectedYear={selectedYear}
     />
@@ -886,10 +886,10 @@ const HomePage: React.FC = () => {
   const [personalTicketLoading, setPersonalTicketLoading] = useState<boolean>(false);
   const [personalTicketError, setPersonalTicketError] = useState<string | null>(null);
 
-  // Personal completed ticket data state (L2+ users only)
-  const [personalCompletedTicketData, setPersonalCompletedTicketData] = useState<Array<{ period: string; tickets: number; target: number }>>([]);
-  const [personalCompletedTicketLoading, setPersonalCompletedTicketLoading] = useState<boolean>(false);
-  const [personalCompletedTicketError, setPersonalCompletedTicketError] = useState<string | null>(null);
+  // Personal Finished ticket data state (L2+ users only)
+  const [personalFinishedTicketData, setPersonalFinishedTicketData] = useState<Array<{ period: string; tickets: number; target: number }>>([]);
+  const [personalFinishedTicketLoading, setPersonalFinishedTicketLoading] = useState<boolean>(false);
+  const [personalFinishedTicketError, setPersonalFinishedTicketError] = useState<string | null>(null);
 
   // Personal KPI data state
   const [personalKPIData, setPersonalKPIData] = useState<any>(null);
@@ -940,9 +940,9 @@ const HomePage: React.FC = () => {
     fetchPersonalTicketData();
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
-  // Fetch personal completed ticket data when filters change (L2+ users only)
+  // Fetch personal Finished ticket data when filters change (L2+ users only)
   useEffect(() => {
-    fetchPersonalCompletedTicketData();
+    fetchPersonalFinishedTicketData();
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
   // Fetch personal KPI data when filters change
@@ -1062,16 +1062,16 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // Fetch personal completed ticket data (L2+ users only)
-  const fetchPersonalCompletedTicketData = async () => {
+  // Fetch personal Finished ticket data (L2+ users only)
+  const fetchPersonalFinishedTicketData = async () => {
     if (!isAuthenticated || !user) {
-      setPersonalCompletedTicketLoading(false);
+      setPersonalFinishedTicketLoading(false);
       return;
     }
 
     try {
-      setPersonalCompletedTicketLoading(true);
-      setPersonalCompletedTicketError(null);
+      setPersonalFinishedTicketLoading(true);
+      setPersonalFinishedTicketError(null);
 
       const dateRange = getPersonalDateRange(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
       const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
@@ -1082,9 +1082,9 @@ const HomePage: React.FC = () => {
         endDate: dateRange.endDate
       };
 
-      // Fetch both completed ticket data and personal targets
+      // Fetch both Finished ticket data and personal targets
       const [ticketResponse, targetResponse] = await Promise.all([
-        ticketService.getUserCompletedTicketCountPerPeriod(params),
+        ticketService.getUserFinishedTicketCountPerPeriod(params),
         personalTargetService.getPersonalTargets({
           personno: user.id,
           year: yearFromDateRange,
@@ -1106,19 +1106,19 @@ const HomePage: React.FC = () => {
           ...item,
           target: targetMap[item.period] || 15 // Fallback to mock target if no real target
         }));
-        setPersonalCompletedTicketData(dataWithTargets);
+        setPersonalFinishedTicketData(dataWithTargets);
       } else {
-        setPersonalCompletedTicketError(t('homepage.failedToFetchPersonalCompletedTicketData'));
+        setPersonalFinishedTicketError(t('homepage.failedToFetchPersonalFinishedTicketData'));
       }
     } catch (err) {
-      console.error('Error fetching personal completed ticket data:', err);
-      setPersonalCompletedTicketError(
+      console.error('Error fetching personal Finished ticket data:', err);
+      setPersonalFinishedTicketError(
         err instanceof Error
           ? err.message
-          : t('homepage.failedToFetchPersonalCompletedTicketData')
+          : t('homepage.failedToFetchPersonalFinishedTicketData')
       );
     } finally {
-      setPersonalCompletedTicketLoading(false);
+      setPersonalFinishedTicketLoading(false);
     }
   };
 
@@ -1386,9 +1386,9 @@ const HomePage: React.FC = () => {
             personalTicketData={personalTicketData}
             personalTicketLoading={personalTicketLoading}
             personalTicketError={personalTicketError}
-            personalCompletedTicketData={personalCompletedTicketData}
-            personalCompletedTicketLoading={personalCompletedTicketLoading}
-            personalCompletedTicketError={personalCompletedTicketError}
+            personalFinishedTicketData={personalFinishedTicketData}
+            personalFinishedTicketLoading={personalFinishedTicketLoading}
+            personalFinishedTicketError={personalFinishedTicketError}
             personalKPIData={personalKPIData}
             personalKPILoading={personalKPILoading}
             personalKPIError={personalKPIError}
@@ -1418,7 +1418,7 @@ const HomePage: React.FC = () => {
         onTargetsUpdated={() => {
           // Refresh personal ticket data when targets are updated
           fetchPersonalTicketData();
-          fetchPersonalCompletedTicketData();
+          fetchPersonalFinishedTicketData();
         }}
       />
 

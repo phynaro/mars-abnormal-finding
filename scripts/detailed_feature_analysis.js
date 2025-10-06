@@ -297,7 +297,7 @@ async function main() {
     }
   }
 
-  console.log('\n=== Detailed Feature Analysis Complete ===');
+  console.log('\n=== Detailed Feature Analysis Finish ===');
 }
 
 main().catch((e) => {

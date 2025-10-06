@@ -58,7 +58,7 @@ const getTicketApprovals = async (req, res) => {
              per.PERSONCODE,
              CASE 
                WHEN ta.approval_level = 1 THEN 'L1 - Create/Review/Reopen'
-               WHEN ta.approval_level = 2 THEN 'L2 - Accept/Reject/Escalate/Complete'
+               WHEN ta.approval_level = 2 THEN 'L2 - Accept/Reject/Escalate/Finish'
                WHEN ta.approval_level = 3 THEN 'L3 - Reassign/Reject Final'
                WHEN ta.approval_level = 4 THEN 'L4 - Approve Close'
                ELSE 'Unknown Level'
@@ -107,7 +107,7 @@ const getTicketApprovalsByPersonAndLevel = async (req, res) => {
                END as location_scope,
                CASE 
                  WHEN ta.approval_level = 1 THEN 'L1 - Create/Review/Reopen'
-                 WHEN ta.approval_level = 2 THEN 'L2 - Accept/Reject/Escalate/Complete'
+                 WHEN ta.approval_level = 2 THEN 'L2 - Accept/Reject/Escalate/Finish'
                  WHEN ta.approval_level = 3 THEN 'L3 - Reassign/Reject Final'
                  WHEN ta.approval_level = 4 THEN 'L4 - Approve Close'
                  ELSE 'Unknown Level'
@@ -160,7 +160,7 @@ const getTicketApprovalById = async (req, res) => {
                END as location_scope,
                CASE 
                  WHEN ta.approval_level = 1 THEN 'L1 - Create/Review/Reopen'
-                 WHEN ta.approval_level = 2 THEN 'L2 - Accept/Reject/Escalate/Complete'
+                 WHEN ta.approval_level = 2 THEN 'L2 - Accept/Reject/Escalate/Finish'
                  WHEN ta.approval_level = 3 THEN 'L3 - Reassign/Reject Final'
                  WHEN ta.approval_level = 4 THEN 'L4 - Approve Close'
                  ELSE 'Unknown Level'
@@ -719,7 +719,7 @@ const deleteTicketApprovalsByPersonAndLevel = async (req, res) => {
 
 // ==================== HIERARCHY VIEW ====================
 
-// Get complete hierarchy view data
+// Get finish hierarchy view data
 const getHierarchyView = async (req, res) => {
   try {
     const pool = await getConnection();

@@ -255,7 +255,7 @@ export const TicketList: React.FC = () => {
       ticket.priority?.toUpperCase() || '',
       ticket.severity_level?.toUpperCase() || '',
       ticket.pu_name || ticket.pucode || 'N/A',
-      ticket.reporter_name || `User ${ticket.reported_by}`,
+      ticket.reporter_name || `User ${ticket.created_by}`,
       ticket.assignee_name || `User ${ticket.assigned_to}` || t('ticket.unassigned'),
       formatDate(ticket.created_at),
     ]);
@@ -402,7 +402,7 @@ export const TicketList: React.FC = () => {
                       <SelectItem value="rejected_final">
                         {t('ticket.rejectedFinal')}
                       </SelectItem>
-                      <SelectItem value="completed">{t('ticket.completed')}</SelectItem>
+                      <SelectItem value="finished">{t('ticket.finished')}</SelectItem>
                       <SelectItem value="escalated">{t('ticket.escalated')}</SelectItem>
                       <SelectItem value="reopened_in_progress">
                         {t('ticket.reopenedInProgress')}
@@ -635,7 +635,7 @@ export const TicketList: React.FC = () => {
                       <User className="w-4 h-4" />
                       <span>
                         {t('ticket.createdBy')}:{" "}
-                        {ticket.reporter_name || `User ${ticket.reported_by}`}
+                        {ticket.reporter_name || `User ${ticket.created_by}`}
                       </span>
                     </div>
                     {ticket.assigned_to && (
@@ -740,7 +740,7 @@ export const TicketList: React.FC = () => {
                           <User className="w-4 h-4 text-muted-foreground" />
                           <span>
                             {ticket.reporter_name ||
-                              `User ${ticket.reported_by}`}
+                              `User ${ticket.created_by}`}
                           </span>
                         </div>
                       </td>

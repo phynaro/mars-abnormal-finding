@@ -19,8 +19,8 @@ router.get('/pending/user', requireFormPermission('TKT', 'view'), ticketControll
 // Get user ticket count per period for personal dashboard (requires TKT form view permission)
 router.get('/user/count-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserTicketCountPerPeriod);
 
-// Get user completed ticket count per period for personal dashboard (L2+ users only, requires TKT form view permission)
-router.get('/user/completed-count-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserCompletedTicketCountPerPeriod);
+// Get user Finished ticket count per period for personal dashboard (L2+ users only, requires TKT form view permission)
+router.get('/user/Finished-count-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserFinishedTicketCountPerPeriod);
 
 // Get personal KPI data for personal dashboard (requires TKT form view permission)
 router.get('/user/personal-kpi', requireFormPermission('TKT', 'view'), ticketController.getPersonalKPIData);
@@ -44,11 +44,17 @@ router.post('/:id/assign', requireFormPermission('TKT', 'save'), ticketControlle
 // Accept ticket (requires TKT form save permission)
 router.post('/:id/accept', requireFormPermission('TKT', 'save'), ticketController.acceptTicket);
 
+// Plan ticket (requires TKT form save permission) - NEW WORKFLOW
+router.post('/:id/plan', requireFormPermission('TKT', 'save'), ticketController.planTicket);
+
+// Start ticket (requires TKT form save permission) - NEW WORKFLOW
+router.post('/:id/start', requireFormPermission('TKT', 'save'), ticketController.startTicket);
+
 // Reject ticket (requires TKT form save permission)
 router.post('/:id/reject', requireFormPermission('TKT', 'save'), ticketController.rejectTicket);
 
-// Complete job (requires TKT form save permission)
-router.post('/:id/complete', requireFormPermission('TKT', 'save'), ticketController.completeJob);
+// Finish job (requires TKT form save permission)
+router.post('/:id/finish', requireFormPermission('TKT', 'save'), ticketController.finishTicket);
 
 // Escalate ticket (requires TKT form save permission)
 router.post('/:id/escalate', requireFormPermission('TKT', 'save'), ticketController.escalateTicket);

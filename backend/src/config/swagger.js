@@ -4,7 +4,7 @@ const YAML = require('yamljs');
 const path = require('path');
 
 // Load OpenAPI specification from YAML file
-const swaggerDocument = YAML.load(path.join(__dirname, '../../swagger/work-request-api.yaml'));
+const swaggerDocument = YAML.load(path.join(__dirname, '../../swagger/swagger.yaml'));
 
 // Swagger configuration options
 const options = {

@@ -25,10 +25,12 @@ const axios = require('axios');
  */
 const TicketState = Object.freeze({
   CREATED: "CREATED",
-  ACCEPTED: "ACCEPTED", 
+  ACCEPTED: "ACCEPTED",
+  PLANED: "PLANED",
+  IN_PROGRESS: "IN_PROGRESS", 
   REJECT_TO_MANAGER: "REJECT_TO_MANAGER",
   REJECT_FINAL: "REJECT_FINAL",
-  COMPLETED: "COMPLETED",
+  Finished: "FINISHED",
   REVIEWED: "REVIEWED",
   REASSIGNED: "REASSIGNED",
   ESCALATED: "ESCALATED",
@@ -43,9 +45,11 @@ const TicketState = Object.freeze({
 const STATE_COLORS = Object.freeze({
   [TicketState.OPEN]: "#0EA5E9",          // Professional blue
   [TicketState.ACCEPTED]: "#22C55E",           // Success green
+  [TicketState.PLANED]: "#3B82F6",             // Planning blue
+  [TicketState.IN_PROGRESS]: "#F59E0B",        // Work in progress amber
   [TicketState.REJECT_TO_MANAGER]: "#F59E0B",  // Warning amber
   [TicketState.REJECT_FINAL]: "#EF4444",       // Error red
-  [TicketState.COMPLETED]: "#10B981",          // Emerald green
+  [TicketState.Finished]: "#10B981",          // Emerald green
   [TicketState.REVIEWED]: "#8B5CF6",           // Purple
   [TicketState.REASSIGNED]: "#A855F7",         // Violet
   [TicketState.ESCALATED]: "#FB7185",          // Rose
@@ -60,9 +64,11 @@ const STATE_COLORS = Object.freeze({
 const STATE_LABELS_TH = Object.freeze({
   [TicketState.OPEN]: "สร้างเคสใหม่",
   [TicketState.ACCEPTED]: "รับงาน",
+  [TicketState.PLANED]: "วางแผนและกำหนดตารางเวลา",
+  [TicketState.IN_PROGRESS]: "เริ่มดำเนินการ",
   [TicketState.REJECT_TO_MANAGER]: "ปฏิเสธ รอการอนุมัติจากหัวหน้างาน",
   [TicketState.REJECT_FINAL]: "ปฏิเสธขั้นสุดท้าย",
-  [TicketState.COMPLETED]: "เสร็จสิ้น",
+  [TicketState.Finished]: "เสร็จสิ้น",
   [TicketState.REVIEWED]: "ตรวจสอบแล้ว รอการปิด",
   [TicketState.REASSIGNED]: "มอบหมายใหม่",
   [TicketState.ESCALATED]: "ส่งต่อให้หัวหน้างาน",
@@ -77,9 +83,11 @@ const STATE_LABELS_TH = Object.freeze({
 const STATE_LABELS_EN = Object.freeze({
   [TicketState.OPEN]: "New Ticket Created",
   [TicketState.ACCEPTED]: "Ticket Accepted",
+  [TicketState.PLANED]: "Planned and Scheduled",
+  [TicketState.IN_PROGRESS]: "Work In Progress",
   [TicketState.REJECT_TO_MANAGER]: "Rejected - Pending Manager Review",
   [TicketState.REJECT_FINAL]: "Rejected - Final Decision",
-  [TicketState.COMPLETED]: "Work Completed",
+  [TicketState.Finished]: "Work Finished",
   [TicketState.REVIEWED]: "Reviewed - Pending Closure",
   [TicketState.REASSIGNED]: "Reassigned",
   [TicketState.ESCALATED]: "Escalated to Manager",

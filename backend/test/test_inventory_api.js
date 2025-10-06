@@ -311,7 +311,7 @@ async function runInventoryTests() {
     console.error('❌ Test suite failed:', error.message);
   }
   
-  console.log('\n🏁 Inventory API Tests Completed');
+  console.log('\n🏁 Inventory API Tests Finished');
   console.log('='.repeat(50));
 }
 

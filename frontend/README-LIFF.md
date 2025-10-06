@@ -55,7 +55,7 @@ The app will be available at `http://localhost:5173`
 
 1. Open the app in your browser
 2. Click "Login with LINE"
-3. Complete LINE authentication
+3. Finish LINE authentication
 4. The app will authenticate with your backend and display user information
 
 ## Project Structure

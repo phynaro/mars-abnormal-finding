@@ -58,7 +58,7 @@ async function testForeignKeyErrors() {
       }
     }
 
-    console.log('\n🎉 Foreign key constraint error handling test completed!');
+    console.log('\n🎉 Foreign key constraint error handling test Finished!');
     console.log('\n📝 Note: To test with real data, make sure you have:');
     console.log('   - A plant with associated areas');
     console.log('   - An area with associated lines');

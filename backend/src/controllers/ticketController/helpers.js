@@ -6,7 +6,7 @@ const DEFAULT_FRONTEND_BASE_URL = 'http://localhost:3000';
 
 const ACTION_MAPPING = {
     L1: ['create', 'approve_review', 'reopen'],
-    L2: ['accept', 'reject', 'escalate', 'complete'],
+    L2: ['accept', 'reject', 'escalate', 'finish'],
     L3: ['reassign', 'reject_final'],
     L4: ['approve_close']
 };
@@ -47,6 +47,30 @@ const formatPersonName = (personRow, fallback = 'Unknown User') => {
     const last = personRow.LASTNAME ? personRow.LASTNAME.trim() : '';
     const combined = `${first} ${last}`.trim();
     return combined || fallback;
+};
+
+/**
+ * Send emails sequentially with rate limiting to avoid API rate limits
+ * @param {Array} emailPromises - Array of email sending functions
+ * @param {number} delayMs - Delay between emails in milliseconds (default: 600ms for 2 requests per second)
+ */
+const sendEmailsSequentially = async (emailPromises, delayMs = 600) => {
+    const results = [];
+    for (let i = 0; i < emailPromises.length; i++) {
+        try {
+            const result = await emailPromises[i]();
+            results.push(result);
+            
+            // Add delay between emails (except for the last one)
+            if (i < emailPromises.length - 1) {
+                await new Promise(resolve => setTimeout(resolve, delayMs));
+            }
+        } catch (error) {
+            console.error(`Error sending email ${i + 1}/${emailPromises.length}:`, error.message);
+            results.push({ success: false, error: error.message });
+        }
+    }
+    return results;
 };
 
 const mapImagesToLinePayload = (records = [], baseUrl = getBackendBaseUrl()) =>
@@ -196,7 +220,7 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
         const ticketResult = await pool.request()
             .input('ticket_id', sql.Int, ticketId)
             .query(`
-                SELECT puno, reported_by, assigned_to
+                SELECT puno, created_by, assigned_to
                 FROM Tickets 
                 WHERE id = @ticket_id
             `);
@@ -204,7 +228,7 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
         const ticket = ticketResult.recordset[0];
         if (!ticket) return [];
         
-        const { puno, reported_by, assigned_to } = ticket;
+        const { puno, created_by, assigned_to } = ticket;
         
         // 2. Get approvers based on action type using optimized query with LineID
         let approvers = [];
@@ -243,11 +267,12 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
         let specificUsers = [];
         switch (actionType) {
             case 'accept':
-            case 'complete':
+            case 'start':
+            case 'finish':
             case 'reject':
             case 'escalate':
                 // Get requester
-                const requester = await getUserById(pool, reported_by);
+                const requester = await getUserById(pool, created_by);
                 if (requester) {
                     specificUsers.push({
                         PERSONNO: requester.PERSONNO,
@@ -260,9 +285,37 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
                 }
                 break;
                 
+            case 'plan':
+                // Get creator (requester) and assignee for planning notifications
+                const creator_plan = await getUserById(pool, created_by);
+                const assignee_plan = await getUserById(pool, assigned_to);
+                
+                if (creator_plan) {
+                    specificUsers.push({
+                        PERSONNO: creator_plan.PERSONNO,
+                        PERSON_NAME: creator_plan.PERSON_NAME,
+                        EMAIL: creator_plan.EMAIL,
+                        LineID: creator_plan.LineID || null,
+                        notification_reason: 'Creator Notification',
+                        recipient_type: 'creator'
+                    });
+                }
+                
+                if (assignee_plan) {
+                    specificUsers.push({
+                        PERSONNO: assignee_plan.PERSONNO,
+                        PERSON_NAME: assignee_plan.PERSON_NAME,
+                        EMAIL: assignee_plan.EMAIL,
+                        LineID: assignee_plan.LineID || null,
+                        notification_reason: 'Assignee Notification',
+                        recipient_type: 'assignee'
+                    });
+                }
+                break;
+                
             case 'reassign':
                 // Get requester and assignee
-                const requester_rs = await getUserById(pool, reported_by);
+                const requester_rs = await getUserById(pool, created_by);
                 const assignee_rs = await getUserById(pool, assigned_to);
                 if (requester_rs) {
                     specificUsers.push({
@@ -331,7 +384,7 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
                 
             case 'approve_close':
                 // Get requester
-                const requester_close = await getUserById(pool, reported_by);
+                const requester_close = await getUserById(pool, created_by);
                 if (requester_close) {
                     specificUsers.push({
                         PERSONNO: requester_close.PERSONNO,
@@ -546,6 +599,7 @@ module.exports = {
     mapRecordset,
     safeSendEmail,
     safeSendLineNotification,
+    sendEmailsSequentially,
     runQuery,
     runStoredProcedure
 };

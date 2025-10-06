@@ -55,7 +55,7 @@ async function testLiveMessage() {
     console.log('\n🔄 Testing different states...');
     const states = [
       { state: abnFlexService.AbnCaseState.CREATED, comment: "เคสใหม่ - ทดสอบสถานะ CREATED" },
-      { state: abnFlexService.AbnCaseState.COMPLETED, comment: "งานเสร็จสิ้น - ทดสอบสถานะ COMPLETED" },
+      { state: abnFlexService.AbnCaseState.Finished, comment: "งานเสร็จสิ้น - ทดสอบสถานะ Finished" },
       { state: abnFlexService.AbnCaseState.ESCALATED, comment: "ส่งต่อ L3 - ทดสอบสถานะ ESCALATED" }
     ];
 
@@ -89,7 +89,7 @@ console.log(`   Frontend URL: ${process.env.FRONTEND_URL || 'Not set'}`);
 console.log();
 
 testLiveMessage().then(() => {
-  console.log('\n🏁 Test completed');
+  console.log('\n🏁 Test Finished');
 }).catch(error => {
   console.error('💥 Test error:', error);
   process.exit(1);

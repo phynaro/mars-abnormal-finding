@@ -20,6 +20,30 @@ const isEmailServiceAvailable = () => {
   return true;
 };
 
+/**
+ * Send emails sequentially with rate limiting to avoid API rate limits
+ * @param {Array} emailPromises - Array of email sending functions
+ * @param {number} delayMs - Delay between emails in milliseconds (default: 600ms for 2 requests per second)
+ */
+const sendEmailsSequentially = async (emailPromises, delayMs = 600) => {
+  const results = [];
+  for (let i = 0; i < emailPromises.length; i++) {
+    try {
+      const result = await emailPromises[i]();
+      results.push(result);
+      
+      // Add delay between emails (except for the last one)
+      if (i < emailPromises.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, delayMs));
+      }
+    } catch (error) {
+      console.error(`Error sending email ${i + 1}/${emailPromises.length}:`, error.message);
+      results.push({ data: null, error: error.message });
+    }
+  }
+  return results;
+};
+
 // Email templates
 const EMAIL_TEMPLATES = {
   verification: {
@@ -96,7 +120,7 @@ const EMAIL_TEMPLATES = {
           
           <div class="content">
             <p>Hello ${firstName},</p>
-            <p>Thank you for registering with the Mars CMMS System. To complete your registration and activate your account, please verify your email address.</p>
+            <p>Thank you for registering with the Mars CMMS System. To finish your registration and activate your account, please verify your email address.</p>
             
             <div style="text-align: center;">
               <a href="${verificationLink}" class="btn">Verify Email Address</a>
@@ -624,21 +648,21 @@ class EmailService {
         return { success: true, sentCount: 0 };
       }
 
-      // Send to all notification users (L2ForPU + actor)
+      // Send to all notification users (L2ForPU + actor) sequentially to avoid rate limits
       const emailPromises = notificationUsers.map(user => {
         if (user.EMAIL && user.EMAIL.trim() !== '') {
           console.log(`Sending email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
-          return resend.emails.send({
+          return () => resend.emails.send({
             from: this.fromEmail,
             to: [user.EMAIL],
             subject: EMAIL_TEMPLATES.newTicket.subject,
             html: EMAIL_TEMPLATES.newTicket.html(ticketData, reporterName),
           });
         }
-        return Promise.resolve({ data: null, error: null });
+        return () => Promise.resolve({ data: null, error: null });
       });
 
-      const results = await Promise.all(emailPromises);
+      const results = await sendEmailsSequentially(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
       
       console.log(`Ticket notification emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
@@ -705,11 +729,11 @@ class EmailService {
         return { success: true, sentCount: 0 };
       }
 
-      // Send to all notification users (requester + actor)
+      // Send to all notification users (requester + actor) sequentially to avoid rate limits
       const emailPromises = notificationUsers.map(user => {
         if (user.EMAIL && user.EMAIL.trim() !== '') {
           console.log(`Sending acceptance email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
-          return resend.emails.send({
+          return () => resend.emails.send({
             from: this.fromEmail,
             to: [user.EMAIL],
         subject: `Ticket Accepted - ${ticketData.ticket_number}`,
@@ -793,15 +817,15 @@ class EmailService {
               </div>
               
               <div class="content">
-                <p>Your ticket has been accepted and work has started. You will be notified when it's completed.</p>
+                <p>Your ticket has been accepted and work has started. You will be notified when it's Finished.</p>
                 
                 <div class="ticket-info">
                   <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                   <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
                   <p><span class="highlight">Accepted By:</span> ${acceptorName}</p>
-                  <p><span class="highlight">Status:</span> <span class="status-green">Work in Progress</span></p>
-                  ${ticketData.scheduled_complete ? `<p><span class="highlight">Scheduled Complete:</span> ${new Date(ticketData.scheduled_complete).toLocaleDateString()}</p>` : ''}
+                  <p><span class="highlight">Status:</span> <span class="status-green">Accepted</span></p>
+                  ${ticketData.schedule_finish ? `<p><span class="highlight">Scheduled Finish:</span> ${new Date(ticketData.schedule_finish).toLocaleDateString()}</p>` : ''}
                 </div>
                 
                 <div style="text-align: center;">
@@ -818,10 +842,10 @@ class EmailService {
         `,
           });
         }
-        return Promise.resolve({ data: null, error: null });
+        return () => Promise.resolve({ data: null, error: null });
       });
 
-      const results = await Promise.all(emailPromises);
+      const results = await sendEmailsSequentially(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
 
       console.log(`Ticket acceptance emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
@@ -846,7 +870,7 @@ class EmailService {
       const emailPromises = notificationUsers.map(user => {
         if (user.EMAIL && user.EMAIL.trim() !== '') {
           console.log(`Sending rejection email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
-          return resend.emails.send({
+          return () => resend.emails.send({
             from: this.fromEmail,
             to: [user.EMAIL],
         subject: `Ticket Rejected - ${ticketData.ticket_number}`,
@@ -955,10 +979,10 @@ class EmailService {
         `,
           });
         }
-        return Promise.resolve({ data: null, error: null });
+        return () => Promise.resolve({ data: null, error: null });
       });
 
-      const results = await Promise.all(emailPromises);
+      const results = await sendEmailsSequentially(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
 
       console.log(`Ticket rejection emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
@@ -970,9 +994,9 @@ class EmailService {
   }
 
   /**
-   * Send job completed notification to requestor
+   * Send job Finished notification to requestor
    */
-  async sendJobCompletedNotification(ticketData, completerName, completionNotes, downtimeAvoidance, costAvoidance, notificationUsers = []) {
+  async sendJobFinishedNotification(ticketData, finishrName, completionNotes, downtimeAvoidance, costAvoidance, notificationUsers = []) {
     try {
       if (!Array.isArray(notificationUsers) || notificationUsers.length === 0) {
         console.warn('No notification users provided for job completion notification');
@@ -983,17 +1007,17 @@ class EmailService {
       const emailPromises = notificationUsers.map(user => {
         if (user.EMAIL && user.EMAIL.trim() !== '') {
           console.log(`Sending completion email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
-          return resend.emails.send({
+          return () => resend.emails.send({
             from: this.fromEmail,
             to: [user.EMAIL],
-        subject: `Job Completed - ${ticketData.ticket_number}`,
+        subject: `Job Finished - ${ticketData.ticket_number}`,
         html: `
           <!DOCTYPE html>
           <html lang="en">
           <head>
             <meta charset="UTF-8">
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Job Completed</title>
+            <title>Job Finished</title>
             <style>
               body {
                 font-family: Arial, Helvetica, sans-serif;
@@ -1062,19 +1086,19 @@ class EmailService {
           <body>
             <div class="container">
               <div class="header">
-                <h2>Job Completed</h2>
+                <h2>Job Finished</h2>
                 <p>Ticket #${ticketData.ticket_number}</p>
               </div>
               
               <div class="content">
-                <p>Your ticket has been completed. Please review and close it if you're satisfied with the work.</p>
+                <p>Your ticket has been Finished. Please review and close it if you're satisfied with the work.</p>
                 
                 <div class="ticket-info">
                   <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                   <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
-                  <p><span class="highlight">Completed By:</span> ${completerName}</p>
-                  <p><span class="highlight">Status:</span> <span class="status-green">Completed</span></p>
+                  <p><span class="highlight">Finished By:</span> ${finishrName}</p>
+                  <p><span class="highlight">Status:</span> <span class="status-green">Finished</span></p>
                   <p><span class="highlight">Cost Avoidance:</span> ${costAvoidance ? `${costAvoidance.toLocaleString()} บาท` : '-'}</p>
                   <p><span class="highlight">Downtime Avoidance:</span> ${downtimeAvoidance ? `${downtimeAvoidance} ชั่วโมง` : '-'}</p>
                   <p><span class="highlight">Failure Mode:</span> ${ticketData.FailureModeName || '-'}</p>
@@ -1095,10 +1119,10 @@ class EmailService {
         `,
           });
         }
-        return Promise.resolve({ data: null, error: null });
+        return () => Promise.resolve({ data: null, error: null });
       });
 
-      const results = await Promise.all(emailPromises);
+      const results = await sendEmailsSequentially(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
 
       console.log(`Job completion emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
@@ -1123,7 +1147,7 @@ class EmailService {
       const emailPromises = notificationUsers.map(user => {
         if (user.EMAIL && user.EMAIL.trim() !== '') {
           console.log(`Sending escalation email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
-          return resend.emails.send({
+          return () => resend.emails.send({
             from: this.fromEmail,
             to: [user.EMAIL],
             subject: `Ticket Escalated - ${ticketData.ticket_number}`,
@@ -1232,10 +1256,10 @@ class EmailService {
         `,
           });
         }
-        return Promise.resolve({ data: null, error: null });
+        return () => Promise.resolve({ data: null, error: null });
       });
 
-      const results = await Promise.all(emailPromises);
+      const results = await sendEmailsSequentially(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
       
       console.log(`Ticket escalation emails sent successfully to ${successful.length} L3 approvers`);
@@ -1385,7 +1409,7 @@ class EmailService {
       const emailPromises = notificationUsers.map(user => {
         if (user.EMAIL && user.EMAIL.trim() !== '') {
           console.log(`Sending closure email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
-          return resend.emails.send({
+          return () => resend.emails.send({
             from: this.fromEmail,
             to: [user.EMAIL],
         subject: `Ticket Closed - ${ticketData.ticket_number}`,
@@ -1495,10 +1519,10 @@ class EmailService {
         `,
           });
         }
-        return Promise.resolve({ data: null, error: null });
+        return () => Promise.resolve({ data: null, error: null });
       });
 
-      const results = await Promise.all(emailPromises);
+      const results = await sendEmailsSequentially(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
 
       console.log(`Ticket closure emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
@@ -1523,7 +1547,7 @@ class EmailService {
       const emailPromises = notificationUsers.map(user => {
         if (user.EMAIL && user.EMAIL.trim() !== '') {
           console.log(`Sending review email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
-          return resend.emails.send({
+          return () => resend.emails.send({
             from: this.fromEmail,
             to: [user.EMAIL],
             subject: `Ticket Reviewed - ${ticketData.ticket_number}`,
@@ -1609,7 +1633,7 @@ class EmailService {
                   </div>
                   
                   <div class="content">
-                    <p>The requestor has reviewed and approved this completed ticket.</p>
+                    <p>The requestor has reviewed and approved this Finished ticket.</p>
                     
                     <div class="ticket-info">
                       <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
@@ -1637,10 +1661,10 @@ class EmailService {
             `,
           });
         }
-        return Promise.resolve({ data: null, error: null });
+        return () => Promise.resolve({ data: null, error: null });
       });
 
-      const results = await Promise.all(emailPromises);
+      const results = await sendEmailsSequentially(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
 
       console.log(`Ticket review emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
@@ -1665,7 +1689,7 @@ class EmailService {
       const emailPromises = notificationUsers.map(user => {
         if (user.EMAIL && user.EMAIL.trim() !== '') {
           console.log(`Sending reopen email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
-          return resend.emails.send({
+          return () => resend.emails.send({
             from: this.fromEmail,
             to: [user.EMAIL],
         subject: `Ticket Reopened - ${ticketData.ticket_number}`,
@@ -1748,10 +1772,10 @@ class EmailService {
         `,
           });
         }
-        return Promise.resolve({ data: null, error: null });
+        return () => Promise.resolve({ data: null, error: null });
       });
 
-      const results = await Promise.all(emailPromises);
+      const results = await sendEmailsSequentially(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
 
       console.log(`Ticket reopen emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);
@@ -1876,7 +1900,7 @@ class EmailService {
       const emailPromises = notificationUsers.map(user => {
         if (user.EMAIL && user.EMAIL.trim() !== '') {
           console.log(`Sending reassignment email notification to ${user.PERSON_NAME} (${user.EMAIL}) - ${user.notification_reason}`);
-          return resend.emails.send({
+          return () => resend.emails.send({
             from: this.fromEmail,
             to: [user.EMAIL],
         subject: `Ticket Reassigned - ${ticketData.ticket_number}`,
@@ -1985,10 +2009,10 @@ class EmailService {
         `,
           });
         }
-        return Promise.resolve({ data: null, error: null });
+        return () => Promise.resolve({ data: null, error: null });
       });
 
-      const results = await Promise.all(emailPromises);
+      const results = await sendEmailsSequentially(emailPromises);
       const successful = results.filter(result => result.data && !result.error);
 
       console.log(`Ticket reassignment emails sent successfully to ${successful.length}/${notificationUsers.length} recipients`);

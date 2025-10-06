@@ -211,9 +211,9 @@ const userController = {
             COUNT(*) as totalTickets,
             SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as openTickets,
             SUM(CASE WHEN assigned_to = @personNo AND status IN ('open', 'in_progress') THEN 1 ELSE 0 END) as assignedTickets,
-            SUM(CASE WHEN reported_by = @personNo AND status = 'completed' THEN 1 ELSE 0 END) as completedTickets
+            SUM(CASE WHEN created_by = @personNo AND status = 'Finished' THEN 1 ELSE 0 END) as FinishedTickets
           FROM Tickets 
-          WHERE reported_by = @personNo OR assigned_to = @personNo
+          WHERE created_by = @personNo OR assigned_to = @personNo
         `);
 
       const stats = statsResult.recordset[0];
@@ -229,7 +229,7 @@ const userController = {
             created_at as timestamp,
             status
           FROM Tickets 
-          WHERE reported_by = @personNo
+          WHERE created_by = @personNo
           
           UNION ALL
           
@@ -260,7 +260,7 @@ const userController = {
           totalTickets: stats.totalTickets || 0,
           openTickets: stats.openTickets || 0,
           assignedTickets: stats.assignedTickets || 0,
-          completedTickets: stats.completedTickets || 0,
+          FinishedTickets: stats.FinishedTickets || 0,
           recentActivity: recentActivity
         }
       });

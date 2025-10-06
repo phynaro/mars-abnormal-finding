@@ -39,7 +39,7 @@ async function testTicketSystem() {
     const userCount = await pool.request().query('SELECT COUNT(*) as count FROM Users');
     console.log(`✅ Users table accessible. Current user count: ${userCount.recordset[0].count}`);
 
-    console.log('\n🎉 Ticket system database test completed successfully!');
+    console.log('\n🎉 Ticket system database test Finished successfully!');
     console.log('\n📝 Next steps:');
     console.log('   1. Start the backend server: npm run dev');
     console.log('   2. Start the frontend: cd ../frontend && npm run dev');

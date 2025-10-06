@@ -1205,7 +1205,7 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
           ELSE 'P13'
         END as period,
         COUNT(*) as tickets,
-        COUNT(DISTINCT t.reported_by) as uniqueReporters
+        COUNT(DISTINCT t.created_by) as uniqueReporters
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
       ${ticketsWhereClause}
@@ -1324,8 +1324,8 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
 
 /**
  * Get Total Tickets Closed Per Period Data
- * Returns count of tickets completed (closed/resolved) per period
- * Uses completed_at field to determine completion date
+ * Returns count of tickets Finished (closed/resolved) per period
+ * Uses finished_at field to determine completion date
  * Supports plant/area filtering via PUExtension
  */
 exports.getTicketsClosedPerPeriod = async (req, res) => {
@@ -1339,8 +1339,8 @@ exports.getTicketsClosedPerPeriod = async (req, res) => {
       area
     } = req.query;
 
-    // Build WHERE clause for completed tickets with plant/area filtering via PUExtension
-    let ticketsWhereClause = `WHERE YEAR(t.completed_at) = ${parseInt(year)} AND t.status IN ('closed', 'resolved') AND t.completed_at IS NOT NULL`;
+    // Build WHERE clause for Finished tickets with plant/area filtering via PUExtension
+    let ticketsWhereClause = `WHERE YEAR(t.finished_at) = ${parseInt(year)} AND t.status IN ('closed', 'resolved') AND t.finished_at IS NOT NULL`;
     
     if (plant && plant !== 'all') {
       ticketsWhereClause += ` AND pe.plant = '${plant}'`;
@@ -1354,18 +1354,18 @@ exports.getTicketsClosedPerPeriod = async (req, res) => {
     const ticketsQuery = `
       SELECT 
         CASE 
-          WHEN MONTH(t.completed_at) = 1 THEN 'P1'
-          WHEN MONTH(t.completed_at) = 2 THEN 'P2'
-          WHEN MONTH(t.completed_at) = 3 THEN 'P3'
-          WHEN MONTH(t.completed_at) = 4 THEN 'P4'
-          WHEN MONTH(t.completed_at) = 5 THEN 'P5'
-          WHEN MONTH(t.completed_at) = 6 THEN 'P6'
-          WHEN MONTH(t.completed_at) = 7 THEN 'P7'
-          WHEN MONTH(t.completed_at) = 8 THEN 'P8'
-          WHEN MONTH(t.completed_at) = 9 THEN 'P9'
-          WHEN MONTH(t.completed_at) = 10 THEN 'P10'
-          WHEN MONTH(t.completed_at) = 11 THEN 'P11'
-          WHEN MONTH(t.completed_at) = 12 THEN 'P12'
+          WHEN MONTH(t.finished_at) = 1 THEN 'P1'
+          WHEN MONTH(t.finished_at) = 2 THEN 'P2'
+          WHEN MONTH(t.finished_at) = 3 THEN 'P3'
+          WHEN MONTH(t.finished_at) = 4 THEN 'P4'
+          WHEN MONTH(t.finished_at) = 5 THEN 'P5'
+          WHEN MONTH(t.finished_at) = 6 THEN 'P6'
+          WHEN MONTH(t.finished_at) = 7 THEN 'P7'
+          WHEN MONTH(t.finished_at) = 8 THEN 'P8'
+          WHEN MONTH(t.finished_at) = 9 THEN 'P9'
+          WHEN MONTH(t.finished_at) = 10 THEN 'P10'
+          WHEN MONTH(t.finished_at) = 11 THEN 'P11'
+          WHEN MONTH(t.finished_at) = 12 THEN 'P12'
           ELSE 'P13'
         END as period,
         COUNT(*) as ticketsClosed
@@ -1374,18 +1374,18 @@ exports.getTicketsClosedPerPeriod = async (req, res) => {
       ${ticketsWhereClause}
       GROUP BY 
         CASE 
-          WHEN MONTH(t.completed_at) = 1 THEN 'P1'
-          WHEN MONTH(t.completed_at) = 2 THEN 'P2'
-          WHEN MONTH(t.completed_at) = 3 THEN 'P3'
-          WHEN MONTH(t.completed_at) = 4 THEN 'P4'
-          WHEN MONTH(t.completed_at) = 5 THEN 'P5'
-          WHEN MONTH(t.completed_at) = 6 THEN 'P6'
-          WHEN MONTH(t.completed_at) = 7 THEN 'P7'
-          WHEN MONTH(t.completed_at) = 8 THEN 'P8'
-          WHEN MONTH(t.completed_at) = 9 THEN 'P9'
-          WHEN MONTH(t.completed_at) = 10 THEN 'P10'
-          WHEN MONTH(t.completed_at) = 11 THEN 'P11'
-          WHEN MONTH(t.completed_at) = 12 THEN 'P12'
+          WHEN MONTH(t.finished_at) = 1 THEN 'P1'
+          WHEN MONTH(t.finished_at) = 2 THEN 'P2'
+          WHEN MONTH(t.finished_at) = 3 THEN 'P3'
+          WHEN MONTH(t.finished_at) = 4 THEN 'P4'
+          WHEN MONTH(t.finished_at) = 5 THEN 'P5'
+          WHEN MONTH(t.finished_at) = 6 THEN 'P6'
+          WHEN MONTH(t.finished_at) = 7 THEN 'P7'
+          WHEN MONTH(t.finished_at) = 8 THEN 'P8'
+          WHEN MONTH(t.finished_at) = 9 THEN 'P9'
+          WHEN MONTH(t.finished_at) = 10 THEN 'P10'
+          WHEN MONTH(t.finished_at) = 11 THEN 'P11'
+          WHEN MONTH(t.finished_at) = 12 THEN 'P12'
           ELSE 'P13'
         END
       ORDER BY period
@@ -1665,16 +1665,16 @@ exports.getUserActivityData = async (req, res) => {
     // Get ticket counts by user for the specified time range and plant/area
     const userActivityQuery = `
       SELECT TOP 10
-        t.reported_by as user_id,
+        t.created_by as user_id,
         p.PERSON_NAME as user_name,
         u.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      INNER JOIN Person p ON t.reported_by = p.PERSONNO
+      INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${whereClause}
-      GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY ticket_count DESC, p.PERSON_NAME ASC
     `;
@@ -2544,11 +2544,11 @@ exports.getOntimeRateByArea = async (req, res) => {
       ontimeRateQuery = `
         SELECT 
           pe.plant as display_name,
-          COUNT(t.id) as total_completed,
-          COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
+          COUNT(t.id) as total_Finished,
+          COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) as ontime_Finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
-              ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
+              ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
         FROM Tickets t
@@ -2556,8 +2556,8 @@ exports.getOntimeRateByArea = async (req, res) => {
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
-          AND t.completed_at IS NOT NULL
-          AND t.scheduled_complete IS NOT NULL
+          AND t.finished_at IS NOT NULL
+          AND t.schedule_finish IS NOT NULL
           AND pe.plant IS NOT NULL
         GROUP BY pe.plant
         HAVING COUNT(t.id) > 0
@@ -2575,11 +2575,11 @@ exports.getOntimeRateByArea = async (req, res) => {
             WHEN pe.area IS NULL THEN 'Unknown Area'
             ELSE pe.area
           END as display_name,
-          COUNT(t.id) as total_completed,
-          COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
+          COUNT(t.id) as total_Finished,
+          COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) as ontime_Finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
-              ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
+              ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
         FROM Tickets t
@@ -2587,8 +2587,8 @@ exports.getOntimeRateByArea = async (req, res) => {
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
-          AND t.completed_at IS NOT NULL
-          AND t.scheduled_complete IS NOT NULL
+          AND t.finished_at IS NOT NULL
+          AND t.schedule_finish IS NOT NULL
           AND pe.plant = '${plant}'
         GROUP BY pe.area
         HAVING COUNT(t.id) > 0
@@ -2607,11 +2607,11 @@ exports.getOntimeRateByArea = async (req, res) => {
             WHEN pe.line IS NOT NULL THEN pe.line
             ELSE 'Unknown Equipment'
           END as display_name,
-          COUNT(t.id) as total_completed,
-          COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
+          COUNT(t.id) as total_Finished,
+          COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) as ontime_Finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
-              ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
+              ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
         FROM Tickets t
@@ -2619,8 +2619,8 @@ exports.getOntimeRateByArea = async (req, res) => {
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
-          AND t.completed_at IS NOT NULL
-          AND t.scheduled_complete IS NOT NULL
+          AND t.finished_at IS NOT NULL
+          AND t.schedule_finish IS NOT NULL
           AND pe.plant = '${plant}'
           AND pe.area = '${area}'
         GROUP BY 
@@ -2640,8 +2640,8 @@ exports.getOntimeRateByArea = async (req, res) => {
     const ontimeRateByAreaData = result.recordset.map(row => ({
       display_name: row.display_name,
       ontimeRate: row.ontime_rate_percentage,
-      totalCompleted: row.total_completed,
-      ontimeCompleted: row.ontime_completed
+      totalFinished: row.total_Finished,
+      ontimeFinished: row.ontime_Finished
     }));
 
     res.json({
@@ -2650,10 +2650,10 @@ exports.getOntimeRateByArea = async (req, res) => {
         ontimeRateByAreaData,
         summary: {
           totalItems: ontimeRateByAreaData.length,
-          totalCompleted: ontimeRateByAreaData.reduce((sum, item) => sum + item.totalCompleted, 0),
-          totalOntimeCompleted: ontimeRateByAreaData.reduce((sum, item) => sum + item.ontimeCompleted, 0),
+          totalFinished: ontimeRateByAreaData.reduce((sum, item) => sum + item.totalFinished, 0),
+          totalOntimeFinished: ontimeRateByAreaData.reduce((sum, item) => sum + item.ontimeFinished, 0),
           overallOntimeRate: ontimeRateByAreaData.length > 0 
-            ? Math.round((ontimeRateByAreaData.reduce((sum, item) => sum + item.ontimeCompleted, 0) / ontimeRateByAreaData.reduce((sum, item) => sum + item.totalCompleted, 0)) * 10000) / 100
+            ? Math.round((ontimeRateByAreaData.reduce((sum, item) => sum + item.ontimeFinished, 0) / ontimeRateByAreaData.reduce((sum, item) => sum + item.totalFinished, 0)) * 10000) / 100
             : 0,
           groupBy: summaryLabel,
           appliedFilters: {
@@ -2678,7 +2678,7 @@ exports.getOntimeRateByArea = async (req, res) => {
 
 /**
  * Get Ontime Rate by User Data
- * Returns percentage of tickets completed on time (completed_at < scheduled_complete)
+ * Returns percentage of tickets Finished on time (finished_at < schedule_finish)
  * Grouped by user with avatar support
  * Sorted from max to min (best performance first)
  * Only shown when specific plant/area is selected
@@ -2707,9 +2707,9 @@ exports.getOntimeRateByUser = async (req, res) => {
     let whereClause = `WHERE t.created_at >= '${startDate}' 
         AND t.created_at <= '${endDate}' 
         AND t.status = 'closed' 
-        AND t.completed_at IS NOT NULL
-        AND t.scheduled_complete IS NOT NULL
-        AND t.completed_by IS NOT NULL`;
+        AND t.finished_at IS NOT NULL
+        AND t.schedule_finish IS NOT NULL
+        AND t.finished_by IS NOT NULL`;
     
     if (plant && plant !== 'all') {
       whereClause += ` AND pe.plant = '${plant}'`;
@@ -2722,22 +2722,22 @@ exports.getOntimeRateByUser = async (req, res) => {
     // Get ontime rate data by user for the specified period and plant/area
     const ontimeRateByUserQuery = `
       SELECT 
-        t.completed_by as user_id,
+        t.finished_by as user_id,
         p.PERSON_NAME as user_name,
         u.AvatarUrl as avatar_url,
-        COUNT(t.id) as total_completed,
-        COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) as ontime_completed,
+        COUNT(t.id) as total_Finished,
+        COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) as ontime_Finished,
         CASE 
           WHEN COUNT(t.id) > 0 THEN 
-            ROUND((COUNT(CASE WHEN t.completed_at < t.scheduled_complete THEN 1 END) * 100.0) / COUNT(t.id), 2)
+            ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
           ELSE 0 
         END as ontime_rate_percentage
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      INNER JOIN Person p ON t.completed_by = p.PERSONNO
+      INNER JOIN Person p ON t.finished_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${whereClause}
-      GROUP BY t.completed_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.finished_by, p.PERSON_NAME, u.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY ontime_rate_percentage DESC
     `;
@@ -2765,8 +2765,8 @@ exports.getOntimeRateByUser = async (req, res) => {
         bgColor: bgColor,
         avatar: row.avatar_url,
         ontimeRate: row.ontime_rate_percentage,
-        totalCompleted: row.total_completed,
-        ontimeCompleted: row.ontime_completed
+        totalFinished: row.total_Finished,
+        ontimeFinished: row.ontime_Finished
       };
     });
 
@@ -2776,10 +2776,10 @@ exports.getOntimeRateByUser = async (req, res) => {
         ontimeRateByUserData,
         summary: {
           totalUsers: ontimeRateByUserData.length,
-          totalCompleted: ontimeRateByUserData.reduce((sum, item) => sum + item.totalCompleted, 0),
-          totalOntimeCompleted: ontimeRateByUserData.reduce((sum, item) => sum + item.ontimeCompleted, 0),
+          totalFinished: ontimeRateByUserData.reduce((sum, item) => sum + item.totalFinished, 0),
+          totalOntimeFinished: ontimeRateByUserData.reduce((sum, item) => sum + item.ontimeFinished, 0),
           overallOntimeRate: ontimeRateByUserData.length > 0 
-            ? Math.round((ontimeRateByUserData.reduce((sum, item) => sum + item.ontimeCompleted, 0) / ontimeRateByUserData.reduce((sum, item) => sum + item.totalCompleted, 0)) * 10000) / 100
+            ? Math.round((ontimeRateByUserData.reduce((sum, item) => sum + item.ontimeFinished, 0) / ontimeRateByUserData.reduce((sum, item) => sum + item.totalFinished, 0)) * 10000) / 100
             : 0
         }
       }
@@ -2797,7 +2797,7 @@ exports.getOntimeRateByUser = async (req, res) => {
 
 /**
  * Get Ticket Average Resolve Duration by User Data
- * Returns average resolve time from created_at to completed_at for closed tickets
+ * Returns average resolve time from created_at to finished_at for closed tickets
  * Grouped by user with avatar support
  * Sorted from min to max (best performance first)
  * Only shown when specific plant/area is selected
@@ -2826,8 +2826,8 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
     let whereClause = `WHERE t.created_at >= '${startDate}' 
         AND t.created_at <= '${endDate}' 
         AND t.status = 'closed' 
-        AND t.completed_at IS NOT NULL
-        AND t.completed_by IS NOT NULL`;
+        AND t.finished_at IS NOT NULL
+        AND t.finished_by IS NOT NULL`;
     
     if (plant && plant !== 'all') {
       whereClause += ` AND pe.plant = '${plant}'`;
@@ -2840,17 +2840,17 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
     // Get ticket resolve duration data by user for the specified period and plant/area
     const resolveDurationByUserQuery = `
       SELECT 
-        t.completed_by as user_id,
+        t.finished_by as user_id,
         p.PERSON_NAME as user_name,
         u.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
-        AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
+        AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      INNER JOIN Person p ON t.completed_by = p.PERSONNO
+      INNER JOIN Person p ON t.finished_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${whereClause}
-      GROUP BY t.completed_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.finished_by, p.PERSON_NAME, u.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY avg_resolve_hours ASC
     `;
@@ -2949,13 +2949,13 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
         SELECT 
           pe.plant as display_name,
           COUNT(t.id) as ticket_count,
-          AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
+          AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
         FROM Tickets t
         LEFT JOIN PUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
-          AND t.completed_at IS NOT NULL
+          AND t.finished_at IS NOT NULL
           AND pe.plant IS NOT NULL
         GROUP BY pe.plant
         HAVING COUNT(t.id) > 0
@@ -2974,13 +2974,13 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
             ELSE pe.area
           END as display_name,
           COUNT(t.id) as ticket_count,
-          AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
+          AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
         FROM Tickets t
         LEFT JOIN PUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
-          AND t.completed_at IS NOT NULL
+          AND t.finished_at IS NOT NULL
           AND pe.plant = '${plant}'
         GROUP BY pe.area
         HAVING COUNT(t.id) > 0
@@ -3000,13 +3000,13 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
             ELSE 'Unknown Equipment'
           END as display_name,
           COUNT(t.id) as ticket_count,
-          AVG(DATEDIFF(HOUR, t.created_at, t.completed_at)) as avg_resolve_hours
+          AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
         FROM Tickets t
         LEFT JOIN PUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
-          AND t.completed_at IS NOT NULL
+          AND t.finished_at IS NOT NULL
           AND pe.plant = '${plant}'
           AND pe.area = '${area}'
         GROUP BY 
@@ -3275,17 +3275,17 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
     // Get cost impact data by reporter for the specified period and plant/area
     const costImpactReporterQuery = `
       SELECT TOP 10
-        t.reported_by as user_id,
+        t.created_by as user_id,
         p.PERSON_NAME as user_name,
         u.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      INNER JOIN Person p ON t.reported_by = p.PERSONNO
+      INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${whereClause}
-      GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
       HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
       ORDER BY total_cost_avoidance DESC
     `;
@@ -3379,17 +3379,17 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
     // Get downtime impact data by reporter for the specified period and plant/area
     const downtimeImpactReporterQuery = `
       SELECT TOP 10
-        t.reported_by as user_id,
+        t.created_by as user_id,
         p.PERSON_NAME as user_name,
         u.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      INNER JOIN Person p ON t.reported_by = p.PERSONNO
+      INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${whereClause}
-      GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
       HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
       ORDER BY total_downtime_hours DESC
     `;
@@ -3615,7 +3615,7 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     const currentKPIsQuery = `
       SELECT 
         COUNT(*) as totalTickets,
-        SUM(CASE WHEN t.status IN ('closed', 'completed') THEN 1 ELSE 0 END) as closedTickets,
+        SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedTickets,
         SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
         SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
@@ -3631,7 +3631,7 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       compareKPIsQuery = `
         SELECT 
           COUNT(*) as totalTickets,
-          SUM(CASE WHEN t.status IN ('closed', 'completed') THEN 1 ELSE 0 END) as closedTickets,
+          SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedTickets,
           SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
           SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
           ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
@@ -3645,46 +3645,46 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     // Get top performers for current period
     const topPerformersQuery = `
       SELECT TOP 1
-        t.reported_by as personno,
+        t.created_by as personno,
         p.PERSON_NAME as personName,
         u.AvatarUrl as avatarUrl,
         COUNT(*) as ticketCount
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      LEFT JOIN Person p ON t.reported_by = p.PERSONNO
+      LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${currentWhereClause}
-      GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
       ORDER BY COUNT(*) DESC
     `;
 
     const topCostSaverQuery = `
       SELECT TOP 1
-        t.reported_by as personno,
+        t.created_by as personno,
         p.PERSON_NAME as personName,
         u.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.cost_avoidance), 0) as totalSavings
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      LEFT JOIN Person p ON t.reported_by = p.PERSONNO
+      LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${currentWhereClause}
-      GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
       ORDER BY totalSavings DESC
     `;
 
     const topDowntimeSaverQuery = `
       SELECT TOP 1
-        t.reported_by as personno,
+        t.created_by as personno,
         p.PERSON_NAME as personName,
         u.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeSaved
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      LEFT JOIN Person p ON t.reported_by = p.PERSONNO
+      LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       ${currentWhereClause}
-      GROUP BY t.reported_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
       ORDER BY totalDowntimeSaved DESC
     `;
 

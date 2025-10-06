@@ -124,7 +124,7 @@ async function testGetSingleWorkOrder(workOrderId = 201635) {
       // Raw field count
       console.log(`\n📈 Raw Database Fields: ${Object.keys(wo.allFields || {}).length} fields available`);
       
-      console.log('\n✅ Single work order test completed successfully');
+      console.log('\n✅ Single work order test Finished successfully');
       return wo;
     } else {
       console.error('❌ Failed to retrieve work order');
@@ -328,7 +328,7 @@ async function runAllTests() {
     console.error('❌ Test suite failed:', error.message);
   }
   
-  console.log('\n🏁 Work Order API Tests Completed');
+  console.log('\n🏁 Work Order API Tests Finished');
   console.log('='.repeat(60));
 }
 
@@ -347,7 +347,7 @@ async function quickTest(workOrderId = 201635) {
     console.log(`   Work Order: ${workOrder.woCode}`);
     console.log(`   Status: ${workOrder.status?.name}`);
     console.log(`   Problem: ${workOrder.problem?.substring(0, 50)}...`);
-    console.log('✅ Quick test completed');
+    console.log('✅ Quick test Finished');
   } else {
     console.log('❌ Quick test failed');
   }

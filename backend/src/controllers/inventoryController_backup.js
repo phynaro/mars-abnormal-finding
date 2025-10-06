@@ -260,7 +260,7 @@ exports.getInventoryItemById = async (req, res) => {
       partType: item.PARTTYPE,
       isActive: item.FLAGACTIVE === 'T',
       
-      // Complete item details
+      // Finish item details
       costs: {
         unitCost: item.UNITCOST,
         averageCost: item.AVGCOST,
@@ -970,7 +970,7 @@ exports.getLowStockItems = async (req, res) => {
   }
 };
 
-// Additional placeholder functions for completeness
+// Additional placeholder functions for finishness
 exports.getStoreBalances = async (req, res) => {
   res.json({ success: true, data: [], message: 'Store balances endpoint - to be implemented' });
 };

@@ -2722,10 +2722,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         formatter={(value, name) => {
                           if (name === 'ontimeRate') {
                             return [`${value}%`, t('dashboard.ontimeRate')];
-                          } else if (name === 'totalCompleted') {
-                            return [`${value} ${t('dashboard.tickets')}`, t('dashboard.totalCompleted')];
-                          } else if (name === 'ontimeCompleted') {
-                            return [`${value} ${t('dashboard.tickets')}`, t('dashboard.ontimeCompleted')];
+                          } else if (name === 'totalFinished') {
+                            return [`${value} ${t('dashboard.tickets')}`, t('dashboard.totalFinished')];
+                          } else if (name === 'ontimeFinished') {
+                            return [`${value} ${t('dashboard.tickets')}`, t('dashboard.ontimeFinished')];
                           }
                           return [value, name];
                         }}
@@ -2780,10 +2780,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         formatter={(value, name) => {
                           if (name === 'ontimeRate') {
                             return [`${value}%`, 'Ontime Rate'];
-                          } else if (name === 'totalCompleted') {
-                            return [`${value} tickets`, 'Total Completed'];
-                          } else if (name === 'ontimeCompleted') {
-                            return [`${value} tickets`, 'Ontime Completed'];
+                          } else if (name === 'totalFinished') {
+                            return [`${value} tickets`, 'Total Finished'];
+                          } else if (name === 'ontimeFinished') {
+                            return [`${value} tickets`, 'Ontime Finished'];
                           }
                           return [value, name];
                         }}

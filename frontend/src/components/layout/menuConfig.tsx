@@ -42,7 +42,7 @@ export const menuItems: MenuItem[] = [
     permissionLevel: 1,
     children: [
      // { id: 'dashboard-abnormal', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal', permissionLevel: 1 },
-      { id: 'dashboard-abnormal-v2', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal-v2', permissionLevel: 1 },
+      { id: 'dashboard-abnormal', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal', permissionLevel: 1 },
       // { id: 'dashboard-backlog', label: 'Backlog', icon: <FileText className="h-4 w-4" />, path: '/dashboard/backlog', permissionLevel: 1 },
       // { id: 'dashboard-maintenance-kpi', label: 'Maintenance KPI', icon: <BarChart3 className="h-4 w-4" />, path: '/dashboard/maintenance-kpi', permissionLevel: 1 },
       // { id: 'dashboard-preventive-maintenance', label: 'Preventive Maintenance', icon: <Clock className="h-4 w-4" />, path: '/dashboard/preventive-maintenance', permissionLevel: 1 },
@@ -97,15 +97,15 @@ export const menuItems: MenuItem[] = [
     permissionLevel: 1,
   },
   {
-    id: 'assets',
+    id: 'settings',
     label: 'Settings',
     icon: <Settings className="h-5 w-5" />,
-    path: '/assets',
+    path: '/settings',
     permissionLevel: 1,
     children: [
-      { id: 'assets-hierarchy', label: 'Hierarchy View', icon: <TrendingUp className="h-4 w-4" />, path: '/assets/hierarchy', permissionLevel: 1 },
-      { id: 'assets-ticket-approvals', label: 'Ticket Approvals', icon: <UserCheck className="h-4 w-4" />, path: '/assets/ticket-approvals', permissionLevel: 1 },
-      { id: 'dashboard-targets', label: 'Target Management', icon: <Target className="h-4 w-4" />, path: '/dashboard/targets', permissionLevel: 1 },
+      { id: 'settings-hierarchy', label: 'Hierarchy View', icon: <TrendingUp className="h-4 w-4" />, path: '/settings/hierarchy', permissionLevel: 1 },
+      { id: 'settings-ticket-approvals', label: 'Ticket Approvals', icon: <UserCheck className="h-4 w-4" />, path: '/settings/ticket-approvals', permissionLevel: 1 },
+      { id: 'settings-targets', label: 'Target Management', icon: <Target className="h-4 w-4" />, path: '/settings/targets', permissionLevel: 1 },
     ]
   },
   

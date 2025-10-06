@@ -112,7 +112,7 @@ export const ViewTicketModal: React.FC<ViewTicketModalProps> = ({
         return <AlertTriangle className="w-4 h-4" />;
       case 'rejected_final':
         return <AlertTriangle className="w-4 h-4" />;
-      case 'completed':
+      case 'Finished':
         return <AlertTriangle className="w-4 h-4" />;
       case 'escalated':
         return <AlertTriangle className="w-4 h-4" />;
@@ -145,7 +145,7 @@ export const ViewTicketModal: React.FC<ViewTicketModalProps> = ({
     closed: 'bg-gray-100 text-gray-800',
     rejected_pending_l3_review: 'bg-orange-100 text-orange-800',
     rejected_final: 'bg-red-100 text-red-800',
-    completed: 'bg-green-100 text-green-800',
+    Finished: 'bg-green-100 text-green-800',
     escalated: 'bg-red-100 text-red-800',
     reopened_in_progress: 'bg-purple-100 text-purple-800'
   };
@@ -252,16 +252,16 @@ export const ViewTicketModal: React.FC<ViewTicketModalProps> = ({
                     }
                   </span>
                 </div>
-                {currentTicket.resolved_at && (
+                {/* {currentTicket.resolved_at && (
                   <div className="flex justify-between">
                     <span className="font-medium">Resolved:</span>
                     <span className="text-gray-600">{formatDate(currentTicket.resolved_at)}</span>
                   </div>
-                )}
-                {currentTicket.closed_at && (
+                )} */}
+                {currentTicket.approved_at && (
                   <div className="flex justify-between">
                     <span className="font-medium">Closed:</span>
-                    <span className="text-gray-600">{formatDate(currentTicket.closed_at)}</span>
+                    <span className="text-gray-600">{formatDate(currentTicket.approved_at)}</span>
                   </div>
                 )}
               </CardContent>

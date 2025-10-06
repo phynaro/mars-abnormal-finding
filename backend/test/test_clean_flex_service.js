@@ -25,7 +25,7 @@ const testPayload = {
 const testStates = [
   { state: abnFlexService.AbnCaseState.CREATED, extraData: { comment: "เคสใหม่ รอการยอมรับจาก L2" } },
   { state: abnFlexService.AbnCaseState.ACCEPTED, extraData: { comment: "งานได้รับการยอมรับแล้ว" } },
-  { state: abnFlexService.AbnCaseState.COMPLETED, extraData: { comment: "งานเสร็จสมบูรณ์แล้ว" } },
+  { state: abnFlexService.AbnCaseState.Finished, extraData: { comment: "งานเสร็จสมบูรณ์แล้ว" } },
   { state: abnFlexService.AbnCaseState.REJECT_FINAL, extraData: { comment: "งานถูกปฏิเสธ" } }
 ];
 
@@ -83,7 +83,7 @@ try {
     ...testPayload,
     extraKVs: [
       { label: "Priority", value: "High" },
-      { label: "Scheduled Complete", value: "22/9/2568 14:30" },
+      { label: "Scheduled Finish", value: "22/9/2568 14:30" },
       { label: "Cost Avoidance", value: "50,000 บาท" }
     ]
   };
@@ -99,7 +99,7 @@ try {
   console.error('❌ Extended payload test failed:', error.message);
 }
 
-console.log('\n🎉 All tests completed!');
+console.log('\n🎉 All tests Finished!');
 console.log('\n📚 Usage in Ticket Controller:');
 console.log(`
 const abnFlexService = require('../services/abnormalFindingFlexService');

@@ -103,7 +103,7 @@ async function testBacklogEndpoints() {
       console.log('✅ Correctly caught error:', error.response?.data?.message);
     }
 
-    console.log('\n🎉 All tests completed!');
+    console.log('\n🎉 All tests Finished!');
 
   } catch (error) {
     console.error('💥 Test suite failed:', error.message);

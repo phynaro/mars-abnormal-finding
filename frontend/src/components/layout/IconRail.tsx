@@ -35,7 +35,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
     <div className="sticky top-0 self-start flex h-[100dvh] flex-col justify-between bg-primary text-primary-foreground w-10 min-w-[48px] flex-none">
       <TooltipProvider>
         <div className="flex flex-col items-center py-3 gap-2">
-          {menuItems.filter(i => i.id !== 'settings').map(item => {
+          {menuItems.map(item => {
             const isActive = forceHighlightById ? (activeId === item.id) : location.pathname.startsWith(item.path);
             return (
               <Tooltip key={item.id}>

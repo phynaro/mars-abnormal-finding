@@ -73,9 +73,9 @@ async function testHierarchyAPIs() {
     
     console.log('\n🎯 Features Implemented:');
     console.log('1. ✅ Hierarchical dropdowns (Plant → Area → Line → Machine)');
-    console.log('2. ✅ PUCODE search with autocomplete');
+    console.log('2. ✅ PUCODE search with autofinish');
     console.log('3. ✅ Automatic PUCODE generation from selections');
-    console.log('4. ✅ Assignee search with autocomplete');
+    console.log('4. ✅ Assignee search with autofinish');
     console.log('5. ✅ File upload for attachments');
     console.log('6. ✅ Form validation');
     console.log('7. ✅ Cost avoidance and downtime tracking');

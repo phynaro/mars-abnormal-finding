@@ -116,7 +116,7 @@ const ProfilePage: React.FC = () => {
     setShowCropper(true);
   };
 
-  const onCropComplete = useCallback((_: any, croppedPixels: any) => {
+  const onCropFinish = useCallback((_: any, croppedPixels: any) => {
     setCroppedAreaPixels(croppedPixels);
   }, []);
 
@@ -412,7 +412,7 @@ const ProfilePage: React.FC = () => {
                 aspect={1}
                 onCropChange={setCrop}
                 onZoomChange={setZoom}
-                onCropComplete={onCropComplete}
+                onCropFinish={onCropFinish}
                 restrictPosition={false}
               />
             )}

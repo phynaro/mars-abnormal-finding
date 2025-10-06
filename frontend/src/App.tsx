@@ -46,7 +46,6 @@ import TicketManagementPage from './pages/TicketManagementPage';
 import TicketDetailsPage from './pages/TicketDetailsPage';
 import TicketCreatePage from './pages/TicketCreatePage';
 import TicketCreateWizardPage from './pages/TicketCreateWizardPage';
-import NewTicketForm from './pages/NewTicketForm';
 import ProfilePage from './pages/ProfilePage';
 import HierarchyViewPage from './pages/HierarchyViewPage';
 import TicketApprovalManagementPage from './pages/TicketApprovalManagementPage';
@@ -147,7 +146,6 @@ const AppContent: React.FC = () => {
           <Route path="home" element={<HomePage />} />
           <Route path="dashboard" element={<Navigate to="/dashboard/abnormal" replace />} />
           <Route path="dashboard/abnormal" element={<AbnormalReportDashboardV2Page />} />
-          <Route path="dashboard/abnormal-v2" element={<AbnormalReportDashboardV2Page />} />
           <Route path="dashboard/maintenance-kpi" element={<DashboardMaintenanceKPIPage />} />
           <Route path="dashboard/preventive-maintenance" element={<DashboardPreventiveMaintenancePage />} />
           <Route path="dashboard/calibration" element={<DashboardCalibrationPage />} />
@@ -156,7 +154,7 @@ const AppContent: React.FC = () => {
           <Route path="dashboard/backlog" element={<DashboardBacklogPage />} />
           <Route path="dashboard/backlog/department/:deptCode" element={<DashboardBacklogDetailPage />} />
           <Route path="dashboard/backlog/user/:personName" element={<DashboardBacklogDetailPage />} />
-          <Route path="dashboard/targets" element={<TargetManagementPage />} />
+         
           
           {/* Maintenance Routes */}
           <Route path="maintenance" element={<WorkOrdersPage />} />
@@ -182,15 +180,15 @@ const AppContent: React.FC = () => {
           <Route path="tickets" element={<TicketManagementPage />} />
           <Route path="tickets/create" element={<TicketCreatePage />} />
           <Route path="tickets/create/wizard" element={<TicketCreateWizardPage />} />
-          <Route path="tickets/create/new" element={<NewTicketForm />} />
+         
           <Route path="tickets/:ticketId" element={<TicketDetailsPage />} />
           <Route path="profile" element={<ProfilePage />} />
 
           {/* Asset Management Routes */}
-          <Route path="assets" element={<HierarchyViewPage />} />
-          <Route path="assets/hierarchy" element={<HierarchyViewPage />} />
-          <Route path="assets/ticket-approvals" element={<TicketApprovalManagementPage />} />
-
+          <Route path="settings" element={<HierarchyViewPage />} />
+          <Route path="settings/hierarchy" element={<HierarchyViewPage />} />
+          <Route path="settings/ticket-approvals" element={<TicketApprovalManagementPage />} />
+          <Route path="settings/targets" element={<TargetManagementPage />} />
           {/* Spare Part (Inventory) */}
           <Route path="spare" element={<InventoryOverviewPage />} />
           <Route path="spare/overview" element={<InventoryOverviewPage />} />

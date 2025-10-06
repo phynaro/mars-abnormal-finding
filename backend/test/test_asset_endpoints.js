@@ -233,7 +233,7 @@ async function runTests() {
     await testGetAssetHierarchy(siteNo);
   }
   
-  console.log('\n✅ Asset Management API Tests Completed!');
+  console.log('\n✅ Asset Management API Tests Finished!');
 }
 
 // Run the tests

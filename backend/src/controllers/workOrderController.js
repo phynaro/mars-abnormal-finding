@@ -366,7 +366,7 @@ exports.getWorkOrderById = async (req, res) => {
       cause: wo.WO_CAUSE,
       action: wo.WO_ACTION,
       
-      // Complete work order data structure similar to getWorkOrders
+      // Finish work order data structure similar to getWorkOrders
       // ... (same mapping as above)
       
       // All additional fields from the WO table
@@ -397,7 +397,7 @@ exports.getWorkOrderStats = async (req, res) => {
       SELECT 
         COUNT(*) as totalWorkOrders,
         SUM(CASE WHEN ws.STATUSTYPE = 'N' THEN 1 ELSE 0 END) as activeWorkOrders,
-        SUM(CASE WHEN ws.STATUSTYPE = 'S' THEN 1 ELSE 0 END) as completedWorkOrders,
+        SUM(CASE WHEN ws.STATUSTYPE = 'S' THEN 1 ELSE 0 END) as FinishedWorkOrders,
         SUM(CASE WHEN wo.WOSTATUSNO = 1 THEN 1 ELSE 0 END) as initiatedWorkOrders,
         SUM(CASE WHEN wo.WOSTATUSNO = 4 THEN 1 ELSE 0 END) as inProgressWorkOrders,
         SUM(CASE WHEN wo.WOSTATUSNO = 5 THEN 1 ELSE 0 END) as finishedWorkOrders,
@@ -445,7 +445,7 @@ exports.getWorkOrderStats = async (req, res) => {
         overview: {
           total: stats.totalWorkOrders,
           active: stats.activeWorkOrders,
-          completed: stats.completedWorkOrders,
+          Finished: stats.FinishedWorkOrders,
           initiated: stats.initiatedWorkOrders,
           inProgress: stats.inProgressWorkOrders,
           finished: stats.finishedWorkOrders,
@@ -678,7 +678,7 @@ exports.getWorkOrderTasks = async (req, res) => {
         Remark as remark,
         FinishDate as finishDate,
         FinishTime as finishTime,
-        NotComplete as isNotComplete,
+        NotFinish as isNotFinish,
         InstallRemove as installRemove,
         SerialNo as serialNumber,
         IMG as imagePath,
@@ -714,7 +714,7 @@ exports.getWorkOrderTasks = async (req, res) => {
       remark: task.remark,
       finishDate: task.finishDate,
       finishTime: task.finishTime,
-      isNotComplete: task.isNotComplete === 'T',
+      isNotFinish: task.isNotFinish === 'T',
       installRemove: task.installRemove,
       serialNumber: task.serialNumber,
       images: {

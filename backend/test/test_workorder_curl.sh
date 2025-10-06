@@ -145,11 +145,11 @@ else
 fi
 
 echo ""
-echo -e "${BLUE}🏁 Test Completed${NC}"
+echo -e "${BLUE}🏁 Test Finished${NC}"
 echo "=================================="
 echo "Generated files:"
 echo "  - workorder_${WORK_ORDER_ID}_response.json"
 echo "  - workorder_${WORK_ORDER_ID}_resources.json"
 echo "  - workorder_${WORK_ORDER_ID}_tasks.json"
 echo ""
-echo -e "${GREEN}All tests completed successfully!${NC}"
+echo -e "${GREEN}All tests Finished successfully!${NC}"

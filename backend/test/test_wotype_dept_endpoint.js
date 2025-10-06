@@ -140,7 +140,7 @@ async function runAllTests() {
   await testDifferentSites();
   await testErrorHandling();
   
-  console.log('\n\n🎉 All tests completed!');
+  console.log('\n\n🎉 All tests Finished!');
   console.log('=' .repeat(80));
 }
 

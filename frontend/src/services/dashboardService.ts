@@ -346,8 +346,8 @@ export interface CostImpactLeaderboardResponse {
 export interface OntimeRateByAreaDataPoint {
   display_name: string;
   ontimeRate: number;
-  totalCompleted: number;
-  ontimeCompleted: number;
+  totalFinished: number;
+  ontimeFinished: number;
 }
 
 export interface OntimeRateByAreaResponse {
@@ -356,8 +356,8 @@ export interface OntimeRateByAreaResponse {
     ontimeRateByAreaData: OntimeRateByAreaDataPoint[];
     summary: {
       totalItems: number;
-      totalCompleted: number;
-      totalOntimeCompleted: number;
+      totalFinished: number;
+      totalOntimeFinished: number;
       overallOntimeRate: number;
       groupBy: string;
       appliedFilters: {
@@ -377,8 +377,8 @@ export interface OntimeRateByUserDataPoint {
   bgColor: string;
   avatar: string | null;
   ontimeRate: number;
-  totalCompleted: number;
-  ontimeCompleted: number;
+  totalFinished: number;
+  ontimeFinished: number;
 }
 
 export interface OntimeRateByUserResponse {
@@ -387,8 +387,8 @@ export interface OntimeRateByUserResponse {
     ontimeRateByUserData: OntimeRateByUserDataPoint[];
     summary: {
       totalUsers: number;
-      totalCompleted: number;
-      totalOntimeCompleted: number;
+      totalFinished: number;
+      totalOntimeFinished: number;
       overallOntimeRate: number;
     };
   };

@@ -105,3 +105,5 @@ helps/
 mssql-mcp-node/
 
 backend/database/
+backend/helps/
+helps/

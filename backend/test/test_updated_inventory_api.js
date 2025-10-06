@@ -52,7 +52,7 @@ async function testUpdatedInventoryAPI() {
       console.log('');
     }
 
-    console.log('🎉 All updated inventory tests completed successfully!');
+    console.log('🎉 All updated inventory tests Finished successfully!');
 
     // Compare current vs historical data
     console.log('\n📈 Data Source Comparison Summary:');
@@ -88,7 +88,7 @@ async function performanceComparisonTest() {
     await Promise.all(promises);
     const endTime = Date.now();
     
-    console.log(`✅ Current data queries completed in ${endTime - startTime}ms`);
+    console.log(`✅ Current data queries Finished in ${endTime - startTime}ms`);
     console.log('📊 This should be faster than the previous version using IV_Store_Bal');
 
   } catch (error) {
@@ -125,7 +125,7 @@ async function testDataAccuracy() {
       console.log('');
     }
 
-    console.log('✅ Data accuracy verification completed');
+    console.log('✅ Data accuracy verification Finished');
 
   } catch (error) {
     console.error('❌ Data accuracy test failed:', error.message);

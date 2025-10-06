@@ -123,7 +123,7 @@ async function runSimpleTests() {
   // Test asset endpoints
   await testAssetEndpoints();
   
-  console.log('\n✅ Simple Asset Management API Tests Completed!');
+  console.log('\n✅ Simple Asset Management API Tests Finished!');
 }
 
 // Run the tests
