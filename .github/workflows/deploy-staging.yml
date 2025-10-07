@@ -33,6 +33,8 @@ jobs:
 
       - name: Create environment files
         run: |
+          cd /opt/mars-abnormal-finding
+          mkdir -p backend frontend
           # Create backend .env.development
           cat > backend/.env.development << EOF
           NODE_ENV=development
