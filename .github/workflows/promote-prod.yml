@@ -34,7 +34,8 @@ jobs:
             echo "❌ Image SHA is required"
             exit 1
           fi
-          
+
+          cd /opt/mars-abnormal-finding
           echo "✅ Deployment confirmed for SHA: ${{ github.event.inputs.image_sha }}"
 
       - name: Checkout code
@@ -75,14 +76,14 @@ jobs:
           # Create backup of current production state
           if docker compose -f docker compose.production.yml ps | grep -q "Up"; then
             echo "Creating backup of current production deployment..."
-            docker compose -f docker compose.production.yml ps > production_backup_$(date +%Y%m%d_%H%M%S).txt
-            docker compose -f docker compose.production.yml logs > production_logs_$(date +%Y%m%d_%H%M%S).txt
+            docker compose -f docker-compose.production.yml ps > production_backup_$(date +%Y%m%d_%H%M%S).txt
+            docker compose -f docker-compose.production.yml logs > production_logs_$(date +%Y%m%d_%H%M%S).txt
           fi
 
       - name: Stop current production
         run: |
           echo "Stopping current production deployment..."
-          docker compose -f docker compose.production.yml down || true
+          docker compose -f docker-compose.production.yml down || true
 
       - name: Deploy to production
         run: |
@@ -95,7 +96,7 @@ jobs:
           echo "Backend: $BACKEND_IMAGE"
           
           # Deploy using docker compose with production environment
-          docker compose -f docker compose.production.yml up -d
+          docker compose -f docker-compose.production.yml up -d
 
       - name: Verify production deployment
         run: |
@@ -103,7 +104,7 @@ jobs:
           sleep 45
           
           # Check if containers are running
-          docker compose -f docker compose.production.yml ps
+          docker compose -f docker-compose.production.yml ps
           
           # Basic health check
           if docker compose -f docker compose.production.yml ps | grep -q "Up"; then
@@ -114,7 +115,7 @@ jobs:
             echo "Production deployment completed successfully"
           else
             echo "❌ Production deployment failed - some services are not running"
-            docker compose -f docker compose.production.yml logs
+            docker compose -f docker-compose.production.yml logs
             exit 1
           fi
 

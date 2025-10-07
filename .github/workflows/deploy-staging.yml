@@ -63,7 +63,7 @@ jobs:
 
       - name: Stop existing containers
         run: |
-          docker compose -f docker compose.yml down || true
+          docker compose down || true
 
       - name: Deploy to staging
         run: |
@@ -73,7 +73,7 @@ jobs:
           
           # Deploy using docker compose with development environment
           cd /opt/mars-abnormal-finding
-          docker compose -f docker compose.yml up -d
+          docker compose up -d
 
       - name: Verify deployment
         run: |
@@ -82,14 +82,14 @@ jobs:
           
           # Check if containers are running
           cd /opt/mars-abnormal-finding
-          docker compose -f docker compose.yml ps
+          docker compose ps
           
           # Basic health check
           if docker compose -f docker compose.yml ps | grep -q "Up"; then
             echo "✅ Deployment successful - services are running"
           else
             echo "❌ Deployment failed - some services are not running"
-            docker compose -f docker compose.yml logs
+            docker compose logs
             exit 1
           fi
 
