@@ -33,7 +33,7 @@ jobs:
 
       - name: Create environment files
         run: |
-          cd /srv/mars-abnormal-finding
+          cd /opt/mars-abnormal-finding
           mkdir -p backend frontend
           # Create backend .env.development
           cat > backend/.env.development << EOF
@@ -74,7 +74,7 @@ jobs:
           export BACKEND_IMAGE=${{ env.REGISTRY }}/${{ env.OWNER }}/backend:sha-${{ github.event.workflow_run.head_sha }}
           
           # Deploy using docker compose with development environment
-          cd /srv/mars-abnormal-finding
+          cd /opt/mars-abnormal-finding
           docker compose up -d
 
       - name: Verify deployment
@@ -83,7 +83,7 @@ jobs:
           sleep 30
           
           # Check if containers are running
-          cd /srv/mars-abnormal-finding
+          cd /opt/mars-abnormal-finding
           docker compose ps
           
           # Basic health check
