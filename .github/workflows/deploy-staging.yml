@@ -33,28 +33,28 @@ jobs:
 
       - name: Create environment files
         run: |
-          cd /opt/mars-abnormal-finding
+          cd /srv/mars-abnormal-finding
           mkdir -p backend frontend
           # Create backend .env.development
           cat > backend/.env.development << EOF
           NODE_ENV=development
-          PORT=${{ secrets.STAGING_BACKEND_PORT }}
-          DB_HOST=${{ secrets.STAGING_DB_HOST }}
           DB_PORT=${{ secrets.STAGING_DB_PORT }}
           DB_NAME=${{ secrets.STAGING_DB_NAME }}
+          DB_PORT=${{ secrets.STAGING_DB_PORT }}
+          DB_SERVER=${{ secrets.STAGING_DB_NAME }}
           DB_USER=${{ secrets.STAGING_DB_USER }}
           DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
           JWT_SECRET=${{ secrets.STAGING_JWT_SECRET }}
-          API_BASE_URL=${{ secrets.STAGING_API_BASE_URL }}
+          FRONTEND_URL=${{ secrets.STAGING_FRONTEND_URL }}
           LINE_CHANNEL_ACCESS_TOKEN=${{ secrets.STAGING_LINE_CHANNEL_ACCESS_TOKEN }}
           LINE_CHANNEL_SECRET=${{ secrets.STAGING_LINE_CHANNEL_SECRET }}
-          EMAIL_SERVICE_API_KEY=${{ secrets.STAGING_EMAIL_SERVICE_API_KEY }}
+          RESEND_API_TOKEN=${{ secrets.STAGING_RESEND_API_TOKEN }}
           EOF
           
           # Create frontend .env.development
           cat > frontend/.env.development << EOF
-          VITE_API_BASE_URL=${{ secrets.STAGING_FRONTEND_API_BASE_URL }}
-          VITE_APP_NAME=${{ secrets.STAGING_APP_NAME }}
+          VITE_API_URL=${{ secrets.STAGING_VITE_API_URL }}
+          VITE_LIFF_ID=${{ secrets.STAGING_VITE_LIFF_ID }}
           VITE_ENVIRONMENT=staging
           EOF
 
@@ -74,7 +74,7 @@ jobs:
           export BACKEND_IMAGE=${{ env.REGISTRY }}/${{ env.OWNER }}/backend:sha-${{ github.event.workflow_run.head_sha }}
           
           # Deploy using docker compose with development environment
-          cd /opt/mars-abnormal-finding
+          cd /srv/mars-abnormal-finding
           docker compose up -d
 
       - name: Verify deployment
@@ -83,7 +83,7 @@ jobs:
           sleep 30
           
           # Check if containers are running
-          cd /opt/mars-abnormal-finding
+          cd /srv/mars-abnormal-finding
           docker compose ps
           
           # Basic health check

@@ -5,8 +5,6 @@ services:
       - ./frontend/.env.development
     environment:
       - NODE_ENV=development
-    volumes:
-      - ./frontend/dist:/usr/share/nginx/html
     networks:
       - mars-network
     depends_on:
@@ -20,7 +18,7 @@ services:
       # Override NODE_ENV if needed
       - NODE_ENV=development
     volumes:
-      - ./backend/uploads:/app/uploads
+      - mars_upload_data:/app/uploads
     restart: unless-stopped
     networks:
       - mars-network
@@ -31,7 +29,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx-development.conf:/etc/nginx/nginx.conf:ro
+      - /home/jirawuth/docker-configs/nginx/nginx-development.conf:/etc/nginx/nginx.conf:ro
     depends_on:
       - frontend
       - backend
@@ -42,3 +40,7 @@ services:
 networks:
   mars-network:
     driver: bridge
+
+volumes:
+  mars_upload_data:
+    driver: local
