@@ -41,7 +41,7 @@ jobs:
           DB_PORT=${{ secrets.STAGING_DB_PORT }}
           DB_NAME=${{ secrets.STAGING_DB_NAME }}
           DB_PORT=${{ secrets.STAGING_DB_PORT }}
-          DB_SERVER=${{ secrets.STAGING_DB_NAME }}
+          DB_SERVER=${{ secrets.STAGING_DB_SERVER }}
           DB_USER=${{ secrets.STAGING_DB_USER }}
           DB_PASSWORD=${{ secrets.STAGING_DB_PASSWORD }}
           JWT_SECRET=${{ secrets.STAGING_JWT_SECRET }}
@@ -87,7 +87,7 @@ jobs:
           docker compose ps
           
           # Basic health check
-          if docker compose -f docker compose.yml ps | grep -q "Up"; then
+          if docker compose -f docker-compose.yml ps | grep -q "Up"; then
             echo "✅ Deployment successful - services are running"
           else
             echo "❌ Deployment failed - some services are not running"
