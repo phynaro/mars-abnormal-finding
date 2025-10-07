@@ -586,7 +586,6 @@ module.exports = {
     formatPersonName,
     generateTicketNumber,
     getActionsForLevel,
-    getBackendBaseUrl,
     getFrontendBaseUrl,
     getHeroImageUrl,
     getTicketDetailUrl,
