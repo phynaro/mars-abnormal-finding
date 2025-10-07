@@ -11,7 +11,7 @@ const ACTION_MAPPING = {
     L4: ['approve_close']
 };
 
-const getBackendBaseUrl = () => process.env.BACKEND_URL || process.env.FRONTEND_URL || DEFAULT_BACKEND_BASE_URL;
+//const getBackendBaseUrl = () => process.env.BACKEND_URL || process.env.FRONTEND_URL || DEFAULT_BACKEND_BASE_URL;
 const getFrontendBaseUrl = () => process.env.FRONTEND_URL || DEFAULT_FRONTEND_BASE_URL;
 
 const canUserPerformAction = (userLevel, action) => ACTION_MAPPING[`L${userLevel}`]?.includes(action) || false;

@@ -13,7 +13,6 @@ const {
     firstRecord,
     formatPersonName,
     generateTicketNumber,
-    getBackendBaseUrl,
     getHeroImageUrl,
     getTicketDetailUrl,
     getTicketNotificationRecipients,

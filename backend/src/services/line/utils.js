@@ -165,7 +165,7 @@ function buildImageMessages(images) {
 function selectHeroImage(images, options = {}) {
   const {
     allowLocalImages = false,
-    backendUrl = process.env.BACKEND_URL,
+   // backendUrl = process.env.BACKEND_URL,
     frontendUrl = process.env.FRONTEND_URL,
     fallbackUrl = DEFAULT_HERO_IMAGE,
   } = options;
