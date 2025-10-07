@@ -85,7 +85,7 @@ const getHeroImageUrl = (images, imageType = 'before') => {
     if (images[0]?.url) {
         return images[0].url;
     }
-    const baseUrl = getBackendBaseUrl();
+    const baseUrl = getFrontendBaseUrl();
     const heroImage = images[0];
     if (heroImage?.image_url) {
         return `${baseUrl}${heroImage.image_url}`;
