@@ -1,5 +1,6 @@
 import { authService } from './authService';
 import { canUserPerformAction, getActionsForLevel, type ActionType } from './administrationService';
+import { getAuthHeaders, getAuthHeadersNoContentType } from '../utils/authHeaders';
 
 export interface Ticket {
   id: number;
@@ -293,26 +294,6 @@ export interface SingleTicketResponse {
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 class TicketService {
-  private async getAuthHeaders() {
-    const token = authService.getToken();
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    };
-  }
-
-  private async getAuthHeadersNoContentType() {
-    const token = authService.getToken();
-    if (!token) {
-      throw new Error('No authentication token found');
-    }
-    return {
-      'Authorization': `Bearer ${token}`
-    } as Record<string, string>;
-  }
 
   async createTicket(
     ticketData: CreateTicketRequest,
@@ -325,7 +306,7 @@ class TicketService {
     let response: Response;
 
     if (hasFiles) {
-      const headers = await this.getAuthHeadersNoContentType();
+      const headers = getAuthHeadersNoContentType();
       const form = new FormData();
       form.append('payload', JSON.stringify(ticketData));
       form.append('image_type', imageType);
@@ -337,7 +318,7 @@ class TicketService {
         body: form
       });
     } else {
-      const headers = await this.getAuthHeaders();
+      const headers = getAuthHeaders();
       response = await fetch(url, {
         method: 'POST',
         headers,
@@ -360,7 +341,7 @@ class TicketService {
   }
 
   async getTickets(filters: TicketFilters = {}): Promise<TicketResponse> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const queryParams = new URLSearchParams();
     
     Object.entries(filters).forEach(([key, value]) => {
@@ -383,7 +364,7 @@ class TicketService {
   }
 
   async getTicketById(id: number): Promise<SingleTicketResponse> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/${id}`, {
       method: 'GET',
       headers
@@ -398,7 +379,7 @@ class TicketService {
   }
 
   async updateTicket(id: number, updateData: UpdateTicketRequest): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/${id}`, {
       method: 'PUT',
       headers,
@@ -414,7 +395,7 @@ class TicketService {
   }
 
   async addComment(ticketId: number, comment: string): Promise<{ success: boolean; message: string; data: any }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/comments`, {
       method: 'POST',
       headers,
@@ -430,7 +411,7 @@ class TicketService {
   }
 
   async assignTicket(ticketId: number, assignedTo: number, notes?: string): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/assign`, {
       method: 'POST',
       headers,
@@ -446,7 +427,7 @@ class TicketService {
   }
 
   async deleteTicket(id: number): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/${id}`, {
       method: 'DELETE',
       headers
@@ -466,7 +447,7 @@ class TicketService {
     imageType: 'before' | 'after' | 'other' = 'other',
     imageName?: string,
   ): Promise<{ success: boolean; message: string; data: any }> {
-    const headers = await this.getAuthHeadersNoContentType();
+    const headers = getAuthHeadersNoContentType();
     const form = new FormData();
     form.append('image', file);
     form.append('image_type', imageType);
@@ -491,7 +472,7 @@ class TicketService {
     imageType: 'before' | 'after' | 'other' = 'other',
   ): Promise<{ success: boolean; message: string; data: any[] }> {
     if (!files.length) throw new Error('No files selected');
-    const headers = await this.getAuthHeadersNoContentType();
+    const headers = getAuthHeadersNoContentType();
     const form = new FormData();
     for (const file of files) form.append('images', file);
     form.append('image_type', imageType);
@@ -508,7 +489,7 @@ class TicketService {
   }
 
   async deleteTicketImage(ticketId: number, imageId: number): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}/images/${imageId}`, {
       method: 'DELETE',
       headers,
@@ -521,7 +502,7 @@ class TicketService {
   }
 
   async triggerTicketNotification(ticketId: number): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}/trigger-notification`, {
       method: 'POST',
       headers,
@@ -535,7 +516,7 @@ class TicketService {
 
   // Workflow actions
   async acceptTicket(id: number, notes?: string, schedule_finish?: string): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/accept`, {
       method: 'POST',
       headers,
@@ -553,7 +534,7 @@ class TicketService {
     assigned_to: number,
     notes?: string
   ): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/plan`, {
       method: 'POST',
       headers,
@@ -569,7 +550,7 @@ class TicketService {
     actual_start_at: string, 
     notes?: string
   ): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/start`, {
       method: 'POST',
       headers,
@@ -581,7 +562,7 @@ class TicketService {
   }
 
   async rejectTicket(id: number, rejection_reason: string, escalate_to_l3: boolean = false): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/reject`, {
       method: 'POST',
       headers,
@@ -601,7 +582,7 @@ class TicketService {
     actual_finish_at?: string,
     actual_start_at?: string
   ): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/finish`, {
       method: 'POST',
       headers,
@@ -620,7 +601,7 @@ class TicketService {
   }
 
   async escalateTicket(id: number, escalation_reason: string, escalated_to: number): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/escalate`, {
       method: 'POST',
       headers,
@@ -632,7 +613,7 @@ class TicketService {
   }
 
   async approveReview(id: number, review_reason: string, satisfaction_rating?: number): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/approve-review`, {
       method: 'POST',
       headers,
@@ -644,7 +625,7 @@ class TicketService {
   }
 
   async approveClose(id: number, close_reason: string): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/approve-close`, {
       method: 'POST',
       headers,
@@ -656,7 +637,7 @@ class TicketService {
   }
 
   async reopenTicket(id: number, reopen_reason: string): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/reopen`, {
       method: 'POST',
       headers,
@@ -669,19 +650,20 @@ class TicketService {
 
   // Assignees
   async getAvailableAssignees(search?: string, ticketId?: number, escalationOnly?: boolean): Promise<{ success: boolean; data: Array<{ id: number; name: string; email?: string; permissionLevel?: number }> }> {
-    const headers = await this.getAuthHeaders();
-    const url = new URL(`${API_BASE_URL}/tickets/assignees/available`);
-    if (search) url.searchParams.set('search', search);
-    if (ticketId) url.searchParams.set('ticket_id', ticketId.toString());
-    if (escalationOnly) url.searchParams.set('escalation_only', 'true');
-    const res = await fetch(url.toString(), { headers });
+    const headers = getAuthHeaders();
+    const queryParams = new URLSearchParams();
+    if (search) queryParams.set('search', search);
+    if (ticketId) queryParams.set('ticket_id', ticketId.toString());
+    if (escalationOnly) queryParams.set('escalation_only', 'true');
+    const url = `${API_BASE_URL}/tickets/assignees/available?${queryParams.toString()}`;
+    const res = await fetch(url, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch assignees');
     return result;
   }
 
   async reassignTicket(id: number, schedule_start: string, schedule_finish: string, assigned_to: number, notes?: string): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/reassign`, {
       method: 'POST',
       headers,
@@ -698,7 +680,7 @@ class TicketService {
   }
 
   async getUserPendingTickets(): Promise<{ success: boolean; data: PendingTicket[] }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/pending/user`, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch pending tickets');
@@ -710,13 +692,14 @@ class TicketService {
     startDate: string;
     endDate: string;
   }): Promise<{ success: boolean; data: any }> {
-    const headers = await this.getAuthHeaders();
-    const url = new URL(`${API_BASE_URL}/tickets/user/count-per-period`);
-    url.searchParams.set('year', params.year.toString());
-    url.searchParams.set('startDate', params.startDate);
-    url.searchParams.set('endDate', params.endDate);
+    const headers = getAuthHeaders();
+    const queryParams = new URLSearchParams();
+    queryParams.set('year', params.year.toString());
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
     
-    const res = await fetch(url.toString(), { headers });
+    const url = `${API_BASE_URL}/tickets/user/count-per-period?${queryParams.toString()}`;
+    const res = await fetch(url, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch user ticket count per period');
     return result;
@@ -727,13 +710,14 @@ class TicketService {
     startDate: string;
     endDate: string;
   }): Promise<{ success: boolean; data: any }> {
-    const headers = await this.getAuthHeaders();
-    const url = new URL(`${API_BASE_URL}/tickets/user/Finished-count-per-period`);
-    url.searchParams.set('year', params.year.toString());
-    url.searchParams.set('startDate', params.startDate);
-    url.searchParams.set('endDate', params.endDate);
+    const headers = getAuthHeaders();
+    const queryParams = new URLSearchParams();
+    queryParams.set('year', params.year.toString());
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
     
-    const res = await fetch(url.toString(), { headers });
+    const url = `${API_BASE_URL}/tickets/user/Finished-count-per-period?${queryParams.toString()}`;
+    const res = await fetch(url, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch user Finished ticket count per period');
     return result;
@@ -745,21 +729,22 @@ class TicketService {
     compare_startDate: string;
     compare_endDate: string;
   }): Promise<{ success: boolean; data: any }> {
-    const headers = await this.getAuthHeaders();
-    const url = new URL(`${API_BASE_URL}/tickets/user/personal-kpi`);
-    url.searchParams.set('startDate', params.startDate);
-    url.searchParams.set('endDate', params.endDate);
-    url.searchParams.set('compare_startDate', params.compare_startDate);
-    url.searchParams.set('compare_endDate', params.compare_endDate);
+    const headers = getAuthHeaders();
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
+    queryParams.set('compare_startDate', params.compare_startDate);
+    queryParams.set('compare_endDate', params.compare_endDate);
     
-    const res = await fetch(url.toString(), { headers });
+    const url = `${API_BASE_URL}/tickets/user/personal-kpi?${queryParams.toString()}`;
+    const res = await fetch(url, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch personal KPI data');
     return result;
   }
 
   async getFailureModes(): Promise<{ success: boolean; data: FailureMode[] }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/failure-modes`, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch failure modes');
@@ -768,17 +753,18 @@ class TicketService {
 
   // Hierarchy APIs  
   async searchPUCODE(search: string): Promise<{ success: boolean; data: PUCODE[] }> {
-    const headers = await this.getAuthHeaders();
-    const url = new URL(`${API_BASE_URL}/hierarchy/pucode/search`);
-    url.searchParams.set('search', search);
-    const res = await fetch(url.toString(), { headers });
+    const headers = getAuthHeaders();
+    const queryParams = new URLSearchParams();
+    queryParams.set('search', search);
+    const url = `${API_BASE_URL}/hierarchy/pucode/search?${queryParams.toString()}`;
+    const res = await fetch(url, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to search PUCODE');
     return result;
   }
 
   async getPUCODEDetails(pucode: string): Promise<{ success: boolean; data: PUCODEDetails }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/hierarchy/pucode/${encodeURIComponent(pucode)}`, { headers });
     const resData = await res.json();
     if (!res.ok) throw new Error(resData.message || 'Failed to fetch PUCODE details');
@@ -787,10 +773,11 @@ class TicketService {
 
   // Equipment APIs
   async getEquipmentByPUNO(puNo: number): Promise<{ success: boolean; data: Equipment[] }> {
-    const headers = await this.getAuthHeaders();
-    const url = new URL(`${API_BASE_URL}/assets/equipment/by-puno`);
-    url.searchParams.set('puNo', puNo.toString());
-    const res = await fetch(url.toString(), { headers });
+    const headers = getAuthHeaders();
+    const queryParams = new URLSearchParams();
+    queryParams.set('puNo', puNo.toString());
+    const url = `${API_BASE_URL}/assets/equipment/by-puno?${queryParams.toString()}`;
+    const res = await fetch(url, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to get equipment');
     return result;
@@ -798,7 +785,7 @@ class TicketService {
 
   // Test endpoints (for development)
   async testL2UsersForArea(areaId: number): Promise<{ success: boolean; data: any[]; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/test-l2-users/${areaId}`, {
       headers
     });
@@ -813,7 +800,7 @@ class TicketService {
 
   // Test email notification (for development)
   async testEmailNotification(): Promise<{ success: boolean; message: string }> {
-    const headers = await this.getAuthHeaders();
+    const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/test-email`, {
       method: 'POST',
       headers

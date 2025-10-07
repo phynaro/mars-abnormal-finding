@@ -50,9 +50,7 @@ import {
   getTicketSeverityClass,
   getTicketStatusClass,
 } from "@/utils/ticketBadgeStyles";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+import { getApiBaseUrl, getAvatarUrl } from "@/utils/url";
 
 interface PersonalKPI {
   ticketsCreatedByMonth: Array<{
@@ -118,12 +116,6 @@ const mockPersonalKPI: PersonalKPI = {
   },
 };
 
-function getUploadsBase(apiBaseUrl: string) {
-  const withApiRemoved = apiBaseUrl.endsWith("/api")
-    ? apiBaseUrl.slice(0, -4)
-    : apiBaseUrl;
-  return withApiRemoved.replace(/\/$/, "");
-}
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-US", {
@@ -986,10 +978,7 @@ const HomePage: React.FC = () => {
   const subtitle = userTitle
     ? `${userTitle} • ${departmentName}`
     : departmentName;
-  const uploadsBase = useMemo(() => getUploadsBase(API_BASE_URL), []);
-  const avatarSrc = user?.avatarUrl
-    ? `${uploadsBase}${user.avatarUrl}`
-    : undefined;
+  const avatarSrc = getAvatarUrl(user?.avatarUrl);
   const avatarInitials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`;
 
   const handleTicketClick = (ticketId: number) => {

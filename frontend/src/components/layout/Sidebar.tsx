@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
 import { menuItems, type MenuItem } from "./menuConfig";
+import { getAvatarUrl } from "../../utils/url";
 
 interface SidebarProps {
   isCollapsed?: boolean;
@@ -245,7 +246,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           <Avatar className="h-8 w-8">
             {user?.avatarUrl && (
               <AvatarImage
-                src={`${(import.meta.env.VITE_API_URL || "http://localhost:3001/api").replace(/\/$/, "").replace(/\/api$/, "")}${user.avatarUrl}`}
+                src={getAvatarUrl(user.avatarUrl)}
               />
             )}
             <AvatarFallback className="bg-primary text-primary-foreground">

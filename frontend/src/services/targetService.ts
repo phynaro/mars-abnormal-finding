@@ -1,5 +1,6 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface Target {
   id: number;
@@ -142,7 +143,7 @@ class TargetService {
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
-        ...authService.getAuthHeaders()
+        ...getAuthHeaders()
       }
     });
     return await response.json();
@@ -156,7 +157,7 @@ class TargetService {
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',
-        ...authService.getAuthHeaders()
+        ...getAuthHeaders()
       }
     });
     return await response.json();

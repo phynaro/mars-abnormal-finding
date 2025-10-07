@@ -11,8 +11,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import Cropper from 'react-easy-crop';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle, Key, MessageSquare, User } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
 
 const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
@@ -34,13 +33,13 @@ const ProfilePage: React.FC = () => {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [showLineHelp, setShowLineHelp] = useState(false);
 
-  const uploadsBase = (API_BASE_URL.endsWith('/api') ? API_BASE_URL.slice(0, -4) : API_BASE_URL).replace(/\/$/, '');
+  const uploadsBase = getApiBaseUrl().replace(/\/$/, '').replace(/\/api$/, '');
 
   const updateProfile = async () => {
     if (!user) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/users/profile`, {
+      const res = await fetch(`${getApiBaseUrl()}/users/profile`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -62,7 +61,7 @@ const ProfilePage: React.FC = () => {
   const changePassword = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/auth/change-password`, {
+      const res = await fetch(`${getApiBaseUrl()}/auth/change-password`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -88,7 +87,7 @@ const ProfilePage: React.FC = () => {
     try {
       const form = new FormData();
       form.append('avatar', avatarFile);
-      const res = await fetch(`${API_BASE_URL}/users/profile/avatar`, {
+      const res = await fetch(`${getApiBaseUrl()}/users/profile/avatar`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
@@ -175,7 +174,7 @@ const ProfilePage: React.FC = () => {
           <div className="flex items-center gap-6">
             <Avatar className="h-16 w-16">
               {user?.avatarUrl ? (
-                <AvatarImage src={`${uploadsBase}${user.avatarUrl}`} alt="avatar" />
+                <AvatarImage src={getAvatarUrl(user.avatarUrl)} alt="avatar" />
               ) : null}
               <AvatarFallback>{user?.firstName?.[0]}{user?.lastName?.[0]}</AvatarFallback>
             </Avatar>
@@ -257,7 +256,7 @@ const ProfilePage: React.FC = () => {
                       return;
                     }
                     
-                    const res = await fetch(`${API_BASE_URL}/users/line/test`, {
+                    const res = await fetch(`${getApiBaseUrl()}/users/line/test`, {
                       method: 'POST',
                       headers: { 
                         'Authorization': `Bearer ${localStorage.getItem('token')}` || '',

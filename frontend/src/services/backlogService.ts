@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface BacklogItem {
   woStatusName: string;
@@ -122,7 +123,7 @@ export interface BacklogDetailResponse {
 class BacklogService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/backlog`;
 
-  private headers() { return authService.getAuthHeaders(); }
+  private headers() { return getAuthHeaders(); }
 
   /**
    * Get backlog by department
@@ -130,11 +131,14 @@ class BacklogService {
   async getBacklogAssign(params: {
     siteNo?: number;
   } = {}): Promise<BacklogResponse> {
-    const url = new URL(`${this.baseURL}/assign`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/assign?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch backlog by department');
     return res.json();
   }
@@ -146,11 +150,14 @@ class BacklogService {
     siteNo?: number;
     deptCode: string;
   }): Promise<BacklogDetailResponse> {
-    const url = new URL(`${this.baseURL}/assign/lv1`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/assign/lv1?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch backlog detail by department');
     return res.json();
   }
@@ -161,11 +168,14 @@ class BacklogService {
   async getBacklogAssignTo(params: {
     siteNo?: number;
   } = {}): Promise<BacklogResponse> {
-    const url = new URL(`${this.baseURL}/assignto`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/assignto?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch backlog by user');
     return res.json();
   }
@@ -177,11 +187,14 @@ class BacklogService {
     siteNo?: number;
     personName: string;
   }): Promise<BacklogDetailResponse> {
-    const url = new URL(`${this.baseURL}/assignto/lv1`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/assignto/lv1?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch backlog detail by user');
     return res.json();
   }
@@ -192,11 +205,14 @@ class BacklogService {
   async getBacklogByWOTypeAndDept(params: {
     siteNo?: number;
   } = {}): Promise<BacklogWOTypeDeptResponse> {
-    const url = new URL(`${this.baseURL}/wotype-dept`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/wotype-dept?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch backlog by work order type and department');
     return res.json();
   }

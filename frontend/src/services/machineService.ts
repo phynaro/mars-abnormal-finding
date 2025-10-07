@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface Machine {
   MachineID: number;
@@ -61,13 +62,6 @@ export interface PaginatedResponse<T> {
 class MachineService {
   private baseURL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-  private async getAuthHeaders() {
-    const token = authService.getToken();
-    return {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
-  }
 
   async getAllMachines(
     page: number = 1,
@@ -85,7 +79,7 @@ class MachineService {
     });
 
     const response = await fetch(`${this.baseURL}/machines?${params}`, {
-      headers: await this.getAuthHeaders(),
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
@@ -97,7 +91,7 @@ class MachineService {
 
   async getMachineById(id: number): Promise<Machine> {
     const response = await fetch(`${this.baseURL}/${id}`, {
-      headers: await this.getAuthHeaders(),
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
@@ -111,7 +105,7 @@ class MachineService {
   async createMachine(machineData: Partial<Machine>): Promise<{ MachineID: number }> {
     const response = await fetch(this.baseURL, {
       method: 'POST',
-      headers: await this.getAuthHeaders(),
+      headers: getAuthHeaders(),
       body: JSON.stringify(machineData),
     });
 
@@ -127,7 +121,7 @@ class MachineService {
   async updateMachine(id: number, machineData: Partial<Machine>): Promise<void> {
     const response = await fetch(`${this.baseURL}/${id}`, {
       method: 'PUT',
-      headers: await this.getAuthHeaders(),
+      headers: getAuthHeaders(),
       body: JSON.stringify(machineData),
     });
 
@@ -140,7 +134,7 @@ class MachineService {
   async deleteMachine(id: number): Promise<void> {
     const response = await fetch(`${this.baseURL}/${id}`, {
       method: 'DELETE',
-      headers: await this.getAuthHeaders(),
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {
@@ -151,7 +145,7 @@ class MachineService {
 
   async getMachineStats(): Promise<MachineStats> {
     const response = await fetch(`${this.baseURL}/stats`, {
-      headers: await this.getAuthHeaders(),
+      headers: getAuthHeaders(),
     });
 
     if (!response.ok) {

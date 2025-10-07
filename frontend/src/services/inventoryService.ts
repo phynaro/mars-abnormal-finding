@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface InventoryFilters {
   page?: number;
@@ -16,7 +17,7 @@ class InventoryService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/inventory`;
 
   private headers() {
-    return authService.getAuthHeaders();
+    return getAuthHeaders();
   }
 
   async getCatalog(filters: InventoryFilters = {}) {

@@ -1,11 +1,12 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 import type { HierarchySiteOverview, HierarchyDepartmentDetailsResponse } from '@/types/hierarchy';
 
 class HierarchyService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/assets`;
 
   private headers() {
-    return authService.getAuthHeaders();
+    return getAuthHeaders();
   }
 
   async getHierarchyOverview(siteNo?: number): Promise<HierarchySiteOverview[]> {

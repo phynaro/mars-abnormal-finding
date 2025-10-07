@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -60,9 +61,6 @@ export interface PersonnelResponse {
 }
 
 class PersonnelService {
-  private getAuthHeaders(): Record<string, string> {
-    return authService.getAuthHeaders();
-  }
   
   private baseURL: string;
 
@@ -78,21 +76,22 @@ class PersonnelService {
     titleNo?: string | number;
     includeDeleted?: boolean;
   } = {}): Promise<PersonnelResponse> {
-    const url = new URL(`${this.baseURL}/persons`);
+    const queryParams = new URLSearchParams();
     
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== '') {
-        url.searchParams.append(key, String(value));
+        queryParams.set(key, String(value));
       }
     });
 
-    console.log('🔍 Personnel Service - Request URL:', url.toString());
+    const url = `${this.baseURL}/persons?${queryParams.toString()}`;
+    console.log('🔍 Personnel Service - Request URL:', url);
     console.log('🔍 Personnel Service - Request params:', params);
 
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
-        ...this.getAuthHeaders(),
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
     });
@@ -135,21 +134,22 @@ class PersonnelService {
       totalPages: number;
     };
   }> {
-    const url = new URL(`${this.baseURL}/departments`);
+    const queryParams = new URLSearchParams();
     
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== '') {
-        url.searchParams.append(key, String(value));
+        queryParams.set(key, String(value));
       }
     });
 
-    console.log('🔍 Personnel Service - Departments Request URL:', url.toString());
+    const url = `${this.baseURL}/departments?${queryParams.toString()}`;
+    console.log('🔍 Personnel Service - Departments Request URL:', url);
     console.log('🔍 Personnel Service - Departments Request params:', params);
 
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
-        ...this.getAuthHeaders(),
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
     });
@@ -192,21 +192,22 @@ class PersonnelService {
       totalPages: number;
     };
   }> {
-    const url = new URL(`${this.baseURL}/titles`);
+    const queryParams = new URLSearchParams();
     
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== '') {
-        url.searchParams.append(key, String(value));
+        queryParams.set(key, String(value));
       }
     });
 
-    console.log('🔍 Personnel Service - Titles Request URL:', url.toString());
+    const url = `${this.baseURL}/titles?${queryParams.toString()}`;
+    console.log('🔍 Personnel Service - Titles Request URL:', url);
     console.log('🔍 Personnel Service - Titles Request params:', params);
 
-    const response = await fetch(url.toString(), {
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
-        ...this.getAuthHeaders(),
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
     });
@@ -240,7 +241,7 @@ class PersonnelService {
     const response = await fetch(`${this.baseURL}/persons/${id}`, {
       method: 'GET',
       headers: {
-        ...this.getAuthHeaders(),
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
     });
@@ -261,7 +262,7 @@ class PersonnelService {
     const response = await fetch(`${this.baseURL}/departments/${id}`, {
       method: 'GET',
       headers: {
-        ...this.getAuthHeaders(),
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
     });
@@ -282,7 +283,7 @@ class PersonnelService {
     const response = await fetch(`${this.baseURL}/titles/${id}`, {
       method: 'GET',
       headers: {
-        ...this.getAuthHeaders(),
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
     });
@@ -311,18 +312,19 @@ class PersonnelService {
       totalPages: number;
     };
   }> {
-    const url = new URL(`${this.baseURL}/usergroups`);
+    const queryParams = new URLSearchParams();
     
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== '') {
-        url.searchParams.append(key, String(value));
+        queryParams.set(key, String(value));
       }
     });
 
-    const response = await fetch(url.toString(), {
+    const url = `${this.baseURL}/usergroups?${queryParams.toString()}`;
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
-        ...this.getAuthHeaders(),
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
     });
@@ -343,7 +345,7 @@ class PersonnelService {
     const response = await fetch(`${this.baseURL}/usergroups/${id}`, {
       method: 'GET',
       headers: {
-        ...this.getAuthHeaders(),
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
     });
@@ -367,14 +369,15 @@ class PersonnelService {
       totalPages: number;
     };
   }> {
-    const url = new URL(`${this.baseURL}/usergroups/${id}/members`);
-    url.searchParams.append('page', String(page));
-    url.searchParams.append('limit', String(limit));
+    const queryParams = new URLSearchParams();
+    queryParams.set('page', String(page));
+    queryParams.set('limit', String(limit));
 
-    const response = await fetch(url.toString(), {
+    const url = `${this.baseURL}/usergroups/${id}/members?${queryParams.toString()}`;
+    const response = await fetch(url, {
       method: 'GET',
       headers: {
-        ...this.getAuthHeaders(),
+        ...getAuthHeaders(),
         'Content-Type': 'application/json',
       },
     });

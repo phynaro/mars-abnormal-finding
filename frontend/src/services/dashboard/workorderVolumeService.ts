@@ -1,4 +1,5 @@
 import authService from '@/services/authService';
+import { getAuthHeaders } from '@/utils/authHeaders';
 
 export interface WorkOrderVolumeItem {
   companyYear: number;
@@ -164,7 +165,7 @@ const baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api')
 
 export async function getCurrentCompanyYear(): Promise<CurrentCompanyYearResponse> {
   const res = await fetch(`${baseURL}/current-company-year`, {
-    headers: authService.getAuthHeaders(),
+    headers: getAuthHeaders(),
   });
   if (!res.ok) throw new Error('Failed to fetch current company year');
   return res.json();
@@ -177,11 +178,14 @@ export async function getWorkOrderVolume(params: {
   deptno?: string | number | null;
   puno?: string | number | null;
 }): Promise<WorkOrderVolumeResponse> {
-  const url = new URL(`${baseURL}/workorder-volume`);
+  const queryParams = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+    if (v !== undefined && v !== null && String(v) !== '') {
+      queryParams.set(k, String(v));
+    }
   });
-  const res = await fetch(url.toString(), { headers: authService.getAuthHeaders() });
+  const url = `${baseURL}/workorder-volume?${queryParams.toString()}`;
+  const res = await fetch(url, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error('Failed to fetch work order volume');
   return res.json();
 }
@@ -193,11 +197,14 @@ export async function getWorkOrderVolumeFilterOptions(params: {
   deptno?: string | number | null;
   puno?: string | number | null;
 }): Promise<WorkOrderVolumeFilterOptionsResponse> {
-  const url = new URL(`${baseURL}/workorder-volume/filter-options`);
+  const queryParams = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+    if (v !== undefined && v !== null && String(v) !== '') {
+      queryParams.set(k, String(v));
+    }
   });
-  const res = await fetch(url.toString(), { headers: authService.getAuthHeaders() });
+  const url = `${baseURL}/workorder-volume/filter-options?${queryParams.toString()}`;
+  const res = await fetch(url, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error('Failed to fetch filter options');
   return res.json();
 }
@@ -209,11 +216,14 @@ export async function getPersonalWorkOrderVolume(params: {
   deptno?: string | number | null;
   puno?: string | number | null;
 }): Promise<PersonalWorkOrderVolumeResponse> {
-  const url = new URL(`${baseURL}/workorder-volume/personal`);
+  const queryParams = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+    if (v !== undefined && v !== null && String(v) !== '') {
+      queryParams.set(k, String(v));
+    }
   });
-  const res = await fetch(url.toString(), { headers: authService.getAuthHeaders() });
+  const url = `${baseURL}/workorder-volume/personal?${queryParams.toString()}`;
+  const res = await fetch(url, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error('Failed to fetch personal work order volume');
   return res.json();
 }
@@ -225,11 +235,14 @@ export async function getPersonalWorkOrderVolumeByPeriod(params: {
   deptno?: string | number | null;
   puno?: string | number | null;
 }): Promise<PersonalWorkOrderVolumeByPeriodResponse> {
-  const url = new URL(`${baseURL}/workorder-volume/personal/period`);
+  const queryParams = new URLSearchParams();
   Object.entries(params).forEach(([k, v]) => {
-    if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+    if (v !== undefined && v !== null && String(v) !== '') {
+      queryParams.set(k, String(v));
+    }
   });
-  const res = await fetch(url.toString(), { headers: authService.getAuthHeaders() });
+  const url = `${baseURL}/workorder-volume/personal/period?${queryParams.toString()}`;
+  const res = await fetch(url, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error('Failed to fetch personal work order volume by period');
   return res.json();
 }

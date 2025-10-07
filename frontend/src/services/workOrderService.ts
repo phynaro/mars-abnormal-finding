@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface WorkOrderFilters {
   page?: number;
@@ -50,7 +51,7 @@ class WorkOrderService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/workorders`;
 
   private async headers() {
-    return authService.getAuthHeaders();
+    return getAuthHeaders();
   }
 
   async getAll(filters: WorkOrderFilters = {}): Promise<PaginatedWorkOrdersResponse> {

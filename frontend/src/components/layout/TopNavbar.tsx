@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { getAvatarUrl } from '../../utils/url';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -125,7 +126,7 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
               <Button variant="ghost" className="gap-3 px-2">
                 <Avatar className="h-8 w-8">
                   {user?.avatarUrl && (
-                    <AvatarImage src={`${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '').replace(/\/api$/, '')}${user.avatarUrl}`} />
+                    <AvatarImage src={getAvatarUrl(user.avatarUrl)} />
                   )}
                   <AvatarFallback className="bg-primary text-primary-foreground">
                     {user?.firstName?.charAt(0)}{user?.lastName?.charAt(0)}

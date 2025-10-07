@@ -1,72 +1,133 @@
-name: promote-prod
+name: Promote to Production
 
 on:
   workflow_dispatch:
     inputs:
-      sha:
-        description: "Git commit SHA to promote (leave empty to use latest staging)"
-        required: false
-        default: ""
+      image_sha:
+        description: 'Image SHA to deploy to production (e.g., abc123def456...)'
+        required: true
+        type: string
+      confirm_deployment:
+        description: 'Type "DEPLOY" to confirm production deployment'
+        required: true
+        type: string
 
 env:
-    HOST: ${{ secrets.DEPLOY_HOST }}
-    USER: ${{ secrets.DEPLOY_USER }}    # e.g., ubuntu
-    REPO_OWNER: ${{ github.repository_owner }}
+  REGISTRY: ghcr.io
+  OWNER: ${{ github.repository_owner }}
 
 jobs:
-  promote:
-    runs-on: ubuntu-latest
-
+  promote-prod:
+    name: Deploy to Production Environment
+    runs-on: self-hosted
+    if: ${{ github.event.inputs.confirm_deployment == 'DEPLOY' }}
+    
     steps:
-      # 1) Try to get the latest 'staging-sha' artifact from the 'deploy-staging' workflow
-      - name: Download latest staging SHA artifact
-        uses: dawidd6/action-download-artifact@v6
-        with:
-          workflow: deploy-staging.yml    # or the workflow NAME if you prefer: deploy-staging
-          workflow_conclusion: success
-          name: staging_sha
-          path: .
-          search_artifacts: true
-          if_no_artifact_found: ignore
-
-      # 2) Decide which SHA to use: input > artifact > fail
-      - name: Resolve SHA to deploy
-        id: r
-        shell: bash
+      - name: Validate inputs
         run: |
-          INPUT_SHA="${{ github.event.inputs.sha }}"
-          ART_SHA=""
-          if [[ -f staging_sha.txt ]]; then ART_SHA="$(cat staging_sha.txt | tr -d '\n' )"; fi
+          if [ "${{ github.event.inputs.confirm_deployment }}" != "DEPLOY" ]; then
+            echo "❌ Deployment not confirmed. Please type 'DEPLOY' to confirm."
+            exit 1
+          fi
+          
+          if [ -z "${{ github.event.inputs.image_sha }}" ]; then
+            echo "❌ Image SHA is required"
+            exit 1
+          fi
+          
+          echo "✅ Deployment confirmed for SHA: ${{ github.event.inputs.image_sha }}"
 
-          if [[ -n "$INPUT_SHA" ]]; then
-            USE="$INPUT_SHA"
-            SRC="input"
-          elif [[ -n "$ART_SHA" ]]; then
-            USE="$ART_SHA"
-            SRC="latest-staging-artifact"
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.OWNER }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Verify images exist
+        run: |
+          echo "Verifying images exist in registry..."
+          
+          # Check if frontend image exists
+          if ! docker manifest inspect ${{ env.REGISTRY }}/${{ env.OWNER }}/frontend:sha-${{ github.event.inputs.image_sha }} > /dev/null 2>&1; then
+            echo "❌ Frontend image not found: ${{ env.REGISTRY }}/${{ env.OWNER }}/frontend:sha-${{ github.event.inputs.image_sha }}"
+            exit 1
+          fi
+          
+          # Check if backend image exists
+          if ! docker manifest inspect ${{ env.REGISTRY }}/${{ env.OWNER }}/backend:sha-${{ github.event.inputs.image_sha }} > /dev/null 2>&1; then
+            echo "❌ Backend image not found: ${{ env.REGISTRY }}/${{ env.OWNER }}/backend:sha-${{ github.event.inputs.image_sha }}"
+            exit 1
+          fi
+          
+          echo "✅ Both images verified in registry"
+
+      - name: Pull production images
+        run: |
+          docker pull ${{ env.REGISTRY }}/${{ env.OWNER }}/frontend:sha-${{ github.event.inputs.image_sha }}
+          docker pull ${{ env.REGISTRY }}/${{ env.OWNER }}/backend:sha-${{ github.event.inputs.image_sha }}
+
+      - name: Create backup of current production
+        run: |
+          # Create backup of current production state
+          if docker compose -f docker compose.production.yml ps | grep -q "Up"; then
+            echo "Creating backup of current production deployment..."
+            docker compose -f docker compose.production.yml ps > production_backup_$(date +%Y%m%d_%H%M%S).txt
+            docker compose -f docker compose.production.yml logs > production_logs_$(date +%Y%m%d_%H%M%S).txt
+          fi
+
+      - name: Stop current production
+        run: |
+          echo "Stopping current production deployment..."
+          docker compose -f docker compose.production.yml down || true
+
+      - name: Deploy to production
+        run: |
+          # Set environment variables for production deployment
+          export FRONTEND_IMAGE=${{ env.REGISTRY }}/${{ env.OWNER }}/frontend:sha-${{ github.event.inputs.image_sha }}
+          export BACKEND_IMAGE=${{ env.REGISTRY }}/${{ env.OWNER }}/backend:sha-${{ github.event.inputs.image_sha }}
+          
+          echo "Deploying to production with images:"
+          echo "Frontend: $FRONTEND_IMAGE"
+          echo "Backend: $BACKEND_IMAGE"
+          
+          # Deploy using docker compose with production environment
+          docker compose -f docker compose.production.yml up -d
+
+      - name: Verify production deployment
+        run: |
+          echo "Waiting for production services to start..."
+          sleep 45
+          
+          # Check if containers are running
+          docker compose -f docker compose.production.yml ps
+          
+          # Basic health check
+          if docker compose -f docker compose.production.yml ps | grep -q "Up"; then
+            echo "✅ Production deployment successful - services are running"
+            
+            # Additional health checks can be added here
+            # For example, curl to check if services are responding
+            echo "Production deployment completed successfully"
           else
-            echo "No SHA provided and no staging artifact found." >&2
+            echo "❌ Production deployment failed - some services are not running"
+            docker compose -f docker compose.production.yml logs
             exit 1
           fi
 
-          echo "sha=$USE" >> "$GITHUB_OUTPUT"
-          echo "src=$SRC" >> "$GITHUB_OUTPUT"
-      - name: Show chosen SHA
+      - name: Clean up old production images
         run: |
-            echo "Promoting SHA ${{ steps.r.outputs.sha }} (source: ${{ steps.r.outputs.src }})"
+          # Remove old production images to save space (keep last 2 versions)
+          docker images ${{ env.REGISTRY }}/${{ env.OWNER }}/frontend --format "table {{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | tail -n +3 | awk '{print $1}' | xargs -r docker rmi || true
+          docker images ${{ env.REGISTRY }}/${{ env.OWNER }}/backend --format "table {{.Repository}}:{{.Tag}}\t{{.CreatedAt}}" | tail -n +3 | awk '{print $1}' | xargs -r docker rmi || true
 
-      # 3) Deploy over SSH using the chosen SHA
-      - name: Promote to prod via SSH
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ env.HOST }}
-          username: ${{ env.USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            set -e
-            cd /opt/hello-cicd/prod
-            export REPO_OWNER="${{ env.REPO_OWNER }}"
-            export IMAGE_SHA="${{ steps.r.outputs.sha }}"
-            # If GHCR packages are private, uncomment:
-            # export GHCR_TOKEN="${{ secrets.GHCR_TOKEN }}"
-            ./deploy_prod.sh
+      - name: Deployment summary
+        run: |
+          echo "## 🚀 Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed SHA**: ${{ github.event.inputs.image_sha }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployed by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Deployment time**: $(date)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ✅ Successfully deployed to production" >> $GITHUB_STEP_SUMMARY

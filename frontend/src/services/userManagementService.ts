@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -64,16 +65,13 @@ export interface AvailableGroup {
 }
 
 class UserManagementService {
-  private getAuthHeaders(): Record<string, string> {
-    return authService.getAuthHeaders();
-  }
 
   // Get all users (L3 only)
   async getAllUsers(): Promise<User[]> {
     try {
       const response = await fetch(`${API_BASE_URL}/users/all`, {
         method: 'GET',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
       });
 
       const result = await response.json();
@@ -93,7 +91,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         method: 'GET',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
       });
 
       const result = await response.json();
@@ -113,7 +111,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users`, {
         method: 'POST',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
         body: JSON.stringify(userData),
       });
 
@@ -134,7 +132,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         method: 'PUT',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
         body: JSON.stringify(userData),
       });
 
@@ -155,7 +153,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
         method: 'DELETE',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
       });
 
       const result = await response.json();
@@ -175,7 +173,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}/role`, {
         method: 'PUT',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
         body: JSON.stringify({ role, permissionLevel }),
       });
 
@@ -196,7 +194,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users/roles`, {
         method: 'GET',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
       });
 
       const result = await response.json();
@@ -216,7 +214,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}/password`, {
         method: 'PUT',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
         body: JSON.stringify({ newPassword }),
       });
 
@@ -237,7 +235,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}/activity?limit=${limit}`, {
         method: 'GET',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
       });
 
       const result = await response.json();
@@ -257,7 +255,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users/bulk-update`, {
         method: 'PUT',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
         body: JSON.stringify({ updates }),
       });
 
@@ -278,7 +276,7 @@ class UserManagementService {
     try {
       const response = await fetch(`${API_BASE_URL}/users/groups`, {
         method: 'GET',
-        headers: this.getAuthHeaders(),
+        headers: getAuthHeaders(),
       });
       const result = await response.json();
       if (!response.ok) {

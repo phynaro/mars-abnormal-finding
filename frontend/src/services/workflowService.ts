@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface WorkflowType {
   WFTYPENO?: number;
@@ -18,7 +19,7 @@ class WorkflowService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/workflow`;
 
   private async headers() {
-    return authService.getAuthHeaders();
+    return getAuthHeaders();
   }
 
   async getTypes(): Promise<WorkflowTypesResponse> {

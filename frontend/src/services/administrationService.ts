@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders as getAuthHeadersUtil } from '../utils/authHeaders';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -236,13 +237,6 @@ export const canUserPerformAction = (
   return userActions.includes(action);
 };
 
-const getAuthHeaders = (): HeadersInit => {
-  const token = authService.getToken();
-  return {
-    'Content-Type': 'application/json',
-    ...(token && { Authorization: `Bearer ${token}` })
-  };
-};
 
 const handleApiResponse = async (response: Response): Promise<any> => {
   if (!response.ok) {
@@ -261,18 +255,19 @@ export const ticketApprovalService = {
     search?: string;
     is_active?: boolean;
   }): Promise<TicketApprovalSummary[]> {
-    const url = new URL(`${API_BASE_URL}/administration/ticket-approvals`);
+    const queryParams = new URLSearchParams();
     
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
         if (value !== undefined && value !== null) {
-          url.searchParams.append(key, value.toString());
+          queryParams.set(key, value.toString());
         }
       });
     }
-    
-    const response = await fetch(url.toString(), {
-      headers: getAuthHeaders()
+
+    const url = `${API_BASE_URL}/administration/ticket-approvals?${queryParams.toString()}`;
+    const response = await fetch(url, {
+      headers: getAuthHeadersUtil()
     });
     const result: ApiResponse<TicketApprovalSummary[]> = await handleApiResponse(response);
     return result.data;
@@ -280,7 +275,7 @@ export const ticketApprovalService = {
 
   async getById(id: number): Promise<TicketApproval> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/${id}`, {
-      headers: getAuthHeaders()
+      headers: getAuthHeadersUtil()
     });
     const result: ApiResponse<TicketApproval> = await handleApiResponse(response);
     return result.data;
@@ -288,7 +283,7 @@ export const ticketApprovalService = {
 
   async getByPersonAndLevel(personno: number, approvalLevel: number): Promise<TicketApproval[]> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/person/${personno}/level/${approvalLevel}`, {
-      headers: getAuthHeaders()
+      headers: getAuthHeadersUtil()
     });
     const result: ApiResponse<TicketApproval[]> = await handleApiResponse(response);
     return result.data;
@@ -297,7 +292,7 @@ export const ticketApprovalService = {
   async create(approval: Omit<TicketApproval, 'id' | 'created_at' | 'updated_at' | 'person_name' | 'location_scope' | 'approval_level_name'>): Promise<{ id: number }> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals`, {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers: getAuthHeadersUtil(),
       body: JSON.stringify(approval)
     });
     const result: ApiResponse<{ id: number }> = await handleApiResponse(response);
@@ -307,7 +302,7 @@ export const ticketApprovalService = {
   async createBulk(bulkData: BulkApprovalCreateData): Promise<BulkApprovalResponse> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/bulk`, {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers: getAuthHeadersUtil(),
       body: JSON.stringify(bulkData)
     });
     const result: BulkApprovalResponse = await handleApiResponse(response);
@@ -317,7 +312,7 @@ export const ticketApprovalService = {
   async createMultiple(approvals: CreateTicketApprovalRequest[]): Promise<{ count: number; ids: number[] }> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/bulk`, {
       method: 'POST',
-      headers: getAuthHeaders(),
+      headers: getAuthHeadersUtil(),
       body: JSON.stringify({ approvals })
     });
     const result: ApiResponse<{ count: number; ids: number[] }> = await handleApiResponse(response);
@@ -327,7 +322,7 @@ export const ticketApprovalService = {
   async update(id: number, approval: Omit<TicketApproval, 'id' | 'created_at' | 'updated_at' | 'person_name' | 'location_scope' | 'approval_level_name'>): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/${id}`, {
       method: 'PUT',
-      headers: getAuthHeaders(),
+      headers: getAuthHeadersUtil(),
       body: JSON.stringify(approval)
     });
     await handleApiResponse(response);
@@ -336,7 +331,7 @@ export const ticketApprovalService = {
   async delete(id: number): Promise<void> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/${id}`, {
       method: 'DELETE',
-      headers: getAuthHeaders()
+      headers: getAuthHeadersUtil()
     });
     await handleApiResponse(response);
   },
@@ -344,7 +339,7 @@ export const ticketApprovalService = {
   async deleteByPersonAndLevel(personno: number, approvalLevel: number): Promise<{ count: number }> {
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/person/${personno}/level/${approvalLevel}`, {
       method: 'DELETE',
-      headers: getAuthHeaders()
+      headers: getAuthHeadersUtil()
     });
     const result: ApiResponse<{ count: number }> = await handleApiResponse(response);
     return { count: result.data.count };
@@ -359,7 +354,7 @@ export const ticketApprovalService = {
     }
 
     const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/notification-users?${params.toString()}`, {
-      headers: getAuthHeaders()
+      headers: getAuthHeadersUtil()
     });
 
     const result: ApiResponse<Person[]> = await handleApiResponse(response);
@@ -373,7 +368,7 @@ export const ticketApprovalService = {
 export const hierarchyService = {
   async getHierarchyView(): Promise<HierarchyViewResponse> {
     const response = await fetch(`${API_BASE_URL}/administration/hierarchy`, {
-      headers: getAuthHeaders()
+      headers: getAuthHeadersUtil()
     });
     const result: ApiResponse<HierarchyViewResponse> = await handleApiResponse(response);
     return result.data;
@@ -385,7 +380,7 @@ export const hierarchyService = {
 export const lookupService = {
   async getLookupData(): Promise<LookupData> {
     const response = await fetch(`${API_BASE_URL}/administration/lookup`, {
-      headers: getAuthHeaders()
+      headers: getAuthHeadersUtil()
     });
     const result: ApiResponse<LookupData> = await handleApiResponse(response);
     return result.data;
@@ -401,7 +396,7 @@ export const personService = {
     if (limit) params.append('limit', limit.toString());
 
     const response = await fetch(`${API_BASE_URL}/administration/persons/search?${params.toString()}`, {
-      headers: getAuthHeaders()
+      headers: getAuthHeadersUtil()
     });
     const result: ApiResponse<Person[]> = await handleApiResponse(response);
 

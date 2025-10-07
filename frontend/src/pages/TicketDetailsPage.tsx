@@ -28,6 +28,7 @@ import {
   UserPlus,
   Phone,
 } from "lucide-react";
+import { getApiBaseUrl, getFileUrl } from "@/utils/url";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -170,10 +171,6 @@ const TicketDetailsPage: React.FC = () => {
     }
   };
 
-  const apiBase = (
-    import.meta.env.VITE_API_URL || "http://localhost:3001/api"
-  ).replace(/\/$/, "");
-  const uploadsBase = apiBase.endsWith("/api") ? apiBase.slice(0, -4) : apiBase;
   // Load assignees only when modal is open with specific actions
   useEffect(() => {
     // Only load when the modal is open and we need assignees (plan/reassign/escalate)
@@ -246,7 +243,7 @@ const TicketDetailsPage: React.FC = () => {
         const file = selectedFiles[i];
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
-          xhr.open("POST", `${apiBase}/tickets/${ticket.id}/images`);
+          xhr.open("POST", `${getApiBaseUrl()}/tickets/${ticket.id}/images`);
           xhr.setRequestHeader("Authorization", `Bearer ${token}`);
           const form = new FormData();
           form.append("image", file);
@@ -405,7 +402,7 @@ const TicketDetailsPage: React.FC = () => {
           }}
         >
           <img
-            src={`${uploadsBase}${img.image_url}`}
+            src={getFileUrl(img.image_url)}
             alt={img.image_name}
             className="h-32 w-full object-cover transition-transform duration-200 sm:h-36 lg:h-40"
           />
@@ -979,9 +976,7 @@ const TicketDetailsPage: React.FC = () => {
                       ? `${comment.user_name.split(" ")[0]?.[0] || ""}${comment.user_name.split(" ")[1]?.[0] || ""}`
                       : `U${comment.user_id}`;
 
-                    const avatarSrc = comment.user_avatar_url
-                      ? `${uploadsBase}${comment.user_avatar_url}`
-                      : undefined;
+                    const avatarSrc = getFileUrl(comment.user_avatar_url);
 
                     return (
                       <div
@@ -1452,7 +1447,7 @@ const TicketDetailsPage: React.FC = () => {
           {ticket && ticket.images && ticket.images[lightboxIndex] && (
             <div className="relative">
               <img
-                src={`${uploadsBase}${ticket.images[lightboxIndex].image_url}`}
+                src={getFileUrl(ticket.images[lightboxIndex].image_url)}
                 alt={ticket.images[lightboxIndex].image_name}
                 className="w-full h-auto"
               />

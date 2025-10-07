@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface Site {
   SiteNo: number;
@@ -57,7 +58,7 @@ class AssetService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/assets`;
 
   private async headers() {
-    return authService.getAuthHeaders();
+    return getAuthHeaders();
   }
 
   async getSites(): Promise<{ success: boolean; data: Site[]; count?: number }> {

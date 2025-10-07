@@ -1,4 +1,5 @@
 import authService from './authService';
+import { getAuthHeaders } from '../utils/authHeaders';
 
 export type GroupBy = 'daily' | 'weekly' | 'period';
 
@@ -535,7 +536,7 @@ class DashboardService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/dashboard`;
   private hierarchyURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/hierarchy`;
 
-  private headers() { return authService.getAuthHeaders(); }
+  private headers() { return getAuthHeaders(); }
 
   async getAllAreas(): Promise<{ success: boolean; data: AreaData[] }> {
     const res = await fetch(`${this.hierarchyURL}/areas`, { headers: this.headers() });
@@ -557,11 +558,14 @@ class DashboardService {
     fromYear?: string | number;
     toYear?: string | number;
   } = {}): Promise<WorkOrderTrendResponse> {
-    const url = new URL(`${this.baseURL}/workorder-volume-trend`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/workorder-volume-trend?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch work order volume trend');
     return res.json();
   }
@@ -574,11 +578,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<AbnormalFindingKPIResponse> {
-    const url = new URL(`${this.baseURL}/af`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/af?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch abnormal finding KPIs');
     return res.json();
   }
@@ -588,11 +595,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   } = {}): Promise<TicketsCountPerPeriodResponse> {
-    const url = new URL(`${this.baseURL}/tickets-count-per-period`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/tickets-count-per-period?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch tickets count per period');
     return res.json();
   }
@@ -602,11 +612,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   } = {}): Promise<TicketsClosedPerPeriodResponse> {
-    const url = new URL(`${this.baseURL}/tickets-closed-per-period`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/tickets-closed-per-period?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch tickets closed per period');
     return res.json();
   }
@@ -616,11 +629,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   } = {}): Promise<AreaActivityResponse> {
-    const url = new URL(`${this.baseURL}/area-activity`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/area-activity?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch area activity data');
     return res.json();
   }
@@ -631,11 +647,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<UserActivityResponse> {
-    const url = new URL(`${this.baseURL}/user-activity`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/user-activity?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch user activity data');
     return res.json();
   }
@@ -645,11 +664,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   } = {}): Promise<CalendarHeatmapResponse> {
-    const url = new URL(`${this.baseURL}/calendar-heatmap`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/calendar-heatmap?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch calendar heatmap data');
     return res.json();
   }
@@ -659,11 +681,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   } = {}): Promise<DowntimeAvoidanceTrendResponse> {
-    const url = new URL(`${this.baseURL}/downtime-avoidance-trend`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/downtime-avoidance-trend?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch downtime avoidance trend data');
     return res.json();
   }
@@ -673,11 +698,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   } = {}): Promise<CostAvoidanceResponse> {
-    const url = new URL(`${this.baseURL}/cost-avoidance`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/cost-avoidance?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch cost avoidance data');
     return res.json();
   }
@@ -688,11 +716,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<DowntimeImpactLeaderboardResponse> {
-    const url = new URL(`${this.baseURL}/downtime-impact-leaderboard`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/downtime-impact-leaderboard?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch downtime impact leaderboard data');
     return res.json();
   }
@@ -703,11 +734,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<CostImpactLeaderboardResponse> {
-    const url = new URL(`${this.baseURL}/cost-impact-leaderboard`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/cost-impact-leaderboard?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch cost impact leaderboard data');
     return res.json();
   }
@@ -719,11 +753,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<OntimeRateByAreaResponse> {
-    const url = new URL(`${this.baseURL}/ontime-rate-by-area`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/ontime-rate-by-area?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch ontime rate by area data');
     return res.json();
   }
@@ -735,17 +772,17 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<OntimeRateByUserResponse> {
-    const url = new URL(`${this.baseURL}/ontime-rate-by-user`);
-    url.searchParams.append('startDate', params.startDate);
-    url.searchParams.append('endDate', params.endDate);
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
     if (params.plant !== undefined) {
-      url.searchParams.append('plant', params.plant);
+      queryParams.set('plant', params.plant);
     }
     if (params.area !== undefined) {
-      url.searchParams.append('area', params.area);
+      queryParams.set('area', params.area);
     }
-
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/ontime-rate-by-user?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch ontime rate by user data');
     return res.json();
   }
@@ -757,17 +794,17 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<TicketResolveDurationByUserResponse> {
-    const url = new URL(`${this.baseURL}/ticket-resolve-duration-by-user`);
-    url.searchParams.append('startDate', params.startDate);
-    url.searchParams.append('endDate', params.endDate);
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
     if (params.plant !== undefined) {
-      url.searchParams.append('plant', params.plant);
+      queryParams.set('plant', params.plant);
     }
     if (params.area !== undefined) {
-      url.searchParams.append('area', params.area);
+      queryParams.set('area', params.area);
     }
-
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/ticket-resolve-duration-by-user?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch ticket resolve duration by user data');
     return res.json();
   }
@@ -779,11 +816,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<TicketResolveDurationByAreaResponse> {
-    const url = new URL(`${this.baseURL}/ticket-resolve-duration-by-area`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/ticket-resolve-duration-by-area?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch ticket resolve duration by area data');
     return res.json();
   }
@@ -795,17 +835,17 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<CostByFailureModeResponse> {
-    const url = new URL(`${this.baseURL}/cost-impact-by-failure-mode`);
-    url.searchParams.append('startDate', params.startDate);
-    url.searchParams.append('endDate', params.endDate);
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
     if (params.plant !== undefined) {
-      url.searchParams.append('plant', params.plant);
+      queryParams.set('plant', params.plant);
     }
     if (params.area !== undefined) {
-      url.searchParams.append('area', params.area);
+      queryParams.set('area', params.area);
     }
-
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/cost-impact-by-failure-mode?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch cost impact by failure mode data');
     return res.json();
   }
@@ -817,17 +857,17 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<DowntimeByFailureModeResponse> {
-    const url = new URL(`${this.baseURL}/downtime-impact-by-failure-mode`);
-    url.searchParams.append('startDate', params.startDate);
-    url.searchParams.append('endDate', params.endDate);
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
     if (params.plant !== undefined) {
-      url.searchParams.append('plant', params.plant);
+      queryParams.set('plant', params.plant);
     }
     if (params.area !== undefined) {
-      url.searchParams.append('area', params.area);
+      queryParams.set('area', params.area);
     }
-
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/downtime-impact-by-failure-mode?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch downtime impact by failure mode data');
     return res.json();
   }
@@ -839,17 +879,17 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<CostImpactReporterLeaderboardResponse> {
-    const url = new URL(`${this.baseURL}/cost-impact-reporter-leaderboard`);
-    url.searchParams.append('startDate', params.startDate);
-    url.searchParams.append('endDate', params.endDate);
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
     if (params.plant !== undefined) {
-      url.searchParams.append('plant', params.plant);
+      queryParams.set('plant', params.plant);
     }
     if (params.area !== undefined) {
-      url.searchParams.append('area', params.area);
+      queryParams.set('area', params.area);
     }
-
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/cost-impact-reporter-leaderboard?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch cost impact reporter leaderboard data');
     return res.json();
   }
@@ -860,11 +900,14 @@ class DashboardService {
     plant?: string;
     area?: string;
   }): Promise<DowntimeImpactReporterLeaderboardResponse> {
-    const url = new URL(`${this.baseURL}/downtime-impact-reporter-leaderboard`);
+    const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && String(v) !== '') url.searchParams.set(k, String(v));
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
     });
-    const res = await fetch(url.toString(), { headers: this.headers() });
+    const url = `${this.baseURL}/downtime-impact-reporter-leaderboard?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch downtime impact reporter leaderboard data');
     return res.json();
   }

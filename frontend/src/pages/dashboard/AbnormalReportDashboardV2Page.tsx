@@ -22,8 +22,7 @@ import { KPITileSkeleton } from '@/components/ui/kpi-tile-skeleton';
 import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
 import authService from '@/services/authService';
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
 
 // Utility function for dynamic currency formatting
 const formatCurrencyDynamic = (amount: number): { display: string; tooltip: string } => {
@@ -339,20 +338,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   // Minimum loading time to prevent UI blinking (in milliseconds)
   const MIN_LOADING_TIME = 800;
 
-  // Helper function to construct avatar URL
-  const getAvatarUrl = useCallback((avatarUrl?: string) => {
-    if (!avatarUrl) return undefined;
-    
-    // If it's already an absolute URL, return as is
-    if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
-      return avatarUrl;
-    }
-    
-    // If it's a relative URL, construct the full URL
-    const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
-    const uploadsBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
-    return `${uploadsBase}${avatarUrl}`;
-  }, []);
 
   // Utility function to format date as YYYY-MM-DD in local timezone
   const formatLocalDate = (date: Date): string => {

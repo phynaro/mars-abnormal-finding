@@ -8,6 +8,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { getAvatarUrl } from '../../utils/url';
 
 interface IconRailProps {
   activeId: string | null;
@@ -20,8 +21,6 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
-  const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
-  const uploadsBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
 
   // Permission checks disabled: show all items regardless of user level
   const canAccess = (_item: MenuItem) => true;
@@ -93,7 +92,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
               <button className="flex h-10 w-10 items-center justify-center rounded-full hover:bg-primary-foreground/10 overflow-hidden">
                 <Avatar className="h-8 w-8">
                   {user?.avatarUrl ? (
-                    <AvatarImage src={`${uploadsBase}${user.avatarUrl}`} />
+                    <AvatarImage src={getAvatarUrl(user.avatarUrl)} />
                   ) : null}
                   <AvatarFallback className="bg-primary-foreground text-primary">
                     {(user?.firstName?.[0] || 'U')}{(user?.lastName?.[0] || '')}

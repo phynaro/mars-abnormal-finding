@@ -8,6 +8,7 @@ import {
 } from 'recharts';
 import { Download, Users, TrendingUp, Calendar, MapPin } from 'lucide-react';
 import dashboardService, { type UserActivityResponse } from '@/services/dashboardService';
+import { getAvatarUrl } from '@/utils/url';
 
 // Custom tooltip component for user chart with avatar
 const UserTooltip = ({ active, payload }: any) => {
@@ -185,20 +186,6 @@ const UserActivityChartPage: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Helper function to construct avatar URL
-  const getAvatarUrl = useCallback((avatarUrl?: string) => {
-    if (!avatarUrl) return undefined;
-    
-    // If it's already an absolute URL, return as is
-    if (avatarUrl.startsWith('http://') || avatarUrl.startsWith('https://')) {
-      return avatarUrl;
-    }
-    
-    // If it's a relative URL, construct the full URL
-    const apiBase = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
-    const uploadsBase = apiBase.endsWith('/api') ? apiBase.slice(0, -4) : apiBase;
-    return `${uploadsBase}${avatarUrl}`;
-  }, []);
 
   // Fetch user activity data
   const fetchUserActivityData = useCallback(async () => {

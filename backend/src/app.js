@@ -4,7 +4,11 @@ const dotenv = require('dotenv');
 const path = require('path');
 
 // Load environment variables
-dotenv.config();
+if (process.env.NODE_ENV === 'development') {
+  dotenv.config({ path: '.env.development' });
+} else {
+  dotenv.config();
+}
 
 // Increase Node.js header size limits to prevent HTTP 431 errors
 process.env.NODE_OPTIONS = '--max-http-header-size=16384';
@@ -15,34 +19,29 @@ const PORT = process.env.PORT || 3001;
 // CORS Configuration
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (like mobile apps or curl requests)
+    // Allow requests with no origin (like mobile apps, curl requests, or internal Docker calls)
     if (!origin) return callback(null, true);
     
+    // In production with Docker, nginx handles CORS, so we can be more permissive
+    if (process.env.NODE_ENV === 'production') {
+      return callback(null, true);
+    }
+    
+    // Development: Allow common development origins
     const allowedOrigins = [
       process.env.FRONTEND_URL || 'http://localhost:3000',
       'http://localhost:3000',
       'http://localhost:3001',
       'http://127.0.0.1:3000',
-      'http://127.0.0.1:3001',
-      'http://192.168.0.241:3000',
-      'http://192.168.0.241:3001',
-      'http://mars-demo.trazor.cloud',
-      'https://mars-demo.trazor.cloud'
+      'http://127.0.0.1:3001'
     ];
-
-   // console.log(`CORS Check - Origin: ${origin}, FRONTEND_URL: ${process.env.FRONTEND_URL}`);
     
-    // Allow localhost, 127.0.0.1, and local network IPs
-    if (origin.includes('localhost') || 
-        origin.includes('127.0.0.1') || 
-        origin.includes('192.168.0.') ||
-        origin.includes('192.168.1.')) {
-     // console.log(`CORS Allowed - Local network: ${origin}`);
+    // Allow localhost and 127.0.0.1 for development
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       return callback(null, true);
     }
     
     if (allowedOrigins.indexOf(origin) !== -1) {
-     // console.log(`CORS Allowed - Explicit match: ${origin}`);
       return callback(null, true);
     }
     
