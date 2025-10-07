@@ -1,6 +1,5 @@
 # Multi-stage Dockerfile for Frontend (Development & Production)
-FROM node:22-alpine as build
-
+FROM node:20-alpine as build
 WORKDIR /app
 
 # Copy package files
@@ -52,7 +51,7 @@ COPY nginx.conf /etc/nginx/nginx.conf
 # Create nginx user and set permissions
 RUN chown -R nginx:nginx /usr/share/nginx/html
 
-# Expose port
-EXPOSE 80
+# Expose port 3000 (not 80, since nginx container will proxy to this)
+EXPOSE 3000
 
 CMD ["nginx", "-g", "daemon off;"]

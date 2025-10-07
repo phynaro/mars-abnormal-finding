@@ -1,0 +1,136 @@
+services:
+  # Backend service with local build
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: mars-backend:local
+    container_name: mars-backend-local
+    env_file:
+      - ./backend/.env.development
+    environment:
+      - NODE_ENV=development
+    volumes:
+      # Mount source code for development (hot reload)
+      - ./backend/src:/app/src:ro
+      - ./backend/swagger:/app/swagger:ro
+      # Persistent uploads directory
+      - ./backend/uploads:/app/uploads
+      # Mount logs directory for debugging
+      - ./backend/logs:/app/logs
+    ports:
+      - "3001:3001"
+    networks:
+      - mars-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend service with local build
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: development
+        VITE_API_URL: http://localhost/api
+        VITE_LIFF_ID: ${VITE_LIFF_ID:-your-liff-id-here}
+    image: mars-frontend:local
+    container_name: mars-frontend-local
+    env_file:
+      - ./frontend/.env.development
+    environment:
+      - NODE_ENV=development
+      - VITE_API_URL=http://localhost/api
+      - VITE_LIFF_ID=${VITE_LIFF_ID:-your-liff-id-here}
+    volumes:
+      # Mount built files for development
+      - ./frontend/dist:/usr/share/nginx/html:ro
+    # No port mapping - only accessible through nginx proxy
+    networks:
+      - mars-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx reverse proxy for local development
+  nginx:
+    image: nginx:alpine
+    container_name: mars-nginx-local
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Use local nginx configuration
+      - ./nginx-development.conf:/etc/nginx/nginx.conf:ro
+      # SSL certificates (optional)
+      # - ./ssl:/etc/ssl:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - mars-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Optional: Database service for local development
+  # Uncomment if you need a local database
+  # db:
+  #   image: mcr.microsoft.com/mssql/server:2022-latest
+  #   container_name: mars-db-local
+  #   environment:
+  #     - ACCEPT_EULA=Y
+  #     - SA_PASSWORD=YourStrong@Passw0rd
+  #     - MSSQL_PID=Developer
+  #   ports:
+  #     - "1433:1433"
+  #   volumes:
+  #     - mars_db_data:/var/opt/mssql
+  #   networks:
+  #     - mars-network
+  #   restart: unless-stopped
+
+  # Optional: Redis for caching (if needed)
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: mars-redis-local
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - mars_redis_data:/data
+  #   networks:
+  #     - mars-network
+  #   restart: unless-stopped
+  #   command: redis-server --appendonly yes
+
+networks:
+  mars-network:
+    driver: bridge
+    name: mars-local-network
+
+  # Uncomment if using database
+  # mars_db_data:
+  #   driver: local
+  #   name: mars-db-data-local
+  # Uncomment if using Redis
+  # mars_redis_data:
+  #   driver: local
+  #   name: mars-redis-data-local

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import Cropper from 'react-easy-crop';
+
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle, Key, MessageSquare, User } from 'lucide-react';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
@@ -108,46 +109,201 @@ const ProfilePage: React.FC = () => {
 
   // Avatar crop handlers
   const onSelectAvatar: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+    console.log('📁 onSelectAvatar called with files:', e.target.files);
     const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setImageSrc(url);
-    setShowCropper(true);
+    if (!file) {
+      console.log('❌ No file selected');
+      return;
+    }
+    
+    console.log('📄 File selected:', {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      lastModified: file.lastModified
+    });
+    
+    try {
+      // Validate file type
+      if (!file.type.startsWith('image/')) {
+        console.error('❌ Invalid file type:', file.type);
+        alert(t('profile.invalidImageFile'));
+        return;
+      }
+      
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        console.error('❌ File too large:', file.size);
+        alert(t('profile.imageTooLarge'));
+        return;
+      }
+      
+      console.log('🔄 Creating object URL...');
+      const url = URL.createObjectURL(file);
+      console.log('✅ Object URL created:', url.substring(0, 50) + '...');
+      
+      console.log('🔄 Setting image source and showing cropper...');
+      setImageSrc(url);
+      setShowCropper(true);
+      
+      console.log('✅ File selection completed successfully');
+    } catch (error) {
+      console.error('❌ Error creating object URL:', error);
+      alert(t('profile.failedToLoadImage'));
+    }
   };
 
-  const onCropFinish = useCallback((_: any, croppedPixels: any) => {
+  const onCropComplete = useCallback((_: any, croppedPixels: any) => {
+    console.log('🔄 onCropComplete called with pixels:', croppedPixels);
     setCroppedAreaPixels(croppedPixels);
   }, []);
 
   async function getCroppedBlob(imageSrc: string, cropPixels: { x: number; y: number; width: number; height: number }): Promise<Blob> {
+    console.log('🎨 getCroppedBlob called with:', {
+      imageSrc: imageSrc.substring(0, 50) + '...',
+      cropPixels
+    });
+    
     const img: HTMLImageElement = await new Promise((resolve, reject) => {
+      console.log('🖼️ Creating image element...');
       const image = new Image();
-      image.onload = () => resolve(image);
-      image.onerror = reject;
+      image.crossOrigin = 'anonymous'; // Add CORS support
+      
+      image.onload = () => {
+        console.log('✅ Image loaded successfully:', {
+          width: image.width,
+          height: image.height,
+          naturalWidth: image.naturalWidth,
+          naturalHeight: image.naturalHeight
+        });
+        resolve(image);
+      };
+      
+      image.onerror = (error) => {
+        console.error('❌ Image load error:', error);
+        reject(new Error('Failed to load image for cropping'));
+      };
+      
+      console.log('🔄 Setting image source...');
       image.src = imageSrc;
     });
+    
+    console.log('🖼️ Image loaded, creating canvas...');
     const canvas = document.createElement('canvas');
     const size = Math.min(cropPixels.width, cropPixels.height);
     canvas.width = size;
     canvas.height = size;
+    
+    console.log('📐 Canvas dimensions:', { width: canvas.width, height: canvas.height, size });
+    
     const ctx = canvas.getContext('2d');
-    if (!ctx) throw new Error('Canvas not supported');
-    ctx.drawImage(img, cropPixels.x, cropPixels.y, size, size, 0, 0, size, size);
-    return await new Promise<Blob>((resolve) => {
-      canvas.toBlob((blob) => resolve(blob as Blob), 'image/png', 0.92);
-    });
+    if (!ctx) {
+      console.error('❌ Canvas 2D context not supported');
+      throw new Error('Canvas 2D context not supported');
+    }
+    
+    try {
+      // Set canvas properties for better compatibility
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      
+      console.log('🎨 Drawing image to canvas with crop parameters:', {
+        sourceX: cropPixels.x,
+        sourceY: cropPixels.y,
+        sourceWidth: size,
+        sourceHeight: size,
+        destX: 0,
+        destY: 0,
+        destWidth: size,
+        destHeight: size
+      });
+      
+      ctx.drawImage(img, cropPixels.x, cropPixels.y, size, size, 0, 0, size, size);
+      
+      console.log('🔄 Converting canvas to blob...');
+      return await new Promise<Blob>((resolve, reject) => {
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              console.log('✅ Blob created from canvas:', {
+                size: blob.size,
+                type: blob.type
+              });
+              resolve(blob);
+            } else {
+              console.error('❌ Failed to create blob from canvas');
+              reject(new Error('Failed to create blob from canvas'));
+            }
+          }, 
+          'image/png', 
+          0.92
+        );
+      });
+    } catch (error) {
+      console.error('❌ Canvas drawing error:', error);
+      throw new Error('Failed to process image crop');
+    }
   }
 
   const applyCrop = async () => {
-    if (!imageSrc || !croppedAreaPixels) return;
+    console.log('🚀 applyCrop function called');
+    console.log('📊 Current state:', {
+      imageSrc: imageSrc ? 'exists' : 'null',
+      croppedAreaPixels: croppedAreaPixels,
+      showCropper: showCropper,
+      avatarFile: avatarFile ? 'exists' : 'null'
+    });
+    
+    if (!imageSrc || !croppedAreaPixels) {
+      console.error('❌ Missing required data:', {
+        imageSrc: !!imageSrc,
+        croppedAreaPixels: !!croppedAreaPixels
+      });
+      alert('Missing image or crop data. Please try selecting the image again.');
+      return;
+    }
+    
     try {
+      console.log('🔄 Starting crop process with pixels:', croppedAreaPixels);
+      console.log('🖼️ Image source type:', typeof imageSrc, imageSrc.substring(0, 50) + '...');
+      
       const blob = await getCroppedBlob(imageSrc, croppedAreaPixels);
+      console.log('✅ Blob created successfully:', {
+        size: blob.size,
+        type: blob.type
+      });
+      
+      if (!blob) {
+        throw new Error('Failed to create cropped blob');
+      }
+      
       const file = new File([blob], 'avatar_cropped.png', { type: 'image/png' });
+      console.log('📁 File created:', {
+        name: file.name,
+        size: file.size,
+        type: file.type
+      });
+      
+      console.log('🔄 Setting avatar file and closing cropper...');
       setAvatarFile(file);
       setShowCropper(false);
-      URL.revokeObjectURL(imageSrc);
-      setImageSrc(null);
+      
+      // Clean up object URL
+      if (imageSrc) {
+        console.log('🧹 Cleaning up object URL');
+        URL.revokeObjectURL(imageSrc);
+        setImageSrc(null);
+      }
+      
+      console.log('✅ Crop applied successfully! New avatar file set.');
+      alert('Crop applied successfully! You can now upload the image.');
+      
     } catch (e) {
+      console.error('❌ Crop error details:', {
+        error: e,
+        message: e instanceof Error ? e.message : 'Unknown error',
+        stack: e instanceof Error ? e.stack : 'No stack trace'
+      });
       alert(e instanceof Error ? e.message : t('profile.failedToCropImage'));
     }
   };
@@ -157,6 +313,25 @@ const ProfilePage: React.FC = () => {
       if (imageSrc) URL.revokeObjectURL(imageSrc);
     };
   }, [imageSrc]);
+  useEffect(() => {
+    console.log('hello');
+  }, []);
+  // Debug useEffect to monitor state changes
+  useEffect(() => {
+    console.log('🔄 State update - croppedAreaPixels:', croppedAreaPixels);
+  }, [croppedAreaPixels]);
+
+  useEffect(() => {
+    console.log('🔄 State update - imageSrc:', imageSrc ? 'exists' : 'null');
+  }, [imageSrc]);
+
+  useEffect(() => {
+    console.log('🔄 State update - showCropper:', showCropper);
+  }, [showCropper]);
+
+  useEffect(() => {
+    console.log('🔄 State update - avatarFile:', avatarFile ? 'exists' : 'null');
+  }, [avatarFile]);
 
 
   return (
@@ -411,7 +586,7 @@ const ProfilePage: React.FC = () => {
                 aspect={1}
                 onCropChange={setCrop}
                 onZoomChange={setZoom}
-                onCropFinish={onCropFinish}
+                onCropComplete={onCropComplete}
                 restrictPosition={false}
               />
             )}
@@ -429,8 +604,14 @@ const ProfilePage: React.FC = () => {
             />
           </div>
           <div className="flex justify-end gap-2 mt-4">
-            <Button variant="outline" onClick={() => setShowCropper(false)}>{t('profile.cancel')}</Button>
-            <Button onClick={applyCrop}>{t('profile.apply')}</Button>
+            <Button variant="outline" onClick={() => {
+              console.log('❌ Cancel button clicked');
+              setShowCropper(false);
+            }}>{t('profile.cancel')}</Button>
+            <Button onClick={() => {
+              console.log('✅ Apply button clicked - calling applyCrop');
+              applyCrop();
+            }}>{t('profile.apply')}</Button>
           </div>
         </DialogContent>
       </Dialog>

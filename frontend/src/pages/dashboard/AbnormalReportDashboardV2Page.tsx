@@ -338,6 +338,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   // Minimum loading time to prevent UI blinking (in milliseconds)
   const MIN_LOADING_TIME = 800;
 
+  const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
   // Utility function to format date as YYYY-MM-DD in local timezone
   const formatLocalDate = (date: Date): string => {

@@ -47,6 +47,7 @@ import TicketDetailsPage from './pages/TicketDetailsPage';
 import TicketCreatePage from './pages/TicketCreatePage';
 import TicketCreateWizardPage from './pages/TicketCreateWizardPage';
 import ProfilePage from './pages/ProfilePage';
+import TestDebugPage from './pages/TestDebugPage';
 import HierarchyViewPage from './pages/HierarchyViewPage';
 import TicketApprovalManagementPage from './pages/TicketApprovalManagementPage';
 import WorkflowTypesPage from './pages/WorkflowTypesPage';
@@ -183,6 +184,7 @@ const AppContent: React.FC = () => {
          
           <Route path="tickets/:ticketId" element={<TicketDetailsPage />} />
           <Route path="profile" element={<ProfilePage />} />
+          <Route path="test-debug" element={<TestDebugPage />} />
 
           {/* Asset Management Routes */}
           <Route path="settings" element={<HierarchyViewPage />} />
