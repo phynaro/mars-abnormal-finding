@@ -63,7 +63,7 @@ jobs:
 
       - name: Stop existing containers
         run: |
-          docker-compose -f docker-compose.yml down || true
+          docker compose -f docker compose.yml down || true
 
       - name: Deploy to staging
         run: |
@@ -71,8 +71,9 @@ jobs:
           export FRONTEND_IMAGE=${{ env.REGISTRY }}/${{ env.OWNER }}/frontend:sha-${{ github.event.workflow_run.head_sha }}
           export BACKEND_IMAGE=${{ env.REGISTRY }}/${{ env.OWNER }}/backend:sha-${{ github.event.workflow_run.head_sha }}
           
-          # Deploy using docker-compose with development environment
-          docker-compose -f docker-compose.yml up -d
+          # Deploy using docker compose with development environment
+          cd /opt/mars-abnormal-finding
+          docker compose -f docker compose.yml up -d
 
       - name: Verify deployment
         run: |
@@ -80,14 +81,15 @@ jobs:
           sleep 30
           
           # Check if containers are running
-          docker-compose -f docker-compose.yml ps
+          cd /opt/mars-abnormal-finding
+          docker compose -f docker compose.yml ps
           
           # Basic health check
-          if docker-compose -f docker-compose.yml ps | grep -q "Up"; then
+          if docker compose -f docker compose.yml ps | grep -q "Up"; then
             echo "✅ Deployment successful - services are running"
           else
             echo "❌ Deployment failed - some services are not running"
-            docker-compose -f docker-compose.yml logs
+            docker compose -f docker compose.yml logs
             exit 1
           fi
 
