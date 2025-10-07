@@ -22,8 +22,15 @@ ENV NODE_ENV=${NODE_ENV}
 ENV VITE_API_URL=${VITE_API_URL}
 ENV VITE_LIFF_ID=${VITE_LIFF_ID}
 
-# Copy appropriate environment file based on NODE_ENV
-COPY .env.${NODE_ENV} .env
+# Copy appropriate environment file based on NODE_ENV (if it exists)
+RUN if [ -f ".env.${NODE_ENV}" ]; then \
+        cp .env.${NODE_ENV} .env; \
+    else \
+        echo "# Environment file for ${NODE_ENV}" > .env; \
+        echo "VITE_API_URL=${VITE_API_URL:-/api}" >> .env; \
+        echo "VITE_LIFF_ID=${VITE_LIFF_ID:-your-liff-id-here}" >> .env; \
+        echo "VITE_ENVIRONMENT=${NODE_ENV}" >> .env; \
+    fi
 
 # Build the application with appropriate mode
 RUN if [ "$NODE_ENV" = "development" ]; then \

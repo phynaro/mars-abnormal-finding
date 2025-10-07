@@ -42,6 +42,10 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           labels: org.opencontainers.image.source=${{ github.repository }}
+          build-args: |
+            NODE_ENV=production
+            VITE_API_URL=/api
+            VITE_LIFF_ID=${{ secrets.STAGING_VITE_LIFF_ID || 'your-liff-id-here' }}
 
   build-backend:
     name: Build & Push (backend)

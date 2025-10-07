@@ -76,6 +76,13 @@ jobs:
           # Deploy using docker compose with development environment
           cd /opt/mars-abnormal-finding
           docker compose up -d
+          
+          # Wait a moment for containers to start
+          sleep 10
+          
+          # Verify the frontend is using the correct API URL
+          echo "Checking frontend API configuration..."
+          docker compose exec frontend printenv | grep VITE_API_URL || echo "VITE_API_URL not found in runtime env"
 
       - name: Verify deployment
         run: |
