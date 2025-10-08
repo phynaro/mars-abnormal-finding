@@ -393,8 +393,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           compare_endDate: `${currentYear - 1}-12-31`
         };
       case 'last-year':
-        // For last-year, we need to find the first Sunday of the week containing New Year's Day of the previous year
-        const lastYearNewYearDay = new Date(currentYear - 1, 0, 1); // January 1st of last year
+        // For last-year, we need to find the first Sunday of the week containing New Year's Day of the selected year
+        const lastYearNewYearDay = new Date(currentYear, 0, 1); // January 1st of the selected year
         const lastYearFirstSunday = new Date(lastYearNewYearDay);
         const lastYearDayOfWeek = lastYearNewYearDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
         const lastYearDaysToSubtract = lastYearDayOfWeek === 0 ? 0 : lastYearDayOfWeek; // Go back to Sunday
@@ -407,8 +407,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         return {
           startDate: formatLocalDate(lastYearFirstSunday),
           endDate: formatLocalDate(lastYearEndDate),
-          compare_startDate: `${currentYear - 2}-01-01`,
-          compare_endDate: `${currentYear - 2}-12-31`
+          compare_startDate: `${currentYear - 1}-01-01`,
+          compare_endDate: `${currentYear - 1}-12-31`
         };
       case 'this-period':
         // Calculate current 28-day period based on first Sunday of the year
