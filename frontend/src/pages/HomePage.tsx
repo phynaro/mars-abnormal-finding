@@ -131,11 +131,11 @@ function formatHours(hours: number) {
 }
 
 // Helper function to get relationship configuration
-const getRelationshipConfig = (relationship: string) => {
+const getRelationshipConfig = (relationship: string, t: any) => {
   const configs = {
     'escalate_approver': {
       icon: <ArrowUp className="h-5 w-5" />,
-      title: 'Escalated Tickets',
+      title: t('homepage.escalatedTickets'),
       color: 'text-orange-600',
       bgColor: 'bg-orange-50 border-orange-200',
       priority: 1,
@@ -152,7 +152,7 @@ const getRelationshipConfig = (relationship: string) => {
     },
     'accept_approver': {
       icon: <CheckCircle className="h-5 w-5" />,
-      title: 'Tickets to Accept',
+      title: t('homepage.ticketsToAccept'),
       color: 'text-blue-600',
       bgColor: 'bg-blue-50 border-blue-200',
       priority: 2,
@@ -169,7 +169,7 @@ const getRelationshipConfig = (relationship: string) => {
     },
     'close_approver': {
       icon: <Lock className="h-5 w-5" />,
-      title: 'Tickets to Close',
+      title: t('homepage.ticketsToClose'),
       color: 'text-purple-600',
       bgColor: 'bg-purple-50 border-purple-200',
       priority: 3,
@@ -186,7 +186,7 @@ const getRelationshipConfig = (relationship: string) => {
     },
     'review_approver': {
       icon: <Star className="h-5 w-5" />,
-      title: 'Tickets to Review',
+      title: t('homepage.ticketsToReview'),
       color: 'text-yellow-600',
       bgColor: 'bg-yellow-50 border-yellow-200',
       priority: 4,
@@ -203,7 +203,7 @@ const getRelationshipConfig = (relationship: string) => {
     },
     'reject_approver': {
       icon: <X className="h-5 w-5" />,
-      title: 'Tickets to Review (Rejected)',
+      title: t('homepage.ticketsToReviewRejected'),
       color: 'text-red-600',
       bgColor: 'bg-red-50 border-red-200',
       priority: 5,
@@ -220,7 +220,7 @@ const getRelationshipConfig = (relationship: string) => {
     },
     'planner': {
       icon: <Calendar className="h-5 w-5" />,
-      title: 'Tickets to Plan',
+      title: t('homepage.ticketsToPlan'),
       color: 'text-indigo-600',
       bgColor: 'bg-indigo-50 border-indigo-200',
       priority: 6,
@@ -239,7 +239,7 @@ const getRelationshipConfig = (relationship: string) => {
     },
     'assignee': {
       icon: <UserCheck className="h-5 w-5" />,
-      title: 'My Assigned Tickets',
+      title: t('homepage.myAssignedTickets'),
       color: 'text-green-600',
       bgColor: 'bg-green-50 border-green-200',
       priority: 7,
@@ -256,7 +256,7 @@ const getRelationshipConfig = (relationship: string) => {
     },
     'requester': {
       icon: <User className="h-5 w-5" />,
-      title: 'My Created Tickets',
+      title: t('homepage.myCreatedTickets'),
       color: 'text-gray-600',
       bgColor: 'bg-gray-50 border-gray-200',
       priority: 8,
@@ -274,7 +274,7 @@ const getRelationshipConfig = (relationship: string) => {
     },
     'viewer': {
       icon: <Eye className="h-5 w-5" />,
-      title: 'Other Tickets',
+      title: t('homepage.otherTickets'),
       color: 'text-gray-500',
       bgColor: 'bg-gray-50 border-gray-200',
       priority: 9,
@@ -296,7 +296,7 @@ const getRelationshipConfig = (relationship: string) => {
 };
 
 // Helper function to render mobile card content with labels
-const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => {
+const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string, t: any) => {
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
   };
@@ -310,7 +310,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.accepted_at ? (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
-          <span>Accepted: {formatDate(ticket.accepted_at)}</span>
+          <span>{t('homepage.accepted')}: {formatDate(ticket.accepted_at)}</span>
         </div>
       ) : null;
     
@@ -318,7 +318,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.accepted_by_name ? (
         <div className="flex items-center gap-2">
           <User className="w-4 h-4 text-muted-foreground" />
-          <span>Accepted by: {ticket.accepted_by_name}</span>
+          <span>{t('homepage.acceptedBy')}: {ticket.accepted_by_name}</span>
         </div>
       ) : null;
     
@@ -326,7 +326,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.escalated_at ? (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
-          <span>Escalated: {formatDateTime(ticket.escalated_at)}</span>
+          <span>{t('homepage.escalated')}: {formatDateTime(ticket.escalated_at)}</span>
         </div>
       ) : null;
     
@@ -334,7 +334,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.escalated_by_name ? (
         <div className="flex items-center gap-2">
           <User className="w-4 h-4 text-muted-foreground" />
-          <span>Escalated by: {ticket.escalated_by_name}</span>
+          <span>{t('homepage.escalatedBy')}: {ticket.escalated_by_name}</span>
         </div>
       ) : null;
     
@@ -342,7 +342,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.reviewed_at ? (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
-          <span>Reviewed: {formatDateTime(ticket.reviewed_at)}</span>
+          <span>{t('homepage.reviewed')}: {formatDateTime(ticket.reviewed_at)}</span>
         </div>
       ) : null;
     
@@ -350,7 +350,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.reviewed_by_name ? (
         <div className="flex items-center gap-2">
           <User className="w-4 h-4 text-muted-foreground" />
-          <span>Reviewed by: {ticket.reviewed_by_name}</span>
+          <span>{t('homepage.reviewedBy')}: {ticket.reviewed_by_name}</span>
         </div>
       ) : null;
     
@@ -358,7 +358,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.finished_at ? (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
-          <span>Finished: {formatDateTime(ticket.finished_at)}</span>
+          <span>{t('homepage.finished')}: {formatDateTime(ticket.finished_at)}</span>
         </div>
       ) : null;
     
@@ -366,7 +366,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.finished_by_name ? (
         <div className="flex items-center gap-2">
           <User className="w-4 h-4 text-muted-foreground" />
-          <span>Finished by: {ticket.finished_by_name}</span>
+          <span>{t('homepage.finishedBy')}: {ticket.finished_by_name}</span>
         </div>
       ) : null;
     
@@ -374,7 +374,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.rejected_at ? (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
-          <span>Rejected: {formatDateTime(ticket.rejected_at)}</span>
+          <span>{t('homepage.rejected')}: {formatDateTime(ticket.rejected_at)}</span>
         </div>
       ) : null;
     
@@ -382,7 +382,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.rejected_by_name ? (
         <div className="flex items-center gap-2">
           <User className="w-4 h-4 text-muted-foreground" />
-          <span>Rejected by: {ticket.rejected_by_name}</span>
+          <span>{t('homepage.rejectedBy')}: {ticket.rejected_by_name}</span>
         </div>
       ) : null;
     
@@ -390,7 +390,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.schedule_start ? (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
-          <span>Scheduled start: {formatDateTime(ticket.schedule_start)}</span>
+          <span>{t('homepage.scheduledStart')}: {formatDateTime(ticket.schedule_start)}</span>
         </div>
       ) : null;
     
@@ -398,7 +398,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.schedule_finish ? (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
-          <span>Scheduled finish: {formatDateTime(ticket.schedule_finish)}</span>
+          <span>{t('homepage.scheduledFinish')}: {formatDateTime(ticket.schedule_finish)}</span>
         </div>
       ) : null;
     
@@ -406,7 +406,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.reporter_name ? (
         <div className="flex items-center gap-2">
           <User className="w-4 h-4 text-muted-foreground" />
-          <span>Created by: {ticket.reporter_name}</span>
+          <span>{t('homepage.createdBy')}: {ticket.reporter_name}</span>
         </div>
       ) : null;
     
@@ -414,7 +414,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
-          <span>Created: {formatDate(ticket.created_at)}</span>
+          <span>{t('homepage.created')}: {formatDate(ticket.created_at)}</span>
         </div>
       );
     
@@ -422,7 +422,7 @@ const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => 
       return ticket.assignee_name ? (
         <div className="flex items-center gap-2">
           <User className="w-4 h-4 text-muted-foreground" />
-          <span>Assigned to: {ticket.assignee_name}</span>
+          <span>{t('homepage.assignedTo')}: {ticket.assignee_name}</span>
         </div>
       ) : null;
     
@@ -637,14 +637,14 @@ const PendingTicketsSection: React.FC<{
 
   // Sort relationship types by priority
   const relationshipTypes = Object.keys(groupedTickets).sort((a, b) => {
-    const configA = getRelationshipConfig(a);
-    const configB = getRelationshipConfig(b);
+    const configA = getRelationshipConfig(a, t);
+    const configB = getRelationshipConfig(b, t);
     return configA.priority - configB.priority;
   });
 
   // Component to render a single ticket table for a relationship type
   const renderTicketTable = (relationship: string, tickets: APIPendingTicket[]) => {
-    const config = getRelationshipConfig(relationship);
+    const config = getRelationshipConfig(relationship, t);
     
     return (
       <div key={relationship} className="mb-6">
@@ -695,7 +695,7 @@ const PendingTicketsSection: React.FC<{
               {/* Dynamic mobile card content based on relationship type */}
               <div className="mt-3 text-sm text-muted-foreground space-y-1">
                 {config.columns.slice(6).map((column) => {
-                  const content = renderMobileCardContent(ticket, column.key);
+                  const content = renderMobileCardContent(ticket, column.key, t);
                   if (!content) return null;
                   
                   return (
