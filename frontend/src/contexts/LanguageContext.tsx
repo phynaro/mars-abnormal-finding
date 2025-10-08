@@ -166,6 +166,8 @@ const translations: Record<Language, Record<string, string>> = {
     // Homepage specific
     'homepage.welcome': 'Welcome back',
     'homepage.quickActions': 'Quick Actions',
+    'homepage.tasks': 'Tasks',
+    'homepage.performance': 'Performance',
     'homepage.pendingTickets': 'Pending Tickets',
     'homepage.personal': 'Personal',
     'homepage.team': 'Team',
@@ -729,6 +731,8 @@ const translations: Record<Language, Record<string, string>> = {
     // Homepage specific
     'homepage.welcome': 'ยินดีต้อนรับ',
     'homepage.quickActions': 'ทางลัด',
+    'homepage.tasks': 'งาน',
+    'homepage.performance': 'ประสิทธิภาพ',
     'homepage.pendingTickets': 'งานที่รอดำเนินการ',
     'homepage.personal': 'ส่วนตัว',
     'homepage.team': 'ทีม',

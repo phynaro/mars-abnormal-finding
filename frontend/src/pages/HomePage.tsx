@@ -22,7 +22,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   BarChart3,
   DollarSign,
-  FileText,
   Settings,
   Ticket,
   TrendingUp,
@@ -75,13 +74,6 @@ interface PersonalKPI {
   };
 }
 
-interface QuickAction {
-  title: string;
-  description: string;
-  icon: React.ReactNode;
-  onClick: () => void;
-  color: string;
-}
 
 
 const mockPersonalKPI: PersonalKPI = {
@@ -131,40 +123,6 @@ function formatHours(hours: number) {
 }
 
 
-const TasksSection: React.FC<{ tasks: QuickAction[] }> = ({
-  tasks,
-}) => {
-  const { t } = useLanguage();
-  
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <CheckSquare className="h-5 w-5" />
-          <span>{t('homepage.tasks')}</span>
-        </CardTitle>
-      </CardHeader>
-    <CardContent>
-      <div className="space-y-3">
-        {tasks.map((task) => (
-          <Button
-            key={task.title}
-            variant="outline"
-            className={`w-full h-auto p-4 flex items-center space-x-3 ${task.color} text-white border-0`}
-            onClick={task.onClick}
-          >
-            {task.icon}
-            <div className="text-left">
-              <div className="font-medium">{task.title}</div>
-              <div className="text-xs opacity-90">{task.description}</div>
-            </div>
-          </Button>
-        ))}
-      </div>
-    </CardContent>
-  </Card>
-  );
-};
 
 const PendingTicketsSection: React.FC<{
   tickets: APIPendingTicket[];
@@ -1118,18 +1076,6 @@ const HomePage: React.FC = () => {
     fetchPersonalKPIData();
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
-  const tasks = useMemo<QuickAction[]>(
-    () => [
-      {
-        title: t('homepage.viewTickets'),
-        description: t('homepage.checkTicketStatus'),
-        icon: <FileText className="h-6 w-6" />,
-        onClick: () => navigate("/tickets"),
-        color: "bg-gray-600 hover:bg-gray-500",
-      },
-    ],
-    [navigate, t],
-  );
 
   const subtitleSource = user as unknown as
     | { title?: string; departmentName?: string }
@@ -1483,21 +1429,14 @@ const HomePage: React.FC = () => {
         </TabsList>
 
         <TabsContent value="tasks" className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-1">
-              <TasksSection tasks={tasks} />
-            </div>
-            <div className="lg:col-span-2">
-              <PendingTicketsSection
-                tickets={pendingTickets}
-                loading={loading}
-                error={error}
-                onTicketClick={handleTicketClick}
-                pagination={pendingTicketsPagination}
-                onPageChange={handlePendingTicketsPageChange}
-              />
-            </div>
-          </div>
+          <PendingTicketsSection
+            tickets={pendingTickets}
+            loading={loading}
+            error={error}
+            onTicketClick={handleTicketClick}
+            pagination={pendingTicketsPagination}
+            onPageChange={handlePendingTicketsPageChange}
+          />
         </TabsContent>
 
         <TabsContent value="performance" className="space-y-4">
