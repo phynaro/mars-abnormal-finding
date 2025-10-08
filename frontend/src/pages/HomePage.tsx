@@ -36,6 +36,8 @@ import {
   AlertTriangle,
   CheckCircle,
   Filter,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   ticketService,
@@ -43,6 +45,7 @@ import {
 } from "@/services/ticketService";
 import personalTargetService from "@/services/personalTargetService";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import PersonalKPISetupModal from "@/components/personal/PersonalKPISetupModal";
 import PersonalFilterModal from "@/components/personal/PersonalFilterModal";
 import {
@@ -171,8 +174,55 @@ const PendingTicketsSection: React.FC<{
   loading: boolean;
   error: string | null;
   onTicketClick: (ticketId: number) => void;
-}> = ({ tickets, loading, error, onTicketClick }) => {
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    pages: number;
+  };
+  onPageChange: (page: number) => void;
+}> = ({ tickets, loading, error, onTicketClick, pagination, onPageChange }) => {
   const { t } = useLanguage();
+  
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const MobileCardSkeleton = () => (
+    <div className="border rounded-lg p-4 bg-card">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <Skeleton className="h-4 w-16 mb-2" />
+          <Skeleton className="h-6 w-3/4 mb-2" />
+        </div>
+        <Skeleton className="h-6 w-20 rounded-full" />
+      </div>
+      <Skeleton className="h-4 w-full mb-1" />
+      <Skeleton className="h-4 w-2/3 mb-3" />
+      <div className="flex flex-wrap gap-2 mb-3">
+        <Skeleton className="h-5 w-16 rounded-full" />
+        <Skeleton className="h-5 w-16 rounded-full" />
+        <Skeleton className="h-5 w-24 rounded-full" />
+      </div>
+      <div className="space-y-2 mb-3">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4" />
+          <Skeleton className="h-4 w-28" />
+        </div>
+      </div>
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-3 w-40" />
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-8 w-16" />
+        </div>
+      </div>
+    </div>
+  );
   
   return (
     <Card>
@@ -182,110 +232,93 @@ const PendingTicketsSection: React.FC<{
           <span>{t('homepage.pendingTickets')}</span>
         </CardTitle>
       </CardHeader>
-    <CardContent>
-      {loading ? (
-        <div className="py-8 text-center text-muted-foreground">
-          <div className="mx-auto mb-4 h-8 w-8 animate-spin rounded-full border-b-2 border-brand"></div>
-          <p>{t('homepage.loadingPendingTickets')}</p>
-        </div>
-      ) : error ? (
-        <div className="py-8 text-center text-destructive dark:text-red-300">
-          <Ticket className="mx-auto mb-4 h-12 w-12 opacity-50" />
-          <p>{t('homepage.errorLoadingTickets')}</p>
-          <p className="text-sm">{error}</p>
-        </div>
-      ) : tickets.length > 0 ? (
-        <div className="space-y-4">
-          <div className="hidden md:block">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm text-foreground">
-                <thead className="border-b border-border/70 bg-muted/40">
-                  <tr>
-                    <th className="py-2 text-left font-medium text-muted-foreground">
-                      Ticket
-                    </th>
-                    <th className="py-2 text-left font-medium text-muted-foreground">
-                      Title
-                    </th>
-                    <th className="py-2 text-left font-medium text-muted-foreground">
-                      Status
-                    </th>
-                    <th className="py-2 text-left font-medium text-muted-foreground">
-                      Priority
-                    </th>
-                    <th className="py-2 text-left font-medium text-muted-foreground">
-                      Line
-                    </th>
-                    <th className="py-2 text-left font-medium text-muted-foreground">
-                      Created
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/60">
-                  {tickets.map((ticket) => (
-                    <tr
-                      key={ticket.id}
-                      className="cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
-                      onClick={() => onTicketClick(ticket.id)}
-                    >
-                      <td className="py-3 font-semibold text-foreground">
-                        {ticket.ticket_number}
-                      </td>
-                      <td className="py-3 max-w-xs truncate text-foreground">
-                        {ticket.title}
-                      </td>
-                      <td className="py-3">
-                        <Badge className={getTicketStatusClass(ticket.status)}>
-                          {ticket.status.replace("_", " ").toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="py-3">
-                        <Badge className={getTicketPriorityClass(ticket.priority)}>
-                          {ticket.priority?.toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="py-3 text-muted-foreground">
-                        {ticket.line_name || "N/A"}
-                      </td>
-                      <td className="py-3 text-muted-foreground">
-                        {new Date(ticket.created_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      <CardContent>
+        {loading ? (
+          <>
+            {/* Mobile Skeleton Cards */}
+            <div className="block lg:hidden space-y-4">
+              {Array.from({ length: 3 }).map((_, index) => (
+                <MobileCardSkeleton key={index} />
+              ))}
             </div>
+            {/* Desktop Spinner */}
+            <div className="hidden lg:flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            </div>
+          </>
+        ) : error ? (
+          <div className="py-8 text-center text-destructive dark:text-red-300">
+            <Ticket className="mx-auto mb-4 h-12 w-12 opacity-50" />
+            <p>{t('homepage.errorLoadingTickets')}</p>
+            <p className="text-sm">{error}</p>
           </div>
-          <div className="md:hidden space-y-3">
-            {tickets.map((ticket) => (
-              <div
-                key={ticket.id}
-                className="p-4 border border-border/70 rounded-lg bg-card hover:bg-muted/60 dark:hover:bg-muted/30 cursor-pointer transition-colors"
-                onClick={() => onTicketClick(ticket.id)}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="font-medium text-foreground">
-                    {ticket.ticket_number}
-                  </div>
-                  <div className="flex space-x-2">
+        ) : tickets.length > 0 ? (
+          <>
+            {/* Mobile Cards */}
+            <div className="block lg:hidden space-y-4">
+              {tickets.map((ticket) => (
+                <div key={ticket.id} className="border rounded-lg p-4 bg-card">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="text-sm text-muted-foreground">
+                        #{ticket.ticket_number}
+                      </div>
+                      <div className="text-lg font-semibold">
+                        {ticket.title}
+                      </div>
+                    </div>
                     <Badge className={getTicketStatusClass(ticket.status)}>
                       {ticket.status.replace("_", " ").toUpperCase()}
                     </Badge>
+                  </div>
+                  <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
+                    {ticket.description}
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
                     <Badge className={getTicketPriorityClass(ticket.priority)}>
                       {ticket.priority?.toUpperCase()}
                     </Badge>
+                    <Badge
+                      className={getTicketSeverityClass(ticket.severity_level)}
+                    >
+                      {ticket.severity_level?.toUpperCase()}
+                    </Badge>
+                    <Badge variant="outline" className="text-xs">
+                      {ticket.pu_name || ticket.pucode || 'N/A'}
+                    </Badge>
                   </div>
-                </div>
-                <div className="text-sm text-foreground mb-2">
-                  {ticket.title}
-                </div>
-                <div className="text-xs text-muted-foreground space-y-1">
-                  <div>Line: {ticket.line_name || "N/A"}</div>
-                  <div>
-                    Created: {new Date(ticket.created_at).toLocaleDateString()}
+                  <div className="mt-3 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-2">
+                      <User className="w-4 h-4" />
+                      <span>
+                        {t('ticket.createdBy')}:{" "}
+                        {ticket.reporter_name || `User ${ticket.created_by}`}
+                      </span>
+                    </div>
+                    {ticket.assigned_to && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <User className="w-4 h-4" />
+                        <span>
+                          {t('ticket.assignedTo')}:{" "}
+                          {ticket.assignee_name || `User ${ticket.assigned_to}`}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-4 flex justify-between items-center text-xs text-muted-foreground">
+                    <span>{t('ticket.created')} {formatDate(ticket.created_at)}</span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onTicketClick(ticket.id)}
+                      >
+                        {t('ticket.view')}
+                      </Button>
+                    </div>
                   </div>
                   {ticket.user_relationship && (
-                    <div className="font-medium text-primary">
+                    <div className="mt-2 text-xs font-medium text-primary">
                       {ticket.user_relationship === "creator"
                         ? t('homepage.youCreatedThisTicket')
                         : ticket.user_relationship === "approver"
@@ -294,19 +327,154 @@ const PendingTicketsSection: React.FC<{
                     </div>
                   )}
                 </div>
+              ))}
+            </div>
+
+            {/* Desktop Table */}
+            <div className="hidden lg:block overflow-x-auto rounded border">
+              <table className="min-w-full text-sm">
+                <thead className="bg-muted/50 text-left">
+                  <tr>
+                    <th className="px-4 py-2">{t('ticket.ticketNumber')}</th>
+                    <th className="px-4 py-2">{t('ticket.title')}</th>
+                    <th className="px-4 py-2">{t('ticket.status')}</th>
+                    <th className="px-4 py-2">{t('ticket.priority')}</th>
+                    <th className="px-4 py-2">{t('ticket.severity')}</th>
+                    <th className="px-4 py-2">PU Name</th>
+                    <th className="px-4 py-2">{t('ticket.createdBy')}</th>
+                    <th className="px-4 py-2">{t('ticket.assignedTo')}</th>
+                    <th className="px-4 py-2">{t('ticket.created')}</th>
+                    <th className="px-4 py-2">Relationship</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tickets.map((ticket) => (
+                    <tr
+                      key={ticket.id}
+                      className="border-t cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
+                      onClick={() => onTicketClick(ticket.id)}
+                    >
+                      <td className="px-4 py-2 whitespace-nowrap font-medium">
+                        {ticket.ticket_number}
+                      </td>
+                      <td className="px-4 py-2">
+                        <div>
+                          <div className="font-medium">{ticket.title}</div>
+                          <div className="text-muted-foreground truncate max-w-xs">
+                            {ticket.description}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        <Badge className={getTicketStatusClass(ticket.status)}>
+                          {ticket.status.replace("_", " ").toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2">
+                        <Badge
+                          className={getTicketPriorityClass(ticket.priority)}
+                        >
+                          {ticket.priority?.toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2">
+                        <Badge
+                          className={getTicketSeverityClass(
+                            ticket.severity_level,
+                          )}
+                        >
+                          {ticket.severity_level?.toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td className="px-4 py-2">
+                        <span className="text-sm">
+                          {ticket.pu_name || ticket.pucode || 'N/A'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 text-muted-foreground" />
+                          <span>
+                            {ticket.reporter_name ||
+                              `User ${ticket.created_by}`}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-2">
+                        {ticket.assigned_to ? (
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 text-muted-foreground" />
+                            <span>
+                              {ticket.assignee_name ||
+                                `User ${ticket.assigned_to}`}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">
+                            {t('ticket.unassigned')}
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
+                        {formatDate(ticket.created_at)}
+                      </td>
+                      <td className="px-4 py-2">
+                        {ticket.user_relationship && (
+                          <Badge variant="outline" className="text-xs">
+                            {ticket.user_relationship === "creator"
+                              ? t('homepage.youCreatedThisTicket')
+                              : ticket.user_relationship === "approver"
+                                ? t('homepage.requiresYourApproval')
+                                : t('homepage.viewOnly')}
+                          </Badge>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination */}
+            {pagination.pages > 1 && (
+              <div className="flex justify-between items-center mt-6">
+                <div className="text-sm text-muted-foreground">
+                  {t('ticket.showing')} {(pagination.page - 1) * pagination.limit + 1} {t('ticket.to')}{" "}
+                  {Math.min(pagination.page * pagination.limit, pagination.total)}{" "}
+                  {t('ticket.of')} {pagination.total} {t('nav.tickets').toLowerCase()}
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(pagination.page - 1)}
+                    disabled={pagination.page === 1}
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                    {t('common.previous')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onPageChange(pagination.page + 1)}
+                    disabled={pagination.page === pagination.pages}
+                  >
+                    {t('common.next')}
+                    <ChevronRight className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
-            ))}
+            )}
+          </>
+        ) : (
+          <div className="py-8 text-center text-muted-foreground">
+            <Ticket className="mx-auto mb-4 h-12 w-12 opacity-50" />
+            <p>{t('homepage.noPendingTickets')}</p>
+            <p className="text-sm">{t('homepage.allTicketsUpToDate')}</p>
           </div>
-        </div>
-      ) : (
-        <div className="py-8 text-center text-muted-foreground">
-          <Ticket className="mx-auto mb-4 h-12 w-12 opacity-50" />
-          <p>{t('homepage.noPendingTickets')}</p>
-          <p className="text-sm">{t('homepage.allTicketsUpToDate')}</p>
-        </div>
-      )}
-    </CardContent>
-  </Card>
+        )}
+      </CardContent>
+    </Card>
   );
 };
 
@@ -867,6 +1035,12 @@ const HomePage: React.FC = () => {
   const [pendingTickets, setPendingTickets] = useState<APIPendingTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pendingTicketsPagination, setPendingTicketsPagination] = useState({
+    page: 1,
+    limit: 10,
+    total: 0,
+    pages: 0
+  });
 
   // Personal tab time range filter state
   const [personalTimeFilter, setPersonalTimeFilter] = useState<string>('this-period');
@@ -906,9 +1080,14 @@ const HomePage: React.FC = () => {
 
       try {
         setLoading(true);
-        const response = await ticketService.getUserPendingTickets();
+        const response = await ticketService.getUserPendingTickets({
+          page: pendingTicketsPagination.page,
+          limit: pendingTicketsPagination.limit
+        });
         if (response.success) {
-          setPendingTickets(response.data);
+          setPendingTickets(response.data.tickets);
+          setPendingTicketsPagination(response.data.pagination);
+          console.log('Pending tickets data:', response.data);
         } else {
           setError(t('homepage.failedToFetchPendingTickets'));
         }
@@ -925,7 +1104,7 @@ const HomePage: React.FC = () => {
     };
 
     fetchPendingTickets();
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, pendingTicketsPagination.page, pendingTicketsPagination.limit]);
 
   // Fetch personal ticket data when filters change
   useEffect(() => {
@@ -983,6 +1162,10 @@ const HomePage: React.FC = () => {
 
   const handleTicketClick = (ticketId: number) => {
     navigate(`/tickets/${ticketId}`);
+  };
+
+  const handlePendingTicketsPageChange = (page: number) => {
+    setPendingTicketsPagination(prev => ({ ...prev, page }));
   };
 
   // Handle KPI setup modal
@@ -1322,6 +1505,8 @@ const HomePage: React.FC = () => {
                 loading={loading}
                 error={error}
                 onTicketClick={handleTicketClick}
+                pagination={pendingTicketsPagination}
+                onPageChange={handlePendingTicketsPageChange}
               />
             </div>
           </div>

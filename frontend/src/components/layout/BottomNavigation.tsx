@@ -6,8 +6,7 @@ import {
   Home, 
   LayoutDashboard, 
   Ticket, 
-  Settings,
-  BarChart3
+  User
 } from 'lucide-react';
 
 interface BottomNavItem {
@@ -51,17 +50,10 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
       permissionLevel: 1,
     },
     {
-      id: 'reports',
-      label: 'Reports',
-      icon: <BarChart3 className="h-5 w-5" />,
-      path: '/reports',
-      permissionLevel: 2,
-    },
-    {
-      id: 'settings',
-      label: 'Settings',
-      icon: <Settings className="h-5 w-5" />,
-      path: '/settings',
+      id: 'profile',
+      label: 'Profile',
+      icon: <User className="h-5 w-5" />,
+      path: '/profile',
       permissionLevel: 1,
     },
   ];
@@ -112,12 +104,10 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
               className={cn(
                 "relative flex flex-col items-center justify-center min-w-0 flex-1 py-2 px-1",
                 "transition-all duration-200 ease-in-out",
-                "hover:bg-accent/50 rounded-lg",
-                "focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2",
-                "active:scale-95", // Touch feedback
+                "focus:outline-none",
                 active 
                   ? "text-primary" 
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground"
               )}
               aria-label={`Navigate to ${item.label}`}
               aria-current={active ? 'page' : undefined}

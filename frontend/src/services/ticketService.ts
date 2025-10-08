@@ -171,29 +171,43 @@ export interface PendingTicket {
   ticket_number: string;
   title: string;
   description: string;
-  status: 'open' | 'in_progress' | 'pending_approval' | 'pending_assignment';
-  priority: 'urgent' | 'high' | 'medium' | 'low';
+  status: 'open' | 'in_progress' | 'pending_approval' | 'pending_assignment' | 'accepted' | 'planed' | 'rejected_pending_l3_review' | 'rejected_final' | 'finished' | 'reviewed' | 'escalated' | 'closed' | 'reopened_in_progress';
+  priority: 'urgent' | 'high' | 'medium' | 'low' | 'normal';
   severity_level: 'critical' | 'high' | 'medium' | 'low';
   created_at: string;
   updated_at: string;
   assigned_to?: number;
   created_by: number;
   // Updated to use PUExtension hierarchy
-  plant_name: string;
-  plant_code: string;
-  area_name: string;
-  area_code: string;
-  line_name: string;
-  line_code: string;
+  plant_name?: string;
+  plant_code?: string;
+  area_name?: string;
+  area_code?: string;
+  line_name?: string;
+  line_code?: string;
   // Keep dummy IDs for backward compatibility
-  area_id: number;
-  line_id: number;
-  creator_name: string;
-  creator_id: number;
+  area_id?: number;
+  line_id?: number;
+  creator_name?: string;
+  creator_id?: number;
   assignee_name?: string;
   assignee_id?: number;
   user_relationship: 'creator' | 'approver' | 'viewer';
   user_approval_level?: number;
+  // Additional fields from getTickets format
+  reporter_name?: string;
+  reporter_email?: string;
+  reporter_phone?: string;
+  assignee_email?: string;
+  assignee_phone?: string;
+  pucode?: string;
+  pu_name?: string;
+  pu_pucode?: string;
+  pudescription?: string;
+  digit_count?: number;
+  machine_name?: string;
+  machine_code?: string;
+  machine_number?: number;
 }
 
 export interface PUCODE {
@@ -679,9 +693,15 @@ class TicketService {
     return result;
   }
 
-  async getUserPendingTickets(): Promise<{ success: boolean; data: PendingTicket[] }> {
+  async getUserPendingTickets(params?: { page?: number; limit?: number }): Promise<{ success: boolean; data: { tickets: PendingTicket[]; pagination: { page: number; limit: number; total: number; pages: number } } }> {
     const headers = getAuthHeaders();
-    const res = await fetch(`${API_BASE_URL}/tickets/pending/user`, { headers });
+    const queryParams = new URLSearchParams();
+    
+    if (params?.page) queryParams.set('page', params.page.toString());
+    if (params?.limit) queryParams.set('limit', params.limit.toString());
+    
+    const url = `${API_BASE_URL}/tickets/pending/user${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const res = await fetch(url, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch pending tickets');
     return result;

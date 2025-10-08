@@ -1,0 +1,11 @@
+version: '3.8'
+
+services:
+  nginx-local:
+    image: nginx:alpine
+    container_name: mars-nginx-local
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx-local-dev.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped

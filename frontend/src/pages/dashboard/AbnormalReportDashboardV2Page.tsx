@@ -1606,14 +1606,17 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         }
       `}</style>
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="space-y-3">
+        {/* First Row - Title */}
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.abnormalReport')}</h1>
         </div>
-        <div className="flex items-center gap-3">
-          {/* Compact Date Range Display */}
+        
+        {/* Second Row - Date Range and Filters */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          {/* Left side - Date Range */}
           <div className="text-sm">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-muted-foreground">{t('dashboard.range')}:</span>
               <span className="text-foreground font-medium">
                 {(() => {
@@ -1635,48 +1638,50 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             </div>
           </div>
           
-          {/* Compact Active Filters Display */}
-          {hasActiveFilters() && (
-            <div className="flex items-center gap-2 text-sm">
-              <span className="text-muted-foreground">Filters:</span>
-              <div className="flex items-center gap-1">
-                {plantFilter !== 'all' && (
-                  <Badge variant="secondary" className="gap-1 text-xs">
-                    Plant: {plants.find(p => p.code === plantFilter)?.name || plantFilter}
-                    <X
-                      className="h-3 w-3 cursor-pointer hover:text-destructive"
-                      onClick={() => clearFilter("plant")}
-                    />
-                  </Badge>
-                )}
-                {areaFilter !== 'all' && (
-                  <Badge variant="secondary" className="gap-1 text-xs">
-                    Area: {areas.find(a => a.code === areaFilter)?.name || areaFilter}
-                    <X
-                      className="h-3 w-3 cursor-pointer hover:text-destructive"
-                      onClick={() => clearFilter("area")}
-                    />
-                  </Badge>
-                )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAllFilters}
-                  className="h-5 text-xs px-2"
-                >
-                  Clear All
-                </Button>
+          {/* Right side - Filters */}
+          <div className="flex items-center gap-3">
+            {/* Compact Active Filters Display */}
+            {hasActiveFilters() && (
+              <div className="flex items-center gap-2 text-sm">
+                <span className="text-muted-foreground">Filters:</span>
+                <div className="flex items-center gap-1 flex-wrap">
+                  {plantFilter !== 'all' && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Plant: {plants.find(p => p.code === plantFilter)?.name || plantFilter}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => clearFilter("plant")}
+                      />
+                    </Badge>
+                  )}
+                  {areaFilter !== 'all' && (
+                    <Badge variant="secondary" className="gap-1 text-xs">
+                      Area: {areas.find(a => a.code === areaFilter)?.name || areaFilter}
+                      <X
+                        className="h-3 w-3 cursor-pointer hover:text-destructive"
+                        onClick={() => clearFilter("area")}
+                      />
+                    </Badge>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAllFilters}
+                    className="h-5 text-xs px-2"
+                  >
+                    Clear All
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
-          
-          <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" className="flex items-center gap-2">
-                <Filter className="h-4 w-4" />
-                {t('dashboard.filters')}
-              </Button>
-            </DialogTrigger>
+            )}
+            
+            <Dialog open={isFilterModalOpen} onOpenChange={setIsFilterModalOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="flex items-center gap-2">
+                  <Filter className="h-4 w-4" />
+                  {t('dashboard.filters')}
+                </Button>
+              </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -1776,6 +1781,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
+          </div>
         </div>
       </div>
 
@@ -1794,7 +1800,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
 
       {/* KPI Tiles */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-6 gap-4">
         {loading ? (
           <KPITileSkeleton count={6} />
         ) : (
@@ -1861,7 +1867,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       </div>
 
       {/* Top Performers */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
         {loading ? (
           <TopPerformersSkeleton count={3} />
         ) : (
@@ -1936,7 +1942,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">{t('dashboard.participation')}</h2>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Total Tickets Count Per Period */}
           <Card>
             <CardHeader>
@@ -1997,7 +2003,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Who Active (Dynamic Grouping) */}
           <Card>
             <CardHeader>
@@ -2171,7 +2177,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">{t('dashboard.impactAndValue')}</h2>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Downtime Avoidance Trend (Dynamic Grouping) */}
           <Card>
             <CardHeader>
@@ -2247,7 +2253,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Downtime Impact Leaderboard (Dynamic Grouping) */}
           <Card>
             <CardHeader>
@@ -2301,7 +2307,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Downtime Impact Leaderboard (Reporter) */}
           <Card>
             <CardHeader>
@@ -2423,7 +2429,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Downtime Impact by Failure Mode */}
           <Card>
             <CardHeader>
@@ -2569,7 +2575,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       <div className="space-y-6">
         <h2 className="text-2xl font-bold">{t('dashboard.speed')}</h2>
         
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Ticket Average Resolve Duration */}
           {areaFilter === 'all' && (
             <Card>

@@ -42,20 +42,18 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   
   return (
     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-2 justify-between sm:justify-start">
-        <div className="flex items-center gap-2">
-          {showBackButton && onBack && (
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={onBack}
-              className="flex items-center gap-2"
-            >
-              ← {t('common.back')}
-            </Button>
-          )}
-        </div>
-        <div className="text-right sm:text-left">
+      <div className="flex items-center gap-2">
+        {showBackButton && onBack && (
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={onBack}
+            className="flex items-center gap-2"
+          >
+            ← {t('common.back')}
+          </Button>
+        )}
+        <div className="text-left">
           <h1 className="font-bold text-xl sm:text-3xl">{title}</h1>
           {description && (
             <p className="text-muted-foreground mt-2 text-sm sm:text-base">{description}</p>

@@ -904,6 +904,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.scheduleStart': 'วันที่วางแผนเริ่มต้น',
     'ticket.scheduleFinish': 'วันที่วางแผนสิ้นสุด',
     'ticket.assignTo': 'มอบหมาย',
+    'ticket.assignedTo': 'มอบหมายให้',
     'ticket.pleaseSelectAssignee': 'กรุณาเลือกผู้รับผิดชอบ',
     'ticket.plan': 'วางแผน',
     'ticket.start': 'เริ่มงาน',
@@ -1051,9 +1052,10 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.rejectionL3ReviewMessage': 'การปฏิเสธนี้จะถูกส่งไปให้แพลนเนอร์ทบทวน',
     'ticket.working': 'กำลังทำงาน...',
     'ticket.chooseFiles': 'เลือกไฟล์',
-    'ticketManagement.title': 'การแจ้งเตือนความผิดปกติ',
+    'ticketManagement.title': 'รายงานความผิดปกติ',
     'ticketManagement.createTicket': 'แจ้งความผิดปกติ',
     'ticket.showing': 'กำลังแสดง',
+  
   
     
     // Dashboard specific

@@ -4618,6 +4618,10 @@ const reopenTicket = async (req, res) => {
 const getUserPendingTickets = async (req, res) => {
     try {
         const userId = req.user.id; // Changed from req.user.personno to req.user.id
+        const {
+            page = 1,
+            limit = 10
+        } = req.query;
         
         if (!userId) {
             return res.status(400).json({
@@ -4626,62 +4630,16 @@ const getUserPendingTickets = async (req, res) => {
             });
         }
 
+        const offset = (page - 1) * limit;
         const pool = await sql.connect(dbConfig);
         
-        // Query to get tickets related to the user:
-        // 1. Tickets created by the user
-        // 2. Tickets where user has approval_level > 2 for the ticket's line_id
-        // Status should not be 'closed', 'Finished', or 'canceled'
-        const query = `
-            SELECT
-                t.id,
-                t.ticket_number,
-                t.title,
-                t.description,
-                t.status,
-                t.priority,
-                t.severity_level,
-                t.created_at,
-                t.updated_at,
-                t.assigned_to,
-                t.created_by,
-                -- Hierarchy information from PUExtension
-                pe.pucode,
-                pe.plant as plant_code,
-                pe.area as area_code,
-                pe.line as line_code,
-                pe.machine as machine_code,
-                pe.number as machine_number,
-                pe.puname as plant_name,
-                pe.pudescription as pudescription,
-                pe.digit_count,
-                -- Hierarchy codes from PUExtension
-                -- Creator info
-                creator.FIRSTNAME + ' ' + creator.LASTNAME as creator_name,
-                creator.PERSONNO as creator_id,
-                -- Assignee info
-                assignee.FIRSTNAME + ' ' + assignee.LASTNAME as assignee_name,
-                assignee.PERSONNO as assignee_id,
-                -- User's relationship to this ticket
-                CASE 
-                    WHEN t.created_by = @userId THEN 'creator'
-                    WHEN ta.approval_level > 2 THEN 'approver'
-                    ELSE 'viewer'
-                END as user_relationship,
-                ta.approval_level as user_approval_level,
-                -- Add priority and created_at to SELECT for ORDER BY
-                CASE t.priority 
-                    WHEN 'urgent' THEN 1
-                    WHEN 'high' THEN 2
-                    WHEN 'medium' THEN 3
-                    WHEN 'low' THEN 4
-                END as priority_order,
-                t.created_at as created_at_order
+        // First, get total count for pagination
+        const countRequest = pool.request();
+        const countQuery = `
+            SELECT COUNT(*) as total
             FROM Tickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN Person creator ON creator.PERSONNO = t.created_by
-            LEFT JOIN Person assignee ON assignee.PERSONNO = t.assigned_to
             LEFT JOIN TicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
                 AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
@@ -4695,49 +4653,111 @@ const getUserPendingTickets = async (req, res) => {
                 (ta.approval_level > 2 AND ta.is_active = 1)
             )
             AND t.status NOT IN ('closed', 'Finished', 'canceled', 'rejected_final')
-            ORDER BY 
-                priority_order,
-                created_at_order DESC
         `;
 
-        const result = await pool.request()
+        const countResult = await countRequest
             .input('userId', sql.Int, userId)
+            .query(countQuery);
+        
+        const total = countResult.recordset[0].total;
+        
+        // Query to get tickets related to the user with same format as getTickets
+        const query = `
+            SELECT 
+                t.*,
+                r.PERSON_NAME as reporter_name,
+                r.EMAIL as reporter_email,
+                r.PHONE as reporter_phone,
+                a.PERSON_NAME as assignee_name,
+                a.EMAIL as assignee_email,
+                a.PHONE as assignee_phone,
+                -- Hierarchy information from PUExtension
+                pe.pucode,
+                pe.plant as plant_code,
+                pe.area as area_code,
+                pe.line as line_code,
+                pe.machine as machine_code,
+                pe.number as machine_number,
+                pe.pudescription as pudescription,
+                pe.digit_count,
+                -- Hierarchy names based on digit patterns
+                (SELECT TOP 1 pudescription 
+                 FROM PUExtension pe2 
+                 WHERE pe2.plant = pe.plant 
+                 AND pe2.area IS NULL 
+                 AND pe2.line IS NULL 
+                 AND pe2.machine IS NULL) as plant_name,
+                (SELECT TOP 1 pudescription 
+                 FROM PUExtension pe2 
+                 WHERE pe2.plant = pe.plant 
+                 AND pe2.area = pe.area 
+                 AND pe2.line IS NULL 
+                 AND pe2.machine IS NULL) as area_name,
+                (SELECT TOP 1 pudescription 
+                 FROM PUExtension pe2 
+                 WHERE pe2.plant = pe.plant 
+                 AND pe2.area = pe.area 
+                 AND pe2.line = pe.line 
+                 AND pe2.machine IS NULL) as line_name,
+                (SELECT TOP 1 pudescription 
+                 FROM PUExtension pe2 
+                 WHERE pe2.plant = pe.plant 
+                 AND pe2.area = pe.area 
+                 AND pe2.line = pe.line 
+                 AND pe2.machine = pe.machine) as machine_name,
+                -- PU information
+                pu.PUCODE as pu_pucode,
+                pu.PUNAME as pu_name,
+                -- User's relationship to this ticket
+                CASE 
+                    WHEN t.created_by = @userId THEN 'creator'
+                    WHEN ta.approval_level > 2 THEN 'approver'
+                    ELSE 'viewer'
+                END as user_relationship,
+                ta.approval_level as user_approval_level
+            FROM Tickets t
+            LEFT JOIN Person r ON t.created_by = r.PERSONNO
+            LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
+            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                AND ta.plant_code = pe.plant 
+                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
+                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
+                AND ta.is_active = 1
+            WHERE (
+                -- Tickets created by the user
+                t.created_by = @userId
+                OR 
+                -- Tickets where user has approval_level > 2 for the line
+                (ta.approval_level > 2 AND ta.is_active = 1)
+            )
+            AND t.status NOT IN ('closed', 'Finished', 'canceled', 'rejected_final')
+            ORDER BY t.created_at DESC
+            OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+        `;
+
+        // Create a new request for the main query
+        const mainRequest = pool.request();
+        const result = await mainRequest
+            .input('userId', sql.Int, userId)
+            .input('offset', sql.Int, offset)
+            .input('limit', sql.Int, limit)
             .query(query);
 
-        const tickets = result.recordset.map(ticket => ({
-            id: ticket.id,
-            ticket_number: ticket.ticket_number,
-            title: ticket.title,
-            description: ticket.description,
-            status: ticket.status,
-            priority: ticket.priority,
-            severity_level: ticket.severity_level,
-            created_at: ticket.created_at,
-            updated_at: ticket.updated_at,
-            assigned_to: ticket.assigned_to,
-            created_by: ticket.created_by,
-            // Map PUExtension fields to expected interface
-            plant_name: ticket.plant_name,
-            plant_code: ticket.plant_code,
-            area_name: ticket.area_code, // Use area_code as area_name for now
-            area_code: ticket.area_code,
-            line_name: ticket.line_code, // Use line_code as line_name for now
-            line_code: ticket.line_code,
-            // Add dummy IDs for backward compatibility
-            area_id: 1, // Dummy ID since we don't have separate area table anymore
-            line_id: 1, // Dummy ID since we don't have separate line table anymore
-            creator_name: ticket.creator_name,
-            creator_id: ticket.creator_id,
-            assignee_name: ticket.assignee_name,
-            assignee_id: ticket.assignee_id,
-            user_relationship: ticket.user_relationship,
-            user_approval_level: ticket.user_approval_level
-        }));
+        const tickets = result.recordset;
 
         res.json({
             success: true,
-            data: tickets,
-            count: tickets.length
+            data: {
+                tickets,
+                pagination: {
+                    page: parseInt(page),
+                    limit: parseInt(limit),
+                    total,
+                    pages: Math.ceil(total / limit)
+                }
+            }
         });
 
     } catch (error) {

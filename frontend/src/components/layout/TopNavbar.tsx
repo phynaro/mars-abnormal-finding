@@ -63,19 +63,13 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
   return (
     <nav className="border-b bg-background px-4 py-3">
       <div className="flex items-center justify-between">
-        {/* Left side - Mobile Menu Button */}
-        <div className="flex items-center space-x-4">
-          {/* Mobile Menu Toggle */}
-          {isMobile && onMobileMenuToggle && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={onMobileMenuToggle}
-              className="lg:hidden"
-            >
-              <Menu className="h-5 w-5" />
-            </Button>
-          )}
+        {/* Left side - Logo */}
+        <div className="flex items-center">
+          <img 
+            src="/MARS-icon.png" 
+            alt="MARS Logo" 
+            className="h-8 w-8"
+          />
         </div>
 
         {/* Right side - Actions and User Menu */}

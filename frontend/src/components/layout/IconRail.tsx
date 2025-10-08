@@ -31,7 +31,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
   const forceHighlightById = !!activeMenu?.children?.length && !location.pathname.startsWith(activeMenu.path);
 
   return (
-    <div className="sticky top-0 self-start flex h-[100dvh] flex-col justify-between bg-primary text-primary-foreground w-10 min-w-[48px] flex-none">
+    <div className="sticky top-0 self-start flex h-[100dvh] flex-col justify-between bg-primary text-primary-foreground w-10 min-w-[48px] flex-none z-50">
       <TooltipProvider>
         <div className="flex flex-col items-center py-3 gap-2">
           {menuItems.map(item => {
@@ -57,7 +57,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
                     <span className="[&>*]:text-primary-foreground">{item.icon}</span>
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="right">{item.label}</TooltipContent>
+                <TooltipContent side="right" className="z-[9999]">{item.label}</TooltipContent>
               </Tooltip>
             );
           })}
@@ -70,7 +70,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
                 {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">Theme</TooltipContent>
+            <TooltipContent side="right" className="z-[9999]">Theme</TooltipContent>
           </Tooltip>
           {/* Language switch */}
           <DropdownMenu>
@@ -79,7 +79,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
                 <Globe className="h-5 w-5" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="z-[9999]">
               <DropdownMenuLabel>Language</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => setLanguage('en')} className={language === 'en' ? 'bg-accent text-accent-foreground' : ''}>English</DropdownMenuItem>
@@ -100,7 +100,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
                 </Avatar>
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent align="end" className="z-[9999]">
               <DropdownMenuLabel>{user?.firstName} {user?.lastName}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate('/profile')}>Profile</DropdownMenuItem>
