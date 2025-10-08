@@ -608,7 +608,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       };
       
       const response = await dashboardService.getTicketsCountPerPeriod(params);
-      
       setParticipationData(response.data.participationData);
       
     } catch (err: any) {
@@ -1070,6 +1069,16 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setDowntimeImpactReporterLoading(false);
     }
   }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+
+  // Update selectedYear when timeFilter changes
+  useEffect(() => {
+    const currentYear = new Date().getFullYear();
+    if (timeFilter === 'last-year') {
+      setSelectedYear(currentYear - 1);
+    } else if (timeFilter === 'this-year') {
+      setSelectedYear(currentYear);
+    }
+  }, [timeFilter]);
 
   // Fetch areas on component mount
   useEffect(() => {
