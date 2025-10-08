@@ -20,24 +20,21 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  Award,
   BarChart3,
-  Clock,
   DollarSign,
   FileText,
   Settings,
-  Target,
   Ticket,
   TrendingUp,
   TrendingDown,
-  TrendingUp as TrendingUpIcon,
   User,
-  Users,
   AlertTriangle,
   CheckCircle,
   Filter,
   ChevronLeft,
   ChevronRight,
+  Plus,
+  CheckSquare,
 } from "lucide-react";
 import {
   ticketService,
@@ -134,8 +131,8 @@ function formatHours(hours: number) {
 }
 
 
-const QuickActionsSection: React.FC<{ actions: QuickAction[] }> = ({
-  actions,
+const TasksSection: React.FC<{ tasks: QuickAction[] }> = ({
+  tasks,
 }) => {
   const { t } = useLanguage();
   
@@ -143,23 +140,23 @@ const QuickActionsSection: React.FC<{ actions: QuickAction[] }> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
-          <TrendingUp className="h-5 w-5" />
-          <span>{t('homepage.quickActions')}</span>
+          <CheckSquare className="h-5 w-5" />
+          <span>{t('homepage.tasks')}</span>
         </CardTitle>
       </CardHeader>
     <CardContent>
       <div className="space-y-3">
-        {actions.map((action) => (
+        {tasks.map((task) => (
           <Button
-            key={action.title}
+            key={task.title}
             variant="outline"
-            className={`w-full h-auto p-4 flex items-center space-x-3 ${action.color} text-white border-0`}
-            onClick={action.onClick}
+            className={`w-full h-auto p-4 flex items-center space-x-3 ${task.color} text-white border-0`}
+            onClick={task.onClick}
           >
-            {action.icon}
+            {task.icon}
             <div className="text-left">
-              <div className="font-medium">{action.title}</div>
-              <div className="text-xs opacity-90">{action.description}</div>
+              <div className="font-medium">{task.title}</div>
+              <div className="text-xs opacity-90">{task.description}</div>
             </div>
           </Button>
         ))}
@@ -225,14 +222,14 @@ const PendingTicketsSection: React.FC<{
   );
   
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
+    <div>
+      <div className="mb-4">
+        <h2 className="text-lg font-semibold flex items-center space-x-2">
           <Ticket className="h-5 w-5" />
           <span>{t('homepage.pendingTickets')}</span>
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
+        </h2>
+      </div>
+      <div>
         {loading ? (
           <>
             {/* Mobile Skeleton Cards */}
@@ -473,8 +470,8 @@ const PendingTicketsSection: React.FC<{
             <p className="text-sm">{t('homepage.allTicketsUpToDate')}</p>
           </div>
         )}
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 };
 
@@ -1121,23 +1118,8 @@ const HomePage: React.FC = () => {
     fetchPersonalKPIData();
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
-  const quickActions = useMemo<QuickAction[]>(
+  const tasks = useMemo<QuickAction[]>(
     () => [
-      {
-        title: t('homepage.createTicket'),
-        description: t('homepage.reportNewIssue'),
-        icon: <Ticket className="h-6 w-6" />,
-        onClick: () => {
-          // Check if screen is mobile size (less than md breakpoint)
-          const isMobile = window.innerWidth < 768; // md breakpoint is 768px
-          if (isMobile) {
-            navigate("/tickets/create/wizard");
-          } else {
-            navigate("/tickets/create");
-          }
-        },
-        color: "bg-red-600 hover:bg-red-400",
-      },
       {
         title: t('homepage.viewTickets'),
         description: t('homepage.checkTicketStatus'),
@@ -1473,31 +1455,37 @@ const HomePage: React.FC = () => {
             <p className="text-muted-foreground text-sm">{subtitle}</p>
           </div>
         </div>
+        {/* Create Ticket Button - Hidden on mobile, visible on lg+ */}
+        <div className="hidden lg:block">
+          <Button
+            onClick={() => navigate("/tickets/create")}
+            className="bg-red-600 hover:bg-red-700 text-white"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            {t('homepage.createTicket')}
+          </Button>
+        </div>
       </div>
 
-      <Tabs defaultValue="quick-actions" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-3">
+      <Tabs defaultValue="tasks" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger
-            value="quick-actions"
+            value="tasks"
             className="flex items-center space-x-2"
           >
-            <TrendingUp className="h-4 w-4" />
-            <span>{t('homepage.quickActions')}</span>
+            <CheckSquare className="h-4 w-4" />
+            <span>{t('homepage.tasks')}</span>
           </TabsTrigger>
-          <TabsTrigger value="personal" className="flex items-center space-x-2">
-            <User className="h-4 w-4" />
-            <span>{t('homepage.personal')}</span>
-          </TabsTrigger>
-          <TabsTrigger value="team" className="flex items-center space-x-2">
-            <Users className="h-4 w-4" />
-            <span>{t('homepage.team')}</span>
+          <TabsTrigger value="performance" className="flex items-center space-x-2">
+            <BarChart3 className="h-4 w-4" />
+            <span>{t('homepage.performance')}</span>
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="quick-actions" className="space-y-4">
+        <TabsContent value="tasks" className="space-y-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <div className="lg:col-span-1">
-              <QuickActionsSection actions={quickActions} />
+              <TasksSection tasks={tasks} />
             </div>
             <div className="lg:col-span-2">
               <PendingTicketsSection
@@ -1512,7 +1500,7 @@ const HomePage: React.FC = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="personal" className="space-y-4">
+        <TabsContent value="performance" className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               {/* Empty div to maintain layout balance */}
@@ -1570,18 +1558,6 @@ const HomePage: React.FC = () => {
           />
         </TabsContent>
 
-        <TabsContent value="team">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t('homepage.teamPerformance')}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-500">
-                {t('homepage.teamPerformanceComingSoon')}
-              </p>
-            </CardContent>
-          </Card>
-        </TabsContent>
       </Tabs>
 
       {/* KPI Setup Modal */}
