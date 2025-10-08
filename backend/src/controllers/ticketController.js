@@ -4718,11 +4718,26 @@ const getUserPendingTickets = async (req, res) => {
                 pu.PUNAME as pu_name,
                 -- User's relationship to this ticket
                 CASE 
-                    WHEN t.created_by = @userId THEN 'creator'
-                    WHEN ta.approval_level > 2 THEN 'approver'
+                    WHEN t.status = 'escalated' AND ta.approval_level >= 3 THEN 'escalate_approver'
+                    WHEN t.status = 'reviewed' AND ta.approval_level = 4 THEN 'close_approver'
+                    WHEN t.status = 'finished' AND t.created_by = @userId THEN 'review_approver'
+                    WHEN t.status = 'in_progress' AND t.assigned_to = @userId THEN 'assignee'
+                    WHEN t.status = 'reopened_in_progress' AND t.assigned_to = @userId THEN 'assignee'
+                    WHEN t.status = 'planed' AND t.assigned_to = @userId THEN 'assignee'
+                    WHEN t.status = 'open' AND ta.approval_level >= 2 THEN 'accept_approver'
+                    WHEN t.status = 'accepted' AND (ta.approval_level = 2 OR ta.approval_level = 3) THEN 'planner'
+                    WHEN t.status = 'rejected_pending_l3_review' AND ta.approval_level >= 3 THEN 'reject_approver'
+                    WHEN t.assigned_to = @userId THEN 'assignee'
+                    WHEN t.created_by = @userId THEN 'requester'
                     ELSE 'viewer'
                 END as user_relationship,
-                ta.approval_level as user_approval_level
+                ta.approval_level as user_approval_level,
+                -- Action person names
+                accepted_person.PERSON_NAME as accepted_by_name,
+                escalated_person.PERSON_NAME as escalated_by_name,
+                reviewed_person.PERSON_NAME as reviewed_by_name,
+                finished_person.PERSON_NAME as finished_by_name,
+                rejected_person.PERSON_NAME as rejected_by_name
             FROM Tickets t
             LEFT JOIN Person r ON t.created_by = r.PERSONNO
             LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
@@ -4741,6 +4756,11 @@ const getUserPendingTickets = async (req, res) => {
                     -- Plant-level approval (area and line are null in approval)
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
+            LEFT JOIN Person accepted_person ON t.accepted_by = accepted_person.PERSONNO
+            LEFT JOIN Person escalated_person ON t.escalated_by = escalated_person.PERSONNO
+            LEFT JOIN Person reviewed_person ON t.reviewed_by = reviewed_person.PERSONNO
+            LEFT JOIN Person finished_person ON t.finished_by = finished_person.PERSONNO
+            LEFT JOIN Person rejected_person ON t.rejected_by = rejected_person.PERSONNO
             WHERE (
                 -- Tickets created by the user
                 t.created_by = @userId
@@ -4748,7 +4768,7 @@ const getUserPendingTickets = async (req, res) => {
                 -- Tickets where user has approval_level >= 2 for the line/area/plant
                 (ta.approval_level >= 2 AND ta.is_active = 1)
             )
-            AND t.status NOT IN ('closed', 'finished', 'canceled', 'rejected_final')
+            AND t.status NOT IN ('closed', 'canceled', 'rejected_final')
             ORDER BY t.created_at DESC
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
         `;
