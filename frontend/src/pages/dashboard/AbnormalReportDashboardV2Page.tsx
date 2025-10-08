@@ -2660,7 +2660,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         }}
                         labelFormatter={(label) => `Area: ${label}`}
                       />
-                      <Legend />
+                      <Legend wrapperStyle={{ paddingTop: '20px' }} />
                       <Bar 
                         dataKey="avgResolveHours" 
                         fill="hsl(var(--primary))" 
@@ -2716,7 +2716,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         }}
                         labelFormatter={(label) => `User: ${label}`}
                       />
-                      <Legend />
+                      <Legend wrapperStyle={{ paddingTop: '20px' }} />
                       <Bar 
                         dataKey="avgResolveHours" 
                         fill="hsl(var(--accent))" 
@@ -2772,7 +2772,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         }}
                         labelFormatter={(label) => `Area: ${label}`}
                       />
-                      <Legend />
+                      <Legend wrapperStyle={{ paddingTop: '20px' }} />
                       <Bar 
                         dataKey="ontimeRate" 
                         fill="hsl(var(--success))" 
@@ -2831,7 +2831,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         }}
                         labelFormatter={(label) => `User: ${label}`}
                       />
-                      <Legend />
+                      <Legend wrapperStyle={{ paddingTop: '20px' }} />
                       <Bar 
                         dataKey="ontimeRate" 
                         fill="hsl(var(--success))" 
