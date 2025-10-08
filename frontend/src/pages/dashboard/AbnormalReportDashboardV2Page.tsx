@@ -1606,9 +1606,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   // Calculate the year for calendar heatmap title based on time filter
   const calendarHeatmapYear = useMemo(() => {
-    const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
-    return parseInt(dateRange.startDate.split('-')[0]);
-  }, [timeFilter, selectedYear, selectedPeriod]);
+    // For calendar heatmap, we should use the selectedYear directly
+    // as it represents the year we want to display data for
+    return selectedYear;
+  }, [selectedYear]);
 
   return (
     <div className="space-y-4 p-4">
