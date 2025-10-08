@@ -69,7 +69,7 @@ const InventoryCatalogPage: React.FC = () => {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.id} className="border-t cursor-pointer hover:bg-accent" onClick={() => navigate(`/spare/catalog/${r.id}`, { state: { breadcrumbExtra: r.partCode } })}>
+                  <tr key={r.id} className="border-t cursor-pointer hover:bg-hover" onClick={() => navigate(`/spare/catalog/${r.id}`, { state: { breadcrumbExtra: r.partCode } })}>
                     <td className="px-4 py-2 whitespace-nowrap font-medium">{r.partCode}</td>
                     <td className="px-4 py-2">{r.partName}</td>
                     <td className="px-4 py-2">{r.group?.name || r.group?.code || '-'}</td>
@@ -85,7 +85,7 @@ const InventoryCatalogPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 gap-3 lg:hidden">
             {rows.map((r) => (
-              <Card key={r.id} className="p-4 space-y-1 cursor-pointer hover:bg-accent" onClick={() => navigate(`/spare/catalog/${r.id}`, { state: { breadcrumbExtra: r.partCode } })}>
+              <Card key={r.id} className="p-4 space-y-1 cursor-pointer hover:bg-hover" onClick={() => navigate(`/spare/catalog/${r.id}`, { state: { breadcrumbExtra: r.partCode } })}>
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{r.partCode}</div>
                   <div className="text-xs text-muted-foreground">{r.unit?.code || ''}</div>

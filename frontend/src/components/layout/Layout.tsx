@@ -77,7 +77,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
           <div className="relative sticky top-0 self-start h-[100dvh]">
             <SubmenuPanel activeId={activeId} collapsed={submenuCollapsed} />
             <button
-              className="absolute top-11 -right-3 z-[60] h-7 w-7 flex items-center justify-center rounded-full bg-background border shadow-sm hover:bg-accent hover:text-accent-foreground transition-colors ring-1 ring-black/5"
+              className="absolute top-11 -right-3 z-[60] h-7 w-7 flex items-center justify-center rounded-full bg-background border shadow-sm hover:bg-hover hover:text-hover-foreground transition-colors ring-1 ring-black/5"
               onClick={() => setSubmenuCollapsed(v => !v)}
               title={submenuCollapsed ? 'Expand menu' : 'Collapse menu'}
             >

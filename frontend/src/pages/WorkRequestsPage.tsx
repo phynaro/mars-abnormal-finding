@@ -302,7 +302,7 @@ const WorkRequestsPage: React.FC = () => {
                 {rows.map((row) => (
                   <tr
                     key={row.id}
-                    className="border-t align-top cursor-pointer hover:bg-accent"
+                    className="border-t align-top cursor-pointer hover:bg-hover"
                     onClick={() => navigate(`/maintenance/work-requests/${row.id}`, { state: { breadcrumbExtra: row.wrCode } })}
                   >
                     <td className="px-4 py-2 whitespace-nowrap font-medium">{row.wrCode}</td>
@@ -321,7 +321,7 @@ const WorkRequestsPage: React.FC = () => {
           {/* Mobile Cards */}
           <div className="grid grid-cols-1 gap-3 lg:hidden">
             {rows.map(row => (
-              <Card key={row.id} className="p-4 space-y-2 cursor-pointer hover:bg-accent" onClick={() => navigate(`/maintenance/work-requests/${row.id}`, { state: { breadcrumbExtra: row.wrCode } })}>
+              <Card key={row.id} className="p-4 space-y-2 cursor-pointer hover:bg-hover" onClick={() => navigate(`/maintenance/work-requests/${row.id}`, { state: { breadcrumbExtra: row.wrCode } })}>
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{row.wrCode}</div>
                   <StatusPill name={row.status?.name} code={row.status?.code} />

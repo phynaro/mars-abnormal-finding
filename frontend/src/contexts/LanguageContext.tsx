@@ -526,7 +526,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.chooseFiles': 'Choose Files',
     'ticket.showing': 'Showing',
     'ticketManagement.title': 'Abnormal Finding Report',
-    'ticketManagement.createTicket': 'Report Abnormal',
+    'ticketManagement.createTicket': 'Create Ticket',
     // Dashboard specific
     'dashboard.abnormalReport': 'Abnormal Report Dashboard',
     'dashboard.totalTickets': 'Total Tickets',

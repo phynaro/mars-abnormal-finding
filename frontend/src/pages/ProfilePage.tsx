@@ -368,9 +368,9 @@ const ProfilePage: React.FC = () => {
                   placeholder={t('profile.chooseFile')}
                 />
               </div>
-              <p className="text-sm text-muted-foreground">
+              {/* <p className="text-sm text-muted-foreground">
                 {t('profile.avatarUploadHint')}
-              </p>
+              </p> */}
             </div>
           </div>
 

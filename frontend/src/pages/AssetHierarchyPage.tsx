@@ -151,7 +151,7 @@ const AssetHierarchyPage: React.FC = () => {
                               ))}
                               {deptData[key]!.pagination.page < deptData[key]!.pagination.pages && (
                                 <div className="pt-1">
-                                  <button disabled={!!deptLoading[key]} onClick={() => loadMore(key)} className="text-xs px-3 py-1 border rounded hover:bg-accent disabled:opacity-50">Load more</button>
+                                  <button disabled={!!deptLoading[key]} onClick={() => loadMore(key)} className="text-xs px-3 py-1 border rounded hover:bg-hover disabled:opacity-50">Load more</button>
                                 </div>
                               )}
                             </div>

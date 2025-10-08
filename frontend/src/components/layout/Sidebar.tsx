@@ -97,7 +97,7 @@ const Sidebar: React.FC<SidebarProps> = ({
           variant={isActive ? "default" : "ghost"}
           className={cn(
             "w-full justify-start h-auto p-3 text-sm font-medium",
-            hasChildren ? "hover:bg-accent" : "",
+            hasChildren ? "hover:bg-hover" : "",
             isCollapsed && !isMobile && "justify-center px-2",
             isActive && "bg-primary text-primary-foreground",
           )}
@@ -148,7 +148,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                     "w-full justify-start h-auto p-2 text-sm",
                     isChildActive
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent hover:text-accent-foreground",
+                      : "text-muted-foreground hover:text-foreground hover:bg-hover hover:text-hover-foreground",
                     !canAccess(child.permissionLevel) &&
                       "opacity-50 cursor-not-allowed",
                     isCollapsed && !isMobile && "justify-center px-2",

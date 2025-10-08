@@ -1822,12 +1822,12 @@ const HomePage: React.FC = () => {
     <div className="container mx-auto px-4 py-6 space-y-4">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-3">
-          <Avatar className="h-12 w-12">
+          {/* <Avatar className="h-12 w-12">
             {avatarSrc ? <AvatarImage src={avatarSrc} alt="avatar" /> : null}
             <AvatarFallback className="text-sm">
               {avatarInitials}
             </AvatarFallback>
-          </Avatar>
+          </Avatar> */}
           <div>
             <h1 className="text-2xl font-bold">
               {t('homepage.welcome')}, {user?.firstName} {user?.lastName}!

@@ -316,11 +316,11 @@ const TicketCreateWizardPage: React.FC = () => {
                         <button
                           type="button"
                           key={idx}
-                          className="w-full text-left px-3 py-3 text-sm hover:bg-accent hover:text-accent-foreground border-b last:border-b-0 transition-colors"
+                          className="w-full text-left px-3 py-3 text-sm hover:bg-hover hover:text-hover-foreground border-b last:border-b-0 transition-colors"
                           onClick={() => onSelectMachine(result)}
                         >
                           <div className="font-medium text-base">{result.PUDESC}</div>
-                          <div className="text-sm text-gray-600 mt-1">{result.PUCODE}</div>
+                          <div className="text-sm mt-1">{result.PUCODE}</div>
                         </button>
                       ))
                     ) : machineSearchQuery.length >= 2 ? (
@@ -412,7 +412,7 @@ const TicketCreateWizardPage: React.FC = () => {
               id="title" 
               value={title} 
               onChange={(e) => setTitle(e.target.value)} 
-              placeholder={t('ticket.briefDescription')} 
+             // placeholder={t('ticket.briefDescription')} 
               className="mt-4" 
             />
             <p className="text-xs text-gray-500 mt-2">
@@ -430,7 +430,7 @@ const TicketCreateWizardPage: React.FC = () => {
               value={description} 
               onChange={(e) => setDescription(e.target.value)} 
               rows={5} 
-              placeholder={t('ticket.detailedDescription')} 
+             // placeholder={t('ticket.detailedDescription')} 
               className="mt-4" 
             />
             <p className="text-xs text-gray-500 mt-2">

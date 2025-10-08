@@ -1591,7 +1591,7 @@ const TicketDetailsPage: React.FC = () => {
                               <button
                                 type="button"
                                 key={u.id}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-hover hover:text-hover-foreground"
                                 onClick={() => {
                                   setActionExtraId(String(u.id));
                                   setAssigneeQuery(u.name);
@@ -1765,7 +1765,7 @@ const TicketDetailsPage: React.FC = () => {
                             <button
                               type="button"
                               key={u.id}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-hover hover:text-hover-foreground"
                               onClick={() => {
                                 setActionExtraId(String(u.id));
                                 setAssigneeQuery(u.name);
@@ -1821,7 +1821,7 @@ const TicketDetailsPage: React.FC = () => {
                           <button
                             type="button"
                             key={u.id}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-hover hover:text-hover-foreground"
                             onClick={() => {
                               setActionExtraId(String(u.id));
                               setAssigneeQuery(u.name);

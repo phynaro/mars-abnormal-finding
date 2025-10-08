@@ -51,7 +51,7 @@ const OrgTitlesPage: React.FC = () => {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.TITLENO} className="border-t cursor-pointer hover:bg-accent" onClick={() => navigate(`/org/titles/${r.TITLENO}`, { state: { breadcrumbExtra: r.TITLECODE } })}>
+                  <tr key={r.TITLENO} className="border-t cursor-pointer hover:bg-hover" onClick={() => navigate(`/org/titles/${r.TITLENO}`, { state: { breadcrumbExtra: r.TITLECODE } })}>
                     <td className="px-4 py-2 whitespace-nowrap font-medium">{r.TITLECODE}</td>
                     <td className="px-4 py-2">{r.TITLENAME}</td>
                     <td className="px-4 py-2">{r.PERSON_COUNT ?? '-'}</td>
@@ -62,7 +62,7 @@ const OrgTitlesPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 gap-3 lg:hidden">
             {rows.map((r) => (
-              <Card key={r.TITLENO} className="p-4 space-y-1 cursor-pointer hover:bg-accent" onClick={() => navigate(`/org/titles/${r.TITLENO}`, { state: { breadcrumbExtra: r.TITLECODE } })}>
+              <Card key={r.TITLENO} className="p-4 space-y-1 cursor-pointer hover:bg-hover" onClick={() => navigate(`/org/titles/${r.TITLENO}`, { state: { breadcrumbExtra: r.TITLECODE } })}>
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{r.TITLECODE}</div>
                   <div className="text-xs text-muted-foreground">{r.PERSON_COUNT ?? '-'}</div>

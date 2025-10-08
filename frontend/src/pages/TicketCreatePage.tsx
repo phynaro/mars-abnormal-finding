@@ -395,7 +395,7 @@ const TicketCreatePage: React.FC = () => {
                             <button
                               type="button"
                               key={idx}
-                              className="w-full text-left px-3 py-3 text-sm hover:bg-accent hover:text-accent-foreground border-b last:border-b-0"
+                              className="w-full text-left px-3 py-3 text-sm hover:bg-hover hover:text-hover-foreground border-b last:border-b-0"
                               onClick={() => onSelectMachine(result)}
                             >
                               <div className="font-medium text-base">{result.PUCODE}</div>

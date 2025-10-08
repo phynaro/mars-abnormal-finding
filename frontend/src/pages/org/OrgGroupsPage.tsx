@@ -52,7 +52,7 @@ const OrgGroupsPage: React.FC = () => {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.USERGROUPNO} className="border-t cursor-pointer hover:bg-accent" onClick={() => navigate(`/org/groups/${r.USERGROUPNO}`, { state: { breadcrumbExtra: r.USERGROUPCODE } })}>
+                  <tr key={r.USERGROUPNO} className="border-t cursor-pointer hover:bg-hover" onClick={() => navigate(`/org/groups/${r.USERGROUPNO}`, { state: { breadcrumbExtra: r.USERGROUPCODE } })}>
                     <td className="px-4 py-2 whitespace-nowrap font-medium">{r.USERGROUPCODE}</td>
                     <td className="px-4 py-2">{r.USERGROUPNAME}</td>
                     <td className="px-4 py-2">{r.MEMBER_COUNT ?? '-'}</td>
@@ -64,7 +64,7 @@ const OrgGroupsPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-1 gap-3 lg:hidden">
             {rows.map((r) => (
-              <Card key={r.USERGROUPNO} className="p-4 space-y-1 cursor-pointer hover:bg-accent" onClick={() => navigate(`/org/groups/${r.USERGROUPNO}`, { state: { breadcrumbExtra: r.USERGROUPCODE } })}>
+              <Card key={r.USERGROUPNO} className="p-4 space-y-1 cursor-pointer hover:bg-hover" onClick={() => navigate(`/org/groups/${r.USERGROUPNO}`, { state: { breadcrumbExtra: r.USERGROUPCODE } })}>
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{r.USERGROUPCODE}</div>
                   <div className="text-xs text-muted-foreground">{r.MEMBER_COUNT ?? '-'}</div>

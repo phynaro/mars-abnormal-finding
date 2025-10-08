@@ -34,6 +34,10 @@
     --accent: 320 68% 44%;            /* #BC2486 - Pink/Magenta accent */
     --accent-foreground: 0 0% 100%;   /* White text on accent */
   
+    /* Hover effects - Light Gray */
+    --hover: 0 0% 97%;                /* Light gray for hover effects */
+    --hover-foreground: 0 0% 24%;     /* Dark text on hover */
+  
     /* Status colors */
     --success: 142 76% 36%;           /* Green for success (derived) */
     --success-foreground: 0 0% 100%;
@@ -80,6 +84,10 @@
     /* Accent - Pink/Magenta (lighter for dark mode) */
     --accent: 320 68% 60%;            /* Lighter pink/magenta */
     --accent-foreground: 0 0% 100%;   /* White text */
+  
+    /* Hover effects - Dark Gray (for dark mode) */
+    --hover: 0 0% 25%;                /* Dark gray for hover effects in dark mode */
+    --hover-foreground: 0 0% 95%;     /* Light text on hover */
   
     /* Status colors */
     --success: 142 76% 50%;           /* Lighter green for dark mode */
@@ -136,6 +144,19 @@
   
   .border-accent {
     border-color: hsl(var(--accent));
+  }
+  
+  /* Hover color utilities */
+  .text-hover {
+    color: hsl(var(--hover));
+  }
+  
+  .bg-hover {
+    background-color: hsl(var(--hover));
+  }
+  
+  .border-hover {
+    border-color: hsl(var(--hover));
   }
   
   /* Status color utilities */

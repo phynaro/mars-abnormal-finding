@@ -215,7 +215,7 @@ const DashboardBacklogPage: React.FC = () => {
               </thead>
               <tbody>
                 {displayedRows.map(row => (
-                  <tr key={row.key} className="border-t cursor-pointer hover:bg-accent" onClick={() => onRowClick(row)}>
+                  <tr key={row.key} className="border-t cursor-pointer hover:bg-hover" onClick={() => onRowClick(row)}>
                     <td className="px-4 py-2 font-medium whitespace-nowrap">{row.key}</td>
                     {statuses.map(st => (
                       <td key={st} className="px-4 py-2 text-right">{row.counts[st] || 0}</td>
@@ -235,7 +235,7 @@ const DashboardBacklogPage: React.FC = () => {
           {!((activeTab === 'department' || activeTab === 'user') && viewMode === 'chart') && (
           <div className="grid grid-cols-1 gap-3 lg:hidden">
             {displayedRows.map(row => (
-              <Card key={row.key} className="p-4 cursor-pointer hover:bg-accent" onClick={() => onRowClick(row)}>
+              <Card key={row.key} className="p-4 cursor-pointer hover:bg-hover" onClick={() => onRowClick(row)}>
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{row.key}</div>
                   <Badge variant="secondary">Total: {row.total}</Badge>

@@ -260,7 +260,7 @@ const DashboardPage: React.FC = () => {
                     return (
                       <tr
                         key={i}
-                        className={`border-t cursor-pointer ${isSel ? 'bg-accent' : 'hover:bg-accent/50'}`}
+                        className={`border-t cursor-pointer ${isSel ? 'bg-accent' : 'hover:bg-hover/50'}`}
                         onClick={() => setSelectedRow(i)}
                       >
                         <td className="px-3 py-2 whitespace-nowrap">{t.machine}</td>

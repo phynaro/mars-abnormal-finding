@@ -143,10 +143,10 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
                 <User className="h-4 w-4 mr-2" />
                 {t('profile.title')}
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              {/* <DropdownMenuItem>
                 <Settings className="h-4 w-4 mr-2" />
                 {t('settings.title')}
-              </DropdownMenuItem>
+              </DropdownMenuItem> */}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleLogout} className="text-destructive">
                 <LogOut className="h-4 w-4 mr-2" />
