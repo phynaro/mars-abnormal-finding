@@ -1235,32 +1235,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       {
         title: t('dashboard.waitingTickets'),
         value: kpis.waitingTicketsThisPeriod,
-        change: summary.comparisonMetrics.waitingTicketsChange.percentage,
-        changeDescription: summary.comparisonMetrics.waitingTicketsChange.description,
-        changeType: summary.comparisonMetrics.waitingTicketsChange.type,
         icon: <Clock className="h-4 w-4" />,
         color: 'text-orange-500'
       },
       {
         title: t('dashboard.pendingTickets'),
         value: kpis.pendingTicketsThisPeriod,
-        change: kpis.pendingTicketsLastPeriod > 0 
-          ? ((kpis.pendingTicketsThisPeriod - kpis.pendingTicketsLastPeriod) / kpis.pendingTicketsLastPeriod) * 100
-          : kpis.pendingTicketsThisPeriod > 0 ? 100 : 0,
-        changeDescription: kpis.pendingTicketsLastPeriod === 0 && kpis.pendingTicketsThisPeriod === 0 
-          ? t('dashboard.noChange') + ' (both periods had 0)' 
-          : kpis.pendingTicketsLastPeriod === 0 && kpis.pendingTicketsThisPeriod > 0
-          ? t('dashboard.newActivity') + ` (0 → ${kpis.pendingTicketsThisPeriod})`
-          : kpis.pendingTicketsThisPeriod === 0 && kpis.pendingTicketsLastPeriod > 0
-          ? t('dashboard.activityStopped') + ` (${kpis.pendingTicketsLastPeriod} → 0)`
-          : `${((kpis.pendingTicketsThisPeriod - kpis.pendingTicketsLastPeriod) / kpis.pendingTicketsLastPeriod * 100).toFixed(1)}% change`,
-        changeType: kpis.pendingTicketsLastPeriod === 0 && kpis.pendingTicketsThisPeriod === 0 
-          ? 'no_change'
-          : kpis.pendingTicketsLastPeriod === 0 && kpis.pendingTicketsThisPeriod > 0
-          ? 'new_activity'
-          : kpis.pendingTicketsThisPeriod === 0 && kpis.pendingTicketsLastPeriod > 0
-          ? 'activity_stopped'
-          : kpis.pendingTicketsThisPeriod > kpis.pendingTicketsLastPeriod ? 'increase' : 'decrease',
         icon: <Clock className="h-4 w-4" />,
         color: 'text-warning'
       },
@@ -1826,37 +1806,18 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     )}
                     {kpi.change !== undefined && (
                       <div className="flex items-center mt-1">
-                        {kpi.changeType === 'new_activity' ? (
-                          <div className="h-3 w-3 bg-blue-500 rounded-full mr-1" />
-                        ) : kpi.changeType === 'activity_stopped' ? (
-                          <div className="h-3 w-3 bg-muted-foreground rounded-full mr-1" />
-                        ) : kpi.changeType === 'no_change' ? (
-                          <div className="h-3 w-3 bg-muted rounded-full mr-1" />
-                        ) : kpi.change > 0 ? (
+                        {kpi.change > 0 ? (
                           <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
                         ) : (
                           <TrendingDown className="h-3 w-3 text-red-500 mr-1" />
                         )}
-                        <span className={`text-xs ${
-                          kpi.changeType === 'new_activity' ? 'text-blue-500' :
-                          kpi.changeType === 'activity_stopped' ? 'text-gray-500' :
-                          kpi.changeType === 'no_change' ? 'text-gray-400' :
-                          kpi.change > 0 ? 'text-green-500' : 'text-red-500'
-                        }`}>
-                          {kpi.changeType === 'no_change' ? t('dashboard.noChange') :
-                           kpi.changeType === 'new_activity' ? t('dashboard.newActivity') :
-                           kpi.changeType === 'activity_stopped' ? t('dashboard.activityStopped') :
-                           `${Math.abs(kpi.change).toFixed(1)}%`}
+                        <span className={`text-xs ${kpi.change > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                          {`${Math.abs(kpi.change).toFixed(1)}%`}
                         </span>
                       </div>
                     )}
-                    {kpi.changeDescription && (
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {kpi.changeDescription}
-                      </div>
-                    )}
                   </div>
-                  <div className={`p-2 rounded-lg bg-muted/50 ${kpi.color}`}>
+                  <div className={`p-2 rounded-lg ${kpi.color}`}>
                     {kpi.icon}
                   </div>
                 </div>
@@ -1991,10 +1952,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <Line
                       type="monotone"
                       dataKey="target"
-                      stroke="hsl(var(--destructive))"
+                      stroke="hsl(var(--accent))"
                       strokeWidth={2}
                       name={t('dashboard.target')}
-                      dot={false}
+                      dot={{ fill: 'hsl(var(--accent))', strokeWidth: 2, r: 4 }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -2291,6 +2252,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               {costImpactLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : costImpactChartData.length === 0 ? (
+                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                  {t('dashboard.noDataAvailable')}
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -2594,8 +2559,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: t('dashboard.hours'), position: 'insideBottom', offset: -5 }}
+                        label={{ value: t('dashboard.hours'), position: 'insideBottom', offset: -10 }}
                         tickFormatter={(value) => `${value}h`}
+                        tick={{ dy: 5 }}
                       />
                       <YAxis 
                         dataKey="display_name" 
@@ -2649,8 +2615,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: 'Hours', position: 'insideBottom', offset: -5 }}
+                        label={{ value: 'Hours', position: 'insideBottom', offset: -10 }}
                         tickFormatter={(value) => `${value}h`}
+                        tick={{ dy: 5 }}
                       />
                       <YAxis 
                         dataKey="userName" 
@@ -2701,9 +2668,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: t('dashboard.percentage'), position: 'insideBottom', offset: -5 }}
+                        label={{ value: t('dashboard.percentage'), position: 'insideBottom', offset: -10 }}
                         tickFormatter={(value) => `${value}%`}
                         domain={[0, 100]}
+                        tick={{ dy: 5 }}
                       />
                       <YAxis 
                         dataKey="display_name" 
@@ -2759,9 +2727,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: 'Percentage (%)', position: 'insideBottom', offset: -5 }}
+                        label={{ value: 'Percentage (%)', position: 'insideBottom', offset: -10 }}
                         tickFormatter={(value) => `${value}%`}
                         domain={[0, 100]}
+                        tick={{ dy: 5 }}
                       />
                       <YAxis 
                         dataKey="userName" 
