@@ -4642,17 +4642,25 @@ const getUserPendingTickets = async (req, res) => {
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN TicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
-                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
-                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
                 AND ta.is_active = 1
+                AND (
+                    -- Exact line match
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                    OR
+                    -- Area-level approval (area matches, line is null in approval)
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                    OR
+                    -- Plant-level approval (area and line are null in approval)
+                    (ta.area_code IS NULL AND ta.line_code IS NULL)
+                )
             WHERE (
                 -- Tickets created by the user
                 t.created_by = @userId
                 OR 
-                -- Tickets where user has approval_level > 2 for the line
-                (ta.approval_level > 2 AND ta.is_active = 1)
+                -- Tickets where user has approval_level >= 2 for the line/area/plant
+                (ta.approval_level >= 2 AND ta.is_active = 1)
             )
-            AND t.status NOT IN ('closed', 'Finished', 'canceled', 'rejected_final')
+            AND t.status NOT IN ('closed', 'finished', 'canceled', 'rejected_final')
         `;
 
         const countResult = await countRequest
@@ -4660,7 +4668,7 @@ const getUserPendingTickets = async (req, res) => {
             .query(countQuery);
         
         const total = countResult.recordset[0].total;
-        
+       
         // Query to get tickets related to the user with same format as getTickets
         const query = `
             SELECT 
@@ -4722,17 +4730,25 @@ const getUserPendingTickets = async (req, res) => {
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN TicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
-                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
-                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
                 AND ta.is_active = 1
+                AND (
+                    -- Exact line match
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                    OR
+                    -- Area-level approval (area matches, line is null in approval)
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                    OR
+                    -- Plant-level approval (area and line are null in approval)
+                    (ta.area_code IS NULL AND ta.line_code IS NULL)
+                )
             WHERE (
                 -- Tickets created by the user
                 t.created_by = @userId
                 OR 
-                -- Tickets where user has approval_level > 2 for the line
-                (ta.approval_level > 2 AND ta.is_active = 1)
+                -- Tickets where user has approval_level >= 2 for the line/area/plant
+                (ta.approval_level >= 2 AND ta.is_active = 1)
             )
-            AND t.status NOT IN ('closed', 'Finished', 'canceled', 'rejected_final')
+            AND t.status NOT IN ('closed', 'finished', 'canceled', 'rejected_final')
             ORDER BY t.created_at DESC
             OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
         `;
@@ -4862,9 +4878,17 @@ const getUserTicketCountPerPeriod = async (req, res) => {
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN TicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
-                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
-                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
                 AND ta.is_active = 1
+                AND (
+                    -- Exact line match
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                    OR
+                    -- Area-level approval (area matches, line is null in approval)
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                    OR
+                    -- Plant-level approval (area and line are null in approval)
+                    (ta.area_code IS NULL AND ta.line_code IS NULL)
+                )
             ${whereClause}
             GROUP BY 
                 CASE 
@@ -5009,9 +5033,17 @@ const getUserFinishedTicketCountPerPeriod = async (req, res) => {
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN TicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
-                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
-                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
                 AND ta.is_active = 1
+                AND (
+                    -- Exact line match
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                    OR
+                    -- Area-level approval (area matches, line is null in approval)
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                    OR
+                    -- Plant-level approval (area and line are null in approval)
+                    (ta.area_code IS NULL AND ta.line_code IS NULL)
+                )
             ${whereClause}
             GROUP BY 
                 CASE 
@@ -5128,14 +5160,22 @@ const getPersonalKPIData = async (req, res) => {
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN TicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
-                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
-                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
                 AND ta.is_active = 1
+                AND (
+                    -- Exact line match
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                    OR
+                    -- Area-level approval (area matches, line is null in approval)
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                    OR
+                    -- Plant-level approval (area and line are null in approval)
+                    (ta.area_code IS NULL AND ta.line_code IS NULL)
+                )
             WHERE (
                 -- Tickets created by the user
                 t.created_by = @userId
                 OR 
-                -- Tickets where user has approval_level > 2 for the line
+                -- Tickets where user has approval_level >= 2 for the line/area/plant
                 (ta.approval_level > 2 AND ta.is_active = 1)
             )
             AND t.created_at >= @startDate 
@@ -5159,14 +5199,22 @@ const getPersonalKPIData = async (req, res) => {
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN TicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
-                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
-                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
                 AND ta.is_active = 1
+                AND (
+                    -- Exact line match
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                    OR
+                    -- Area-level approval (area matches, line is null in approval)
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                    OR
+                    -- Plant-level approval (area and line are null in approval)
+                    (ta.area_code IS NULL AND ta.line_code IS NULL)
+                )
             WHERE (
                 -- Tickets created by the user
                 t.created_by = @userId
                 OR 
-                -- Tickets where user has approval_level > 2 for the line
+                -- Tickets where user has approval_level >= 2 for the line/area/plant
                 (ta.approval_level > 2 AND ta.is_active = 1)
             )
             AND t.created_at >= @compare_startDate 
@@ -5208,14 +5256,22 @@ const getPersonalKPIData = async (req, res) => {
                 LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                 LEFT JOIN TicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
-                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
-                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
                 AND ta.is_active = 1
+                AND (
+                    -- Exact line match
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                    OR
+                    -- Area-level approval (area matches, line is null in approval)
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                    OR
+                    -- Plant-level approval (area and line are null in approval)
+                    (ta.area_code IS NULL AND ta.line_code IS NULL)
+                )
                 WHERE (
                     -- Tickets Finished by the user
                     t.finished_by = @userId
                     OR 
-                    -- Tickets where user has approval_level > 2 for the line and was involved
+                    -- Tickets where user has approval_level >= 2 for the line/area/plant and was involved
                     (ta.approval_level > 2 AND ta.is_active = 1)
                 )
                 AND t.finished_at >= @startDate 
@@ -5236,14 +5292,22 @@ const getPersonalKPIData = async (req, res) => {
                 LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                 LEFT JOIN TicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
-                AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
-                AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
                 AND ta.is_active = 1
+                AND (
+                    -- Exact line match
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                    OR
+                    -- Area-level approval (area matches, line is null in approval)
+                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                    OR
+                    -- Plant-level approval (area and line are null in approval)
+                    (ta.area_code IS NULL AND ta.line_code IS NULL)
+                )
                 WHERE (
                     -- Tickets Finished by the user
                     t.finished_by = @userId
                     OR 
-                    -- Tickets where user has approval_level > 2 for the line and was involved
+                    -- Tickets where user has approval_level >= 2 for the line/area/plant and was involved
                     (ta.approval_level > 2 AND ta.is_active = 1)
                 )
                 AND t.finished_at >= @compare_startDate 
