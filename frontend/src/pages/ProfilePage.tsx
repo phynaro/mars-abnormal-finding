@@ -1,9 +1,10 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/ui/file-upload';
+import type { FileUploadRef } from '@/components/ui/file-upload';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -33,6 +34,7 @@ const ProfilePage: React.FC = () => {
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [showLineHelp, setShowLineHelp] = useState(false);
+  const fileInputRef = useRef<FileUploadRef>(null);
 
   const uploadsBase = getApiBaseUrl().replace(/\/$/, '').replace(/\/api$/, '');
 
@@ -82,30 +84,6 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  const uploadAvatar = async () => {
-    if (!avatarFile) return;
-    setLoading(true);
-    try {
-      const form = new FormData();
-      form.append('avatar', avatarFile);
-      const res = await fetch(`${getApiBaseUrl()}/users/profile/avatar`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
-        },
-        body: form
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.message || t('profile.failedToUploadAvatar'));
-      await refreshUser();
-      setAvatarFile(null);
-      alert(t('profile.avatarUpdated'));
-    } catch (e) {
-      alert(e instanceof Error ? e.message : t('profile.failedToUploadAvatar'));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Avatar crop handlers
   const onSelectAvatar: React.ChangeEventHandler<HTMLInputElement> = (e) => {
@@ -246,7 +224,7 @@ const ProfilePage: React.FC = () => {
   }
 
   const applyCrop = async () => {
-    console.log('🚀 applyCrop function called');
+    console.log('🚀 applyCrop function called - starting crop and upload process');
     console.log('📊 Current state:', {
       imageSrc: imageSrc ? 'exists' : 'null',
       croppedAreaPixels: croppedAreaPixels,
@@ -284,8 +262,7 @@ const ProfilePage: React.FC = () => {
         type: file.type
       });
       
-      console.log('🔄 Setting avatar file and closing cropper...');
-      setAvatarFile(file);
+      console.log('🔄 Closing cropper and starting upload...');
       setShowCropper(false);
       
       // Clean up object URL
@@ -295,16 +272,44 @@ const ProfilePage: React.FC = () => {
         setImageSrc(null);
       }
       
-      console.log('✅ Crop applied successfully! New avatar file set.');
-      alert('Crop applied successfully! You can now upload the image.');
+      // Automatically upload the cropped image
+      console.log('🚀 Starting automatic upload of cropped image...');
+      setLoading(true);
+      
+      const form = new FormData();
+      form.append('avatar', file);
+      
+      const res = await fetch(`${getApiBaseUrl()}/users/profile/avatar`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+        },
+        body: form
+      });
+      
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || t('profile.failedToUploadAvatar'));
+      
+      console.log('✅ Avatar uploaded successfully!');
+      await refreshUser();
+      setAvatarFile(null);
+      alert(t('profile.avatarUpdated'));
+      
+      // Reset the file input so the same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.reset();
+        console.log('🔄 File input reset for next selection');
+      }
       
     } catch (e) {
-      console.error('❌ Crop error details:', {
+      console.error('❌ Crop and upload error details:', {
         error: e,
         message: e instanceof Error ? e.message : 'Unknown error',
         stack: e instanceof Error ? e.stack : 'No stack trace'
       });
-      alert(e instanceof Error ? e.message : t('profile.failedToCropImage'));
+      alert(e instanceof Error ? e.message : t('profile.failedToUploadAvatar'));
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -357,12 +362,15 @@ const ProfilePage: React.FC = () => {
               <Label htmlFor="avatar">{t('profile.changeProfilePicture')}</Label>
               <div className="flex gap-2">
                 <FileUpload 
+                  ref={fileInputRef}
                   accept="image/*" 
                   onChange={(files) => onSelectAvatar({ target: { files } } as any)} 
                   placeholder={t('profile.chooseFile')}
                 />
-                <Button onClick={uploadAvatar} disabled={!avatarFile || loading}>{t('profile.upload')}</Button>
               </div>
+              <p className="text-sm text-muted-foreground">
+                {t('profile.avatarUploadHint')}
+              </p>
             </div>
           </div>
 
@@ -572,7 +580,14 @@ const ProfilePage: React.FC = () => {
       </Dialog>
 
       {/* Cropper Dialog */}
-      <Dialog open={showCropper} onOpenChange={setShowCropper}>
+      <Dialog open={showCropper} onOpenChange={(open) => {
+        setShowCropper(open);
+        // Reset file input when dialog is closed
+        if (!open && fileInputRef.current) {
+          fileInputRef.current.reset();
+          console.log('🔄 File input reset after dialog close');
+        }
+      }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>{t('profile.cropAvatar')}</DialogTitle>
@@ -607,11 +622,18 @@ const ProfilePage: React.FC = () => {
             <Button variant="outline" onClick={() => {
               console.log('❌ Cancel button clicked');
               setShowCropper(false);
-            }}>{t('profile.cancel')}</Button>
+              // Reset file input when cancelling
+              if (fileInputRef.current) {
+                fileInputRef.current.reset();
+                console.log('🔄 File input reset after cancel');
+              }
+            }} disabled={loading}>{t('profile.cancel')}</Button>
             <Button onClick={() => {
-              console.log('✅ Apply button clicked - calling applyCrop');
+              console.log('✅ Apply & Upload button clicked - calling applyCrop');
               applyCrop();
-            }}>{t('profile.apply')}</Button>
+            }} disabled={loading}>
+              {loading ? t('profile.uploading') : t('profile.applyAndUpload')}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, forwardRef, useImperativeHandle } from 'react';
 import { Button } from './button';
 import { Upload } from 'lucide-react';
 
@@ -11,15 +11,27 @@ interface FileUploadProps {
   placeholder?: string;
 }
 
-export const FileUpload: React.FC<FileUploadProps> = ({
+export interface FileUploadRef {
+  reset: () => void;
+}
+
+export const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
   accept = "*/*",
   multiple = false,
   onChange,
   className = "",
   disabled = false,
   placeholder = "Choose Files"
-}) => {
+}, ref) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    reset: () => {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  }));
 
   const handleButtonClick = () => {
     if (!disabled && fileInputRef.current) {
@@ -59,4 +71,4 @@ export const FileUpload: React.FC<FileUploadProps> = ({
       </Button>
     </div>
   );
-};
+});
