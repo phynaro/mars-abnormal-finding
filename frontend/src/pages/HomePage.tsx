@@ -34,6 +34,14 @@ import {
   ChevronRight,
   Plus,
   CheckSquare,
+  ArrowUp,
+  Clock,
+  Lock,
+  Star,
+  X,
+  Calendar,
+  UserCheck,
+  Eye,
 } from "lucide-react";
 import {
   ticketService,
@@ -122,6 +130,344 @@ function formatHours(hours: number) {
   return `${hours.toFixed(1)}h`;
 }
 
+// Helper function to get relationship configuration
+const getRelationshipConfig = (relationship: string) => {
+  const configs = {
+    'escalate_approver': {
+      icon: <ArrowUp className="h-5 w-5" />,
+      title: 'Escalated Tickets',
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50 border-orange-200',
+      priority: 1,
+      columns: [
+        { key: 'ticket_number', label: 'Ticket #' },
+        { key: 'title', label: 'Title' },
+        { key: 'status', label: 'Status' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'severity_level', label: 'Severity' },
+        { key: 'pu_name', label: 'PU Name' },
+        { key: 'escalated_by', label: 'Escalated By' },
+        { key: 'escalated_at', label: 'Escalated At' }
+      ]
+    },
+    'accept_approver': {
+      icon: <CheckCircle className="h-5 w-5" />,
+      title: 'Tickets to Accept',
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50 border-blue-200',
+      priority: 2,
+      columns: [
+        { key: 'ticket_number', label: 'Ticket #' },
+        { key: 'title', label: 'Title' },
+        { key: 'status', label: 'Status' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'severity_level', label: 'Severity' },
+        { key: 'pu_name', label: 'PU Name' },
+        { key: 'reporter_name', label: 'Created By' },
+        { key: 'created_at', label: 'Created At' }
+      ]
+    },
+    'close_approver': {
+      icon: <Lock className="h-5 w-5" />,
+      title: 'Tickets to Close',
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50 border-purple-200',
+      priority: 3,
+      columns: [
+        { key: 'ticket_number', label: 'Ticket #' },
+        { key: 'title', label: 'Title' },
+        { key: 'status', label: 'Status' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'severity_level', label: 'Severity' },
+        { key: 'pu_name', label: 'PU Name' },
+        { key: 'reviewed_by', label: 'Reviewed By' },
+        { key: 'reviewed_at', label: 'Reviewed At' }
+      ]
+    },
+    'review_approver': {
+      icon: <Star className="h-5 w-5" />,
+      title: 'Tickets to Review',
+      color: 'text-yellow-600',
+      bgColor: 'bg-yellow-50 border-yellow-200',
+      priority: 4,
+      columns: [
+        { key: 'ticket_number', label: 'Ticket #' },
+        { key: 'title', label: 'Title' },
+        { key: 'status', label: 'Status' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'severity_level', label: 'Severity' },
+        { key: 'pu_name', label: 'PU Name' },
+        { key: 'finished_by', label: 'Finished By' },
+        { key: 'finished_at', label: 'Finished At' }
+      ]
+    },
+    'reject_approver': {
+      icon: <X className="h-5 w-5" />,
+      title: 'Tickets to Review (Rejected)',
+      color: 'text-red-600',
+      bgColor: 'bg-red-50 border-red-200',
+      priority: 5,
+      columns: [
+        { key: 'ticket_number', label: 'Ticket #' },
+        { key: 'title', label: 'Title' },
+        { key: 'status', label: 'Status' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'severity_level', label: 'Severity' },
+        { key: 'pu_name', label: 'PU Name' },
+        { key: 'rejected_by', label: 'Rejected By' },
+        { key: 'rejected_at', label: 'Rejected At' }
+      ]
+    },
+    'planner': {
+      icon: <Calendar className="h-5 w-5" />,
+      title: 'Tickets to Plan',
+      color: 'text-indigo-600',
+      bgColor: 'bg-indigo-50 border-indigo-200',
+      priority: 6,
+      columns: [
+        { key: 'ticket_number', label: 'Ticket #' },
+        { key: 'title', label: 'Title' },
+        { key: 'status', label: 'Status' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'severity_level', label: 'Severity' },
+        { key: 'pu_name', label: 'PU Name' },
+        { key: 'reporter_name', label: 'Created By' },
+        { key: 'created_at', label: 'Created At' },
+        { key: 'accepted_by', label: 'Accepted By' },
+        { key: 'accepted_at', label: 'Accepted At' }
+      ]
+    },
+    'assignee': {
+      icon: <UserCheck className="h-5 w-5" />,
+      title: 'My Assigned Tickets',
+      color: 'text-green-600',
+      bgColor: 'bg-green-50 border-green-200',
+      priority: 7,
+      columns: [
+        { key: 'ticket_number', label: 'Ticket #' },
+        { key: 'title', label: 'Title' },
+        { key: 'status', label: 'Status' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'severity_level', label: 'Severity' },
+        { key: 'pu_name', label: 'PU Name' },
+        { key: 'scheduled_start', label: 'Scheduled Start' },
+        { key: 'scheduled_complete', label: 'Scheduled Complete' }
+      ]
+    },
+    'requester': {
+      icon: <User className="h-5 w-5" />,
+      title: 'My Created Tickets',
+      color: 'text-gray-600',
+      bgColor: 'bg-gray-50 border-gray-200',
+      priority: 8,
+      columns: [
+        { key: 'ticket_number', label: 'Ticket #' },
+        { key: 'title', label: 'Title' },
+        { key: 'status', label: 'Status' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'severity_level', label: 'Severity' },
+        { key: 'pu_name', label: 'PU Name' },
+        { key: 'assignee_name', label: 'Assigned To' },
+        { key: 'scheduled_start', label: 'Scheduled Start' },
+        { key: 'scheduled_complete', label: 'Scheduled Complete' }
+      ]
+    },
+    'viewer': {
+      icon: <Eye className="h-5 w-5" />,
+      title: 'Other Tickets',
+      color: 'text-gray-500',
+      bgColor: 'bg-gray-50 border-gray-200',
+      priority: 9,
+      columns: [
+        { key: 'ticket_number', label: 'Ticket #' },
+        { key: 'title', label: 'Title' },
+        { key: 'status', label: 'Status' },
+        { key: 'priority', label: 'Priority' },
+        { key: 'severity_level', label: 'Severity' },
+        { key: 'pu_name', label: 'PU Name' },
+        { key: 'reporter_name', label: 'Created By' },
+        { key: 'created_at', label: 'Created At' },
+        { key: 'assignee_name', label: 'Assigned To' }
+      ]
+    }
+  };
+  
+  return configs[relationship as keyof typeof configs] || configs.viewer;
+};
+
+// Helper function to render cell content based on field type
+const renderCellContent = (ticket: APIPendingTicket, fieldKey: string) => {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  switch (fieldKey) {
+    case 'ticket_number':
+      return <span className="font-medium">{ticket.ticket_number}</span>;
+    
+    case 'title':
+      return (
+        <div>
+          <div className="font-medium">{ticket.title}</div>
+          <div className="text-muted-foreground truncate max-w-xs text-xs">
+            {ticket.description}
+          </div>
+        </div>
+      );
+    
+    case 'status':
+      return (
+        <Badge className={getTicketStatusClass(ticket.status)}>
+          {ticket.status.replace("_", " ").toUpperCase()}
+        </Badge>
+      );
+    
+    case 'priority':
+      return (
+        <Badge className={getTicketPriorityClass(ticket.priority)}>
+          {ticket.priority?.toUpperCase()}
+        </Badge>
+      );
+    
+    case 'severity_level':
+      return (
+        <Badge className={getTicketSeverityClass(ticket.severity_level)}>
+          {ticket.severity_level?.toUpperCase()}
+        </Badge>
+      );
+    
+    case 'pu_name':
+      return <span className="text-sm">{ticket.pu_name || ticket.pucode || 'N/A'}</span>;
+    
+    case 'reporter_name':
+      return (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>{ticket.reporter_name || 'Unknown User'}</span>
+        </div>
+      );
+    
+    case 'assignee_name':
+      return ticket.assignee_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>{ticket.assignee_name}</span>
+        </div>
+      ) : (
+        <span className="text-muted-foreground">Unassigned</span>
+      );
+    
+    case 'created_at':
+      return <span className="text-muted-foreground">{formatDate(ticket.created_at)}</span>;
+    
+    case 'accepted_at':
+      return ticket.accepted_at ? (
+        <span className="text-muted-foreground">{formatDate(ticket.accepted_at)}</span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'accepted_by':
+      return ticket.accepted_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>{ticket.accepted_by_name}</span>
+        </div>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'escalated_at':
+      return ticket.escalated_at ? (
+        <span className="text-muted-foreground">{formatDateTime(ticket.escalated_at)}</span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'escalated_by':
+      return ticket.escalated_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>{ticket.escalated_by_name}</span>
+        </div>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'reviewed_at':
+      return ticket.reviewed_at ? (
+        <span className="text-muted-foreground">{formatDateTime(ticket.reviewed_at)}</span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'reviewed_by':
+      return ticket.reviewed_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>{ticket.reviewed_by_name}</span>
+        </div>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'finished_at':
+      return ticket.finished_at ? (
+        <span className="text-muted-foreground">{formatDateTime(ticket.finished_at)}</span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'finished_by':
+      return ticket.finished_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>{ticket.finished_by_name}</span>
+        </div>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'rejected_at':
+      return ticket.rejected_at ? (
+        <span className="text-muted-foreground">{formatDateTime(ticket.rejected_at)}</span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'rejected_by':
+      return ticket.rejected_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>{ticket.rejected_by_name}</span>
+        </div>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'scheduled_start':
+      return ticket.scheduled_start ? (
+        <span className="text-muted-foreground">{formatDateTime(ticket.scheduled_start)}</span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    case 'scheduled_complete':
+      return ticket.scheduled_complete ? (
+        <span className="text-muted-foreground">{formatDateTime(ticket.scheduled_complete)}</span>
+      ) : (
+        <span className="text-muted-foreground">-</span>
+      );
+    
+    default:
+      return <span className="text-muted-foreground">-</span>;
+  }
+};
+
 
 
 const PendingTicketsSection: React.FC<{
@@ -141,6 +487,136 @@ const PendingTicketsSection: React.FC<{
   
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString();
+  };
+
+  // Group tickets by user relationship
+  const groupedTickets = tickets.reduce((groups, ticket) => {
+    const relationship = ticket.user_relationship || 'viewer';
+    if (!groups[relationship]) {
+      groups[relationship] = [];
+    }
+    groups[relationship].push(ticket);
+    return groups;
+  }, {} as Record<string, APIPendingTicket[]>);
+
+  // Sort relationship types by priority
+  const relationshipTypes = Object.keys(groupedTickets).sort((a, b) => {
+    const configA = getRelationshipConfig(a);
+    const configB = getRelationshipConfig(b);
+    return configA.priority - configB.priority;
+  });
+
+  // Component to render a single ticket table for a relationship type
+  const renderTicketTable = (relationship: string, tickets: APIPendingTicket[]) => {
+    const config = getRelationshipConfig(relationship);
+    
+    return (
+      <div key={relationship} className="mb-6">
+        {/* Table Header */}
+        <div className="flex items-center gap-2 mb-3">
+          <div className={config.color}>
+            {config.icon}
+          </div>
+          <h3 className={`text-lg font-semibold ${config.color}`}>
+            {config.title} ({tickets.length})
+          </h3>
+        </div>
+
+        {/* Mobile Cards */}
+        <div className="block lg:hidden space-y-4">
+          {tickets.map((ticket) => (
+            <div key={ticket.id} className="border rounded-lg p-4 bg-card">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="text-sm text-muted-foreground">
+                    #{ticket.ticket_number}
+                  </div>
+                  <div className="text-lg font-semibold">
+                    {ticket.title}
+                  </div>
+                </div>
+                <Badge className={getTicketStatusClass(ticket.status)}>
+                  {ticket.status.replace("_", " ").toUpperCase()}
+                </Badge>
+              </div>
+              <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
+                {ticket.description}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge className={getTicketPriorityClass(ticket.priority)}>
+                  {ticket.priority?.toUpperCase()}
+                </Badge>
+                <Badge
+                  className={getTicketSeverityClass(ticket.severity_level)}
+                >
+                  {ticket.severity_level?.toUpperCase()}
+                </Badge>
+                <Badge variant="outline" className="text-xs">
+                  {ticket.pu_name || ticket.pucode || 'N/A'}
+                </Badge>
+              </div>
+              
+              {/* Dynamic mobile card content based on relationship type */}
+              <div className="mt-3 text-sm text-muted-foreground space-y-1">
+                {config.columns.slice(6).map((column) => {
+                  const content = renderCellContent(ticket, column.key);
+                  if (content.props.children === '-') return null;
+                  
+                  return (
+                    <div key={column.key} className="flex items-center gap-2">
+                      {content}
+                    </div>
+                  );
+                })}
+              </div>
+              
+              <div className="mt-4 flex justify-between items-center text-xs text-muted-foreground">
+                <span>{t('ticket.created')} {formatDate(ticket.created_at)}</span>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onTicketClick(ticket.id)}
+                  >
+                    {t('ticket.view')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop Table */}
+        <div className="hidden lg:block overflow-x-auto rounded border">
+          <table className="min-w-full text-sm">
+            <thead className="bg-muted/50 text-left">
+              <tr>
+                {config.columns.map((column) => (
+                  <th key={column.key} className="px-4 py-2">
+                    {column.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tickets.map((ticket) => (
+                <tr
+                  key={ticket.id}
+                  className="border-t cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
+                  onClick={() => onTicketClick(ticket.id)}
+                >
+                  {config.columns.map((column) => (
+                    <td key={column.key} className="px-4 py-2">
+                      {renderCellContent(ticket, column.key)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   };
 
   const MobileCardSkeleton = () => (
@@ -181,12 +657,6 @@ const PendingTicketsSection: React.FC<{
   
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-lg font-semibold flex items-center space-x-2">
-          <Ticket className="h-5 w-5" />
-          <span>{t('homepage.pendingTickets')}</span>
-        </h2>
-      </div>
       <div>
         {loading ? (
           <>
@@ -209,186 +679,10 @@ const PendingTicketsSection: React.FC<{
           </div>
         ) : tickets.length > 0 ? (
           <>
-            {/* Mobile Cards */}
-            <div className="block lg:hidden space-y-4">
-              {tickets.map((ticket) => (
-                <div key={ticket.id} className="border rounded-lg p-4 bg-card">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-sm text-muted-foreground">
-                        #{ticket.ticket_number}
-                      </div>
-                      <div className="text-lg font-semibold">
-                        {ticket.title}
-                      </div>
-                    </div>
-                    <Badge className={getTicketStatusClass(ticket.status)}>
-                      {ticket.status.replace("_", " ").toUpperCase()}
-                    </Badge>
-                  </div>
-                  <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
-                    {ticket.description}
-                  </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge className={getTicketPriorityClass(ticket.priority)}>
-                      {ticket.priority?.toUpperCase()}
-                    </Badge>
-                    <Badge
-                      className={getTicketSeverityClass(ticket.severity_level)}
-                    >
-                      {ticket.severity_level?.toUpperCase()}
-                    </Badge>
-                    <Badge variant="outline" className="text-xs">
-                      {ticket.pu_name || ticket.pucode || 'N/A'}
-                    </Badge>
-                  </div>
-                  <div className="mt-3 text-sm text-muted-foreground">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      <span>
-                        {t('ticket.createdBy')}:{" "}
-                        {ticket.reporter_name || `User ${ticket.created_by}`}
-                      </span>
-                    </div>
-                    {ticket.assigned_to && (
-                      <div className="flex items-center gap-2 mt-1">
-                        <User className="w-4 h-4" />
-                        <span>
-                          {t('ticket.assignedTo')}:{" "}
-                          {ticket.assignee_name || `User ${ticket.assigned_to}`}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="mt-4 flex justify-between items-center text-xs text-muted-foreground">
-                    <span>{t('ticket.created')} {formatDate(ticket.created_at)}</span>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => onTicketClick(ticket.id)}
-                      >
-                        {t('ticket.view')}
-                      </Button>
-                    </div>
-                  </div>
-                  {ticket.user_relationship && (
-                    <div className="mt-2 text-xs font-medium text-primary">
-                      {ticket.user_relationship === "creator"
-                        ? t('homepage.youCreatedThisTicket')
-                        : ticket.user_relationship === "approver"
-                          ? t('homepage.requiresYourApproval')
-                          : t('homepage.viewOnly')}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Desktop Table */}
-            <div className="hidden lg:block overflow-x-auto rounded border">
-              <table className="min-w-full text-sm">
-                <thead className="bg-muted/50 text-left">
-                  <tr>
-                    <th className="px-4 py-2">{t('ticket.ticketNumber')}</th>
-                    <th className="px-4 py-2">{t('ticket.title')}</th>
-                    <th className="px-4 py-2">{t('ticket.status')}</th>
-                    <th className="px-4 py-2">{t('ticket.priority')}</th>
-                    <th className="px-4 py-2">{t('ticket.severity')}</th>
-                    <th className="px-4 py-2">PU Name</th>
-                    <th className="px-4 py-2">{t('ticket.createdBy')}</th>
-                    <th className="px-4 py-2">{t('ticket.assignedTo')}</th>
-                    <th className="px-4 py-2">{t('ticket.created')}</th>
-                    <th className="px-4 py-2">Relationship</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {tickets.map((ticket) => (
-                    <tr
-                      key={ticket.id}
-                      className="border-t cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
-                      onClick={() => onTicketClick(ticket.id)}
-                    >
-                      <td className="px-4 py-2 whitespace-nowrap font-medium">
-                        {ticket.ticket_number}
-                      </td>
-                      <td className="px-4 py-2">
-                        <div>
-                          <div className="font-medium">{ticket.title}</div>
-                          <div className="text-muted-foreground truncate max-w-xs">
-                            {ticket.description}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">
-                        <Badge className={getTicketStatusClass(ticket.status)}>
-                          {ticket.status.replace("_", " ").toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2">
-                        <Badge
-                          className={getTicketPriorityClass(ticket.priority)}
-                        >
-                          {ticket.priority?.toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2">
-                        <Badge
-                          className={getTicketSeverityClass(
-                            ticket.severity_level,
-                          )}
-                        >
-                          {ticket.severity_level?.toUpperCase()}
-                        </Badge>
-                      </td>
-                      <td className="px-4 py-2">
-                        <span className="text-sm">
-                          {ticket.pu_name || ticket.pucode || 'N/A'}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 text-muted-foreground" />
-                          <span>
-                            {ticket.reporter_name ||
-                              `User ${ticket.created_by}`}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-2">
-                        {ticket.assigned_to ? (
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-muted-foreground" />
-                            <span>
-                              {ticket.assignee_name ||
-                                `User ${ticket.assigned_to}`}
-                            </span>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            {t('ticket.unassigned')}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
-                        {formatDate(ticket.created_at)}
-                      </td>
-                      <td className="px-4 py-2">
-                        {ticket.user_relationship && (
-                          <Badge variant="outline" className="text-xs">
-                            {ticket.user_relationship === "creator"
-                              ? t('homepage.youCreatedThisTicket')
-                              : ticket.user_relationship === "approver"
-                                ? t('homepage.requiresYourApproval')
-                                : t('homepage.viewOnly')}
-                          </Badge>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            {/* Render grouped ticket tables */}
+            {relationshipTypes.map(relationship => 
+              renderTicketTable(relationship, groupedTickets[relationship])
+            )}
 
             {/* Pagination */}
             {pagination.pages > 1 && (
