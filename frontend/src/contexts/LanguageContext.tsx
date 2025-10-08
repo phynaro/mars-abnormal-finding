@@ -35,7 +35,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.previous': 'Previous',
     'common.warning': 'Warning',
     'common.search': 'Search',
-    
+    'common.clear': 'Clear',
     // Navigation
     'nav.dashboard': 'Dashboard',
     'nav.tickets': 'Tickets',
@@ -597,6 +597,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.previous': 'ก่อนหน้า',
     'common.warning': 'คำเตือน',
     'common.search': 'ค้นหาปัญหา',
+    'common.clear': 'ล้าง',
     
     // Navigation
     'nav.dashboard': 'แดชบอร์ด',
