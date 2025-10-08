@@ -63,17 +63,15 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-background flex flex-col lg:hidden">
-      {/* Top Navigation */}
-      <div className="sticky top-0 z-40 bg-background">
-        <TopNavbar 
-          isMobile={true} 
-          onMobileMenuToggle={handleToggleMobileMenu} 
-        />
-      </div>
+      {/* Top Navigation - Now fixed with blur effect */}
+      <TopNavbar 
+        isMobile={true} 
+        onMobileMenuToggle={handleToggleMobileMenu} 
+      />
 
-      {/* Main Content */}
+      {/* Main Content - Add top padding to account for fixed navbar */}
       <main className={cn(
-        "flex-1 overflow-auto bg-background",
+        "flex-1 overflow-auto bg-background pt-16", // pt-16 to account for fixed navbar height
         isBottomNavVisible && "pb-20" // Extra padding for FAB
       )}>
         {children}

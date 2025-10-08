@@ -61,7 +61,7 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
   };
 
   return (
-    <nav className="border-b bg-background px-4 py-3">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3">
       <div className="flex items-center justify-between">
         {/* Left side - Logo */}
         <div className="flex items-center">
@@ -75,9 +75,9 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
         {/* Right side - Actions and User Menu */}
         <div className="flex items-center space-x-2">
           {/* Notifications */}
-          <Button variant="ghost" size="icon">
+          {/* <Button variant="ghost" size="icon">
             <Bell className="h-5 w-5" />
-          </Button>
+          </Button> */}
 
           {/* Language Selector */}
           <DropdownMenu>
