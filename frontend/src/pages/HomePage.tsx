@@ -1089,7 +1089,7 @@ const HomePage: React.FC = () => {
   const avatarInitials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`;
 
   const handleTicketClick = (ticketId: number) => {
-    navigate(`/tickets/${ticketId}`);
+    navigate(`/tickets/${ticketId}`, { state: { from: '/home' } });
   };
 
   const handlePendingTicketsPageChange = (page: number) => {

@@ -193,7 +193,7 @@ export const TicketList: React.FC = () => {
   };
 
   const handleViewTicket = (ticket: Ticket) => {
-    navigate(`/tickets/${ticket.id}`);
+    navigate(`/tickets/${ticket.id}`, { state: { from: '/tickets' } });
   };
 
   const handleDeleteTicket = async (ticketId: number) => {

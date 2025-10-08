@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket } from "@/services/ticketService";
 import { Button } from "@/components/ui/button";
@@ -54,6 +54,7 @@ import {
 const TicketDetailsPage: React.FC = () => {
   const { ticketId } = useParams<{ ticketId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,6 +127,23 @@ const TicketDetailsPage: React.FC = () => {
 
   // Ref for assignee dropdown to handle click outside
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Function to determine where to navigate back to
+  const getBackNavigation = () => {
+    // Check if we have a referrer in the location state
+    if (location.state?.from) {
+      return location.state.from;
+    }
+    
+    // Check if we came from the homepage by looking at the referrer
+    const referrer = document.referrer;
+    if (referrer && (referrer.includes('/home') || referrer.includes('/dashboard'))) {
+      return '/home';
+    }
+    
+    // Default to tickets page
+    return '/tickets';
+  };
 
   useEffect(() => {
     if (ticketId) {
@@ -326,7 +344,7 @@ const TicketDetailsPage: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             {error || t('ticket.ticketNotFoundDescription')}
           </p>
-          <Button onClick={() => navigate("/tickets")} variant="outline">
+          <Button onClick={() => navigate(getBackNavigation())} variant="outline">
             <ArrowLeft className="mr-2 h-4 w-4" />
             {t('ticket.backToTickets')}
           </Button>
@@ -622,7 +640,7 @@ const TicketDetailsPage: React.FC = () => {
       <PageHeader
           title={`Ticket #${ticket.ticket_number}`}
           showBackButton={true}
-          onBack={() => navigate("/tickets")}
+          onBack={() => navigate(getBackNavigation())}
           rightContent={
           <div className="flex flex-wrap gap-2 justify-end">
             {/* Accept button - Only assigned L2 user can accept open tickets */}
