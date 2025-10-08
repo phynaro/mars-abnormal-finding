@@ -274,13 +274,20 @@ const AvatarLabel = ({ data, maxAvatar = 28, clipPrefix = '' }: { data: any[], m
 const AbnormalReportDashboardV2Page: React.FC = () => {
   const { t } = useLanguage();
   
-  // Global Filters
+  // Global Filters - Applied (currently active)
   const [timeFilter, setTimeFilter] = useState<string>('this-period');
   const [plantFilter, setPlantFilter] = useState<string>('all');
   const [areaFilter, setAreaFilter] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedPeriod, setSelectedPeriod] = useState<number>(1);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
+
+  // Pending Filters - Changes not yet applied
+  const [pendingTimeFilter, setPendingTimeFilter] = useState<string>('this-period');
+  const [pendingPlantFilter, setPendingPlantFilter] = useState<string>('all');
+  const [pendingAreaFilter, setPendingAreaFilter] = useState<string>('all');
+  const [pendingSelectedYear, setPendingSelectedYear] = useState<number>(new Date().getFullYear());
+  const [pendingSelectedPeriod, setPendingSelectedPeriod] = useState<number>(1);
 
   // API State
   const [kpiData, setKpiData] = useState<AbnormalFindingKPIResponse['data'] | null>(null);
@@ -480,14 +487,49 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     if (filterType === 'plant') {
       setPlantFilter('all');
       setAreaFilter('all'); // Also reset area when plant is cleared
+      setPendingPlantFilter('all');
+      setPendingAreaFilter('all');
     } else if (filterType === 'area') {
       setAreaFilter('all');
+      setPendingAreaFilter('all');
     }
   };
 
   const clearAllFilters = () => {
     setPlantFilter('all');
     setAreaFilter('all');
+    setPendingPlantFilter('all');
+    setPendingAreaFilter('all');
+  };
+
+  // Apply pending filters
+  const applyFilters = () => {
+    setTimeFilter(pendingTimeFilter);
+    setPlantFilter(pendingPlantFilter);
+    setAreaFilter(pendingAreaFilter);
+    setSelectedYear(pendingSelectedYear);
+    setSelectedPeriod(pendingSelectedPeriod);
+    setIsFilterModalOpen(false);
+  };
+
+  // Reset pending filters to current applied filters
+  const resetPendingFilters = () => {
+    setPendingTimeFilter(timeFilter);
+    setPendingPlantFilter(plantFilter);
+    setPendingAreaFilter(areaFilter);
+    setPendingSelectedYear(selectedYear);
+    setPendingSelectedPeriod(selectedPeriod);
+  };
+
+  // Check if there are pending changes
+  const hasPendingChanges = () => {
+    return (
+      pendingTimeFilter !== timeFilter ||
+      pendingPlantFilter !== plantFilter ||
+      pendingAreaFilter !== areaFilter ||
+      pendingSelectedYear !== selectedYear ||
+      pendingSelectedPeriod !== selectedPeriod
+    );
   };
 
   // Fetch plants data
@@ -1070,7 +1112,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
-  // Update selectedYear when timeFilter changes
+  // Update selectedYear when timeFilter changes (only for applied filters)
   useEffect(() => {
     const currentYear = new Date().getFullYear();
     if (timeFilter === 'last-year') {
@@ -1079,6 +1121,23 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setSelectedYear(currentYear);
     }
   }, [timeFilter]);
+
+  // Update pending selectedYear when pendingTimeFilter changes
+  useEffect(() => {
+    const currentYear = new Date().getFullYear();
+    if (pendingTimeFilter === 'last-year') {
+      setPendingSelectedYear(currentYear - 1);
+    } else if (pendingTimeFilter === 'this-year') {
+      setPendingSelectedYear(currentYear);
+    }
+  }, [pendingTimeFilter]);
+
+  // Initialize pending filters when modal opens
+  useEffect(() => {
+    if (isFilterModalOpen) {
+      resetPendingFilters();
+    }
+  }, [isFilterModalOpen]);
 
   // Fetch areas on component mount
   useEffect(() => {
@@ -1208,6 +1267,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       fetchAreas();
     }
   }, [plantFilter]);
+
+  // Refetch areas when pending plant filter changes (for modal preview)
+  useEffect(() => {
+    if (isFilterModalOpen && pendingPlantFilter !== 'all') {
+      fetchAreas(pendingPlantFilter);
+    } else if (isFilterModalOpen && pendingPlantFilter === 'all') {
+      fetchAreas();
+    }
+  }, [pendingPlantFilter, isFilterModalOpen]);
 
   // Fetch area activity data when year or filters change
   useEffect(() => {
@@ -1681,7 +1749,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">{t('dashboard.timeRange')}</label>
-                <Select value={timeFilter} onValueChange={setTimeFilter}>
+                <Select value={pendingTimeFilter} onValueChange={setPendingTimeFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder={t('dashboard.selectPeriod')} />
                   </SelectTrigger>
@@ -1694,11 +1762,11 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 </Select>
               </div>
               
-              {timeFilter === 'select-period' && (
+              {pendingTimeFilter === 'select-period' && (
                 <>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">{t('dashboard.year')}</label>
-                    <Select value={selectedYear.toString()} onValueChange={(value) => setSelectedYear(parseInt(value))}>
+                    <Select value={pendingSelectedYear.toString()} onValueChange={(value) => setPendingSelectedYear(parseInt(value))}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -1712,7 +1780,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">{t('dashboard.period')}</label>
-                    <Select value={selectedPeriod.toString()} onValueChange={(value) => setSelectedPeriod(parseInt(value))}>
+                    <Select value={pendingSelectedPeriod.toString()} onValueChange={(value) => setPendingSelectedPeriod(parseInt(value))}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -1728,9 +1796,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Plant</label>
-                <Select value={plantFilter} onValueChange={(value) => {
-                  setPlantFilter(value);
-                  setAreaFilter('all'); // Reset area when plant changes
+                <Select value={pendingPlantFilter} onValueChange={(value) => {
+                  setPendingPlantFilter(value);
+                  setPendingAreaFilter('all'); // Reset area when plant changes
                 }}>
                   <SelectTrigger>
                     <SelectValue placeholder={plantsLoading ? 'Loading Plants...' : 'Plant'} />
@@ -1748,7 +1816,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">{t('dashboard.area')}</label>
-                <Select value={areaFilter} onValueChange={setAreaFilter}>
+                <Select value={pendingAreaFilter} onValueChange={setPendingAreaFilter}>
                   <SelectTrigger>
                     <SelectValue placeholder={areasLoading ? t('dashboard.loadingAreas') : t('dashboard.area')} />
                   </SelectTrigger>
@@ -1763,10 +1831,33 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 </Select>
               </div>
             </div>
-            <div className="flex justify-end gap-2 pt-4 border-t">
-              <Button variant="outline" onClick={() => setIsFilterModalOpen(false)}>
-                {t('dashboard.close')}
-              </Button>
+            <div className="flex justify-between items-center pt-4 border-t">
+              <div className="text-sm text-muted-foreground">
+                {hasPendingChanges() && (
+                  <span className="text-orange-600">You have unsaved changes</span>
+                )}
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => {
+                  resetPendingFilters();
+                  setIsFilterModalOpen(false);
+                }}>
+                  Cancel
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={resetPendingFilters}
+                  disabled={!hasPendingChanges()}
+                >
+                  Reset
+                </Button>
+                <Button 
+                  onClick={applyFilters}
+                  disabled={!hasPendingChanges()}
+                >
+                  Apply Filters
+                </Button>
+              </div>
             </div>
           </DialogContent>
         </Dialog>
