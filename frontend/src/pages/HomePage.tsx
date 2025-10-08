@@ -295,6 +295,142 @@ const getRelationshipConfig = (relationship: string) => {
   return configs[relationship as keyof typeof configs] || configs.viewer;
 };
 
+// Helper function to render mobile card content with labels
+const renderMobileCardContent = (ticket: APIPendingTicket, fieldKey: string) => {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString();
+  };
+
+  const formatDateTime = (dateString: string) => {
+    return new Date(dateString).toLocaleString();
+  };
+
+  switch (fieldKey) {
+    case 'accepted_at':
+      return ticket.accepted_at ? (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span>Accepted: {formatDate(ticket.accepted_at)}</span>
+        </div>
+      ) : null;
+    
+    case 'accepted_by':
+      return ticket.accepted_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>Accepted by: {ticket.accepted_by_name}</span>
+        </div>
+      ) : null;
+    
+    case 'escalated_at':
+      return ticket.escalated_at ? (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span>Escalated: {formatDateTime(ticket.escalated_at)}</span>
+        </div>
+      ) : null;
+    
+    case 'escalated_by':
+      return ticket.escalated_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>Escalated by: {ticket.escalated_by_name}</span>
+        </div>
+      ) : null;
+    
+    case 'reviewed_at':
+      return ticket.reviewed_at ? (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span>Reviewed: {formatDateTime(ticket.reviewed_at)}</span>
+        </div>
+      ) : null;
+    
+    case 'reviewed_by':
+      return ticket.reviewed_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>Reviewed by: {ticket.reviewed_by_name}</span>
+        </div>
+      ) : null;
+    
+    case 'finished_at':
+      return ticket.finished_at ? (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span>Finished: {formatDateTime(ticket.finished_at)}</span>
+        </div>
+      ) : null;
+    
+    case 'finished_by':
+      return ticket.finished_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>Finished by: {ticket.finished_by_name}</span>
+        </div>
+      ) : null;
+    
+    case 'rejected_at':
+      return ticket.rejected_at ? (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span>Rejected: {formatDateTime(ticket.rejected_at)}</span>
+        </div>
+      ) : null;
+    
+    case 'rejected_by':
+      return ticket.rejected_by_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>Rejected by: {ticket.rejected_by_name}</span>
+        </div>
+      ) : null;
+    
+    case 'scheduled_start':
+      return ticket.schedule_start ? (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span>Scheduled start: {formatDateTime(ticket.schedule_start)}</span>
+        </div>
+      ) : null;
+    
+    case 'scheduled_complete':
+      return ticket.schedule_finish ? (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span>Scheduled finish: {formatDateTime(ticket.schedule_finish)}</span>
+        </div>
+      ) : null;
+    
+    case 'reporter_name':
+      return ticket.reporter_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>Created by: {ticket.reporter_name}</span>
+        </div>
+      ) : null;
+    
+    case 'created_at':
+      return (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-muted-foreground" />
+          <span>Created: {formatDate(ticket.created_at)}</span>
+        </div>
+      );
+    
+    case 'assignee_name':
+      return ticket.assignee_name ? (
+        <div className="flex items-center gap-2">
+          <User className="w-4 h-4 text-muted-foreground" />
+          <span>Assigned to: {ticket.assignee_name}</span>
+        </div>
+      ) : null;
+    
+    default:
+      return null;
+  }
+};
+
 // Helper function to render cell content based on field type
 const renderCellContent = (ticket: APIPendingTicket, fieldKey: string) => {
   const formatDate = (dateString: string) => {
@@ -559,11 +695,11 @@ const PendingTicketsSection: React.FC<{
               {/* Dynamic mobile card content based on relationship type */}
               <div className="mt-3 text-sm text-muted-foreground space-y-1">
                 {config.columns.slice(6).map((column) => {
-                  const content = renderCellContent(ticket, column.key);
-                  if (content.props.children === '-') return null;
+                  const content = renderMobileCardContent(ticket, column.key);
+                  if (!content) return null;
                   
                   return (
-                    <div key={column.key} className="flex items-center gap-2">
+                    <div key={column.key}>
                       {content}
                     </div>
                   );
