@@ -16,6 +16,7 @@ router.post('/profile/avatar', uploadAvatar.single('avatar'), compressAvatarMidd
 router.post('/line/test', userController.sendLineTest);
 router.get('/stats', userController.getUserStats);
 router.get('/role', userController.getRole);
+router.get('/all-basic', userController.getAllUsers); // Get all users for filtering (basic info only)
 
 // User management routes (Admin only)
 router.get('/all', userManagementController.getAllUsers);

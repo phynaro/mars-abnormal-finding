@@ -1192,7 +1192,7 @@ const TicketDetailsPage: React.FC = () => {
                 {ticket.actual_finish_at && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      {t('ticket.actualFinishedate')}
+                      {t('ticket.actualFinishdate')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                     {formatCommentTime(ticket.actual_finish_at)}

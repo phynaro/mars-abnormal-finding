@@ -2608,10 +2608,10 @@ exports.getOntimeRateByArea = async (req, res) => {
             ELSE 'Unknown Equipment'
           END as display_name,
           COUNT(t.id) as total_Finished,
-          COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) as ontime_Finished,
+          COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_Finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
-              ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
+              ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
         FROM Tickets t
@@ -2726,10 +2726,10 @@ exports.getOntimeRateByUser = async (req, res) => {
         p.PERSON_NAME as user_name,
         u.AvatarUrl as avatar_url,
         COUNT(t.id) as total_Finished,
-        COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) as ontime_Finished,
+        COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_Finished,
         CASE 
           WHEN COUNT(t.id) > 0 THEN 
-            ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
+            ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
           ELSE 0 
         END as ontime_rate_percentage
       FROM Tickets t

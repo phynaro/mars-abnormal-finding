@@ -552,9 +552,9 @@ class CedarIntegrationService {
                     updateFields.push(
                         { name: 'actFinishDate', type: sql.NVarChar, field: 'ACT_FINISH_D', value: finishDateStr },
                         { name: 'actFinishTime', type: sql.NVarChar, field: 'ACT_FINISH_T', value: finishTimeStr },
-                        { name: 'finishUser', type: sql.Int, field: 'FINISHUSER', value: updateData.changedBy },
-                        { name: 'Finishedate', type: sql.NVarChar, field: 'FinishedATE', value: finishDateStr },
-                        { name: 'finishTime', type: sql.NVarChar, field: 'FINISH_TIME', value: finishTimeStr }
+                        { name: 'completeUser', type: sql.Int, field: 'COMPLETEUSER', value: updateData.changedBy },
+                        { name: 'completeDate', type: sql.NVarChar, field: 'COMPLETEDATE', value: finishDateStr },
+                        { name: 'completeTime', type: sql.NVarChar, field: 'COMPLETE_TIME', value: finishTimeStr }
                     );
                 }
                 

@@ -65,6 +65,7 @@ export const TicketList: React.FC = () => {
   const [totalTickets, setTotalTickets] = useState(0);
   const [plants, setPlants] = useState<HierarchyOption[]>([]);
   const [areas, setAreas] = useState<HierarchyOption[]>([]);
+  const [users, setUsers] = useState<Array<{id: number; name: string; email?: string}>>([]);
   const { toast } = useToast();
 
   // Helper function to check if user is L3/Admin (permission level 3 or higher)
@@ -85,6 +86,8 @@ export const TicketList: React.FC = () => {
     search: "",
     plant: undefined,
     area: undefined,
+    created_by: undefined,
+    assigned_to: undefined,
   });
 
   const fetchTickets = async () => {
@@ -140,6 +143,20 @@ export const TicketList: React.FC = () => {
     }
   };
 
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/all-basic`, {
+        headers: authService.getAuthHeaders()
+      });
+      const result = await response.json();
+      if (result.success) {
+        setUsers(result.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch users:', error);
+    }
+  };
+
   useEffect(() => {
     fetchTickets();
   }, [filters]);
@@ -147,6 +164,7 @@ export const TicketList: React.FC = () => {
   useEffect(() => {
     fetchPlants();
     fetchAreas();
+    fetchUsers();
   }, []);
 
   // Refetch areas when plant filter changes
@@ -181,11 +199,13 @@ export const TicketList: React.FC = () => {
       search: "",
       plant: undefined,
       area: undefined,
+      created_by: undefined,
+      assigned_to: undefined,
     });
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.priority || filters.severity_level || filters.search || filters.plant || filters.area);
+    return !!(filters.status || filters.priority || filters.severity_level || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to);
   };
 
   const handlePageChange = (page: number) => {
@@ -490,6 +510,48 @@ export const TicketList: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="created_by">{t('ticket.createdBy')}</Label>
+                  <Select
+                    value={filters.created_by ? filters.created_by.toString() : "all"}
+                    onValueChange={(v) =>
+                      handleFilterChange("created_by", v === "all" ? undefined : parseInt(v))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('ticket.allUsers')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('ticket.allUsers')}</SelectItem>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id.toString()}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="assigned_to">{t('ticket.assignedTo')}</Label>
+                  <Select
+                    value={filters.assigned_to ? filters.assigned_to.toString() : "all"}
+                    onValueChange={(v) =>
+                      handleFilterChange("assigned_to", v === "all" ? undefined : parseInt(v))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={t('ticket.allUsers')} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">{t('ticket.allUsers')}</SelectItem>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id.toString()}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
             </DialogContent>
           </Dialog>
@@ -562,6 +624,24 @@ export const TicketList: React.FC = () => {
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("search")}
+              />
+            </Badge>
+          )}
+          {filters.created_by && (
+            <Badge variant="secondary" className="gap-1">
+              Created By: {users.find(u => u.id === filters.created_by)?.name || `User ${filters.created_by}`}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("created_by")}
+              />
+            </Badge>
+          )}
+          {filters.assigned_to && (
+            <Badge variant="secondary" className="gap-1">
+              Assigned To: {users.find(u => u.id === filters.assigned_to)?.name || `User ${filters.assigned_to}`}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("assigned_to")}
               />
             </Badge>
           )}

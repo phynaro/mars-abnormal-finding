@@ -192,7 +192,7 @@ export interface PendingTicket {
   creator_id?: number;
   assignee_name?: string;
   assignee_id?: number;
-  user_relationship: 'creator' | 'approver' | 'viewer';
+  user_relationship: 'escalate_approver' | 'accept_approver' | 'close_approver' | 'review_approver' | 'reject_approver' | 'planner' | 'assignee' | 'requester' | 'viewer';
   user_approval_level?: number;
   // Additional fields from getTickets format
   reporter_name?: string;
@@ -207,6 +207,24 @@ export interface PendingTicket {
   digit_count?: number;
   machine_name?: string;
   machine_code?: string;
+  // Additional fields for dynamic columns
+  accepted_at?: string;
+  accepted_by?: number;
+  accepted_by_name?: string;
+  escalated_at?: string;
+  escalated_by?: number;
+  escalated_by_name?: string;
+  reviewed_at?: string;
+  reviewed_by?: number;
+  reviewed_by_name?: string;
+  finished_at?: string;
+  finished_by?: number;
+  finished_by_name?: string;
+  rejected_at?: string;
+  rejected_by?: number;
+  rejected_by_name?: string;
+  schedule_start?: string;
+  schedule_finish?: string;
   machine_number?: number;
 }
 

@@ -107,3 +107,5 @@ scripts/
 backend/database/
 backend/helps/
 helps/
+.codex/
+.cursor/

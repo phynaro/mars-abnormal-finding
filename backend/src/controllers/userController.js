@@ -125,13 +125,50 @@ const userController = {
     });
   },
 
-  // Get all users (admin only - placeholder)
+  // Get all users for filtering purposes (basic info only)
   getAllUsers: async (req, res) => {
-    res.json({
-      success: true,
-      message: 'User management functionality coming soon',
-      users: []
-    });
+    try {
+      const pool = await sql.connect(dbConfig);
+      
+      // Get all active users with basic information for filtering
+      const result = await pool.request()
+        .query(`
+          SELECT 
+            p.PERSONNO as id,
+            p.PERSON_NAME as name,
+            p.FIRSTNAME,
+            p.LASTNAME,
+            p.EMAIL,
+            p.PHONE,
+            p.TITLE,
+            u.IsActive
+          FROM Person p
+          INNER JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+          WHERE p.FLAGDEL != 'Y' 
+            AND (u.IsActive = 1 OR u.IsActive IS NULL)
+          ORDER BY p.PERSON_NAME
+        `);
+
+      const users = result.recordset.map(user => ({
+        id: user.id,
+        name: user.name || `${user.FIRSTNAME || ''} ${user.LASTNAME || ''}`.trim(),
+        email: user.EMAIL,
+        phone: user.PHONE,
+        title: user.TITLE
+      }));
+
+      res.json({
+        success: true,
+        data: users
+      });
+    } catch (error) {
+      console.error('Get all users error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch users',
+        error: error.message
+      });
+    }
   },
 
   // Send test LINE notification to current user's LineID or provided LineID

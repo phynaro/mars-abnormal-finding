@@ -133,9 +133,9 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
               </span>
               
               {/* Active background indicator */}
-              {active && (
+              {/* {active && (
                 <div className="absolute inset-0 bg-primary/10 rounded-lg -z-10" />
-              )}
+              )} */}
             </button>
           );
         })}
