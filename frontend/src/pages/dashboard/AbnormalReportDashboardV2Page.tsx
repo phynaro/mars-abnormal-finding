@@ -2023,7 +2023,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <YAxis />
                     <RechartsTooltip />
                     <Legend />
-                    <Bar dataKey="tickets" fill="hsl(var(--primary))" name={t('dashboard.tickets')} />
+                    <Bar dataKey="tickets" fill="hsl(var(--primary))" name={t('dashboard.ticketsOpened')} />
                     <Line type="monotone" dataKey="target" stroke="hsl(var(--accent))" name={t('dashboard.target')} />
                   </ComposedChart>
                 </ResponsiveContainer>
@@ -2050,14 +2050,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <RechartsTooltip />
                     <Legend />
                     <Bar dataKey="ticketsClosed" fill="hsl(var(--primary))" name={t('dashboard.ticketsClosed')} />
-                    <Line
-                      type="monotone"
-                      dataKey="target"
-                      stroke="hsl(var(--accent))"
-                      strokeWidth={2}
-                      name={t('dashboard.target')}
-                      dot={{ fill: 'hsl(var(--accent))', strokeWidth: 2, r: 4 }}
-                    />
+                    <Line type="monotone" dataKey="target" stroke="hsl(var(--accent))" name={t('dashboard.target')} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -2526,6 +2519,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       yAxisId="cases"
                       orientation="right"
                       label={{ value: t('dashboard.caseCount'), angle: 90, position: 'insideRight' }}
+                      
                     />
                     <RechartsTooltip 
                       formatter={(value, name) => {
@@ -2550,14 +2544,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       fill="hsl(var(--primary))" 
                       name={t('dashboard.downtimeHours')}
                     />
-                    <Line 
-                      yAxisId="cases"
-                      type="monotone" 
-                      dataKey="caseCount" 
-                      stroke="hsl(var(--accent))" 
-                      strokeWidth={3}
-                      name={t('dashboard.caseCount')}
-                    />
+                    <Line  yAxisId="cases" type="monotone" dataKey="caseCount" stroke="hsl(var(--accent))" name={t('dashboard.caseCount')} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -2618,17 +2605,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <Bar 
                       yAxisId="cost"
                       dataKey="cost" 
-                      fill="hsl(var(--accent))" 
+                      fill="hsl(var(--primary))" 
                       name={t('dashboard.costAvoidance')}
                     />
-                    <Line 
-                      yAxisId="cases"
-                      type="monotone" 
-                      dataKey="caseCount" 
-                      stroke="hsl(var(--primary))" 
-                      strokeWidth={3}
-                      name={t('dashboard.caseCount')}
-                    />
+                      <Line  yAxisId="cases" type="monotone" dataKey="caseCount" stroke="hsl(var(--accent))" name={t('dashboard.caseCount')} />
                   </ComposedChart>
                 </ResponsiveContainer>
               )}
@@ -2655,7 +2635,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={resolveDurationByAreaChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <BarChart data={resolveDurationByAreaChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
                         type="number" 
@@ -2709,7 +2689,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <BarChart 
                       data={resolveDurationByUserChartData} 
                       layout="vertical" 
-                      margin={{ top: 20, right: 120, left: 20, bottom: 5 }}
+                      margin={{ top: 20, right: 120, left: 20, bottom: 20 }}
                       barCategoryGap={6}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
@@ -2764,7 +2744,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
-                    <BarChart data={ontimeRateByAreaChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                    <BarChart data={ontimeRateByAreaChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
                       <CartesianGrid strokeDasharray="3 3" />
                       <XAxis 
                         type="number" 
@@ -2821,7 +2801,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <BarChart 
                       data={ontimeRateByUserChartData} 
                       layout="vertical" 
-                      margin={{ top: 20, right: 120, left: 20, bottom: 5 }}
+                      margin={{ top: 20, right: 120, left: 20, bottom: 20 }}
                       barCategoryGap={6}
                     >
                       <CartesianGrid strokeDasharray="3 3" />
