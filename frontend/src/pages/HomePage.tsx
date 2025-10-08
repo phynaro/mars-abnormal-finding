@@ -251,7 +251,7 @@ const getRelationshipConfig = (relationship: string) => {
         { key: 'severity_level', label: 'Severity' },
         { key: 'pu_name', label: 'PU Name' },
         { key: 'scheduled_start', label: 'Scheduled Start' },
-        { key: 'scheduled_complete', label: 'Scheduled Complete' }
+        { key: 'scheduled_complete', label: 'Scheduled Finish' }
       ]
     },
     'requester': {
@@ -450,15 +450,15 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string) => {
       );
     
     case 'scheduled_start':
-      return ticket.scheduled_start ? (
-        <span className="text-muted-foreground">{formatDateTime(ticket.scheduled_start)}</span>
+      return ticket.schedule_start ? (
+        <span className="text-muted-foreground">{formatDateTime(ticket.schedule_start)}</span>
       ) : (
         <span className="text-muted-foreground">-</span>
       );
     
     case 'scheduled_complete':
-      return ticket.scheduled_complete ? (
-        <span className="text-muted-foreground">{formatDateTime(ticket.scheduled_complete)}</span>
+      return ticket.schedule_finish ? (
+        <span className="text-muted-foreground">{formatDateTime(ticket.schedule_finish)}</span>
       ) : (
         <span className="text-muted-foreground">-</span>
       );
@@ -1228,6 +1228,7 @@ const PersonalKPISection: React.FC<{
   personalKPILoading: boolean;
   personalKPIError: string | null;
   onKpiSetupClick: (type: 'report' | 'fix') => void;
+  user: any;
 }> = ({
   personalKPI,
   timeFilter,
@@ -1243,6 +1244,7 @@ const PersonalKPISection: React.FC<{
   personalKPILoading,
   personalKPIError,
   onKpiSetupClick,
+  user,
 }) => (
   <div className="space-y-4">
     {/* Personal KPI Tiles */}
@@ -1262,13 +1264,15 @@ const PersonalKPISection: React.FC<{
     />
     
     {/* Personal Finished Ticket Count Chart (L2+ users only) */}
-    <PersonalFinishedTicketChart 
-      data={personalFinishedTicketData}
-      loading={personalFinishedTicketLoading}
-      error={personalFinishedTicketError}
-      onKpiSetupClick={() => onKpiSetupClick('fix')}
-      selectedYear={selectedYear}
-    />
+    {user?.permissionLevel && user.permissionLevel >= 2 && (
+      <PersonalFinishedTicketChart 
+        data={personalFinishedTicketData}
+        loading={personalFinishedTicketLoading}
+        error={personalFinishedTicketError}
+        onKpiSetupClick={() => onKpiSetupClick('fix')}
+        selectedYear={selectedYear}
+      />
+    )}
     
     {/* Legacy chart - keeping for now */}
     
@@ -1788,6 +1792,7 @@ const HomePage: React.FC = () => {
             personalKPILoading={personalKPILoading}
             personalKPIError={personalKPIError}
             onKpiSetupClick={handleKpiSetupClick}
+            user={user}
           />
         </TabsContent>
 
