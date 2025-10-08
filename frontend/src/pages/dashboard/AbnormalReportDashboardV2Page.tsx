@@ -1671,7 +1671,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         </div>
         
         {/* Second Row - Date Range and Filters */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex flex-row items-center justify-between gap-3">
           {/* Left side - Date Range */}
           <div className="text-sm">
             <div className="flex items-center gap-2 flex-wrap">
