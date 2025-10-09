@@ -150,7 +150,7 @@ const LoginPage: React.FC = () => {
                     onChange={handleInputChange}
                     className="pl-10"
                     placeholder={t('auth.username')}
-                    autoFinish="username"
+                    autoComplete="username"
                   />
                 </div>
               </div>
@@ -169,7 +169,7 @@ const LoginPage: React.FC = () => {
                     onChange={handleInputChange}
                     className="pl-10 pr-10"
                     placeholder={t('auth.password')}
-                    autoFinish="current-password"
+                    autoComplete="current-password"
                   />
                   <Button
                     type="button"

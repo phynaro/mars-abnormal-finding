@@ -1,0 +1,82 @@
+services:
+  # Backend service
+  backend:
+    image: mars-backend:latest
+    container_name: mars-backend
+    env_file:
+      - ./backend/.env.production
+    environment:
+      - NODE_ENV=production
+    volumes:
+      # Persistent uploads directory
+      - mars_upload_data:/app/uploads
+      # Logs directory
+      - mars_log_data:/app/logs
+    networks:
+      - mars-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Frontend service
+  frontend:
+    image: mars-frontend:latest
+    container_name: mars-frontend
+    env_file:
+      - ./frontend/.env.production
+    environment:
+      - NODE_ENV=production
+    networks:
+      - mars-network
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Nginx reverse proxy
+  nginx:
+    image: mars-nginx:latest
+    container_name: mars-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    # volumes:
+      # SSL certificates (optional)
+      # - ./ssl:/etc/ssl:ro
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - mars-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+networks:
+  mars-network:
+    driver: bridge
+    name: mars-deploy-network
+
+volumes:
+  mars_upload_data:
+    driver: local
+    name: mars-upload-data
+  mars_log_data:
+    driver: local
+    name: mars-log-data
