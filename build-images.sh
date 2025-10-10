@@ -26,7 +26,7 @@ echo -e "${YELLOW}Building frontend image for ${PLATFORM}...${NC}"
 docker build --platform ${PLATFORM} \
     --build-arg NODE_ENV=production \
     --build-arg VITE_API_URL=/api \
-    --build-arg VITE_LIFF_ID=${VITE_LIFF_ID:-your-liff-id-here} \
+    --build-arg VITE_LIFF_ID=2007697113-EWn7vw08 \
     -f frontend/Dockerfile.production \
     -t ${REGISTRY}${FRONTEND_IMAGE_NAME}:${VERSION} ./frontend
 

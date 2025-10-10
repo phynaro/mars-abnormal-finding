@@ -53,13 +53,15 @@ const authenticateToken = async (req, res, next) => {
             u.LastDate,
             u.ExpireDate,
             u.NeverExpireFlag,
-            u.EmailVerified,
-            u.LastLogin,
-            u.CreatedAt,
-            u.UpdatedAt,
-            u.LineID,
-            u.AvatarUrl,
-            u.IsActive,
+            ue.EmailVerified,
+            ue.EmailVerificationToken,
+            ue.EmailVerificationExpires,
+            ue.LastLogin,
+            ue.CreatedAt,
+            ue.UpdatedAt,
+            ue.LineID,
+            ue.AvatarUrl,
+            ue.IsActive,
             g.UserGCode,
             g.UserGName,
             p.PERSONCODE,
@@ -79,11 +81,12 @@ const authenticateToken = async (req, res, next) => {
             s.SiteCode,
             s.SiteName
           FROM _secUsers u
+          LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
           LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
           LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
           LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
           LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
-          WHERE u.UserID = @userID AND (u.IsActive = 1 OR u.IsActive IS NULL)
+          WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
         `);
 
       if (userResult.recordset.length === 0 || (userResult.recordset[0].IsActive !== null && !userResult.recordset[0].IsActive)) {

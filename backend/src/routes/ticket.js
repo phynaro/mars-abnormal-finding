@@ -95,11 +95,12 @@ router.get('/test-l2-users/:area_code', requireFormPermission('TKT', 'view'), as
                     p.FIRSTNAME,
                     p.LASTNAME,
                     p.EMAIL,
-                    u.LineID,
+                    ue.LineID,
                     ta.approval_level
                 FROM TicketApproval ta
                 INNER JOIN Person p ON ta.personno = p.PERSONNO
                 LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+                LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
                 WHERE ta.area_code = @area_code
                 AND ta.approval_level >= 2
                 AND ta.is_active = 1

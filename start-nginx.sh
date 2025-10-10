@@ -10,4 +10,4 @@ echo "  Backend: cd backend && npm run dev"
 echo ""
 echo "Press Ctrl+C to stop"
 
-docker-compose -f docker-compose.nginx-local.yml up
+docker compose -f docker-compose.nginx-local.yml up

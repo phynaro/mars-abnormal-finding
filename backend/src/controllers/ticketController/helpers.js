@@ -457,9 +457,10 @@ const getUserById = async (pool, userId) => {
         .input('user_id', sql.Int, userId)
         .query(`
             SELECT p.PERSONNO, p.PERSON_NAME, p.EMAIL,
-                   u.LineID
+                   ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+            LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @user_id
               AND p.FLAGDEL != 'Y'
         `);

@@ -4,6 +4,7 @@ import path from 'path'
 
 // https://vite.dev/config/
 export default defineConfig({
+  base: '/', // Ensure proper base URL for relative paths
   plugins: [
     react({
       // Use classic JSX runtime to avoid jsxDEV issues

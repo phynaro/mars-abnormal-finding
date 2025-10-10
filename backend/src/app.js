@@ -5,11 +5,13 @@ const path = require('path');
 
 // Load environment variables
 if (process.env.NODE_ENV === 'development') {
-  dotenv.config({ path: '.env.development' });
+  dotenv.config({ path: path.join(__dirname, '../.env.development') });
 } else {
   dotenv.config();
 }
 
+console.log(process.env.NODE_ENV);
+console.log(process.env.DB_SERVER);
 // Increase Node.js header size limits to prevent HTTP 431 errors
 process.env.NODE_OPTIONS = '--max-http-header-size=16384';
 
@@ -33,7 +35,7 @@ const corsOptions = {
       'http://localhost:3000',
       'http://localhost:3001',
       'http://127.0.0.1:3000',
-      'http://127.0.0.1:3001'
+      'http://127.0.0.1:3001','http://192.168.3.199'
     ];
     
     // Allow localhost and 127.0.0.1 for development
@@ -55,7 +57,7 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 
-app.use(cors(corsOptions));
+//app.use(cors(corsOptions));
 // Middleware to handle large headers and prevent HTTP 431 errors
 app.use((req, res, next) => {
   // Set larger header limits

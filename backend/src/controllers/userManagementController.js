@@ -42,13 +42,15 @@ const userManagementController = {
               u.LastDate,
               u.ExpireDate,
               u.NeverExpireFlag,
-              u.EmailVerified,
-              u.LastLogin,
-              u.CreatedAt,
-              u.UpdatedAt,
-              u.LineID,
-              u.AvatarUrl,
-              u.IsActive,
+              ue.EmailVerified,
+              ue.EmailVerificationToken,
+              ue.EmailVerificationExpires,
+              ue.LastLogin,
+              ue.CreatedAt,
+              ue.UpdatedAt,
+              ue.LineID,
+              ue.AvatarUrl,
+              ue.IsActive,
               g.UserGCode,
               g.UserGName,
               p.PERSONCODE,
@@ -68,12 +70,13 @@ const userManagementController = {
               s.SiteCode,
               s.SiteName
             FROM _secUsers u
+            LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
             LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
             LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
             LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
             LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
-            WHERE (u.IsActive = 1 OR u.IsActive IS NULL)
-            ORDER BY u.CreatedAt DESC
+            WHERE (ue.IsActive = 1 OR ue.IsActive IS NULL)
+            ORDER BY ue.CreatedAt DESC
           `);
 
         const users = result.recordset.map(user => ({
@@ -158,13 +161,15 @@ const userManagementController = {
             u.LastDate,
             u.ExpireDate,
             u.NeverExpireFlag,
-            u.EmailVerified,
-            u.LastLogin,
-            u.CreatedAt,
-            u.UpdatedAt,
-            u.LineID,
-            u.AvatarUrl,
-            u.IsActive,
+            ue.EmailVerified,
+            ue.EmailVerificationToken,
+            ue.EmailVerificationExpires,
+            ue.LastLogin,
+            ue.CreatedAt,
+            ue.UpdatedAt,
+            ue.LineID,
+            ue.AvatarUrl,
+            ue.IsActive,
             g.UserGCode,
             g.UserGName,
             p.PERSONCODE,
@@ -184,11 +189,12 @@ const userManagementController = {
             s.SiteCode,
             s.SiteName
           FROM _secUsers u
+          LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
           LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
           LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
           LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
           LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
-          WHERE u.UserID = @userID AND (u.IsActive = 1 OR u.IsActive IS NULL)
+          WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
         `);
 
       if (result.recordset.length === 0) {
@@ -356,9 +362,13 @@ const userManagementController = {
           .input('createUser', sql.Int, req.user.id)
           .input('createDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''))
           .query(`
-            INSERT INTO _secUsers (PersonNo, UserID, Passwd, GroupNo, LevelReport, StoreRoom, DBNo, LineID, NeverExpireFlag, EmailVerified, IsActive, CreateUser, CreatedAt)
-            OUTPUT INSERTED.PersonNo, INSERTED.UserID, INSERTED.CreatedAt
-            VALUES (@personNo, @userID, @passwd, @groupNo, @levelReport, @storeRoom, @dbNo, @lineId, @neverExpireFlag, @emailVerified, @isActive, @createUser, GETDATE())
+            INSERT INTO _secUsers (PersonNo, UserID, Passwd, GroupNo, LevelReport, StoreRoom, DBNo, NeverExpireFlag, CreateUser)
+            VALUES (@personNo, @userID, @passwd, @groupNo, @levelReport, @storeRoom, @dbNo, @neverExpireFlag, @createUser);
+            
+            INSERT INTO UserExtension (UserID, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+            VALUES (@userID, @emailVerified, NULL, NULL, NULL, GETDATE(), GETDATE(), @lineId, NULL, @isActive);
+            
+            SELECT @personNo as PersonNo, @userID as UserID, GETDATE() as CreatedAt
           `);
 
         await transaction.commit();
@@ -429,7 +439,7 @@ const userManagementController = {
       // Check if user exists
       const userResult = await pool.request()
         .input('userID', sql.VarChar(50), userId)
-        .query('SELECT PersonNo, UserID FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
+        .query('SELECT u.PersonNo, u.UserID FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
       if (userResult.recordset.length === 0) {
         return res.status(404).json({
@@ -503,9 +513,12 @@ const userManagementController = {
                   LevelReport = COALESCE(@levelReport, LevelReport),
                   StoreRoom = COALESCE(@storeRoom, StoreRoom),
                   DBNo = COALESCE(@dbNo, DBNo),
-                  LineID = COALESCE(@lineId, LineID),
+                  UpdateUser = @updateUser
+              WHERE UserID = @userID;
+              
+              UPDATE UserExtension
+              SET LineID = COALESCE(@lineId, LineID),
                   IsActive = COALESCE(@isActive, IsActive),
-                  UpdateUser = @updateUser,
                   UpdatedAt = GETDATE()
               WHERE UserID = @userID
             `);
@@ -551,7 +564,7 @@ const userManagementController = {
       // Check if user exists
       const userResult = await pool.request()
         .input('userID', sql.VarChar(50), userId)
-        .query('SELECT UserID FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
+        .query('SELECT u.UserID FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
       if (userResult.recordset.length === 0) {
         return res.status(404).json({
@@ -566,7 +579,11 @@ const userManagementController = {
         .input('updateUser', sql.Int, req.user.id)
         .query(`
           UPDATE _secUsers 
-          SET IsActive = 0, UpdateUser = @updateUser, UpdatedAt = GETDATE() 
+          SET UpdateUser = @updateUser
+          WHERE UserID = @userID;
+          
+          UPDATE UserExtension 
+          SET IsActive = 0, UpdatedAt = GETDATE() 
           WHERE UserID = @userID
         `);
 
@@ -648,7 +665,7 @@ const userManagementController = {
       // Check if user exists
       const userResult = await pool.request()
         .input('userID', sql.VarChar(50), userId)
-        .query('SELECT UserID FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
+        .query('SELECT u.UserID FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
       if (userResult.recordset.length === 0) {
         return res.status(404).json({
@@ -667,7 +684,11 @@ const userManagementController = {
         .input('updateUser', sql.Int, req.user.id)
         .query(`
           UPDATE _secUsers 
-          SET Passwd = @newPassword, UpdateUser = @updateUser, UpdatedAt = GETDATE() 
+          SET Passwd = @newPassword, UpdateUser = @updateUser
+          WHERE UserID = @userID;
+          
+          UPDATE UserExtension 
+          SET UpdatedAt = GETDATE() 
           WHERE UserID = @userID
         `);
 

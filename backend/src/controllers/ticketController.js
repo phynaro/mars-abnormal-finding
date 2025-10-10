@@ -233,9 +233,10 @@ const createTicket = async (req, res) => {
                 console.log(`Action: CREATE`);
                 // Get reporter information for notifications
                 const reporterResult = await runQuery(pool, `
-                    SELECT p.PERSON_NAME, p.FIRSTNAME, p.LASTNAME, p.EMAIL, p.DEPTNO, u.LineID
+                    SELECT p.PERSON_NAME, p.FIRSTNAME, p.LASTNAME, p.EMAIL, p.DEPTNO, ue.LineID
                     FROM Person p
                     LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
                     WHERE p.PERSONNO = @user_id
                 `, [
                     { name: 'user_id', type: sql.Int, value: created_by }
@@ -282,12 +283,12 @@ const createTicket = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -853,9 +854,10 @@ const updateTicket = async (req, res) => {
                 LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                 WHERE t.id = @ticket_id;
 
-                SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID 
+                SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID 
                 FROM Person p
                 LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
                 WHERE p.PERSONNO = @reporter_id;
             `, [
                 { name: 'ticket_id', type: sql.Int, value: id },
@@ -1029,6 +1031,7 @@ const assignTicket = async (req, res) => {
             SELECT PERSON_NAME, EMAIL, DEPTNO, LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @assignee_id;
         `, [
             { name: 'ticket_id', type: sql.Int, value: id },
@@ -1435,9 +1438,10 @@ const acceptTicket = async (req, res) => {
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             WHERE t.id = @ticket_id;
 
-            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @reporter_id;
         `, [
             { name: 'ticket_id', type: sql.Int, value: id },
@@ -1494,12 +1498,12 @@ const acceptTicket = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -1784,12 +1788,12 @@ const planTicket = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -2111,12 +2115,12 @@ const startTicket = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -2400,14 +2404,16 @@ const rejectTicket = async (req, res) => {
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
             WHERE t.id = @ticket_id;
 
-            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @reporter_id;
 
-            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, u.LineID
+            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @assignee_id;
         `, [
             { name: 'ticket_id', type: sql.Int, value: id },
@@ -2474,12 +2480,12 @@ const rejectTicket = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -2774,12 +2780,12 @@ const finishTicket = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -3089,12 +3095,12 @@ const escalateTicket = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -3396,12 +3402,12 @@ const approveReview = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -3685,12 +3691,12 @@ const approveClose = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -4007,12 +4013,12 @@ const reassignTicket = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');
@@ -4453,12 +4459,12 @@ const reopenTicket = async (req, res) => {
 
                 // COUNT USERS BY NOTIFICATION CAPABILITY
                 const emailCapable = notificationUsers.filter(u => u.EMAIL && u.EMAIL.trim() !== '').length;
-                const lineCapable = notificationUsers.filter(u => u.LineID && u.LineID.trim() !== '').length;
+                const lineCapable = notificationUsers.filter(u => ue.LineID && ue.LineID.trim() !== '').length;
                 const bothCapable = notificationUsers.filter(u => 
-                    u.EMAIL && u.EMAIL.trim() !== '' && u.LineID && u.LineID.trim() !== ''
+                    u.EMAIL && u.EMAIL.trim() !== '' && ue.LineID && ue.LineID.trim() !== ''
                 ).length;
                 const noContactInfo = notificationUsers.filter(u => 
-                    (!u.EMAIL || u.EMAIL.trim() === '') && (!u.LineID || u.LineID.trim() === '')
+                    (!u.EMAIL || u.EMAIL.trim() === '') && (!ue.LineID || ue.LineID.trim() === '')
                 ).length;
 
                 console.log('\n📞 NOTIFICATION CAPABILITY:');

@@ -45,17 +45,32 @@ const userController = {
             // Update _secUsers table (security/user settings)
       // Always update LineID if it's provided in the request (even if empty)
       if (lineId !== undefined) {
-        const secUserRequest = pool.request()
-          .input('userID', sql.VarChar(50), userId) // Max 50 chars
-          .input('lineId', sql.NVarChar(500), lineId || null) // Match the database field type nvarchar(500)
-          .input('updateDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''));
-
-        await secUserRequest.query(`
-          UPDATE _secUsers
-          SET LineID = @lineId,
-              UpdateDate = @updateDate
-          WHERE UserID = @userID
-        `);
+        // Check if UserExtension record exists
+        const checkResult = await pool.request()
+          .input('userID', sql.VarChar(50), userId)
+          .query('SELECT UserID FROM UserExtension WHERE UserID = @userID');
+        
+        if (checkResult.recordset.length === 0) {
+          // Create UserExtension record if it doesn't exist
+          await pool.request()
+            .input('userID', sql.VarChar(50), userId)
+            .input('lineId', sql.NVarChar(500), lineId || null)
+            .query(`
+              INSERT INTO UserExtension (UserID, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+              VALUES (@userID, 'Y', NULL, NULL, NULL, GETDATE(), GETDATE(), @lineId, NULL, 1)
+            `);
+        } else {
+          // Update existing UserExtension record
+          await pool.request()
+            .input('userID', sql.VarChar(50), userId)
+            .input('lineId', sql.NVarChar(500), lineId || null)
+            .query(`
+              UPDATE UserExtension
+              SET LineID = @lineId,
+                  UpdatedAt = GETDATE()
+              WHERE UserID = @userID
+            `);
+        }
       }
 
       res.json({ success: true, message: 'Profile updated successfully' });
@@ -75,12 +90,30 @@ const userController = {
       const relativePath = `/uploads/avatars/${req.user.id}/${req.file.filename}`;
 
       const pool = await sql.connect(dbConfig);
-      await pool.request()
+      
+      // Check if UserExtension record exists
+      const checkResult = await pool.request()
         .input('userID', sql.VarChar, userId)
-        .input('avatarUrl', sql.NVarChar(500), relativePath)
-        .query(`
-          UPDATE _secUsers SET AvatarUrl = @avatarUrl, UpdatedAt = GETDATE() WHERE UserID = @userID
-        `);
+        .query('SELECT UserID FROM UserExtension WHERE UserID = @userID');
+      
+      if (checkResult.recordset.length === 0) {
+        // Create UserExtension record if it doesn't exist
+        await pool.request()
+          .input('userID', sql.VarChar, userId)
+          .input('avatarUrl', sql.NVarChar(500), relativePath)
+          .query(`
+            INSERT INTO UserExtension (UserID, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+            VALUES (@userID, 'Y', NULL, NULL, NULL, GETDATE(), GETDATE(), NULL, @avatarUrl, 1)
+          `);
+      } else {
+        // Update existing UserExtension record
+        await pool.request()
+          .input('userID', sql.VarChar, userId)
+          .input('avatarUrl', sql.NVarChar(500), relativePath)
+          .query(`
+            UPDATE UserExtension SET AvatarUrl = @avatarUrl, UpdatedAt = GETDATE() WHERE UserID = @userID
+          `);
+      }
 
       const compressionInfo = req.compressionInfo ? {
         originalSizeKB: req.compressionInfo.originalSizeKB,
@@ -144,8 +177,9 @@ const userController = {
             u.IsActive
           FROM Person p
           INNER JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+          LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
           WHERE p.FLAGDEL != 'Y' 
-            AND (u.IsActive = 1 OR u.IsActive IS NULL)
+            AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
           ORDER BY p.PERSON_NAME
         `);
 
@@ -184,7 +218,7 @@ const userController = {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request()
           .input('userID', sql.VarChar(50), req.user.userId)
-          .query('SELECT LineID FROM _secUsers WHERE UserID = @userID');
+          .query('SELECT LineID FROM UserExtension WHERE UserID = @userID');
         
         if (result.recordset.length === 0) {
           return res.status(404).json({ success: false, message: 'User not found' });

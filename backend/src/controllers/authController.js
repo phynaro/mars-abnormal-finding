@@ -106,13 +106,15 @@ const login = async (req, res) => {
           u.LastDate,
           u.ExpireDate,
           u.NeverExpireFlag,
-          u.EmailVerified,
-          u.LastLogin,
-          u.CreatedAt,
-          u.UpdatedAt,
-          u.LineID,
-          u.AvatarUrl,
-          u.IsActive,
+          ue.EmailVerified,
+          ue.EmailVerificationToken,
+          ue.EmailVerificationExpires,
+          ue.LastLogin,
+          ue.CreatedAt,
+          ue.UpdatedAt,
+          ue.LineID,
+          ue.AvatarUrl,
+          ue.IsActive,
           g.UserGCode,
           g.UserGName,
           p.PERSONCODE,
@@ -132,11 +134,12 @@ const login = async (req, res) => {
           s.SiteCode,
           s.SiteName
         FROM _secUsers u
+        LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
         LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
         LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
         LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
         LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
-        WHERE u.UserID = @username AND (u.IsActive = 1 OR u.IsActive IS NULL)
+        WHERE u.UserID = @username AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
       `);
 
     if (userResult.recordset.length === 0) {
@@ -202,7 +205,7 @@ const login = async (req, res) => {
     // Update last login
     await pool.request()
       .input('userID', sql.VarChar, user.UserID)
-      .query('UPDATE _secUsers SET LastLogin = GETDATE() WHERE UserID = @userID');
+      .query('UPDATE UserExtension SET LastLogin = GETDATE() WHERE UserID = @userID');
 
     // Remove sensitive data
     delete user.Passwd;
@@ -327,7 +330,7 @@ const changePassword = async (req, res) => {
     // Get current user
     const userResult = await pool.request()
       .input('userID', sql.VarChar, userId)
-      .query('SELECT Passwd FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
+      .query('SELECT u.Passwd FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
     if (userResult.recordset.length === 0) {
       return res.status(404).json({ 
@@ -354,7 +357,7 @@ const changePassword = async (req, res) => {
     await pool.request()
       .input('userID', sql.VarChar, userId)
       .input('newPassword', sql.NVarChar, newHashedPassword)
-      .query('UPDATE _secUsers SET Passwd = @newPassword, UpdatedAt = GETDATE() WHERE UserID = @userID');
+      .query('UPDATE _secUsers SET Passwd = @newPassword WHERE UserID = @userID; UPDATE UserExtension SET UpdatedAt = GETDATE() WHERE UserID = @userID');
 
     res.json({
       success: true,
@@ -391,13 +394,15 @@ const getProfile = async (req, res) => {
           u.LastDate,
           u.ExpireDate,
           u.NeverExpireFlag,
-          u.EmailVerified,
-          u.LastLogin,
-          u.CreatedAt,
-          u.UpdatedAt,
-          u.LineID,
-          u.AvatarUrl,
-          u.IsActive,
+          ue.EmailVerified,
+          ue.EmailVerificationToken,
+          ue.EmailVerificationExpires,
+          ue.LastLogin,
+          ue.CreatedAt,
+          ue.UpdatedAt,
+          ue.LineID,
+          ue.AvatarUrl,
+          ue.IsActive,
           g.UserGCode,
           g.UserGName,
           p.PERSONCODE,
@@ -417,11 +422,12 @@ const getProfile = async (req, res) => {
           s.SiteCode,
           s.SiteName
         FROM _secUsers u
+        LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
         LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
         LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
         LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
         LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
-        WHERE u.UserID = @userID AND (u.IsActive = 1 OR u.IsActive IS NULL)
+        WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
       `);
 
     if (userResult.recordset.length === 0) {
@@ -490,7 +496,7 @@ const validateToken = async (token) => {
     const pool = await getConnection();
     const userResult = await pool.request()
       .input('userID', sql.VarChar, decoded.userId)
-      .query('SELECT UserID, IsActive FROM _secUsers WHERE UserID = @userID AND (IsActive = 1 OR IsActive IS NULL)');
+      .query('SELECT u.UserID, ue.IsActive FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
     if (userResult.recordset.length === 0 || (userResult.recordset[0].IsActive !== null && !userResult.recordset[0].IsActive)) {
       return null;

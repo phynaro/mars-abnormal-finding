@@ -1667,14 +1667,15 @@ exports.getUserActivityData = async (req, res) => {
       SELECT TOP 10
         t.created_by as user_id,
         p.PERSON_NAME as user_name,
-        u.AvatarUrl as avatar_url,
+        ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY ticket_count DESC, p.PERSON_NAME ASC
     `;
@@ -2724,7 +2725,7 @@ exports.getOntimeRateByUser = async (req, res) => {
       SELECT 
         t.finished_by as user_id,
         p.PERSON_NAME as user_name,
-        u.AvatarUrl as avatar_url,
+        ue.AvatarUrl as avatar_url,
         COUNT(t.id) as total_Finished,
         COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_Finished,
         CASE 
@@ -2736,8 +2737,9 @@ exports.getOntimeRateByUser = async (req, res) => {
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.finished_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.finished_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.finished_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY ontime_rate_percentage DESC
     `;
@@ -2842,15 +2844,16 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
       SELECT 
         t.finished_by as user_id,
         p.PERSON_NAME as user_name,
-        u.AvatarUrl as avatar_url,
+        ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.finished_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.finished_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.finished_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY avg_resolve_hours ASC
     `;
@@ -3277,15 +3280,16 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
       SELECT TOP 10
         t.created_by as user_id,
         p.PERSON_NAME as user_name,
-        u.AvatarUrl as avatar_url,
+        ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
       ORDER BY total_cost_avoidance DESC
     `;
@@ -3381,15 +3385,16 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
       SELECT TOP 10
         t.created_by as user_id,
         p.PERSON_NAME as user_name,
-        u.AvatarUrl as avatar_url,
+        ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
       ORDER BY total_downtime_hours DESC
     `;
@@ -3647,14 +3652,15 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       SELECT TOP 1
         t.created_by as personno,
         p.PERSON_NAME as personName,
-        u.AvatarUrl as avatarUrl,
+        ue.AvatarUrl as avatarUrl,
         COUNT(*) as ticketCount
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       ORDER BY COUNT(*) DESC
     `;
 
@@ -3662,14 +3668,15 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       SELECT TOP 1
         t.created_by as personno,
         p.PERSON_NAME as personName,
-        u.AvatarUrl as avatarUrl,
+        ue.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.cost_avoidance), 0) as totalSavings
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       ORDER BY totalSavings DESC
     `;
 
@@ -3677,14 +3684,15 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       SELECT TOP 1
         t.created_by as personno,
         p.PERSON_NAME as personName,
-        u.AvatarUrl as avatarUrl,
+        ue.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeSaved
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, u.AvatarUrl
+      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       ORDER BY totalDowntimeSaved DESC
     `;
 
