@@ -117,7 +117,7 @@ const AppContent: React.FC = () => {
   };
 
   return (
-    <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+    <Router>
       <Routes>
         {/* Public Routes */}
         <Route path="/login" element={

@@ -67,6 +67,10 @@ const TicketDetailsPage: React.FC = () => {
   const { ticketId } = useParams<{ ticketId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  
+  // Add key to prevent unnecessary re-mounts
+  const componentKey = `ticket-${ticketId}`;
+  const mountCountRef = useRef(0);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -191,9 +195,10 @@ const TicketDetailsPage: React.FC = () => {
   }, [ticketId, fetchTicketDetails]);
 
   useEffect(() => {
-    console.log('🏁 TicketDetailsPage mounted');
+    mountCountRef.current += 1;
+    console.log('🏁 TicketDetailsPage mounted - Mount #', mountCountRef.current);
     return () => {
-      console.log('👋 TicketDetailsPage unmounted');
+      console.log('👋 TicketDetailsPage unmounted - Mount #', mountCountRef.current);
     };
   }, []);
 
