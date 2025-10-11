@@ -8,8 +8,9 @@ import Layout from './components/layout/Layout';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
-import HomePage from './pages/HomePage';
-import DashboardPage from './pages/DashboardPage';
+import WelcomePage from './pages/home/WelcomePage';
+import HomePage from './pages/home/HomePage';
+import DashboardPage from './pages/dashboard/DashboardPage';
 import DashboardMaintenanceKPIPage from './pages/dashboard/DashboardMaintenanceKPIPage';
 import DashboardPreventiveMaintenancePage from './pages/dashboard/DashboardPreventiveMaintenancePage';
 import DashboardCalibrationPage from './pages/dashboard/DashboardCalibrationPage';
@@ -19,21 +20,21 @@ import DashboardBacklogPage from './pages/dashboard/DashboardBacklogPage';
 import DashboardBacklogDetailPage from './pages/dashboard/DashboardBacklogDetailPage';
 import AbnormalReportDashboardV2Page from './pages/dashboard/AbnormalReportDashboardV2Page';
 import UserActivityChartPage from './pages/charts/UserActivityChartPage';
-import TargetManagementPage from './pages/TargetManagementPage';
-import UserManagementPage from './pages/UserManagementPage';
-import RoleManagementPage from './pages/RoleManagementPage';
+import TargetManagementPage from './pages/settings/TargetManagementPage';
+import UserManagementPage from './pages/settings/UserManagementPage';
+import RoleManagementPage from './pages/settings/RoleManagementPage';
 // Removed old machine pages from menu in favor of Assets
-import WorkOrdersPage from './pages/WorkOrdersPage';
-import WorkOrderDetailsPage from './pages/WorkOrderDetailsPage';
-import WorkRequestsPage from './pages/WorkRequestsPage';
-import PreventiveMaintenancePage from './pages/PreventiveMaintenancePage';
-import WorkRequestDetailsPage from './pages/WorkRequestDetailsPage';
-import InventoryOverviewPage from './pages/InventoryOverviewPage';
-import InventoryCatalogPage from './pages/InventoryCatalogPage';
-import InventoryStoresPage from './pages/InventoryStoresPage';
-import InventoryVendorsPage from './pages/InventoryVendorsPage';
-import InventoryAnalyticsPage from './pages/InventoryAnalyticsPage';
-import InventoryCatalogDetailsPage from './pages/InventoryCatalogDetailsPage';
+import WorkOrdersPage from './pages/works/WorkOrdersPage';
+import WorkOrderDetailsPage from './pages/works/WorkOrderDetailsPage';
+import WorkRequestsPage from './pages/works/WorkRequestsPage';
+import PreventiveMaintenancePage from './pages/dashboard/PreventiveMaintenancePage';
+import WorkRequestDetailsPage from './pages/works/WorkRequestDetailsPage';
+import InventoryOverviewPage from './pages/asset/InventoryOverviewPage';
+import InventoryCatalogPage from './pages/asset/InventoryCatalogPage';
+import InventoryStoresPage from './pages/asset/InventoryStoresPage';
+import InventoryVendorsPage from './pages/asset/InventoryVendorsPage';
+import InventoryAnalyticsPage from './pages/asset/InventoryAnalyticsPage';
+import InventoryCatalogDetailsPage from './pages/asset/InventoryCatalogDetailsPage';
 import OrgDepartmentsPage from './pages/org/OrgDepartmentsPage';
 import OrgDepartmentDetailsPage from './pages/org/OrgDepartmentDetailsPage';
 import OrgGroupsPage from './pages/org/OrgGroupsPage';
@@ -42,15 +43,14 @@ import OrgTitlesPage from './pages/org/OrgTitlesPage';
 import OrgTitleDetailsPage from './pages/org/OrgTitleDetailsPage';
 import OrgUsersPage from './pages/org/OrgUsersPage';
 import OrgUserDetailsPage from './pages/org/OrgUserDetailsPage';
-import TicketManagementPage from './pages/TicketManagementPage';
-import TicketDetailsPage from './pages/TicketDetailsPage';
-import TicketCreatePage from './pages/TicketCreatePage';
-import TicketCreateWizardPage from './pages/TicketCreateWizardPage';
-import ProfilePage from './pages/ProfilePage';
-import TestDebugPage from './pages/TestDebugPage';
-import HierarchyViewPage from './pages/HierarchyViewPage';
-import TicketApprovalManagementPage from './pages/TicketApprovalManagementPage';
-import WorkflowTypesPage from './pages/WorkflowTypesPage';
+import TicketManagementPage from './pages/tickets/TicketManagementPage';
+import TicketDetailsPage from './pages/tickets/TicketDetailsPage';
+import TicketCreatePage from './pages/tickets/TicketCreatePage';
+import TicketCreateWizardPage from './pages/tickets/TicketCreateWizardPage';
+import ProfilePage from './pages/profile/ProfilePage';
+import HierarchyViewPage from './pages/settings/HierarchyViewPage';
+import TicketApprovalManagementPage from './pages/settings/TicketApprovalManagementPage';
+import WorkflowTypesPage from './pages/works/WorkflowTypesPage';
 
 // Main App Component with Routing
 const AppContent: React.FC = () => {
@@ -92,7 +92,7 @@ const AppContent: React.FC = () => {
 
   // Public Route Component (moved inside to access auth context)
   const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { isAuthenticated, redirectUrl, clearRedirectUrl } = useAuth();
+    const { isAuthenticated, redirectUrl, clearRedirectUrl, user } = useAuth();
     
     if (isAuthenticated) {
       // Handle redirect URL if present, otherwise go to dashboard
@@ -101,7 +101,15 @@ const AppContent: React.FC = () => {
         clearRedirectUrl(); // Clear immediately to prevent loops
         return <Navigate to={destination} replace />;
       } else {
-        return <Navigate to="/dashboard" replace />;
+        // Check if this is a first-time user (no last login or very recent account)
+        const isFirstTime = !user?.lastLogin || 
+          (user?.lastLogin && new Date(user.lastLogin) > new Date(Date.now() - 24 * 60 * 60 * 1000)); // Within 24 hours
+        
+        if (isFirstTime) {
+          return <Navigate to="/welcome" replace />;
+        } else {
+          return <Navigate to="/home" replace />;
+        }
       }
     }
     
@@ -126,6 +134,11 @@ const AppContent: React.FC = () => {
           <PublicRoute>
             <VerifyEmailPage />
           </PublicRoute>
+        } />
+        <Route path="/welcome" element={
+          <ProtectedRoute>
+            <WelcomePage />
+          </ProtectedRoute>
         } />
         
         {/* Standalone Chart Routes (No Layout) */}
@@ -184,7 +197,6 @@ const AppContent: React.FC = () => {
          
           <Route path="tickets/:ticketId" element={<TicketDetailsPage />} />
           <Route path="profile" element={<ProfilePage />} />
-          <Route path="test-debug" element={<TestDebugPage />} />
 
           {/* Asset Management Routes */}
           <Route path="settings" element={<HierarchyViewPage />} />

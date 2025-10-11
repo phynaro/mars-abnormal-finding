@@ -1,20 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../contexts/AuthContext';
-import userManagementService from '../services/userManagementService';
+import { useAuth } from '@/contexts/AuthContext';
+import userManagementService from '@/services/userManagementService';
 import type { 
   User, 
   CreateUserData, 
   UpdateUserData, 
   Role 
-} from '../services/userManagementService';
-import { UserList } from '../components/user-management/UserList';
-import { UserFilters } from '../components/user-management/UserFilters';
-import { CreateUserModal } from '../components/user-management/CreateUserModal';
-import { EditUserModal } from '../components/user-management/EditUserModal';
-import { ViewUserModal } from '../components/user-management/ViewUserModal';
-import { PageHeader } from '../components/common/PageHeader';
-import { LoadingSpinner } from '../components/common/LoadingSpinner';
-import { AccessDenied } from '../components/common/AccessDenied';
+} from '@/services/userManagementService';
+import { UserList } from '@/components/user-management/UserList';
+import { UserFilters } from '@/components/user-management/UserFilters';
+import { CreateUserModal } from '@/components/user-management/CreateUserModal';
+import { EditUserModal } from '@/components/user-management/EditUserModal';
+import { ViewUserModal } from '@/components/user-management/ViewUserModal';
+import { PageHeader } from '@/components/common/PageHeader';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { AccessDenied } from '@/components/common/AccessDenied';
 
 const UserManagementPage: React.FC = () => {
   const { user: currentUser } = useAuth();
