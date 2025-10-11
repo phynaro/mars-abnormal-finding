@@ -39,7 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { FileUpload } from "@/components/ui/file-upload";
 import {
@@ -2055,6 +2055,9 @@ const TicketDetailsPage: React.FC = () => {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="sr-only">Cedar Integration Details</DialogTitle>
+            <DialogDescription className="sr-only">
+              Cedar integration status and synchronization details for this ticket
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Cedar Integration Details</h3>
