@@ -176,22 +176,24 @@ const getTicketIntegrationLogs = async (req, res) => {
             .input('limit', sql.Int, parseInt(limit))
             .input('offset', sql.Int, parseInt(offset))
             .query(`
-                SELECT 
-                    id,
-                    ticket_id,
-                    wono,
-                    action,
-                    status,
-                    request_data,
-                    response_data,
-                    error_message,
-                    created_at,
-                    created_by
-                FROM CedarIntegrationLog
-                WHERE ticket_id = @ticketId
-                ORDER BY created_at DESC
-                OFFSET @offset ROWS
-                FETCH NEXT @limit ROWS ONLY
+                SELECT *
+                FROM (
+                    SELECT 
+                        id,
+                        ticket_id,
+                        wono,
+                        action,
+                        status,
+                        request_data,
+                        response_data,
+                        error_message,
+                        created_at,
+                        created_by,
+                        ROW_NUMBER() OVER (ORDER BY created_at DESC) as row_num
+                    FROM CedarIntegrationLog
+                    WHERE ticket_id = @ticketId
+                ) AS paginated_results
+                WHERE row_num > @offset AND row_num <= @offset + @limit
             `);
 
         res.json({
@@ -233,27 +235,29 @@ const getTicketsWithCedarStatus = async (req, res) => {
             .input('limit', sql.Int, parseInt(limit))
             .input('offset', sql.Int, parseInt(offset))
             .query(`
-                SELECT 
-                    t.id as ticket_id,
-                    t.ticket_number,
-                    t.title,
-                    t.status as ticket_status,
-                    t.cedar_wono,
-                    t.cedar_wocode,
-                    t.cedar_sync_status,
-                    t.cedar_last_sync,
-                    t.cedar_sync_error,
-                    wo.WOStatusNo as cedar_wo_status_no,
-                    wo.WFStatusCode as cedar_wf_status_code,
-                    pu.PUCODE,
-                    pu.PUNAME
-                FROM Tickets t
-                LEFT JOIN WO wo ON t.cedar_wono = wo.WONO
-                LEFT JOIN PU pu ON t.puno = pu.PUNO
-                WHERE 1=1 ${whereClause}
-                ORDER BY t.created_at DESC
-                OFFSET @offset ROWS
-                FETCH NEXT @limit ROWS ONLY
+                SELECT *
+                FROM (
+                    SELECT 
+                        t.id as ticket_id,
+                        t.ticket_number,
+                        t.title,
+                        t.status as ticket_status,
+                        t.cedar_wono,
+                        t.cedar_wocode,
+                        t.cedar_sync_status,
+                        t.cedar_last_sync,
+                        t.cedar_sync_error,
+                        wo.WOStatusNo as cedar_wo_status_no,
+                        wo.WFStatusCode as cedar_wf_status_code,
+                        pu.PUCODE,
+                        pu.PUNAME,
+                        ROW_NUMBER() OVER (ORDER BY t.created_at DESC) as row_num
+                    FROM Tickets t
+                    LEFT JOIN WO wo ON t.cedar_wono = wo.WONO
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO
+                    WHERE 1=1 ${whereClause}
+                ) AS paginated_results
+                WHERE row_num > @offset AND row_num <= @offset + @limit
             `);
 
         res.json({

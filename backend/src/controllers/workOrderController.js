@@ -50,99 +50,102 @@ exports.getWorkOrders = async (req, res) => {
     }
 
     // Main query with joins
+    // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
     const query = `
-      SELECT 
-        wo.WONO,
-        wo.WOCODE,
-        wo.WODATE,
-        wo.WOTIME,
-        wo.WO_PROBLEM,
-        wo.WO_PLAN,
-        wo.WO_CAUSE,
-        wo.WO_ACTION,
-        wo.SCH_START_D,
-        wo.SCH_START_T,
-        wo.SCH_FINISH_D,
-        wo.SCH_FINISH_T,
-        wo.SCH_DURATION,
-        wo.ACT_START_D,
-        wo.ACT_START_T,
-        wo.ACT_FINISH_D,
-        wo.ACT_FINISH_T,
-        wo.ACT_DURATION,
-        wo.RequesterName,
-        wo.REQ_PHONE,
-        wo.REQ_Email,
-        wo.TaskProcedure,
-        wo.CREATEDATE,
-        wo.UPDATEDATE,
-        wo.PMNO,
-        wo.EQNO,
-        wo.PUNO,
-        wo.WRNO,
-        wo.WRCODE,
-        
-        -- Status information
-        ws.WOSTATUSCODE,
-        ws.WOSTATUSNAME,
-        wo.WFStatusCode,
-        
-        -- Type information
-        wt.WOTYPECODE,
-        wt.WOTYPENAME,
-        
-        -- Priority information
-        wp.PRIORITYCODE,
-        wp.PRIORITYNAME,
-        
-        -- Equipment/Asset information
-        eq.EQCODE,
-        eq.EQNAME,
-        
-        -- Production Unit information
-        pu.PUCODE,
-        pu.PUNAME,
-        
-        -- Department information
-        dept.DEPTCODE,
-        dept.DEPTNAME,
-        
-        -- Site information
-        site.SITECODE,
-        site.SITENAME,
-        
-        -- Safety flags
-        wo.HotWork,
-        wo.ConfineSpace,
-        wo.WorkAtHeight,
-        wo.LockOutTagOut,
-        wo.FlagSafety,
-        wo.FlagEnvironment,
-        
-        -- Cost information
-        wo.PlanMHAmountOfCost,
-        wo.ActMHAmountOfCost,
-        wo.PlanMTAmountOfCost,
-        wo.ActMTAmountOfCost,
-        
-        -- Evaluation information
-        wo.HasEvaluate,
-        wo.EvaluateDate,
-        wo.EvaluateTime,
-        wo.EvaluateNote
-        
-      FROM WO wo
-      LEFT JOIN WOStatus ws ON wo.WOSTATUSNO = ws.WOSTATUSNO
-      LEFT JOIN WOType wt ON wo.WOTYPENO = wt.WOTYPENO
-      LEFT JOIN WOPriority wp ON wo.PRIORITYNO = wp.PRIORITYNO
-      LEFT JOIN EQ eq ON wo.EQNO = eq.EQNO
-      LEFT JOIN PU pu ON wo.PUNO = pu.PUNO
-      LEFT JOIN Dept dept ON wo.DEPTNO = dept.DEPTNO
-      LEFT JOIN Site site ON wo.SiteNo = site.SiteNo
-      ${whereClause}
-      ORDER BY wo.${sortBy} ${sortOrder}
-      OFFSET ${offset} ROWS
-      FETCH NEXT ${limit} ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          wo.WONO,
+          wo.WOCODE,
+          wo.WODATE,
+          wo.WOTIME,
+          wo.WO_PROBLEM,
+          wo.WO_PLAN,
+          wo.WO_CAUSE,
+          wo.WO_ACTION,
+          wo.SCH_START_D,
+          wo.SCH_START_T,
+          wo.SCH_FINISH_D,
+          wo.SCH_FINISH_T,
+          wo.SCH_DURATION,
+          wo.ACT_START_D,
+          wo.ACT_START_T,
+          wo.ACT_FINISH_D,
+          wo.ACT_FINISH_T,
+          wo.ACT_DURATION,
+          wo.RequesterName,
+          wo.REQ_PHONE,
+          wo.REQ_Email,
+          wo.TaskProcedure,
+          wo.CREATEDATE,
+          wo.UPDATEDATE,
+          wo.PMNO,
+          wo.EQNO,
+          wo.PUNO,
+          wo.WRNO,
+          wo.WRCODE,
+          
+          -- Status information
+          ws.WOSTATUSCODE,
+          ws.WOSTATUSNAME,
+          wo.WFStatusCode,
+          
+          -- Type information
+          wt.WOTYPECODE,
+          wt.WOTYPENAME,
+          
+          -- Priority information
+          wp.PRIORITYCODE,
+          wp.PRIORITYNAME,
+          
+          -- Equipment/Asset information
+          eq.EQCODE,
+          eq.EQNAME,
+          
+          -- Production Unit information
+          pu.PUCODE,
+          pu.PUNAME,
+          
+          -- Department information
+          dept.DEPTCODE,
+          dept.DEPTNAME,
+          
+          -- Site information
+          site.SITECODE,
+          site.SITENAME,
+          
+          -- Safety flags
+          wo.HotWork,
+          wo.ConfineSpace,
+          wo.WorkAtHeight,
+          wo.LockOutTagOut,
+          wo.FlagSafety,
+          wo.FlagEnvironment,
+          
+          -- Cost information
+          wo.PlanMHAmountOfCost,
+          wo.ActMHAmountOfCost,
+          wo.PlanMTAmountOfCost,
+          wo.ActMTAmountOfCost,
+          
+          -- Evaluation information
+          wo.HasEvaluate,
+          wo.EvaluateDate,
+          wo.EvaluateTime,
+          wo.EvaluateNote,
+          ROW_NUMBER() OVER (ORDER BY wo.${sortBy} ${sortOrder}) as row_num
+          
+        FROM WO wo
+        LEFT JOIN WOStatus ws ON wo.WOSTATUSNO = ws.WOSTATUSNO
+        LEFT JOIN WOType wt ON wo.WOTYPENO = wt.WOTYPENO
+        LEFT JOIN WOPriority wp ON wo.PRIORITYNO = wp.PRIORITYNO
+        LEFT JOIN EQ eq ON wo.EQNO = eq.EQNO
+        LEFT JOIN PU pu ON wo.PUNO = pu.PUNO
+        LEFT JOIN Dept dept ON wo.DEPTNO = dept.DEPTNO
+        LEFT JOIN Site site ON wo.SiteNo = site.SiteNo
+        ${whereClause}
+      ) AS paginated_results
+      WHERE row_num > ${offset} AND row_num <= ${offset} + ${limit}
     `;
 
     // Count query for pagination

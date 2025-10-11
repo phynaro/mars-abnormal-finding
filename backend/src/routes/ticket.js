@@ -143,7 +143,7 @@ router.post('/test-email', async (req, res) => {
         // Test data
         const testTicketData = {
             id: 999, // Test ID for demo
-            ticket_number: 'TKT-TEST-001',
+            ticket_number: 'AB25-00001',
             title: 'Test Ticket for Email Notification',
             description: 'This is a test ticket to verify email notifications are working.',
             affected_point_type: 'machine',

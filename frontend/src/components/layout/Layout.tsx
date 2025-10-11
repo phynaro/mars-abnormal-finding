@@ -33,9 +33,9 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   const location = useLocation();
   const findActiveId = () => {
     const match = menuItems.find(m => location.pathname.startsWith(m.path));
-    return match ? match.id : 'dashboard';
+    return match ? match.id : null;
   };
-  const [activeId, setActiveId] = useState<string>(findActiveId());
+  const [activeId, setActiveId] = useState<string | null>(findActiveId());
   const [submenuCollapsed, setSubmenuCollapsed] = useState<boolean>(() => {
     const v = localStorage.getItem('submenu-collapsed-global');
     return v ? v === '1' : false
@@ -74,10 +74,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         const hasChildren = !!active?.children?.length;
         if (!hasChildren) return null;
         return (
-          <div className="relative sticky top-0 self-start h-[100dvh]">
+          <div className="relative sticky top-0 self-start h-[100dvh] z-[9800]">
             <SubmenuPanel activeId={activeId} collapsed={submenuCollapsed} />
             <button
-              className="absolute top-11 -right-3 z-[60] h-7 w-7 flex items-center justify-center rounded-full bg-background border shadow-sm hover:bg-hover hover:text-hover-foreground transition-colors ring-1 ring-black/5"
+              className="absolute top-11 -right-3 z-[9850] h-7 w-7 flex items-center justify-center rounded-full bg-background border shadow-sm hover:bg-hover hover:text-hover-foreground transition-colors ring-1 ring-black/5"
               onClick={() => setSubmenuCollapsed(v => !v)}
               title={submenuCollapsed ? 'Expand menu' : 'Collapse menu'}
             >

@@ -174,40 +174,43 @@ const machineController = {
       requestForData.input('limit', sql.Int, parseInt(limit));
 
       // Get machines with pagination (parameterized) - mapping PU table columns to Machine interface
+      // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
       const result = await requestForData.query(`
-        SELECT 
-          PUNO AS MachineID, 
-          PUNAME AS MachineName, 
-          PUCODE AS MachineCode, 
-          PUTYPENO AS MachineType, 
-          TEXT1 AS Manufacturer, 
-          TEXT2 AS Model,
-          TEXT3 AS SerialNumber, 
-          PULOCATION AS Location, 
-          DEPTNO AS Department, 
-          CREATEDATE AS InstallationDate, 
-          UPDATEDATE AS LastMaintenanceDate,
-          UPDATEDATE AS NextMaintenanceDate,
-          CASE WHEN FLAGDEL = 'Y' THEN 'Inactive' ELSE 'Active' END AS Status, 
-          TEXT4 AS Capacity, 
-          TEXT5 AS PowerRating, 
-          NUMBER1 AS OperatingHours,
-          CASE WHEN PUCRITICALNO = 1 THEN 'Low' WHEN PUCRITICALNO = 2 THEN 'Medium' WHEN PUCRITICALNO = 3 THEN 'High' ELSE 'Low' END AS Criticality, 
-          PUREFCODE AS AssetTag, 
-          NUMBER2 AS PurchasePrice, 
-          NUMBER1 AS CurrentValue, 
-          DATE1 AS WarrantyExpiryDate,
-          NOTE AS Notes, 
-          CREATEUSER AS CreatedBy, 
-          CREATEDATE AS CreatedDate, 
-          UPDATEUSER AS ModifiedBy, 
-          UPDATEDATE AS ModifiedDate,
-          CASE WHEN FLAGDEL = 'Y' THEN 0 ELSE 1 END AS IsActive
-        FROM PU 
-        ${whereClause}
-        ORDER BY PUNO DESC
-        OFFSET @offset ROWS
-        FETCH NEXT @limit ROWS ONLY
+        SELECT *
+        FROM (
+          SELECT 
+            PUNO AS MachineID, 
+            PUNAME AS MachineName, 
+            PUCODE AS MachineCode, 
+            PUTYPENO AS MachineType, 
+            TEXT1 AS Manufacturer, 
+            TEXT2 AS Model,
+            TEXT3 AS SerialNumber, 
+            PULOCATION AS Location, 
+            DEPTNO AS Department, 
+            CREATEDATE AS InstallationDate, 
+            UPDATEDATE AS LastMaintenanceDate,
+            UPDATEDATE AS NextMaintenanceDate,
+            CASE WHEN FLAGDEL = 'Y' THEN 'Inactive' ELSE 'Active' END AS Status, 
+            TEXT4 AS Capacity, 
+            TEXT5 AS PowerRating, 
+            NUMBER1 AS OperatingHours,
+            CASE WHEN PUCRITICALNO = 1 THEN 'Low' WHEN PUCRITICALNO = 2 THEN 'Medium' WHEN PUCRITICALNO = 3 THEN 'High' ELSE 'Low' END AS Criticality, 
+            PUREFCODE AS AssetTag, 
+            NUMBER2 AS PurchasePrice, 
+            NUMBER1 AS CurrentValue, 
+            DATE1 AS WarrantyExpiryDate,
+            NOTE AS Notes, 
+            CREATEUSER AS CreatedBy, 
+            CREATEDATE AS CreatedDate, 
+            UPDATEUSER AS ModifiedBy, 
+            UPDATEDATE AS ModifiedDate,
+            CASE WHEN FLAGDEL = 'Y' THEN 0 ELSE 1 END AS IsActive,
+            ROW_NUMBER() OVER (ORDER BY PUNO DESC) as row_num
+          FROM PU 
+          ${whereClause}
+        ) AS paginated_results
+        WHERE row_num > @offset AND row_num <= @offset + @limit
       `);
 
       res.json({

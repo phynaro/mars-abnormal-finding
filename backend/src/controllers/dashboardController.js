@@ -96,6 +96,67 @@ function calculatePeriodForDate(date, year) {
 }
 
 /**
+ * Calculate current period and week for today
+ * Returns format like "P1W4" (Period 1, Week 4)
+ */
+function getCurrentPeriodAndWeek(date = new Date()) {
+  const year = date.getFullYear();
+  
+  // Calculate which week within the period (1-4, since each period has 28 days = 4 weeks)
+  const firstDayOfYear = new Date(year, 0, 1, 0, 0, 0, 0);
+  const firstSunday = new Date(firstDayOfYear);
+  
+  // Adjust to first Sunday
+  const dayOfWeek = firstDayOfYear.getDay();
+  const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  firstSunday.setDate(firstDayOfYear.getDate() + daysToAdd);
+  
+  // Calculate days since first Sunday
+  const daysSinceFirstSunday = Math.floor((date - firstSunday) / (1000 * 60 * 60 * 24));
+  
+  // Calculate period number (1-based) - ensure it's at least 1
+  const periodNumber = Math.max(1, Math.floor(daysSinceFirstSunday / 28) + 1);
+  
+  // Calculate week within period (1-4) - handle negative days
+  let weekInPeriod;
+  if (daysSinceFirstSunday < 0) {
+    // Before first Sunday, count as week 1 of period 1
+    weekInPeriod = 1;
+  } else {
+    weekInPeriod = Math.floor((daysSinceFirstSunday % 28) / 7) + 1;
+  }
+  
+  return {
+    period: periodNumber,
+    week: weekInPeriod,
+    display: `P${periodNumber}W${weekInPeriod}`,
+    year: year,
+    date: date.toISOString().split('T')[0]
+  };
+}
+
+/**
+ * Get current period and week API endpoint
+ */
+exports.getCurrentPeriodAndWeek = async (req, res) => {
+  try {
+    const currentInfo = getCurrentPeriodAndWeek();
+    
+    res.json({
+      success: true,
+      data: currentInfo
+    });
+  } catch (error) {
+    console.error('Error in getCurrentPeriodAndWeek:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Fill missing periods with zero counts
  */
 function fillMissingPeriods(trendData, groupBy, year, fromPeriod, toPeriod, fromYear, toYear) {

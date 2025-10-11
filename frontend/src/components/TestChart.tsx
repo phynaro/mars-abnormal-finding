@@ -3,14 +3,7 @@ import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tool
 
 // Simple test chart component
 const TestChart: React.FC = () => {
-  // Sample data
-  const data = [
-    { date: '2024-01-01', count: 10 },
-    { date: '2024-01-02', count: 15 },
-    { date: '2024-01-03', count: 8 },
-    { date: '2024-01-04', count: 20 },
-    { date: '2024-01-05', count: 12 },
-  ];
+  const data: Array<{ date: string; count: number }> = [];
 
   return (
     <div className="w-full h-[300px] border border-gray-300 p-4">

@@ -59,6 +59,7 @@ const TicketCreatePage: React.FC = () => {
   const [machineSearchLoading, setMachineSearchLoading] = useState(false);
   const [machineSearchDropdownOpen, setMachineSearchDropdownOpen] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<PUCODEResult | null>(null);
+  const [isProgrammaticUpdate, setIsProgrammaticUpdate] = useState(false);
 
   // Equipment selection state
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
@@ -226,13 +227,19 @@ const TicketCreatePage: React.FC = () => {
 
   // Search machines with debounce
   useEffect(() => {
+    // Skip search if this is a programmatic update (e.g., after machine selection)
+    if (isProgrammaticUpdate) {
+      setIsProgrammaticUpdate(false);
+      return;
+    }
+
     const t = setTimeout(async () => {
       if (machineSearchQuery.length >= 2) {
         await searchMachines(machineSearchQuery);
       }
     }, 300);
     return () => clearTimeout(t);
-  }, [machineSearchQuery]);
+  }, [machineSearchQuery, isProgrammaticUpdate]);
 
   // Load equipment when machine is selected
   useEffect(() => {
@@ -268,21 +275,33 @@ const TicketCreatePage: React.FC = () => {
   const onSelectMachine = (machine: PUCODEResult) => {
     setSelectedMachine(machine);
     handleInputChange('puno', machine.PUNO);
+    setIsProgrammaticUpdate(true);
     setMachineSearchQuery(machine.PUCODE);
     setMachineSearchDropdownOpen(false);
     
     // Clear equipment selection when machine changes
     clearEquipmentSelection();
+    
+    // Blur the input to prevent onFocus from reopening the dropdown
+    if (searchInputRef.current) {
+      searchInputRef.current.blur();
+    }
   };
 
   const clearMachineSelection = () => {
     setSelectedMachine(null);
+    setIsProgrammaticUpdate(true);
     setMachineSearchQuery('');
     setMachineSearchResults([]);
     handleInputChange('puno', undefined);
     
     // Clear equipment selection when machine is cleared
     clearEquipmentSelection();
+    
+    // Blur the input to prevent onFocus from reopening the dropdown
+    if (searchInputRef.current) {
+      searchInputRef.current.blur();
+    }
   };
 
   // Equipment selection handlers
@@ -332,7 +351,12 @@ const TicketCreatePage: React.FC = () => {
       }
 
       toast({ title: t('common.success'), description: t('ticket.ticketCreatedSuccess'), variant: 'default' });
-      navigate(`/tickets/${ticketId}`);
+      
+      // Use setTimeout to ensure navigation happens after all async operations complete
+      // This fixes mobile Safari/Chrome navigation issues
+      setTimeout(() => {
+        navigate(`/tickets/${ticketId}`, { replace: true });
+      }, 100);
     } catch (error) {
       toast({ title: t('common.error'), description: error instanceof Error ? error.message : t('ticket.failedToCreateTicket'), variant: 'destructive' });
     } finally {
@@ -439,7 +463,7 @@ const TicketCreatePage: React.FC = () => {
                   )}
                   
                   {/* Equipment Selection */}
-                  {selectedMachine && (
+                  {selectedMachine && equipmentList.length > 0 && (
                     <div className="space-y-3">
                       <Label htmlFor="equipment-select" className="text-base font-semibold">Equipment (Optional)</Label>
                       

@@ -63,12 +63,7 @@ const RoleManagementPage: React.FC = () => {
       setRoles(fetchedRoles);
     } catch (error) {
       console.error('Failed to load roles:', error);
-      // Fallback roles if API fails
-      setRoles([
-        { id: 'admin', name: 'Administrator', description: 'Full system access', permissionLevel: 3, permissions: ['all'] },
-        { id: 'manager', name: 'Manager', description: 'Department management', permissionLevel: 2, permissions: ['dashboard', 'tickets', 'tickets-admin', 'machines', 'reports'] },
-        { id: 'operator', name: 'Operator', description: 'Basic operations', permissionLevel: 1, permissions: ['dashboard', 'tickets'] }
-      ]);
+      setRoles([]);
     } finally {
       setLoading(false);
     }

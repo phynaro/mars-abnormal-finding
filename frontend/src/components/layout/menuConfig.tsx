@@ -30,7 +30,8 @@ export const menuItems: MenuItem[] = [
   {
     id: 'home',
     label: 'Home',
-    icon: <Home className="h-5 w-5" />,
+    //icon: <Home className="h-5 w-5" />,
+    icon: <div className="h-7 w-7 rounded-full bg-white flex items-center justify-center"><img src="/MARS-icon.png" alt="MARS Logo" className="h-6 w-6" /></div>,
     path: '/home',
     permissionLevel: 1,
   },

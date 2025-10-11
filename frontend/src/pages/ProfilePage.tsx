@@ -87,96 +87,59 @@ const ProfilePage: React.FC = () => {
 
   // Avatar crop handlers
   const onSelectAvatar: React.ChangeEventHandler<HTMLInputElement> = (e) => {
-    console.log('📁 onSelectAvatar called with files:', e.target.files);
     const file = e.target.files?.[0];
     if (!file) {
-      console.log('❌ No file selected');
       return;
     }
-    
-    console.log('📄 File selected:', {
-      name: file.name,
-      size: file.size,
-      type: file.type,
-      lastModified: file.lastModified
-    });
     
     try {
       // Validate file type
       if (!file.type.startsWith('image/')) {
-        console.error('❌ Invalid file type:', file.type);
         alert(t('profile.invalidImageFile'));
         return;
       }
       
       // Validate file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
-        console.error('❌ File too large:', file.size);
         alert(t('profile.imageTooLarge'));
         return;
       }
       
-      console.log('🔄 Creating object URL...');
       const url = URL.createObjectURL(file);
-      console.log('✅ Object URL created:', url.substring(0, 50) + '...');
-      
-      console.log('🔄 Setting image source and showing cropper...');
       setImageSrc(url);
       setShowCropper(true);
-      
-      console.log('✅ File selection completed successfully');
     } catch (error) {
-      console.error('❌ Error creating object URL:', error);
       alert(t('profile.failedToLoadImage'));
     }
   };
 
   const onCropComplete = useCallback((_: any, croppedPixels: any) => {
-    console.log('🔄 onCropComplete called with pixels:', croppedPixels);
     setCroppedAreaPixels(croppedPixels);
   }, []);
 
   async function getCroppedBlob(imageSrc: string, cropPixels: { x: number; y: number; width: number; height: number }): Promise<Blob> {
-    console.log('🎨 getCroppedBlob called with:', {
-      imageSrc: imageSrc.substring(0, 50) + '...',
-      cropPixels
-    });
-    
     const img: HTMLImageElement = await new Promise((resolve, reject) => {
-      console.log('🖼️ Creating image element...');
       const image = new Image();
       image.crossOrigin = 'anonymous'; // Add CORS support
       
       image.onload = () => {
-        console.log('✅ Image loaded successfully:', {
-          width: image.width,
-          height: image.height,
-          naturalWidth: image.naturalWidth,
-          naturalHeight: image.naturalHeight
-        });
         resolve(image);
       };
       
       image.onerror = (error) => {
-        console.error('❌ Image load error:', error);
         reject(new Error('Failed to load image for cropping'));
       };
       
-      console.log('🔄 Setting image source...');
       image.src = imageSrc;
     });
     
-    console.log('🖼️ Image loaded, creating canvas...');
     const canvas = document.createElement('canvas');
     const size = Math.min(cropPixels.width, cropPixels.height);
     canvas.width = size;
     canvas.height = size;
     
-    console.log('📐 Canvas dimensions:', { width: canvas.width, height: canvas.height, size });
-    
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      console.error('❌ Canvas 2D context not supported');
       throw new Error('Canvas 2D context not supported');
     }
     
@@ -185,31 +148,14 @@ const ProfilePage: React.FC = () => {
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
       
-      console.log('🎨 Drawing image to canvas with crop parameters:', {
-        sourceX: cropPixels.x,
-        sourceY: cropPixels.y,
-        sourceWidth: size,
-        sourceHeight: size,
-        destX: 0,
-        destY: 0,
-        destWidth: size,
-        destHeight: size
-      });
-      
       ctx.drawImage(img, cropPixels.x, cropPixels.y, size, size, 0, 0, size, size);
       
-      console.log('🔄 Converting canvas to blob...');
       return await new Promise<Blob>((resolve, reject) => {
         canvas.toBlob(
           (blob) => {
             if (blob) {
-              console.log('✅ Blob created from canvas:', {
-                size: blob.size,
-                type: blob.type
-              });
               resolve(blob);
             } else {
-              console.error('❌ Failed to create blob from canvas');
               reject(new Error('Failed to create blob from canvas'));
             }
           }, 
@@ -218,62 +164,34 @@ const ProfilePage: React.FC = () => {
         );
       });
     } catch (error) {
-      console.error('❌ Canvas drawing error:', error);
       throw new Error('Failed to process image crop');
     }
   }
 
   const applyCrop = async () => {
-    console.log('🚀 applyCrop function called - starting crop and upload process');
-    console.log('📊 Current state:', {
-      imageSrc: imageSrc ? 'exists' : 'null',
-      croppedAreaPixels: croppedAreaPixels,
-      showCropper: showCropper,
-      avatarFile: avatarFile ? 'exists' : 'null'
-    });
-    
     if (!imageSrc || !croppedAreaPixels) {
-      console.error('❌ Missing required data:', {
-        imageSrc: !!imageSrc,
-        croppedAreaPixels: !!croppedAreaPixels
-      });
       alert('Missing image or crop data. Please try selecting the image again.');
       return;
     }
     
     try {
-      console.log('🔄 Starting crop process with pixels:', croppedAreaPixels);
-      console.log('🖼️ Image source type:', typeof imageSrc, imageSrc.substring(0, 50) + '...');
-      
       const blob = await getCroppedBlob(imageSrc, croppedAreaPixels);
-      console.log('✅ Blob created successfully:', {
-        size: blob.size,
-        type: blob.type
-      });
       
       if (!blob) {
         throw new Error('Failed to create cropped blob');
       }
       
       const file = new File([blob], 'avatar_cropped.png', { type: 'image/png' });
-      console.log('📁 File created:', {
-        name: file.name,
-        size: file.size,
-        type: file.type
-      });
       
-      console.log('🔄 Closing cropper and starting upload...');
       setShowCropper(false);
       
       // Clean up object URL
       if (imageSrc) {
-        console.log('🧹 Cleaning up object URL');
         URL.revokeObjectURL(imageSrc);
         setImageSrc(null);
       }
       
       // Automatically upload the cropped image
-      console.log('🚀 Starting automatic upload of cropped image...');
       setLoading(true);
       
       const form = new FormData();
@@ -290,7 +208,6 @@ const ProfilePage: React.FC = () => {
       const result = await res.json();
       if (!res.ok) throw new Error(result.message || t('profile.failedToUploadAvatar'));
       
-      console.log('✅ Avatar uploaded successfully!');
       await refreshUser();
       setAvatarFile(null);
       alert(t('profile.avatarUpdated'));
@@ -298,15 +215,9 @@ const ProfilePage: React.FC = () => {
       // Reset the file input so the same file can be selected again
       if (fileInputRef.current) {
         fileInputRef.current.reset();
-        console.log('🔄 File input reset for next selection');
       }
       
     } catch (e) {
-      console.error('❌ Crop and upload error details:', {
-        error: e,
-        message: e instanceof Error ? e.message : 'Unknown error',
-        stack: e instanceof Error ? e.stack : 'No stack trace'
-      });
       alert(e instanceof Error ? e.message : t('profile.failedToUploadAvatar'));
     } finally {
       setLoading(false);
@@ -318,190 +229,198 @@ const ProfilePage: React.FC = () => {
       if (imageSrc) URL.revokeObjectURL(imageSrc);
     };
   }, [imageSrc]);
-  useEffect(() => {
-    console.log('hello');
-  }, []);
-  // Debug useEffect to monitor state changes
-  useEffect(() => {
-    console.log('🔄 State update - croppedAreaPixels:', croppedAreaPixels);
-  }, [croppedAreaPixels]);
-
-  useEffect(() => {
-    console.log('🔄 State update - imageSrc:', imageSrc ? 'exists' : 'null');
-  }, [imageSrc]);
-
-  useEffect(() => {
-    console.log('🔄 State update - showCropper:', showCropper);
-  }, [showCropper]);
-
-  useEffect(() => {
-    console.log('🔄 State update - avatarFile:', avatarFile ? 'exists' : 'null');
-  }, [avatarFile]);
 
 
   return (
-    <div className="container mx-auto px-4 py-8 space-y-6">
-      {/* Section 1: Profile Information */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User className="h-5 w-5" />
-            {t('profile.profileInformation')}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Avatar */}
-          <div className="flex items-center gap-6">
-            <Avatar className="h-16 w-16">
-              {user?.avatarUrl ? (
-                <AvatarImage src={getAvatarUrl(user.avatarUrl)} alt="avatar" />
-              ) : null}
-              <AvatarFallback>{user?.firstName?.[0]}{user?.lastName?.[0]}</AvatarFallback>
-            </Avatar>
-            <div className="space-y-2">
-              <Label htmlFor="avatar">{t('profile.changeProfilePicture')}</Label>
-              <div className="flex gap-2">
-                <FileUpload 
-                  ref={fileInputRef}
-                  accept="image/*" 
-                  onChange={(files) => onSelectAvatar({ target: { files } } as any)} 
-                  placeholder={t('profile.chooseFile')}
-                />
-              </div>
-              {/* <p className="text-sm text-muted-foreground">
-                {t('profile.avatarUploadHint')}
-              </p> */}
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Personal Info */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>{t('profile.firstName')}</Label>
-              <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>{t('profile.lastName')}</Label>
-              <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>{t('profile.email')}</Label>
-              <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>{t('profile.phone')}</Label>
-              <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
-            </div>
-          </div>
-          <div>
-            <Button onClick={updateProfile} disabled={loading}>{t('profile.saveChanges')}</Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Responsive Layout for LINE and Password sections */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Section 2: LINE Notification */}
-        <Card>
+    <div className="container mx-auto px-4 py-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Section 1: Profile Information */}
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <MessageSquare className="h-5 w-5" />
-              {t('profile.lineNotifications')}
+              <User className="h-5 w-5" />
+              {t('profile.profileInformation')}
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <Label>{t('profile.lineUserId')}</Label>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowLineHelp(true)}
-                  className="h-6 w-6 p-0"
-                >
-                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                </Button>
-              </div>
-              <Input value={lineId} onChange={(e) => setLineId(e.target.value)} placeholder={t('profile.enterLineId')} />
-            </div>
-            
-            <div className="space-y-3">
-              <Button
-                variant="outline"
-                onClick={async () => {
-                  try {
-                    // Use the current form value for testing, not the saved value
-                    const testLineId = lineId.trim();
-                    if (!testLineId) {
-                      alert(t('profile.pleaseEnterLineId'));
-                      return;
-                    }
-                    
-                    const res = await fetch(`${getApiBaseUrl()}/users/line/test`, {
-                      method: 'POST',
-                      headers: { 
-                        'Authorization': `Bearer ${localStorage.getItem('token')}` || '',
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({ lineId: testLineId })
-                    });
-                    const result = await res.json();
-                    if (!res.ok) throw new Error(result.message || t('profile.failedToSendTestNotification'));
-                    alert(t('profile.testNotificationSent'));
-                  } catch (e) {
-                    alert(e instanceof Error ? e.message : t('profile.failedToSendTestNotification'));
-                  }
-                }}
-                disabled={!lineId.trim()}
-              >
-                {t('profile.sendTestLineNotification')}
-              </Button>
-              
-              {/* Show warning if LINE ID has been changed but not saved */}
-              {lineId !== (user?.lineId || '') && (
-                <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
-                  <p className="text-sm text-amber-800">
-                    <strong>{t('profile.note')}:</strong> {t('profile.lineIdChangedNotSaved')}
-                  </p>
+          <CardContent className="space-y-6">
+            {/* Avatar */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-6">
+              <Avatar className="h-16 w-16">
+                {user?.avatarUrl ? (
+                  <AvatarImage src={getAvatarUrl(user.avatarUrl)} alt="avatar" />
+                ) : null}
+                <AvatarFallback>{user?.firstName?.[0]}{user?.lastName?.[0]}</AvatarFallback>
+              </Avatar>
+              <div className="space-y-2">
+                <Label htmlFor="avatar">{t('profile.changeProfilePicture')}</Label>
+                <div className="flex gap-2">
+                  <FileUpload 
+                    ref={fileInputRef}
+                    accept="image/*" 
+                    onChange={(files) => onSelectAvatar({ target: { files } } as any)} 
+                    placeholder={t('profile.chooseFile')}
+                  />
                 </div>
-              )}
-              
-              <p className="text-sm text-muted-foreground">
-                {lineId.trim() ? 
-                  t('profile.testWillUseCurrentInput') : 
-                  t('profile.ensureLineIdSet')
-                }
-              </p>
+              </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Section 3: Change Password */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Key className="h-5 w-5" />
-              {t('profile.changePassword')}
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>{t('profile.currentPassword')}</Label>
-              <Input type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label>{t('profile.newPassword')}</Label>
-              <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            <Separator />
+
+            {/* Personal Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>{t('profile.firstName')}</Label>
+                <Input value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('profile.lastName')}</Label>
+                <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('profile.email')}</Label>
+                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('profile.phone')}</Label>
+                <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
             </div>
             <div>
-              <Button variant="outline" onClick={changePassword} disabled={loading || !currentPassword || !newPassword}>
-                {t('profile.changePassword')}
-              </Button>
+              <Button onClick={updateProfile} disabled={loading}>{t('profile.saveChanges')}</Button>
             </div>
           </CardContent>
         </Card>
+
+        {/* Right column: LINE notification + Change password */}
+        <div className="space-y-6 lg:col-span-1">
+          {/* Section 2: LINE Notification */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                {t('profile.lineNotifications')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Label>{t('profile.lineUserId')}</Label>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowLineHelp(true)}
+                    className="h-6 w-6 p-0"
+                  >
+                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  </Button>
+                </div>
+                <Input value={lineId} onChange={(e) => setLineId(e.target.value)} placeholder={t('profile.enterLineId')} />
+              </div>
+              
+              <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    try {
+                      // Use the current form value for testing, not the saved value
+                      const testLineId = lineId.trim();
+                      if (!testLineId) {
+                        alert(t('profile.pleaseEnterLineId'));
+                        return;
+                      }
+                      
+                      const res = await fetch(`${getApiBaseUrl()}/users/line/test`, {
+                        method: 'POST',
+                        headers: { 
+                          'Authorization': `Bearer ${localStorage.getItem('token')}` || '',
+                          'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ lineId: testLineId })
+                      });
+                      const result = await res.json();
+                      if (!res.ok) throw new Error(result.message || t('profile.failedToSendTestNotification'));
+                      alert(t('profile.testNotificationSent'));
+                    } catch (e) {
+                      alert(e instanceof Error ? e.message : t('profile.failedToSendTestNotification'));
+                    }
+                  }}
+                  disabled={!lineId.trim()}
+                >
+                  {t('profile.sendTestLineNotification')}
+                </Button>
+                
+                {/* Show warning if LINE ID has been changed but not saved */}
+                {lineId !== (user?.lineId || '') && (
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
+                    <p className="text-sm text-amber-800">
+                      <strong>{t('profile.note')}:</strong> {t('profile.lineIdChangedNotSaved')}
+                    </p>
+                  </div>
+                )}
+                
+                <p className="text-sm text-muted-foreground">
+                  {lineId.trim() ? 
+                    t('profile.testWillUseCurrentInput') : 
+                    t('profile.ensureLineIdSet')
+                  }
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section 3: Change Password */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5" />
+                {t('profile.changePassword')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <form onSubmit={(e) => { e.preventDefault(); changePassword(); }} className="space-y-4">
+                {/* Hidden username field for accessibility */}
+                <input 
+                  type="text" 
+                  name="username" 
+                  value={user?.username || ''} 
+                  autoComplete="username" 
+                  style={{ display: 'none' }}
+                  tabIndex={-1}
+                  readOnly
+                />
+                <div className="space-y-2">
+                  <Label htmlFor="current-password">{t('profile.currentPassword')}</Label>
+                  <Input 
+                    id="current-password"
+                    name="current-password"
+                    type="password" 
+                    value={currentPassword} 
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    autoComplete="current-password"
+                    placeholder={t('profile.currentPassword')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="new-password">{t('profile.newPassword')}</Label>
+                  <Input 
+                    id="new-password"
+                    name="new-password"
+                    type="password" 
+                    value={newPassword} 
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    autoComplete="new-password"
+                    placeholder={t('profile.newPassword')}
+                  />
+                </div>
+                <div>
+                  <Button type="submit" variant="outline" disabled={loading || !currentPassword || !newPassword}>
+                    {t('profile.changePassword')}
+                  </Button>
+                </div>
+              </form>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* LINE Help Modal */}
@@ -585,7 +504,6 @@ const ProfilePage: React.FC = () => {
         // Reset file input when dialog is closed
         if (!open && fileInputRef.current) {
           fileInputRef.current.reset();
-          console.log('🔄 File input reset after dialog close');
         }
       }}>
         <DialogContent className="max-w-lg">
@@ -620,18 +538,13 @@ const ProfilePage: React.FC = () => {
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <Button variant="outline" onClick={() => {
-              console.log('❌ Cancel button clicked');
               setShowCropper(false);
               // Reset file input when cancelling
               if (fileInputRef.current) {
                 fileInputRef.current.reset();
-                console.log('🔄 File input reset after cancel');
               }
             }} disabled={loading}>{t('profile.cancel')}</Button>
-            <Button onClick={() => {
-              console.log('✅ Apply & Upload button clicked - calling applyCrop');
-              applyCrop();
-            }} disabled={loading}>
+            <Button onClick={applyCrop} disabled={loading}>
               {loading ? t('profile.uploading') : t('profile.applyAndUpload')}
             </Button>
           </div>

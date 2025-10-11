@@ -546,11 +546,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       }
     } catch (error) {
       console.error('Failed to fetch plants:', error);
-      // Set fallback plants if API fails
-      setPlants([
-        { code: 'PLANT1', name: 'Plant 1' },
-        { code: 'PLANT2', name: 'Plant 2' }
-      ]);
+      setPlants([]);
     } finally {
       setPlantsLoading(false);
     }
@@ -585,14 +581,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
     } catch (err: any) {
       console.error('Error fetching areas:', err);
-      // Set fallback areas if API fails
-      setAreas([
-        { id: 1, name: 'Line A', code: 'LINE-A', plant_id: 1, is_active: true },
-        { id: 2, name: 'Line B', code: 'LINE-B', plant_id: 1, is_active: true },
-        { id: 3, name: 'Warehouse', code: 'WH', plant_id: 1, is_active: true },
-        { id: 4, name: 'Utilities', code: 'UTIL', plant_id: 1, is_active: true },
-        { id: 5, name: 'Office', code: 'OFF', plant_id: 1, is_active: true }
-      ]);
+      setAreas([]);
     } finally {
       setAreasLoading(false);
     }
@@ -654,7 +643,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
     } catch (err: any) {
       console.error('Error fetching participation data:', err);
-      // Set fallback data if API fails
       setParticipationData([]);
     } finally {
       setParticipationLoading(false);
@@ -677,7 +665,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
     } catch (err: any) {
       console.error('Error fetching area activity data:', err);
-      // Set fallback data if API fails
       setAreaActivityData([]);
     } finally {
       setAreaActivityLoading(false);
@@ -702,7 +689,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       
     } catch (err: any) {
       console.error('Error fetching user activity data:', err);
-      // Set fallback data if API fails
       setUserActivityData([]);
     } finally {
       setUserActivityLoading(false);
@@ -1375,47 +1361,20 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   // Participation Charts - Use real API data
   const participationChartData = useMemo(() => {
-    // If we have API data, use it; otherwise return empty array for loading state
-    if (participationData.length > 0) {
-      return participationData;
-    }
-    
-    // Fallback: create empty data structure for loading state
-    return Array.from({ length: 13 }, (_, i) => ({
-      period: `P${i + 1}`,
-      tickets: 0,
-      target: 30,
-      uniqueReporters: 0,
-      coverageRate: 0
-    }));
+    return participationData;
   }, [participationData]);
 
   // Tickets Closed Per Period Data - Use real API data
   const ticketsClosedChartData = useMemo(() => {
-    // If we have API data, use it; otherwise return empty array for loading state
-    if (ticketsClosedData.length > 0) {
-      return ticketsClosedData;
-    }
-    
-    // Fallback: create empty data structure for loading state
-    return Array.from({ length: 13 }, (_, i) => ({
-      period: `P${i + 1}`,
-      ticketsClosed: 0
-    }));
+    return ticketsClosedData;
   }, [ticketsClosedData]);
 
   // Area Activity Data - Use real API data with dynamic grouping
   const areaActivityChartData = useMemo(() => {
-    // If we have API data, transform it for the chart; otherwise return empty array for loading state
-    if (areaActivityData.length > 0) {
-      return areaActivityData.map(item => ({
-        display_name: item.display_name,
-        tickets: item.tickets
-      })).sort((a, b) => b.tickets - a.tickets);
-    }
-    
-    // Fallback: return empty array for loading state
-    return [];
+    return areaActivityData.map(item => ({
+      display_name: item.display_name,
+      tickets: item.tickets
+    })).sort((a, b) => b.tickets - a.tickets);
   }, [areaActivityData]);
 
   // Dynamic chart title based on filter conditions
@@ -1453,16 +1412,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   // User Activity Data - Use real API data
   const userActivityChartData = useMemo(() => {
-    // If we have API data, transform it for the chart; otherwise return empty array for loading state
-    if (userActivityData.length > 0) {
-      return userActivityData.map(item => ({
-        ...item,
-        avatar: getAvatarUrl(item.avatar)
-      }));
-    }
-    
-    // Fallback: return empty array for loading state
-    return [];
+    return userActivityData.map(item => ({
+      ...item,
+      avatar: getAvatarUrl(item.avatar)
+    }));
   }, [userActivityData, getAvatarUrl]);
 
   // Impact and Value Charts Data (from API)
@@ -1484,29 +1437,17 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   }, [costImpactData]);
 
   const downtimeImpactReporterChartData = useMemo(() => {
-    // If we have API data, transform it for the chart; otherwise return empty array for loading state
-    if (downtimeImpactReporterData.length > 0) {
-      return downtimeImpactReporterData.map(item => ({
-        ...item,
-        avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
-      }));
-    }
-    
-    // Fallback: return empty array for loading state
-    return [];
+    return downtimeImpactReporterData.map(item => ({
+      ...item,
+      avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
+    }));
   }, [downtimeImpactReporterData, getAvatarUrl]);
 
   const costImpactReporterChartData = useMemo(() => {
-    // If we have API data, transform it for the chart; otherwise return empty array for loading state
-    if (costImpactReporterData.length > 0) {
-      return costImpactReporterData.map(item => ({
-        ...item,
-        avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
-      }));
-    }
-    
-    // Fallback: return empty array for loading state
-    return [];
+    return costImpactReporterData.map(item => ({
+      ...item,
+      avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
+    }));
   }, [costImpactReporterData, getAvatarUrl]);
 
   const downtimeByFailureModeChartData = useMemo(() => {
@@ -1522,16 +1463,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   }, [resolveDurationByAreaData]);
 
   const resolveDurationByUserChartData = useMemo(() => {
-    // If we have API data, transform it for the chart; otherwise return empty array for loading state
-    if (resolveDurationByUserData.length > 0) {
-      return resolveDurationByUserData.map(item => ({
-        ...item,
-        avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
-      }));
-    }
-    
-    // Fallback: return empty array for loading state
-    return [];
+    return resolveDurationByUserData.map(item => ({
+      ...item,
+      avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
+    }));
   }, [resolveDurationByUserData, getAvatarUrl]);
 
   const ontimeRateByAreaChartData = useMemo(() => {
@@ -1539,16 +1474,10 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   }, [ontimeRateByAreaData]);
 
   const ontimeRateByUserChartData = useMemo(() => {
-    // If we have API data, transform it for the chart; otherwise return empty array for loading state
-    if (ontimeRateByUserData.length > 0) {
-      return ontimeRateByUserData.map(item => ({
-        ...item,
-        avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
-      }));
-    }
-    
-    // Fallback: return empty array for loading state
-    return [];
+    return ontimeRateByUserData.map(item => ({
+      ...item,
+      avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
+    }));
   }, [ontimeRateByUserData, getAvatarUrl]);
 
   // Pad the axis domain so avatars rendered as labels have enough room and are not clipped
@@ -1587,17 +1516,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     return [0, maxCost + buffer];
   }, [costImpactReporterChartData]);
 
-  // Remove mock data - now using real API data via costImpactReporterChartData
-
-  // Remove mock data - now using real API data via downtimeByFailureModeChartData
-
-  // Remove mock data - now using real API data via downtimeByFailureModeChartData
-
-  // Remove mock data - now using real API data via costByFailureModeChartData
-
-  // Remove mock data - now using real API data via resolveDurationByAreaChartData
-
-  // Remove mock data - now using real API data via ontimeRateByAreaChartData and ontimeRateByUserChartData
 
   // Calendar Heatmap Data (from API)
   const calendarData = useMemo(() => {
@@ -1874,6 +1792,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <AlertTriangle className="h-4 w-4" />
               <span className="font-medium">{t('dashboard.errorLoadingData')}</span>
               <span>{error}</span>
+            </div>
+            <div className="mt-2 text-sm text-red-700">
+              Please check your connection and try again. If the problem persists, contact your system administrator.
             </div>
           </CardContent>
         </Card>
@@ -2320,8 +2241,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : downtimeImpactChartData.length === 0 ? (
-                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                  {t('dashboard.noDataAvailable')}
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load downtime impact data.<br />
+                    Please check your connection or contact support.
+                  </p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -2348,8 +2274,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
               ) : costImpactChartData.length === 0 ? (
-                <div className="flex items-center justify-center h-[300px] text-muted-foreground">
-                  {t('dashboard.noDataAvailable')}
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load cost impact data.<br />
+                    Please check your connection or contact support.
+                  </p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>

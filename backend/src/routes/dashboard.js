@@ -3,7 +3,11 @@ const router = express.Router();
 const dashboardController = require('../controllers/dashboardController');
 const { authenticateToken, requireFormPermission } = require('../middleware/auth');
 
-// Apply authentication middleware to all routes
+// Public endpoints (before authentication middleware)
+// Get Current Period and Week (public endpoint, no authentication required)
+router.get('/current-period-week', dashboardController.getCurrentPeriodAndWeek);
+
+// Apply authentication middleware to all other routes
 router.use(authenticateToken);
 
 // Get Work Order Volume Trend (requires WO form view permission)
@@ -23,6 +27,7 @@ router.get('/workorder-volume/filter-options', requireFormPermission('WO', 'view
 
 // Get Current Company Year (requires WO form view permission)
 router.get('/current-company-year', requireFormPermission('WO', 'view'), dashboardController.getCurrentCompanyYear);
+
 
 // Get Abnormal Finding KPIs (requires TKT form view permission)
 router.get('/af', requireFormPermission('TKT', 'view'), dashboardController.getAbnormalFindingKPIs);

@@ -534,60 +534,64 @@ const getTickets = async (req, res) => {
         const total = countResult.recordset[0].total;
 
         // Get tickets with user information and hierarchy via PUExtension
+        // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
         const ticketsResult = await request.query(`
-            SELECT 
-                t.*,
-                r.PERSON_NAME as reporter_name,
-                r.EMAIL as reporter_email,
-                r.PHONE as reporter_phone,
-                a.PERSON_NAME as assignee_name,
-                a.EMAIL as assignee_email,
-                a.PHONE as assignee_phone,
-                -- Hierarchy information from PUExtension
-                pe.pucode,
-                pe.plant as plant_code,
-                pe.area as area_code,
-                pe.line as line_code,
-                pe.machine as machine_code,
-                pe.number as machine_number,
-                pe.pudescription as pudescription,
-                pe.digit_count,
-                -- Hierarchy names based on digit patterns
-                (SELECT TOP 1 pudescription 
-                 FROM PUExtension pe2 
-                 WHERE pe2.plant = pe.plant 
-                 AND pe2.area IS NULL 
-                 AND pe2.line IS NULL 
-                 AND pe2.machine IS NULL) as plant_name,
-                (SELECT TOP 1 pudescription 
-                 FROM PUExtension pe2 
-                 WHERE pe2.plant = pe.plant 
-                 AND pe2.area = pe.area 
-                 AND pe2.line IS NULL 
-                 AND pe2.machine IS NULL) as area_name,
-                (SELECT TOP 1 pudescription 
-                 FROM PUExtension pe2 
-                 WHERE pe2.plant = pe.plant 
-                 AND pe2.area = pe.area 
-                 AND pe2.line = pe.line 
-                 AND pe2.machine IS NULL) as line_name,
-                (SELECT TOP 1 pudescription 
-                 FROM PUExtension pe2 
-                 WHERE pe2.plant = pe.plant 
-                 AND pe2.area = pe.area 
-                 AND pe2.line = pe.line 
-                 AND pe2.machine = pe.machine) as machine_name,
-                -- PU information
-                pu.PUCODE as pu_pucode,
-                pu.PUNAME as pu_name
-            FROM Tickets t
-            LEFT JOIN Person r ON t.created_by = r.PERSONNO
-            LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
-            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-            ${whereClause}
-            ORDER BY t.created_at DESC
-            OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+            SELECT *
+            FROM (
+                SELECT 
+                    t.*,
+                    r.PERSON_NAME as reporter_name,
+                    r.EMAIL as reporter_email,
+                    r.PHONE as reporter_phone,
+                    a.PERSON_NAME as assignee_name,
+                    a.EMAIL as assignee_email,
+                    a.PHONE as assignee_phone,
+                    -- Hierarchy information from PUExtension
+                    pe.pucode,
+                    pe.plant as plant_code,
+                    pe.area as area_code,
+                    pe.line as line_code,
+                    pe.machine as machine_code,
+                    pe.number as machine_number,
+                    pe.pudescription as pudescription,
+                    pe.digit_count,
+                    -- Hierarchy names based on digit patterns
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area IS NULL 
+                     AND pe2.line IS NULL 
+                     AND pe2.machine IS NULL) as plant_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line IS NULL 
+                     AND pe2.machine IS NULL) as area_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line = pe.line 
+                     AND pe2.machine IS NULL) as line_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line = pe.line 
+                     AND pe2.machine = pe.machine) as machine_name,
+                    -- PU information
+                    pu.PUCODE as pu_pucode,
+                    pu.PUNAME as pu_name,
+                    ROW_NUMBER() OVER (ORDER BY t.created_at DESC) as row_num
+                FROM Tickets t
+                LEFT JOIN Person r ON t.created_by = r.PERSONNO
+                LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                ${whereClause}
+            ) AS paginated_results
+            WHERE row_num > @offset AND row_num <= @offset + @limit
         `);
 
         const tickets = ticketsResult.recordset;
@@ -637,7 +641,7 @@ const getTicketById = async (req, res) => {
                     -- Workflow tracking fields
                     accepted_user.PERSON_NAME as accepted_by_name,
                     rejected_user.PERSON_NAME as rejected_by_name,
-                    Finished_user.PERSON_NAME as finished_by_name,
+                    finished_user.PERSON_NAME as finished_by_name,
                     escalated_user.PERSON_NAME as escalated_by_name,
                     approved_user.PERSON_NAME as approved_by_name,
                     reopened_user.PERSON_NAME as reopened_by_name,
@@ -679,6 +683,10 @@ const getTicketById = async (req, res) => {
                     -- PU information
                     pu.PUCODE as pu_pucode,
                     pu.PUNAME as pu_name,
+                    -- Equipment information
+                    eq.EQNO as equipment_id,
+                    eq.EQCODE as equipment_code,
+                    eq.EQNAME as equipment_name,
                     -- Failure mode information
                     fm.FailureModeCode as failure_mode_code,
                     fm.FailureModeName as failure_mode_name
@@ -687,7 +695,7 @@ const getTicketById = async (req, res) => {
                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
                 LEFT JOIN Person accepted_user ON t.accepted_by = accepted_user.PERSONNO
                 LEFT JOIN Person rejected_user ON t.rejected_by = rejected_user.PERSONNO
-                LEFT JOIN Person Finished_user ON t.finished_by = Finished_user.PERSONNO
+                LEFT JOIN Person finished_user ON t.finished_by = finished_user.PERSONNO
                 LEFT JOIN Person escalated_user ON t.escalated_by = escalated_user.PERSONNO
                 LEFT JOIN Person approved_user ON t.approved_by = approved_user.PERSONNO
                 LEFT JOIN Person reopened_user ON t.reopened_by = reopened_user.PERSONNO
@@ -695,6 +703,7 @@ const getTicketById = async (req, res) => {
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                 LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
                 LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo AND fm.FlagDel != 'Y'
+                LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
                 WHERE t.id = @id
             `);
 
@@ -733,10 +742,11 @@ const getTicketById = async (req, res) => {
                     tc.*,
                     u.PERSON_NAME as user_name,
                     u.EMAIL as user_email,
-                    s.AvatarUrl as user_avatar_url
+                    ue.AvatarUrl as user_avatar_url
                 FROM TicketComments tc
                 LEFT JOIN Person u ON tc.user_id = u.PERSONNO
                 LEFT JOIN _secUsers s ON u.PERSONNO = s.PersonNo
+                LEFT JOIN UserExtension ue ON s.UserID = ue.UserID
                 WHERE tc.ticket_id = @ticket_id 
                 ORDER BY tc.created_at
             `);
@@ -1096,8 +1106,35 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
 const deleteTicket = async (req, res) => {
     try {
         const { id } = req.params;
+        const { reason } = req.body;
+        const userId = req.user.id;
         const pool = await sql.connect(dbConfig);
 
+        // First, get ticket details for logging
+        const ticketResult = await pool.request()
+            .input('id', sql.Int, id)
+            .query('SELECT ticket_number, created_by FROM Tickets WHERE id = @id');
+
+        if (ticketResult.recordset.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'Ticket not found'
+            });
+        }
+
+        const ticket = ticketResult.recordset[0];
+
+        // Add audit log entry before deletion
+        await pool.request()
+            .input('ticket_id', sql.Int, id)
+            .input('user_id', sql.Int, userId)
+            .input('comment', sql.NVarChar(sql.MAX), `Ticket deleted: ${reason || 'No reason provided'}`)
+            .query(`
+                INSERT INTO TicketComments (ticket_id, user_id, comment, created_at)
+                VALUES (@ticket_id, @user_id, @comment, GETDATE())
+            `);
+
+        // Delete the ticket
         const result = await pool.request()
             .input('id', sql.Int, id)
             .query('DELETE FROM Tickets WHERE id = @id');
@@ -1108,6 +1145,8 @@ const deleteTicket = async (req, res) => {
                 message: 'Ticket not found'
             });
         }
+
+        console.log(`Ticket ${ticket.ticket_number} deleted by user ${userId}. Reason: ${reason || 'No reason provided'}`);
 
         res.json({
             success: true,
@@ -4676,107 +4715,111 @@ const getUserPendingTickets = async (req, res) => {
         const total = countResult.recordset[0].total;
        
         // Query to get tickets related to the user with same format as getTickets
+        // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
         const query = `
-            SELECT 
-                t.*,
-                r.PERSON_NAME as reporter_name,
-                r.EMAIL as reporter_email,
-                r.PHONE as reporter_phone,
-                a.PERSON_NAME as assignee_name,
-                a.EMAIL as assignee_email,
-                a.PHONE as assignee_phone,
-                -- Hierarchy information from PUExtension
-                pe.pucode,
-                pe.plant as plant_code,
-                pe.area as area_code,
-                pe.line as line_code,
-                pe.machine as machine_code,
-                pe.number as machine_number,
-                pe.pudescription as pudescription,
-                pe.digit_count,
-                -- Hierarchy names based on digit patterns
-                (SELECT TOP 1 pudescription 
-                 FROM PUExtension pe2 
-                 WHERE pe2.plant = pe.plant 
-                 AND pe2.area IS NULL 
-                 AND pe2.line IS NULL 
-                 AND pe2.machine IS NULL) as plant_name,
-                (SELECT TOP 1 pudescription 
-                 FROM PUExtension pe2 
-                 WHERE pe2.plant = pe.plant 
-                 AND pe2.area = pe.area 
-                 AND pe2.line IS NULL 
-                 AND pe2.machine IS NULL) as area_name,
-                (SELECT TOP 1 pudescription 
-                 FROM PUExtension pe2 
-                 WHERE pe2.plant = pe.plant 
-                 AND pe2.area = pe.area 
-                 AND pe2.line = pe.line 
-                 AND pe2.machine IS NULL) as line_name,
-                (SELECT TOP 1 pudescription 
-                 FROM PUExtension pe2 
-                 WHERE pe2.plant = pe.plant 
-                 AND pe2.area = pe.area 
-                 AND pe2.line = pe.line 
-                 AND pe2.machine = pe.machine) as machine_name,
-                -- PU information
-                pu.PUCODE as pu_pucode,
-                pu.PUNAME as pu_name,
-                -- User's relationship to this ticket
-                CASE 
-                    WHEN t.status = 'escalated' AND ta.approval_level >= 3 THEN 'escalate_approver'
-                    WHEN t.status = 'reviewed' AND ta.approval_level = 4 THEN 'close_approver'
-                    WHEN t.status = 'finished' AND t.created_by = @userId THEN 'review_approver'
-                    WHEN t.status = 'in_progress' AND t.assigned_to = @userId THEN 'assignee'
-                    WHEN t.status = 'reopened_in_progress' AND t.assigned_to = @userId THEN 'assignee'
-                    WHEN t.status = 'planed' AND t.assigned_to = @userId THEN 'assignee'
-                    WHEN t.status = 'open' AND ta.approval_level >= 2 THEN 'accept_approver'
-                    WHEN t.status = 'accepted' AND (ta.approval_level = 2 OR ta.approval_level = 3) THEN 'planner'
-                    WHEN t.status = 'rejected_pending_l3_review' AND ta.approval_level >= 3 THEN 'reject_approver'
-                    WHEN t.assigned_to = @userId THEN 'assignee'
-                    WHEN t.created_by = @userId THEN 'requester'
-                    ELSE 'viewer'
-                END as user_relationship,
-                ta.approval_level as user_approval_level,
-                -- Action person names
-                accepted_person.PERSON_NAME as accepted_by_name,
-                escalated_person.PERSON_NAME as escalated_by_name,
-                reviewed_person.PERSON_NAME as reviewed_by_name,
-                finished_person.PERSON_NAME as finished_by_name,
-                rejected_person.PERSON_NAME as rejected_by_name
-            FROM Tickets t
-            LEFT JOIN Person r ON t.created_by = r.PERSONNO
-            LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
-            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
-                AND ta.plant_code = pe.plant 
-                AND ta.is_active = 1
-                AND (
-                    -- Exact line match
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                    OR
-                    -- Area-level approval (area matches, line is null in approval)
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                    OR
-                    -- Plant-level approval (area and line are null in approval)
-                    (ta.area_code IS NULL AND ta.line_code IS NULL)
+            SELECT *
+            FROM (
+                SELECT 
+                    t.*,
+                    r.PERSON_NAME as reporter_name,
+                    r.EMAIL as reporter_email,
+                    r.PHONE as reporter_phone,
+                    a.PERSON_NAME as assignee_name,
+                    a.EMAIL as assignee_email,
+                    a.PHONE as assignee_phone,
+                    -- Hierarchy information from PUExtension
+                    pe.pucode,
+                    pe.plant as plant_code,
+                    pe.area as area_code,
+                    pe.line as line_code,
+                    pe.machine as machine_code,
+                    pe.number as machine_number,
+                    pe.pudescription as pudescription,
+                    pe.digit_count,
+                    -- Hierarchy names based on digit patterns
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area IS NULL 
+                     AND pe2.line IS NULL 
+                     AND pe2.machine IS NULL) as plant_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line IS NULL 
+                     AND pe2.machine IS NULL) as area_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line = pe.line 
+                     AND pe2.machine IS NULL) as line_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM PUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line = pe.line 
+                     AND pe2.machine = pe.machine) as machine_name,
+                    -- PU information
+                    pu.PUCODE as pu_pucode,
+                    pu.PUNAME as pu_name,
+                    -- User's relationship to this ticket
+                    CASE 
+                        WHEN t.status = 'escalated' AND ta.approval_level >= 3 THEN 'escalate_approver'
+                        WHEN t.status = 'reviewed' AND ta.approval_level = 4 THEN 'close_approver'
+                        WHEN t.status = 'finished' AND t.created_by = @userId THEN 'review_approver'
+                        WHEN t.status = 'in_progress' AND t.assigned_to = @userId THEN 'assignee'
+                        WHEN t.status = 'reopened_in_progress' AND t.assigned_to = @userId THEN 'assignee'
+                        WHEN t.status = 'planed' AND t.assigned_to = @userId THEN 'assignee'
+                        WHEN t.status = 'open' AND ta.approval_level >= 2 THEN 'accept_approver'
+                        WHEN t.status = 'accepted' AND (ta.approval_level = 2 OR ta.approval_level = 3) THEN 'planner'
+                        WHEN t.status = 'rejected_pending_l3_review' AND ta.approval_level >= 3 THEN 'reject_approver'
+                        WHEN t.assigned_to = @userId THEN 'assignee'
+                        WHEN t.created_by = @userId THEN 'requester'
+                        ELSE 'viewer'
+                    END as user_relationship,
+                    ta.approval_level as user_approval_level,
+                    -- Action person names
+                    accepted_person.PERSON_NAME as accepted_by_name,
+                    escalated_person.PERSON_NAME as escalated_by_name,
+                    reviewed_person.PERSON_NAME as reviewed_by_name,
+                    finished_person.PERSON_NAME as finished_by_name,
+                    rejected_person.PERSON_NAME as rejected_by_name,
+                    ROW_NUMBER() OVER (ORDER BY t.created_at DESC) as row_num
+                FROM Tickets t
+                LEFT JOIN Person r ON t.created_by = r.PERSONNO
+                LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                    AND ta.plant_code = pe.plant 
+                    AND ta.is_active = 1
+                    AND (
+                        -- Exact line match
+                        (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                        OR
+                        -- Area-level approval (area matches, line is null in approval)
+                        (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                        OR
+                        -- Plant-level approval (area and line are null in approval)
+                        (ta.area_code IS NULL AND ta.line_code IS NULL)
+                    )
+                LEFT JOIN Person accepted_person ON t.accepted_by = accepted_person.PERSONNO
+                LEFT JOIN Person escalated_person ON t.escalated_by = escalated_person.PERSONNO
+                LEFT JOIN Person reviewed_person ON t.reviewed_by = reviewed_person.PERSONNO
+                LEFT JOIN Person finished_person ON t.finished_by = finished_person.PERSONNO
+                LEFT JOIN Person rejected_person ON t.rejected_by = rejected_person.PERSONNO
+                WHERE (
+                    -- Tickets created by the user
+                    t.created_by = @userId
+                    OR 
+                    -- Tickets where user has approval_level >= 2 for the line/area/plant
+                    (ta.approval_level >= 2 AND ta.is_active = 1)
                 )
-            LEFT JOIN Person accepted_person ON t.accepted_by = accepted_person.PERSONNO
-            LEFT JOIN Person escalated_person ON t.escalated_by = escalated_person.PERSONNO
-            LEFT JOIN Person reviewed_person ON t.reviewed_by = reviewed_person.PERSONNO
-            LEFT JOIN Person finished_person ON t.finished_by = finished_person.PERSONNO
-            LEFT JOIN Person rejected_person ON t.rejected_by = rejected_person.PERSONNO
-            WHERE (
-                -- Tickets created by the user
-                t.created_by = @userId
-                OR 
-                -- Tickets where user has approval_level >= 2 for the line/area/plant
-                (ta.approval_level >= 2 AND ta.is_active = 1)
-            )
-            AND t.status NOT IN ('closed', 'canceled', 'rejected_final')
-            ORDER BY t.created_at DESC
-            OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+                AND t.status NOT IN ('closed', 'canceled', 'rejected_final')
+            ) AS paginated_results
+            WHERE row_num > @offset AND row_num <= @offset + @limit
         `;
 
         // Create a new request for the main query

@@ -150,82 +150,85 @@ exports.getWorkflowTracking = async (req, res) => {
     }
 
     // Main query with joins
+    // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
     const query = `
-      SELECT 
-        wt.DocNo,
-        wt.DocCode,
-        wt.WFDocFlowCode,
-        wt.Event_Order,
-        wt.WFStepNo,
-        wt.Event_Date,
-        wt.Event_Time,
-        wt.Subject,
-        wt.Event_Desc,
-        wt.From_PersonNo,
-        wt.From_Date,
-        wt.From_Time,
-        wt.Send_For,
-        wt.Receive_PersonNo,
-        wt.Receive_UserGroupNo,
-        wt.Approved_Flag,
-        wt.NotApproved_Flag,
-        wt.Approved_PersonNo,
-        wt.Approved_Date,
-        wt.Approved_Time,
-        wt.Readed_Flag,
-        wt.Action_Flag,
-        wt.MenuID,
-        wt.FormID,
-        wt.CreateUser,
-        wt.CreateDate,
-        wt.UpdateUser,
-        wt.UpdateDate,
-        wt.SiteNo,
-        wt.WFStatusCode,
-        wt.WFActionForNo,
-        wt.ApproveMassage,
-        wt.DocStatusNo,
-        wt.InboxNo,
-        wt.ActionNo,
-        wt.CreatedAt,
-        
-        -- From Person information
-        fp.PERSON_NAME as FromPersonName,
-        fp.EMAIL as FromPersonEmail,
-        fp.PHONE as FromPersonPhone,
-        fp.TITLE as FromPersonTitle,
-        
-        -- Receive Person information
-        rp.PERSON_NAME as ReceivePersonName,
-        rp.EMAIL as ReceivePersonEmail,
-        rp.PHONE as ReceivePersonPhone,
-        rp.TITLE as ReceivePersonTitle,
-        
-        -- Approved Person information
-        ap.PERSON_NAME as ApprovedPersonName,
-        ap.EMAIL as ApprovedPersonEmail,
-        ap.PHONE as ApprovedPersonPhone,
-        ap.TITLE as ApprovedPersonTitle,
-        
-        -- User Group information
-        ug.USERGROUPNAME as ReceiveUserGroupName,
-        ug.USERGROUPCODE as ReceiveUserGroupCode,
-        
-        -- Workflow Node information
-        wn.NODENAME as WFStepName,
-        wn.NODETYPE as WFStepType,
-        wn.ORDERNO as WFStepOrder
-        
-      FROM WFTrackeds wt
-      LEFT JOIN Person fp ON wt.From_PersonNo = fp.PERSONNO
-      LEFT JOIN Person rp ON wt.Receive_PersonNo = rp.PERSONNO
-      LEFT JOIN Person ap ON wt.Approved_PersonNo = ap.PERSONNO
-      LEFT JOIN USERGROUP ug ON wt.Receive_UserGroupNo = ug.USERGROUPNO
-      LEFT JOIN WF_NODE wn ON wt.WFStepNo = wn.NODENO
-      ${whereClause}
-      ORDER BY wt.${sortBy} ${sortOrder}
-      OFFSET ${offset} ROWS
-      FETCH NEXT ${limit} ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          wt.DocNo,
+          wt.DocCode,
+          wt.WFDocFlowCode,
+          wt.Event_Order,
+          wt.WFStepNo,
+          wt.Event_Date,
+          wt.Event_Time,
+          wt.Subject,
+          wt.Event_Desc,
+          wt.From_PersonNo,
+          wt.From_Date,
+          wt.From_Time,
+          wt.Send_For,
+          wt.Receive_PersonNo,
+          wt.Receive_UserGroupNo,
+          wt.Approved_Flag,
+          wt.NotApproved_Flag,
+          wt.Approved_PersonNo,
+          wt.Approved_Date,
+          wt.Approved_Time,
+          wt.Readed_Flag,
+          wt.Action_Flag,
+          wt.MenuID,
+          wt.FormID,
+          wt.CreateUser,
+          wt.CreateDate,
+          wt.UpdateUser,
+          wt.UpdateDate,
+          wt.SiteNo,
+          wt.WFStatusCode,
+          wt.WFActionForNo,
+          wt.ApproveMassage,
+          wt.DocStatusNo,
+          wt.InboxNo,
+          wt.ActionNo,
+          wt.CreatedAt,
+          
+          -- From Person information
+          fp.PERSON_NAME as FromPersonName,
+          fp.EMAIL as FromPersonEmail,
+          fp.PHONE as FromPersonPhone,
+          fp.TITLE as FromPersonTitle,
+          
+          -- Receive Person information
+          rp.PERSON_NAME as ReceivePersonName,
+          rp.EMAIL as ReceivePersonEmail,
+          rp.PHONE as ReceivePersonPhone,
+          rp.TITLE as ReceivePersonTitle,
+          
+          -- Approved Person information
+          ap.PERSON_NAME as ApprovedPersonName,
+          ap.EMAIL as ApprovedPersonEmail,
+          ap.PHONE as ApprovedPersonPhone,
+          ap.TITLE as ApprovedPersonTitle,
+          
+          -- User Group information
+          ug.USERGROUPNAME as ReceiveUserGroupName,
+          ug.USERGROUPCODE as ReceiveUserGroupCode,
+          
+          -- Workflow Node information
+          wn.NODENAME as WFStepName,
+          wn.NODETYPE as WFStepType,
+          wn.ORDERNO as WFStepOrder,
+          ROW_NUMBER() OVER (ORDER BY wt.${sortBy} ${sortOrder}) as row_num
+          
+        FROM WFTrackeds wt
+        LEFT JOIN Person fp ON wt.From_PersonNo = fp.PERSONNO
+        LEFT JOIN Person rp ON wt.Receive_PersonNo = rp.PERSONNO
+        LEFT JOIN Person ap ON wt.Approved_PersonNo = ap.PERSONNO
+        LEFT JOIN USERGROUP ug ON wt.Receive_UserGroupNo = ug.USERGROUPNO
+        LEFT JOIN WF_NODE wn ON wt.WFStepNo = wn.NODENO
+        ${whereClause}
+      ) AS paginated_results
+      WHERE row_num > ${offset} AND row_num <= ${offset} + ${limit}
     `;
 
     // Count query for pagination

@@ -84,37 +84,6 @@ interface PersonalKPI {
 
 
 
-const mockPersonalKPI: PersonalKPI = {
-  ticketsCreatedByMonth: [
-    { month: "Jan", tickets: 12, target: 15 },
-    { month: "Feb", tickets: 18, target: 15 },
-    { month: "Mar", tickets: 14, target: 15 },
-    { month: "Apr", tickets: 22, target: 15 },
-    { month: "May", tickets: 16, target: 15 },
-    { month: "Jun", tickets: 19, target: 15 },
-    { month: "Jul", tickets: 25, target: 15 },
-    { month: "Aug", tickets: 21, target: 15 },
-    { month: "Sep", tickets: 17, target: 15 },
-    { month: "Oct", tickets: 23, target: 15 },
-    { month: "Nov", tickets: 20, target: 15 },
-    { month: "Dec", tickets: 18, target: 15 },
-  ],
-  downtimeAvoidance: {
-    thisPeriod: 45.5,
-    thisYear: 487.2,
-    ranking: 3,
-  },
-  costAvoidance: {
-    thisPeriod: 12500,
-    thisYear: 145000,
-    ranking: 2,
-  },
-  ticketStats: {
-    openCount: 8,
-    closedCount: 12,
-    ranking: 5,
-  },
-};
 
 
 function formatCurrency(amount: number) {
@@ -661,7 +630,11 @@ const PendingTicketsSection: React.FC<{
         {/* Mobile Cards */}
         <div className="block lg:hidden space-y-4">
           {tickets.map((ticket) => (
-            <div key={ticket.id} className="border rounded-lg p-4 bg-card">
+            <div 
+              key={ticket.id} 
+              className="border rounded-lg p-4 bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
+              onClick={() => onTicketClick(ticket.id)}
+            >
               <div className="flex justify-between items-start">
                 <div>
                   <div className="text-sm text-muted-foreground">
@@ -706,17 +679,8 @@ const PendingTicketsSection: React.FC<{
                 })}
               </div>
               
-              <div className="mt-4 flex justify-between items-center text-xs text-muted-foreground">
+              <div className="mt-4 text-xs text-muted-foreground">
                 <span>{t('ticket.created')} {formatDate(ticket.created_at)}</span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onTicketClick(ticket.id)}
-                  >
-                    {t('ticket.view')}
-                  </Button>
-                </div>
               </div>
             </div>
           ))}
@@ -1399,16 +1363,14 @@ const PersonalKPISection: React.FC<{
       selectedYear={selectedYear}
     />
     
-    {/* Personal Finished Ticket Count Chart (L2+ users only) */}
-    {user?.permissionLevel && user.permissionLevel >= 2 && (
-      <PersonalFinishedTicketChart 
-        data={personalFinishedTicketData}
-        loading={personalFinishedTicketLoading}
-        error={personalFinishedTicketError}
-        onKpiSetupClick={() => onKpiSetupClick('fix')}
-        selectedYear={selectedYear}
-      />
-    )}
+    {/* Personal Finished Ticket Count Chart */}
+    <PersonalFinishedTicketChart 
+      data={personalFinishedTicketData}
+      loading={personalFinishedTicketLoading}
+      error={personalFinishedTicketError}
+      onKpiSetupClick={() => onKpiSetupClick('fix')}
+      selectedYear={selectedYear}
+    />
     
     {/* Legacy chart - keeping for now */}
     
@@ -1420,7 +1382,7 @@ const HomePage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const [personalKPI] = useState<PersonalKPI>(mockPersonalKPI);
+  const [personalKPI, setPersonalKPI] = useState<PersonalKPI | null>(null);
   const [pendingTickets, setPendingTickets] = useState<APIPendingTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1575,10 +1537,10 @@ const HomePage: React.FC = () => {
           targetMap[target.period] = target.target_value;
         });
 
-        // Add real target data or fallback to mock targets
+        // Add real target data
         const dataWithTargets = ticketResponse.data.map(item => ({
           ...item,
-          target: targetMap[item.period] || 15 // Fallback to mock target if no real target
+          target: targetMap[item.period] || 0 // No fallback target
         }));
         setPersonalTicketData(dataWithTargets);
       } else {
@@ -1635,10 +1597,10 @@ const HomePage: React.FC = () => {
           targetMap[target.period] = target.target_value;
         });
 
-        // Add real target data or fallback to mock targets
+        // Add real target data
         const dataWithTargets = ticketResponse.data.map(item => ({
           ...item,
-          target: targetMap[item.period] || 15 // Fallback to mock target if no real target
+          target: targetMap[item.period] || 0 // No fallback target
         }));
         setPersonalFinishedTicketData(dataWithTargets);
       } else {

@@ -470,33 +470,32 @@ const getUserById = async (pool, userId) => {
 
 const generateTicketNumber = async (pool) => {
     try {
-        const today = new Date();
-        const dateStr = today.getFullYear().toString() +
-            (today.getMonth() + 1).toString().padStart(2, '0') +
-            today.getDate().toString().padStart(2, '0');
-
-        const counterResult = await pool.request()
-            .input('date_str', sql.VarChar(8), dateStr)
+        // Get the highest existing case number from tickets table
+        const result = await pool.request()
             .query(`
-                IF EXISTS (SELECT 1 FROM TicketDailyCounters WHERE date_str = @date_str)
-                    UPDATE TicketDailyCounters
-                    SET case_number = case_number + 1
-                    WHERE date_str = @date_str;
-                ELSE
-                    INSERT INTO TicketDailyCounters (date_str, case_number)
-                    VALUES (@date_str, 1);
-
-                SELECT case_number FROM TicketDailyCounters WHERE date_str = @date_str;
+                SELECT TOP 1 ticket_number 
+                FROM Tickets 
+                WHERE ticket_number LIKE 'AB25-%'
+                ORDER BY CAST(SUBSTRING(ticket_number, 6, 5) AS INT) DESC
             `);
 
-        const caseNumber = counterResult.recordset[0].case_number;
-        return `TKT-${dateStr}-${caseNumber.toString().padStart(3, '0')}`;
+        let nextCaseNumber = 1;
+        
+        if (result.recordset.length > 0) {
+            const latestTicketNumber = result.recordset[0].ticket_number;
+            // Extract the case number part (after 'AB25-')
+            const caseNumberStr = latestTicketNumber.substring(5);
+            const currentCaseNumber = parseInt(caseNumberStr, 10);
+            nextCaseNumber = currentCaseNumber + 1;
+        }
+
+        return `AB25-${nextCaseNumber.toString().padStart(5, '0')}`;
 
     } catch (error) {
         console.error('Error generating ticket number:', error);
-        const timestamp = Date.now().toString().slice(-8);
-        const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-        return `TKT-${timestamp}-${random}`;
+        // Fallback: use timestamp-based approach
+        const timestamp = Date.now().toString().slice(-5);
+        return `AB25-${timestamp}`;
     }
 };
 

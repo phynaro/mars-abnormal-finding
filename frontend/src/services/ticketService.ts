@@ -9,6 +9,7 @@ export interface Ticket {
   description: string;
   pucode?: string; // New field for PUCODE
   puno?: number; // New field for PU ID
+  cedar_wocode?: string; // CEDAR work order code
   plant_id?: number;
   area_id?: number;
   line_id?: number;
@@ -70,6 +71,9 @@ export interface Ticket {
   line_code?: string;
   machine_name?: string;
   machine_code?: string;
+  equipment_id?: number;
+  equipment_code?: string;
+  equipment_name?: string;
   PUNAME?: string; // From PU table
   pu_name?: string; // PU name from new schema
   pu_pucode?: string; // From PU table
@@ -458,11 +462,15 @@ class TicketService {
     return response.json();
   }
 
-  async deleteTicket(id: number): Promise<{ success: boolean; message: string }> {
+  async deleteTicket(id: number, reason?: string): Promise<{ success: boolean; message: string }> {
     const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/${id}`, {
       method: 'DELETE',
-      headers
+      headers: {
+        ...headers,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ reason })
     });
 
     if (!response.ok) {

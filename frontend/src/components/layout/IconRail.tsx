@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { menuItems, type MenuItem } from './menuConfig';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePeriodWeek } from '@/hooks/usePeriodWeek';
 import { Globe, Sun, Moon, Settings as SettingsIcon } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -21,6 +22,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
   const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
+  const { periodWeek } = usePeriodWeek();
 
   // Permission checks disabled: show all items regardless of user level
   const canAccess = (_item: MenuItem) => true;
@@ -62,7 +64,12 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
             );
           })}
         </div>
+        
+
+        
         <div className="flex flex-col items-center py-3 gap-2">
+
+
           {/* Theme toggle */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -107,8 +114,41 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
               <DropdownMenuItem onClick={async () => { try { await logout(); } catch {} }}>Logout</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+
+                            {/* Period/Week Display */}
+        {periodWeek && (
+          <div className="flex flex-col items-center py-1 px-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex flex-col items-center justify-center h-10 w-10 rounded-md">
+                <span className="text-[10px] font-bold text-primary-foreground leading-none">
+                    {periodWeek.display}
+                  </span>
+                <span className="text-xm text-primary-foreground/70 leading-none">
+                    {periodWeek.year}
+                  </span>
+
+
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="right" className="z-[9999]">
+                <div className="text-center">
+                  <div className="font-medium">Current Period & Week</div>
+                  <div className="text-sm text-muted-foreground">
+                    Period {periodWeek.period}, Week {periodWeek.week}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {periodWeek.date}
+                  </div>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
         </div>
       </TooltipProvider>
+
+      
     </div>
   );
 };

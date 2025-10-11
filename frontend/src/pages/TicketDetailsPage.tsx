@@ -88,6 +88,9 @@ const TicketDetailsPage: React.FC = () => {
   const [actionNumber, setActionNumber] = useState("");
   const [actionExtraId, setActionExtraId] = useState("");
   const [acting, setActing] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteComment, setDeleteComment] = useState("");
+  const [deleting, setDeleting] = useState(false);
   
   // Plan action specific state
   const [scheduleStart, setScheduleStart] = useState("");
@@ -393,6 +396,11 @@ const TicketDetailsPage: React.FC = () => {
             ? `${ticket.machine_code}${ticket.machine_number ? `-${ticket.machine_number}` : ""}`
             : undefined),
         },
+        ...(ticket.equipment_name ? [{
+          label: "Equipment",
+          code: ticket.equipment_code,
+          value: ticket.equipment_name
+        }] : []),
       ].filter((item) => Boolean(item.code))
     : [];
 
@@ -501,6 +509,20 @@ const TicketDetailsPage: React.FC = () => {
       setActualStartAtEdit("");
     }
     setActionOpen(true);
+  };
+
+  const performDelete = async () => {
+    if (!ticket || !deleteComment.trim()) return;
+    setDeleting(true);
+    try {
+      await ticketService.deleteTicket(ticket.id, deleteComment.trim());
+      // Navigate back after successful deletion
+      navigate(getBackNavigation());
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to delete ticket");
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const performAction = async () => {
@@ -737,6 +759,19 @@ const TicketDetailsPage: React.FC = () => {
                   {t('ticket.reassign')}
                 </Button>
               )}
+            {/* Delete button - L3+ users can delete tickets */}
+            {isL3Plus && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setDeleteComment("");
+                  setDeleteOpen(true);
+                }}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('ticket.delete')}
+              </Button>
+            )}
           </div>
         }
       />
@@ -1085,6 +1120,17 @@ const TicketDetailsPage: React.FC = () => {
                   </p>
                   <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
                     {ticket.pu_name}
+                  </p>
+                </div>
+              )}
+
+              {ticket.cedar_wocode && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    CEDAR WO
+                  </p>
+                  <p className="mt-1 font-mono text-sm text-gray-900 dark:text-gray-100">
+                    {ticket.cedar_wocode}
                   </p>
                 </div>
               )}
@@ -1873,6 +1919,49 @@ const TicketDetailsPage: React.FC = () => {
                 }
               >
                 {acting ? t('ticket.working') : t('common.confirm')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Modal */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent className="max-w-lg">
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-red-600">
+              {t('ticket.deleteTicket')}
+            </h3>
+            <div className="space-y-2">
+              <Label>{t('ticket.deleteReason')}</Label>
+              <Textarea
+                rows={3}
+                value={deleteComment}
+                onChange={(e) => setDeleteComment(e.target.value)}
+                placeholder={t('ticket.deleteReasonPlaceholder')}
+                required
+              />
+              {!deleteComment.trim() && (
+                <p className="text-xs text-red-500">{t('ticket.deleteReasonRequired')}</p>
+              )}
+            </div>
+            <div className="text-sm text-gray-600">
+              {t('ticket.deleteWarning')}
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteOpen(false)}
+                disabled={deleting}
+              >
+                {t('common.cancel')}
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={performDelete}
+                disabled={deleting || !deleteComment.trim()}
+              >
+                {deleting ? t('ticket.deleting') : t('ticket.confirmDelete')}
               </Button>
             </div>
           </div>

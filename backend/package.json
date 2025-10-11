@@ -5,7 +5,7 @@
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",
-    "dev": "cross-env NODE_ENV=development nodemon src/app.js",
+    "dev": "nodemon src/app.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "validate-api": "node scripts/validate-openapi.js",
     "docs": "npm run validate-api && echo \"API docs available at http://localhost:3001/api-docs\"",

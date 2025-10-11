@@ -18,8 +18,8 @@ const getUserPersonMapping = async (pool, userId) => {
         u.LevelReport,
         u.StoreRoom,
         u.DBNo,
-        u.LineID,
-        u.IsActive,
+        ue.LineID,
+        ue.IsActive,
         p.PERSONNO,
         p.PERSON_NAME,
         p.EMAIL,
@@ -76,6 +76,7 @@ const getUserPersonMapping = async (pool, userId) => {
       lineId: user.LineID || null,
       groupNo: user.GroupNo || null,
       levelReport: user.LevelReport || null,
+      permissionLevel: user.LevelReport || null,
       storeRoom: user.StoreRoom || null,
       dbNo: user.DBNo || null
     };
@@ -135,119 +136,122 @@ exports.getWorkRequests = async (req, res) => {
     }
 
     // Main query with joins
+    // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
     const query = `
-      SELECT 
-        wr.WRNO,
-        wr.WRCODE,
-        wr.WRDATE,
-        wr.WRTIME,
-        wr.WRDESC,
-        wr.REQUESTERNAME,
-        wr.REQ_PHONE,
-        wr.REQ_Email,
-        wr.REMARK,
-        wr.DATE_REQ,
-        wr.Time_REQ,
-        wr.CREATEDATE,
-        wr.UPDATEDATE,
-        wr.Note,
-        wr.BudgetCost,
-        
-        -- Status information
-        ws.WRSTATUSCODE,
-        ws.WRSTATUSNAME,
-        wr.WFStatusCode,
-        
-        -- Urgency information
-        wu.WRURGENTCODE,
-        wu.WRURGENTNAME,
-        
-        -- Request Type information
-        wrt.RequestTypeCode,
-        wrt.RequestTypeName,
-        
-        -- Work Request Type information
-        wt.WRTypeCode,
-        wt.WRTypeName,
-        
-        -- Equipment/Asset information
-        eq.EQCODE,
-        eq.EQNAME,
-        
-        -- Production Unit information
-        pu.PUCODE,
-        pu.PUNAME,
-        
-        -- Department information
-        dept_req.DEPTCODE as REQ_DEPTCODE,
-        dept_req.DEPTNAME as REQ_DEPTNAME,
-        dept_rec.DEPTCODE as REC_DEPTCODE,
-        dept_rec.DEPTNAME as REC_DEPTNAME,
-        
-        -- Site information
-        site.SITECODE,
-        site.SITENAME,
-        
-        -- Safety flags
-        wr.HotWork,
-        wr.ConfineSpace,
-        wr.WorkAtHeight,
-        wr.LockOutTagOut,
-        wr.FlagSafety,
-        wr.FlagEnvironment,
-        
-        -- Approval information
-        wr.FLAGAPPROVE,
-        wr.APPROVEDATE,
-        wr.APPROVETIME,
-        wr.APPROVEBY,
-        wr.FLAGAPPROVEM,
-        wr.APPROVEDATEM,
-        wr.APPROVETIMEM,
-        wr.APPROVEBYM,
-        wr.FLAGAPPROVEC,
-        wr.APPROVEDATEC,
-        wr.APPROVETIMEC,
-        wr.APPROVEBYC,
-        
-        -- Schedule information
-        wr.SCH_START_D,
-        wr.SCH_START_T,
-        wr.SCH_FINISH_D,
-        wr.SCH_FINISH_T,
-        wr.SCH_DURATION,
-        
-        -- Downtime information
-        wr.DT_Start_D,
-        wr.DT_Start_T,
-        wr.DT_Finish_D,
-        wr.DT_Finish_T,
-        wr.DT_Duration,
-        
-        -- Related work order
-        wr.WONO,
-        
-        -- Meter reading
-        wr.MeterNo,
-        wr.MeterRead,
-        
-        -- Images
-        wr.IMG
-        
-      FROM WR wr
-      LEFT JOIN WRStatus ws ON wr.WRSTATUSNO = ws.WRSTATUSNO
-      LEFT JOIN WRUrgent wu ON wr.WRURGENTNO = wu.WRURGENTNO
-      LEFT JOIN WRRequestType wrt ON wr.RequestTypeNo = wrt.RequestTypeNo
-      LEFT JOIN WRType wt ON wr.WOTYPENO = wt.WRTypeNo
-      LEFT JOIN EQ eq ON wr.EQNO = eq.EQNO
-      LEFT JOIN PU pu ON wr.PUNO = pu.PUNO
-      LEFT JOIN Dept dept_req ON wr.DEPT_REQ = dept_req.DEPTNO
-      LEFT JOIN Dept dept_rec ON wr.DEPT_REC = dept_rec.DEPTNO
-      LEFT JOIN Site site ON wr.SiteNo = site.SiteNo
-      ${whereClause}
-      ORDER BY wr.${sortBy} ${sortOrder}
-      OFFSET ${offset} ROWS
-      FETCH NEXT ${limit} ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          wr.WRNO,
+          wr.WRCODE,
+          wr.WRDATE,
+          wr.WRTIME,
+          wr.WRDESC,
+          wr.REQUESTERNAME,
+          wr.REQ_PHONE,
+          wr.REQ_Email,
+          wr.REMARK,
+          wr.DATE_REQ,
+          wr.Time_REQ,
+          wr.CREATEDATE,
+          wr.UPDATEDATE,
+          wr.Note,
+          wr.BudgetCost,
+          
+          -- Status information
+          ws.WRSTATUSCODE,
+          ws.WRSTATUSNAME,
+          wr.WFStatusCode,
+          
+          -- Urgency information
+          wu.WRURGENTCODE,
+          wu.WRURGENTNAME,
+          
+          -- Request Type information
+          wrt.RequestTypeCode,
+          wrt.RequestTypeName,
+          
+          -- Work Request Type information
+          wt.WRTypeCode,
+          wt.WRTypeName,
+          
+          -- Equipment/Asset information
+          eq.EQCODE,
+          eq.EQNAME,
+          
+          -- Production Unit information
+          pu.PUCODE,
+          pu.PUNAME,
+          
+          -- Department information
+          dept_req.DEPTCODE as REQ_DEPTCODE,
+          dept_req.DEPTNAME as REQ_DEPTNAME,
+          dept_rec.DEPTCODE as REC_DEPTCODE,
+          dept_rec.DEPTNAME as REC_DEPTNAME,
+          
+          -- Site information
+          site.SITECODE,
+          site.SITENAME,
+          
+          -- Safety flags
+          wr.HotWork,
+          wr.ConfineSpace,
+          wr.WorkAtHeight,
+          wr.LockOutTagOut,
+          wr.FlagSafety,
+          wr.FlagEnvironment,
+          
+          -- Approval information
+          wr.FLAGAPPROVE,
+          wr.APPROVEDATE,
+          wr.APPROVETIME,
+          wr.APPROVEBY,
+          wr.FLAGAPPROVEM,
+          wr.APPROVEDATEM,
+          wr.APPROVETIMEM,
+          wr.APPROVEBYM,
+          wr.FLAGAPPROVEC,
+          wr.APPROVEDATEC,
+          wr.APPROVETIMEC,
+          wr.APPROVEBYC,
+          
+          -- Schedule information
+          wr.SCH_START_D,
+          wr.SCH_START_T,
+          wr.SCH_FINISH_D,
+          wr.SCH_FINISH_T,
+          wr.SCH_DURATION,
+          
+          -- Downtime information
+          wr.DT_Start_D,
+          wr.DT_Start_T,
+          wr.DT_Finish_D,
+          wr.DT_Finish_T,
+          wr.DT_Duration,
+          
+          -- Related work order
+          wr.WONO,
+          
+          -- Meter reading
+          wr.MeterNo,
+          wr.MeterRead,
+          
+          -- Images
+          wr.IMG,
+          ROW_NUMBER() OVER (ORDER BY wr.${sortBy} ${sortOrder}) as row_num
+          
+        FROM WR wr
+        LEFT JOIN WRStatus ws ON wr.WRSTATUSNO = ws.WRSTATUSNO
+        LEFT JOIN WRUrgent wu ON wr.WRURGENTNO = wu.WRURGENTNO
+        LEFT JOIN WRRequestType wrt ON wr.RequestTypeNo = wrt.RequestTypeNo
+        LEFT JOIN WRType wt ON wr.WOTYPENO = wt.WRTypeNo
+        LEFT JOIN EQ eq ON wr.EQNO = eq.EQNO
+        LEFT JOIN PU pu ON wr.PUNO = pu.PUNO
+        LEFT JOIN Dept dept_req ON wr.DEPT_REQ = dept_req.DEPTNO
+        LEFT JOIN Dept dept_rec ON wr.DEPT_REC = dept_rec.DEPTNO
+        LEFT JOIN Site site ON wr.SiteNo = site.SiteNo
+        ${whereClause}
+      ) AS paginated_results
+      WHERE row_num > ${offset} AND row_num <= ${offset} + ${limit}
     `;
 
     // Count query for pagination
@@ -1581,34 +1585,36 @@ exports.getMyWorkflowTasks = async (req, res) => {
     }
 
     const query = `
-      SELECT 
-        wft.DOCNO as WRNO,
-        wft.DOCCODE as WRCODE,
-        wft.Subject,
-        wft.Event_Desc,
-        wft.Event_Date,
-        wft.Event_Time,
-        wft.Send_for,
-        wft.Action_Flag,
-        wft.Approved_Flag,
-        wft.Readed_Flag,
-        wr.WRDESC,
-        wr.REQUESTERNAME,
-        wr.DATE_REQ,
-        wr.WRSTATUSNO,
-        ws.WRSTATUSNAME,
-        wu.WRURGENTNAME,
-        wu.WRURGENTCODE,
-        dept.DEPTNAME as REQ_DEPT_NAME
-      FROM WFTrackeds wft
-      LEFT JOIN WR wr ON wft.DOCNO = wr.WRNO
-      LEFT JOIN WRStatus ws ON wr.WRSTATUSNO = ws.WRSTATUSNO
-      LEFT JOIN WRUrgent wu ON wr.WRURGENTNO = wu.WRURGENTNO
-      LEFT JOIN Dept dept ON wr.DEPT_REQ = dept.DEPTNO
-      ${whereClause}
-      ORDER BY wft.Event_Date DESC, wft.Event_Time DESC
-      OFFSET ${offset} ROWS
-      FETCH NEXT ${limit} ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          wft.DOCNO as WRNO,
+          wft.DOCCODE as WRCODE,
+          wft.Subject,
+          wft.Event_Desc,
+          wft.Event_Date,
+          wft.Event_Time,
+          wft.Send_for,
+          wft.Action_Flag,
+          wft.Approved_Flag,
+          wft.Readed_Flag,
+          wr.WRDESC,
+          wr.REQUESTERNAME,
+          wr.DATE_REQ,
+          wr.WRSTATUSNO,
+          ws.WRSTATUSNAME,
+          wu.WRURGENTNAME,
+          wu.WRURGENTCODE,
+          dept.DEPTNAME as REQ_DEPT_NAME,
+          ROW_NUMBER() OVER (ORDER BY wft.Event_Date DESC, wft.Event_Time DESC) as row_num
+        FROM WFTrackeds wft
+        LEFT JOIN WR wr ON wft.DOCNO = wr.WRNO
+        LEFT JOIN WRStatus ws ON wr.WRSTATUSNO = ws.WRSTATUSNO
+        LEFT JOIN WRUrgent wu ON wr.WRURGENTNO = wu.WRURGENTNO
+        LEFT JOIN Dept dept ON wr.DEPT_REQ = dept.DEPTNO
+        ${whereClause}
+      ) AS paginated_results
+      WHERE row_num > ${offset} AND row_num <= ${offset} + ${limit}
     `;
 
     const countQuery = `

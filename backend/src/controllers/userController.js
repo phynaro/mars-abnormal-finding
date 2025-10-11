@@ -80,7 +80,7 @@ const userController = {
     }
   },
 
-  // Upload avatar for current user; stores path in _secUsers.AvatarUrl
+  // Upload avatar for current user; stores path in UserExtension.AvatarUrl
   uploadAvatar: async (req, res) => {
     try {
       const userId = req.user.userId; // Use userId from JWT
@@ -174,12 +174,9 @@ const userController = {
             p.EMAIL,
             p.PHONE,
             p.TITLE,
-            u.IsActive
+            1 as IsActive
           FROM Person p
-          INNER JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-          LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
-          WHERE p.FLAGDEL != 'Y' 
-            AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
+          WHERE p.FLAGDEL != 'Y'
           ORDER BY p.PERSON_NAME
         `);
 

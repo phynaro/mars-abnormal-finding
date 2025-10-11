@@ -122,6 +122,7 @@ const authenticateToken = async (req, res, next) => {
         groupCode: user.UserGCode,
         groupName: user.UserGName,
         levelReport: user.LevelReport,
+        permissionLevel: user.LevelReport,
         storeRoom: user.StoreRoom,
         dbNo: user.DBNo,
         lineId: user.LineID,

@@ -20,7 +20,11 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
-    allowedHosts: ['localhost', '127.0.0.1','987d8f0d6c37.ngrok-free.app'],
+    allowedHosts: ['localhost', '127.0.0.1', '192.168.0.241', '987d8f0d6c37.ngrok-free.app'],
+    hmr: {
+      port: 3000,
+      host: '192.168.0.241'
+    }
   },
   build: {
     // Ensure proper handling of canvas and blob operations in production

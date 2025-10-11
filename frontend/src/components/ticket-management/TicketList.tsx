@@ -680,7 +680,11 @@ export const TicketList: React.FC = () => {
             {/* Mobile Cards */}
             <div className="block lg:hidden space-y-4">
               {tickets.map((ticket) => (
-                <div key={ticket.id} className="border rounded-lg p-4 bg-card">
+                <div 
+                  key={ticket.id} 
+                  className="border rounded-lg p-4 bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
+                  onClick={() => handleViewTicket(ticket)}
+                >
                   <div className="flex justify-between items-start">
                     <div>
                       <div className="text-sm text-muted-foreground">
@@ -728,27 +732,8 @@ export const TicketList: React.FC = () => {
                       </div>
                     )}
                   </div>
-                  <div className="mt-4 flex justify-between items-center text-xs text-muted-foreground">
+                  <div className="mt-4 text-xs text-muted-foreground">
                     <span>{t('ticket.created')} {formatDate(ticket.created_at)}</span>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleViewTicket(ticket)}
-                      >
-                        {t('ticket.view')}
-                      </Button>
-                      {isL3User() && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-red-600"
-                          onClick={() => handleDeleteTicket(ticket.id)}
-                        >
-                          {t('common.delete')}
-                        </Button>
-                      )}
-                    </div>
                   </div>
                 </div>
               ))}
@@ -768,7 +753,6 @@ export const TicketList: React.FC = () => {
                     <th className="px-4 py-2">{t('ticket.createdBy')}</th>
                     <th className="px-4 py-2">{t('ticket.assignedTo')}</th>
                     <th className="px-4 py-2">{t('ticket.created')}</th>
-                    {isL3User() && <th className="px-4 py-2">{t('ticket.actions')}</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -842,24 +826,6 @@ export const TicketList: React.FC = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
                         {formatDate(ticket.created_at)}
                       </td>
-                      {isL3User() && (
-                        <td className="px-4 py-2">
-                          <div
-                            className="flex gap-2"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteTicket(ticket.id)}
-                              title={t('common.delete')}
-                              className="text-red-600 hover:text-red-700"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </td>
-                      )}
                     </tr>
                   ))}
                 </tbody>

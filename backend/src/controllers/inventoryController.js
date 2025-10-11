@@ -49,92 +49,95 @@ exports.getInventoryCatalog = async (req, res) => {
     }
 
     // Updated query to use current Iv_Store instead of historical IV_Store_Bal
+    // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
     const query = `
-      SELECT 
-        iv.PARTNO,
-        iv.PARTCODE,
-        iv.PARTNAME,
-        iv.PARTDESC,
-        iv.IVGROUPNO,
-        iv.IVTYPENO,
-        iv.IVUNITNO,
-        iv.PREFER_VENDOR as VENDORNO,
-        iv.Category,
-        iv.FlagActive,
-        iv.CREATEDATE,
-        iv.UPDATEDATE,
-        
-        -- Group information
-        ig.IVGROUPCODE,
-        ig.IVGROUPNAME,
-        
-        -- Type information
-        it.IVTYPECODE,
-        it.IVTYPENAME,
-        
-        -- Unit information
-        iu.IVUNITCODE,
-        iu.IVUNITNAME,
-        
-        -- Vendor information
-        v.VENDORCODE,
-        v.VENDORNAME,
-        
-        -- Current stock balance from Iv_Store (current data)
-        ISNULL(curr.QOnhand, 0) as QTY_ONHAND,
-        ISNULL(curr.QReserve, 0) as QTY_RESERVED,
-        ISNULL((curr.QOnhand - curr.QReserve), 0) as QTY_AVAILABLE,
-        ISNULL(curr.Amount, 0) as VALUE_ONHAND,
-        
-        -- Store information
-        s.STORECODE,
-        s.STORENAME,
-        
-        -- Stock control from current store data
-        curr.QMin as MINSTOCK,
-        curr.QMax as MAXSTOCK,
-        curr.QReOrder as REORDERPOINT,
-        curr.QEOQ as REORDERQTY,
-        curr.LeadTimeEOQ as LEADTIME,
-        curr.UnitCost,
-        curr.UnitCost_Avg as AVGCOST,
-        curr.UnitCost_STD as STDCOST,
-        curr.UnitCost_LastPO as LASTCOST,
-        curr.BinLocation,
-        curr.Shelf
-        
-      FROM Iv_Catalog iv
-      LEFT JOIN IVGroup ig ON iv.IVGROUPNO = ig.IVGROUPNO
-      LEFT JOIN IVType it ON iv.IVTYPENO = it.IVTYPENO
-      LEFT JOIN IVUnit iu ON iv.IVUNITNO = iu.IVUNITNO
-      LEFT JOIN Vendor v ON iv.PREFER_VENDOR = v.VENDORNO
-      LEFT JOIN (
+      SELECT *
+      FROM (
         SELECT 
-          PartNo,
-          StoreNo,
-          QOnhand,
-          QReserve,
-          Amount,
-          QMin,
-          QMax,
-          QReOrder,
-          QEOQ,
-          LeadTimeEOQ,
-          UnitCost,
-          UnitCost_Avg,
-          UnitCost_STD,
-          UnitCost_LastPO,
-          BinLocation,
-          Shelf,
-          ROW_NUMBER() OVER (PARTITION BY PartNo ORDER BY QOnhand DESC) as rn
-        FROM Iv_Store
-        WHERE FlagDel IS NULL OR FlagDel != 'Y'
-      ) curr ON iv.PARTNO = curr.PartNo AND curr.rn = 1
-      LEFT JOIN Store s ON curr.StoreNo = s.STORENO
-      ${whereClause}
-      ORDER BY iv.${sortBy} ${sortOrder}
-      OFFSET @offset ROWS
-      FETCH NEXT @limit ROWS ONLY
+          iv.PARTNO,
+          iv.PARTCODE,
+          iv.PARTNAME,
+          iv.PARTDESC,
+          iv.IVGROUPNO,
+          iv.IVTYPENO,
+          iv.IVUNITNO,
+          iv.PREFER_VENDOR as VENDORNO,
+          iv.Category,
+          iv.FlagActive,
+          iv.CREATEDATE,
+          iv.UPDATEDATE,
+          
+          -- Group information
+          ig.IVGROUPCODE,
+          ig.IVGROUPNAME,
+          
+          -- Type information
+          it.IVTYPECODE,
+          it.IVTYPENAME,
+          
+          -- Unit information
+          iu.IVUNITCODE,
+          iu.IVUNITNAME,
+          
+          -- Vendor information
+          v.VENDORCODE,
+          v.VENDORNAME,
+          
+          -- Current stock balance from Iv_Store (current data)
+          ISNULL(curr.QOnhand, 0) as QTY_ONHAND,
+          ISNULL(curr.QReserve, 0) as QTY_RESERVED,
+          ISNULL((curr.QOnhand - curr.QReserve), 0) as QTY_AVAILABLE,
+          ISNULL(curr.Amount, 0) as VALUE_ONHAND,
+          
+          -- Store information
+          s.STORECODE,
+          s.STORENAME,
+          
+          -- Stock control from current store data
+          curr.QMin as MINSTOCK,
+          curr.QMax as MAXSTOCK,
+          curr.QReOrder as REORDERPOINT,
+          curr.QEOQ as REORDERQTY,
+          curr.LeadTimeEOQ as LEADTIME,
+          curr.UnitCost,
+          curr.UnitCost_Avg as AVGCOST,
+          curr.UnitCost_STD as STDCOST,
+          curr.UnitCost_LastPO as LASTCOST,
+          curr.BinLocation,
+          curr.Shelf,
+          ROW_NUMBER() OVER (ORDER BY iv.${sortBy} ${sortOrder}) as row_num
+          
+        FROM Iv_Catalog iv
+        LEFT JOIN IVGroup ig ON iv.IVGROUPNO = ig.IVGROUPNO
+        LEFT JOIN IVType it ON iv.IVTYPENO = it.IVTYPENO
+        LEFT JOIN IVUnit iu ON iv.IVUNITNO = iu.IVUNITNO
+        LEFT JOIN Vendor v ON iv.PREFER_VENDOR = v.VENDORNO
+        LEFT JOIN (
+          SELECT 
+            PartNo,
+            StoreNo,
+            QOnhand,
+            QReserve,
+            Amount,
+            QMin,
+            QMax,
+            QReOrder,
+            QEOQ,
+            LeadTimeEOQ,
+            UnitCost,
+            UnitCost_Avg,
+            UnitCost_STD,
+            UnitCost_LastPO,
+            BinLocation,
+            Shelf,
+            ROW_NUMBER() OVER (PARTITION BY PartNo ORDER BY QOnhand DESC) as rn
+          FROM Iv_Store
+          WHERE FlagDel IS NULL OR FlagDel != 'Y'
+        ) curr ON iv.PARTNO = curr.PartNo AND curr.rn = 1
+        LEFT JOIN Store s ON curr.StoreNo = s.STORENO
+        ${whereClause}
+      ) AS paginated_results
+      WHERE row_num > @offset AND row_num <= @offset + @limit
     `;
 
     const countQuery = `
@@ -586,21 +589,23 @@ exports.getStores = async (req, res) => {
     }
 
     const query = `
-      SELECT 
-        s.STORENO,
-        s.STORECODE,
-        s.STORENAME,
-        s.CREATEDATE,
-        s.UPDATEDATE,
-        COUNT(bal.PartNo) as TOTAL_ITEMS,
-        SUM(bal.Amount) as TOTAL_VALUE
-      FROM Store s
-      LEFT JOIN IV_Store_Bal bal ON s.STORENO = bal.StoreNo
-      ${whereClause}
-      GROUP BY s.STORENO, s.STORECODE, s.STORENAME, s.CREATEDATE, s.UPDATEDATE
-      ORDER BY s.STORECODE
-      OFFSET ${offset} ROWS
-      FETCH NEXT ${limit} ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          s.STORENO,
+          s.STORECODE,
+          s.STORENAME,
+          s.CREATEDATE,
+          s.UPDATEDATE,
+          COUNT(bal.PartNo) as TOTAL_ITEMS,
+          SUM(bal.Amount) as TOTAL_VALUE,
+          ROW_NUMBER() OVER (ORDER BY s.STORECODE) as row_num
+        FROM Store s
+        LEFT JOIN IV_Store_Bal bal ON s.STORENO = bal.StoreNo
+        ${whereClause}
+        GROUP BY s.STORENO, s.STORECODE, s.STORENAME, s.CREATEDATE, s.UPDATEDATE
+      ) AS paginated_results
+      WHERE row_num > ${offset} AND row_num <= ${offset} + ${limit}
     `;
 
     const countQuery = `
@@ -728,19 +733,21 @@ exports.getStoreInventory = async (req, res) => {
     }
 
     const query = `
-      SELECT 
-        ivs.*,
-        iv.PARTCODE,
-        iv.PARTNAME,
-        iv.PARTDESC,
-        iu.IVUNITCODE
-      FROM Iv_Store ivs
-      LEFT JOIN Iv_Catalog iv ON ivs.PartNo = iv.PARTNO
-      LEFT JOIN IVUnit iu ON iv.IVUNITNO = iu.IVUNITNO
-      ${whereClause}
-      ORDER BY iv.PARTCODE
-      OFFSET @offset ROWS
-      FETCH NEXT @limit ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          ivs.*,
+          iv.PARTCODE,
+          iv.PARTNAME,
+          iv.PARTDESC,
+          iu.IVUNITCODE,
+          ROW_NUMBER() OVER (ORDER BY iv.PARTCODE) as row_num
+        FROM Iv_Store ivs
+        LEFT JOIN Iv_Catalog iv ON ivs.PartNo = iv.PARTNO
+        LEFT JOIN IVUnit iu ON iv.IVUNITNO = iu.IVUNITNO
+        ${whereClause}
+      ) AS paginated_results
+      WHERE row_num > @offset AND row_num <= @offset + @limit
     `;
 
     const countQuery = `
@@ -839,16 +846,18 @@ exports.getVendors = async (req, res) => {
     }
 
     const query = `
-      SELECT 
-        v.*,
-        COUNT(iv.PARTNO) as TOTAL_PARTS
-      FROM Vendor v
-      LEFT JOIN Iv_Catalog iv ON v.VENDORNO = iv.PREFER_VENDOR
-      ${whereClause}
-      GROUP BY v.VENDORNO, v.VENDORCODE, v.VENDORNAME, v.ADDRESS, v.PHONE, v.FAX, v.EMAIL, v.URL, v.FLAGDEL, v.CREATEUSER, v.CREATEDATE, v.UPDATEUSER, v.UPDATEDATE, v.MonetaryNo, v.SiteNo
-      ORDER BY v.VENDORCODE
-      OFFSET ${offset} ROWS
-      FETCH NEXT ${limit} ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          v.*,
+          COUNT(iv.PARTNO) as TOTAL_PARTS,
+          ROW_NUMBER() OVER (ORDER BY v.VENDORCODE) as row_num
+        FROM Vendor v
+        LEFT JOIN Iv_Catalog iv ON v.VENDORNO = iv.PREFER_VENDOR
+        ${whereClause}
+        GROUP BY v.VENDORNO, v.VENDORCODE, v.VENDORNAME, v.ADDRESS, v.PHONE, v.FAX, v.EMAIL, v.URL, v.FLAGDEL, v.CREATEUSER, v.CREATEDATE, v.UPDATEUSER, v.UPDATEDATE, v.MonetaryNo, v.SiteNo
+      ) AS paginated_results
+      WHERE row_num > ${offset} AND row_num <= ${offset} + ${limit}
     `;
 
     const result = await pool.request().query(query);
@@ -1160,20 +1169,22 @@ exports.getHistoricalInventoryData = async (req, res) => {
     }
 
     const query = `
-      SELECT 
-        bal.*,
-        iv.PARTCODE,
-        iv.PARTNAME,
-        iv.PARTDESC,
-        s.STORECODE,
-        s.STORENAME
-      FROM IV_Store_Bal bal
-      LEFT JOIN Iv_Catalog iv ON bal.PartNo = iv.PARTNO
-      LEFT JOIN Store s ON bal.StoreNo = s.STORENO
-      ${whereClause}
-      ORDER BY bal.StoreYear DESC, bal.StoreMonth DESC, iv.PARTCODE
-      OFFSET @offset ROWS
-      FETCH NEXT @limit ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          bal.*,
+          iv.PARTCODE,
+          iv.PARTNAME,
+          iv.PARTDESC,
+          s.STORECODE,
+          s.STORENAME,
+          ROW_NUMBER() OVER (ORDER BY bal.StoreYear DESC, bal.StoreMonth DESC, iv.PARTCODE) as row_num
+        FROM IV_Store_Bal bal
+        LEFT JOIN Iv_Catalog iv ON bal.PartNo = iv.PARTNO
+        LEFT JOIN Store s ON bal.StoreNo = s.STORENO
+        ${whereClause}
+      ) AS paginated_results
+      WHERE row_num > @offset AND row_num <= @offset + @limit
     `;
 
     const countQuery = `

@@ -21,12 +21,6 @@ const DashboardPage: React.FC = () => {
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
   const areas = ['Line A', 'Line B', 'Warehouse', 'Utilities'];
 
-  // Simple hash util for stable mock numbers
-  function hashCode(s: string) {
-    let h = 0;
-    for (let i = 0; i < s.length; i++) h = Math.imul(31, h) + s.charCodeAt(i) | 0;
-    return Math.abs(h);
-  }
 
   function getWeekOfYear(date: Date) {
     const target: any = new Date(date.valueOf());
@@ -40,54 +34,36 @@ const DashboardPage: React.FC = () => {
   // Generate weekly periods for the year up to 52
   const periods = useMemo(() => Array.from({ length: 52 }, (_, i) => `P${i + 1}`), []);
 
-  // Mock bar data: open vs closed per period, influenced by year and area
   const barData = useMemo(() => {
-    return periods.map(p => {
-      const base = hashCode(`${year}-${area}-${p}`) % 20;
-      const open = base + (hashCode(`o-${p}`) % 8);
-      const closed = Math.max(0, open - (hashCode(`c-${p}`) % 5));
-      return { period: p, open, closed };
-    });
-  }, [year, area, periods]);
+    return periods.map(p => ({
+      period: p,
+      open: 0,
+      closed: 0,
+    }));
+  }, [periods]);
 
-  // KPI mock calculations
+  // KPI calculations - using real data
   const thisMonth = now.getMonth();
   const lastMonth = (thisMonth + 11) % 12;
-  const totalThisMonth = (hashCode(`${year}-${thisMonth}-tt`) % 180) + 20;
-  const totalLastMonth = (hashCode(`${year}-${lastMonth}-tt`) % 180) + 20;
-  const openActive = (hashCode(`${year}-${thisMonth}-open`) % 60) + 5;
-  const closedThisMonth = Math.max(0, totalThisMonth - openActive);
-  const closedLastMonth = Math.max(0, totalLastMonth - (hashCode(`${year}-${lastMonth}-open`) % 60));
-  const downAvoidHours = ((hashCode(`${year}-avoid`) % 300) + 80); // hours
+  const totalThisMonth = 0;
+  const totalLastMonth = 0;
+  const openActive = 0;
+  const closedThisMonth = 0;
+  const closedLastMonth = 0;
+  const downAvoidHours = 0;
   const pct = (a: number, b: number) => (b === 0 ? 0 : Math.round(((a - b) / b) * 100));
 
-  // Donut data: ticket distribution by area (filtered by year + optional status/risk)
+  // Donut data: ticket distribution by area
   const donutData = useMemo(() => {
-    const statusBias = ticketStatus === 'all' ? 1 : ticketStatus === 'open' ? 1.2 : 0.9;
-    const riskBias = riskLevel === 'all' ? 1 : riskLevel === 'high' ? 1.3 : riskLevel === 'medium' ? 1.0 : 0.8;
-    return areas.map(a => {
-      const v = Math.round(((hashCode(`${year}-${a}-dist`) % 60) + 10) * statusBias * riskBias);
-      return { name: a, value: v };
-    });
-  }, [areas, year, ticketStatus, riskLevel]);
+    return areas.map(a => ({
+      name: a,
+      value: 0
+    }));
+  }, [areas]);
 
   // Mini table data based on selected donut segment
   const selectedAreaTickets = useMemo(() => {
     if (!selectedArea) return [] as Array<{ machine: string; title: string; images: string[]; risk: 'high'|'medium'|'low'; status: 'open'|'closed' }>; 
-    const base = hashCode(`${year}-${selectedArea}-${ticketStatus}-${riskLevel}`) % 6 + 4;
-    const mkImg = (color: string) => `data:image/svg+xml;utf8,` + encodeURIComponent(`<svg xmlns='http://www.w3.org/2000/svg' width='120' height='80'><rect width='120' height='80' fill='${color}'/><text x='8' y='24' font-size='12' fill='white'>${selectedArea}</text></svg>`);
-    const all = Array.from({ length: base }).map((_, i) => {
-      const risk: 'high'|'medium'|'low' = (['high','medium','low'])[i % 3] as any;
-      const status: 'open'|'closed' = (i % 2 === 0 ? 'open' : 'closed');
-      return {
-        machine: `${selectedArea} - Machine ${String.fromCharCode(65 + (i % 6))}`,
-        title: ['Vibration abnormal', 'Overheat warning', 'Oil leakage', 'Noise detected', 'Sensor fault'][i % 5],
-        images: [mkImg('#64748b'), mkImg('#334155')],
-        risk,
-        status,
-      };
-    });
-    return all.filter(row => (ticketStatus === 'all' || row.status === ticketStatus) && (riskLevel === 'all' || row.risk === riskLevel));
   }, [selectedArea, year, ticketStatus, riskLevel]);
 
   // Reset row selection when area changes or list changes
@@ -96,14 +72,13 @@ const DashboardPage: React.FC = () => {
   }, [selectedArea, selectedAreaTickets.length]);
 
   // Horizontal bar for assignees by period
-  const assignees = ['Alice', 'Bob', 'Charlie', 'Diana', 'Evan', 'Faye'];
+  const assignees: string[] = [];
   const assigneeData = useMemo(() => {
-    const p = selectedPeriod || `P${getWeekOfYear(now)}`;
     return assignees.map(u => ({
       user: u,
-      count: (hashCode(`${year}-${p}-${u}`) % 18) + 1
-    })).sort((a, b) => b.count - a.count);
-  }, [selectedPeriod, year]);
+      count: 0
+    }));
+  }, [assignees]);
 
   // Colors aligned to theme (muted minimal palette)
   const colors = {

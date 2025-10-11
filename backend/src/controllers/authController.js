@@ -48,6 +48,22 @@ async function getUserPermissions(userId, groupNo) {
       WHERE UserID = @userId
     `);
 
+  // Always add TKT permissions for all authenticated users
+  const tktPermissions = {
+    FormID: 'TKT',
+    HaveView: 'T',
+    HaveSave: 'T',
+    HaveDelete: 'T'
+  };
+
+  // Check if TKT already exists in group privileges
+  const hasTktInGroup = groupPrivileges.recordset.some(priv => priv.FormID === 'TKT');
+  
+  // Add TKT permissions if not already present
+  if (!hasTktInGroup) {
+    groupPrivileges.recordset.push(tktPermissions);
+  }
+
   return {
     groupPrivileges: groupPrivileges.recordset,
     userPermissions: userPermissions.recordset
@@ -237,6 +253,7 @@ const login = async (req, res) => {
         groupCode: user.UserGCode,
         groupName: user.UserGName,
         levelReport: user.LevelReport,
+        permissionLevel: user.LevelReport,
         storeRoom: user.StoreRoom,
         dbNo: user.DBNo,
         lineId: user.LineID,
@@ -467,6 +484,7 @@ const getProfile = async (req, res) => {
         groupCode: user.UserGCode,
         groupName: user.UserGName,
         levelReport: user.LevelReport,
+        permissionLevel: user.LevelReport,
         storeRoom: user.StoreRoom,
         dbNo: user.DBNo,
         lineId: user.LineID,

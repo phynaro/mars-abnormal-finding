@@ -2,13 +2,14 @@ import React from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
 import { useLanguage } from '../../contexts/LanguageContext';
-import { 
-  Sun, 
-  Moon, 
-  Globe, 
-  User, 
-  LogOut, 
-  Settings, 
+import { usePeriodWeek } from '../../hooks/usePeriodWeek';
+import {
+  Sun,
+  Moon,
+  Globe,
+  User,
+  LogOut,
+  Settings,
   Bell,
   Menu
 } from 'lucide-react';
@@ -30,14 +31,15 @@ interface TopNavbarProps {
   isMobile?: boolean;
 }
 
-const TopNavbar: React.FC<TopNavbarProps> = ({ 
-  onMobileMenuToggle, 
-  isMobile = false 
+const TopNavbar: React.FC<TopNavbarProps> = ({
+  onMobileMenuToggle,
+  isMobile = false
 }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();
+  const { periodWeek } = usePeriodWeek();
 
   const handleLogout = async () => {
     try {
@@ -63,13 +65,15 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 py-3">
       <div className="flex items-center justify-between">
-        {/* Left side - Logo */}
-        <div className="flex items-center">
-          <img 
-            src="/MARS-icon.png" 
-            alt="MARS Logo" 
-            className="h-8 w-8"
+        {/* Left side - Logo and Period/Week */}
+        <div className="flex items-center gap-4">
+          <img
+            src="/MARS-icon.png"
+            alt="MARS Logo"
+            className="h-8 w-8 cursor-pointer hover:opacity-80 transition-opacity"
+            onClick={() => navigate('/home')}
           />
+
         </div>
 
         {/* Right side - Actions and User Menu */}
@@ -78,6 +82,18 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
           {/* <Button variant="ghost" size="icon">
             <Bell className="h-5 w-5" />
           </Button> */}
+
+          {/* Period/Week Display */}
+          {periodWeek && (
+            <div className="flex items-center gap-2 px-3 py-1">
+              <span className="text-sm font-medium text-primary">
+                {periodWeek.display}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                {periodWeek.year}
+              </span>
+            </div>
+          )}
 
           {/* Language Selector */}
           <DropdownMenu>

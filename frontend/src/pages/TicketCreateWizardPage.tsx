@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ticketService, type CreateTicketRequest } from '@/services/ticketService';
+import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/ui/file-upload';
@@ -58,6 +58,7 @@ const TicketCreateWizardPage: React.FC = () => {
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const skipNextSearchRef = useRef(false);
 
   // Data state (mirrors CreateTicketRequest with extras)
   const [title, setTitle] = useState('');
@@ -66,6 +67,12 @@ const TicketCreateWizardPage: React.FC = () => {
   const [puno, setPuno] = useState<number | undefined>(undefined);
   const [severity, setSeverity] = useState<'low'|'medium'|'high'|'critical'>('medium');
   const [priority, setPriority] = useState<'low'|'normal'|'high'|'urgent'>('normal');
+
+  // Equipment selection state
+  const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
+  const [equipmentLoading, setEquipmentLoading] = useState(false);
+  const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+  const [redirectTicketId, setRedirectTicketId] = useState<number | null>(null);
 
   // Images
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
@@ -113,6 +120,12 @@ const TicketCreateWizardPage: React.FC = () => {
 
   // Improved search with better debouncing and state management
   useEffect(() => {
+    // Skip search if this is a programmatic update (e.g., after machine selection)
+    if (skipNextSearchRef.current) {
+      skipNextSearchRef.current = false;
+      return;
+    }
+
     // Clear previous timeout
     if (searchTimeoutRef.current) {
       clearTimeout(searchTimeoutRef.current);
@@ -164,17 +177,62 @@ const TicketCreateWizardPage: React.FC = () => {
     };
   }, [machineSearchDropdownOpen]);
 
+  // Load equipment when machine is selected
+  useEffect(() => {
+    if (selectedMachine) {
+      loadEquipment();
+    } else {
+      setEquipmentList([]);
+      setSelectedEquipment(null);
+    }
+  }, [selectedMachine]);
+
+  // Load equipment function
+  const loadEquipment = async () => {
+    if (!selectedMachine) {
+      setEquipmentList([]);
+      return;
+    }
+
+    try {
+      setEquipmentLoading(true);
+      const response = await ticketService.getEquipmentByPUNO(selectedMachine.PUNO);
+      if (response.success) {
+        setEquipmentList(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading equipment:', error);
+      toast({
+        title: t('common.error'),
+        description: 'Failed to load equipment',
+        variant: 'destructive'
+      });
+    } finally {
+      setEquipmentLoading(false);
+    }
+  };
+
   // Machine selection handlers
   const onSelectMachine = (machine: PUCODEResult) => {
     setSelectedMachine(machine);
     setPucode(machine.PUCODE);
     setPuno(machine.PUNO);
+    skipNextSearchRef.current = true;
     setMachineSearchQuery(machine.PUCODE);
     setMachineSearchDropdownOpen(false);
+    
+    // Clear equipment selection when machine changes
+    clearEquipmentSelection();
+    
+    // Blur the input to prevent onFocus from reopening the dropdown
+    if (searchInputRef.current) {
+      searchInputRef.current.blur();
+    }
   };
 
   const clearMachineSelection = () => {
     setSelectedMachine(null);
+    skipNextSearchRef.current = true;
     setMachineSearchQuery('');
     setMachineSearchResults([]);
     setPucode('');
@@ -182,6 +240,30 @@ const TicketCreateWizardPage: React.FC = () => {
     setMachineSearchDropdownOpen(false);
     setIsSearching(false);
     setMachineSearchLoading(false);
+    
+    // Clear equipment selection when machine is cleared
+    clearEquipmentSelection();
+    
+    // Blur the input to prevent onFocus from reopening the dropdown
+    if (searchInputRef.current) {
+      searchInputRef.current.blur();
+    }
+  };
+
+  // Equipment selection handlers
+  const onSelectEquipment = (equipmentId: string) => {
+    if (equipmentId === 'none') {
+      setSelectedEquipment(null);
+    } else {
+      const equipment = equipmentList.find(eq => eq.EQNO.toString() === equipmentId);
+      if (equipment) {
+        setSelectedEquipment(equipment);
+      }
+    }
+  };
+
+  const clearEquipmentSelection = () => {
+    setSelectedEquipment(null);
   };
 
   const canNext = (): boolean => {
@@ -200,6 +282,20 @@ const TicketCreateWizardPage: React.FC = () => {
   const back = () => setCurrentIndex((i) => Math.max(i - 1, 0));
 
   const submittingRef = useRef(false);
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (redirectTicketId !== null) {
+      navigate(`/tickets/${redirectTicketId}`, { replace: true });
+    }
+  }, [redirectTicketId, navigate]);
+
   const submit = async () => {
     if (submittingRef.current) return; // guard against double taps
     submittingRef.current = true;
@@ -210,11 +306,13 @@ const TicketCreateWizardPage: React.FC = () => {
         description: description.trim(),
         pucode: pucode.trim(),
         puno: puno,
+        equipment_id: selectedEquipment?.EQNO,
         severity_level: severity,
         priority,
       };
       const created = await ticketService.createTicket(payload);
       const ticketId = created.data.id;
+      
       if (beforeFiles.length > 0) {
         setImagesUploading(true);
         try { 
@@ -239,12 +337,14 @@ const TicketCreateWizardPage: React.FC = () => {
           // Don't fail the ticket creation if notification fails
         }
       }
-      //toast({ title: t('common.success'), description: t('ticket.ticketCreatedSuccess') });
-      navigate(`/tickets/${ticketId}`);
+      
+      setRedirectTicketId(ticketId);
     } catch (e) {
       toast({ title: t('common.error'), description: e instanceof Error ? e.message : t('ticket.failedToCreateTicket'), variant: 'destructive' });
     } finally {
-      setSubmitting(false);
+      if (isMountedRef.current) {
+        setSubmitting(false);
+      }
       submittingRef.current = false;
     }
   };
@@ -362,6 +462,71 @@ const TicketCreateWizardPage: React.FC = () => {
                       <X className="w-4 h-4" />
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {/* Equipment Selection */}
+              {selectedMachine && equipmentList.length > 0 && (
+                <div className="space-y-3">
+                  <Label htmlFor="equipment-select" className="text-base font-semibold">Equipment (Optional)</Label>
+                  
+                  <Select
+                    value={selectedEquipment?.EQNO.toString() || 'none'}
+                    onValueChange={onSelectEquipment}
+                    disabled={equipmentLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={equipmentLoading ? "Loading equipment..." : "Select equipment..."} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No specific equipment</SelectItem>
+                      {equipmentList.map((equipment) => (
+                        <SelectItem key={equipment.EQNO} value={equipment.EQNO.toString()}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{equipment.EQCODE}</span>
+                            <span className="text-sm text-muted-foreground">{equipment.EQNAME}</span>
+                            {equipment.EQTYPENAME && (
+                              <span className="text-xs text-muted-foreground">Type: {equipment.EQTYPENAME}</span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  {/* Selected Equipment Display */}
+                  {selectedEquipment && (
+                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                            <p className="text-sm font-medium text-blue-800">Selected Equipment</p>
+                          </div>
+                          <p className="text-lg font-mono text-blue-900 mb-1">{selectedEquipment.EQCODE}</p>
+                          <p className="text-sm text-blue-700 mb-2">{selectedEquipment.EQNAME}</p>
+                          {selectedEquipment.EQTYPENAME && (
+                            <div className="text-xs text-blue-600">
+                              Type: {selectedEquipment.EQTYPENAME}
+                            </div>
+                          )}
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={clearEquipmentSelection}
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <X className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  
+                  <p className="text-xs text-gray-500">
+                    Select specific equipment if the issue is related to a particular component
+                  </p>
                 </div>
               )}
               
@@ -489,6 +654,12 @@ const TicketCreateWizardPage: React.FC = () => {
                   <span className="text-gray-500">{t('ticket.machineName')}:</span> 
                   <span className="font-medium">{selectedMachine?.PUDESC || '-'}</span>
                 </div>
+                {equipmentList.length > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Equipment:</span> 
+                    <span className="font-medium">{selectedEquipment ? `${selectedEquipment.EQCODE} - ${selectedEquipment.EQNAME}` : 'No specific equipment'}</span>
+                  </div>
+                )}
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.description')}:</span> 
                   <span className="font-medium">{description}</span>

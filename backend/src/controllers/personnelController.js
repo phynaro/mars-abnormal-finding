@@ -55,20 +55,23 @@ class PersonnelController {
       const total = countResult.recordset[0].total;
 
       // Get paginated data with joins
+      // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
       const dataQuery = `
-        SELECT 
-          p.*,
-          d.DEPTNAME,
-          d.DEPTCODE,
-          t.TITLENAME,
-          t.TITLECODE
-        FROM Person p
-        LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
-        LEFT JOIN Title t ON p.TITLENO = t.TITLENO
-        ${whereClause}
-        ORDER BY p.PERSONNO
-        OFFSET @offset ROWS
-        FETCH NEXT @limit ROWS ONLY
+        SELECT *
+        FROM (
+          SELECT 
+            p.*,
+            d.DEPTNAME,
+            d.DEPTCODE,
+            t.TITLENAME,
+            t.TITLECODE,
+            ROW_NUMBER() OVER (ORDER BY p.PERSONNO) as row_num
+          FROM Person p
+          LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+          LEFT JOIN Title t ON p.TITLENO = t.TITLENO
+          ${whereClause}
+        ) AS paginated_results
+        WHERE row_num > @offset AND row_num <= @offset + @limit
       `;
 
       const dataRequest = pool.request();
@@ -191,21 +194,24 @@ class PersonnelController {
       const total = countResult.recordset[0].total;
 
       // Get paginated data with parent department info
+      // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
       const dataQuery = `
-        SELECT 
-          d.*,
-          pd.DEPTNAME as PARENT_DEPTNAME,
-          pd.DEPTCODE as PARENT_DEPTCODE,
-          ug.USERGROUPNAME,
-          ug.USERGROUPCODE,
-          (SELECT COUNT(*) FROM Person p WHERE p.DEPTNO = d.DEPTNO AND (p.FLAGDEL IS NULL OR p.FLAGDEL != 'Y')) as PERSON_COUNT
-        FROM Dept d
-        LEFT JOIN Dept pd ON d.DEPTPARENT = pd.DEPTNO
-        LEFT JOIN USERGROUP ug ON d.UserGroupNo = ug.USERGROUPNO
-        ${whereClause}
-        ORDER BY d.HIERARCHYNO, d.DEPTNO
-        OFFSET @offset ROWS
-        FETCH NEXT @limit ROWS ONLY
+        SELECT *
+        FROM (
+          SELECT 
+            d.*,
+            pd.DEPTNAME as PARENT_DEPTNAME,
+            pd.DEPTCODE as PARENT_DEPTCODE,
+            ug.USERGROUPNAME,
+            ug.USERGROUPCODE,
+            (SELECT COUNT(*) FROM Person p WHERE p.DEPTNO = d.DEPTNO AND (p.FLAGDEL IS NULL OR p.FLAGDEL != 'Y')) as PERSON_COUNT,
+            ROW_NUMBER() OVER (ORDER BY d.HIERARCHYNO, d.DEPTNO) as row_num
+          FROM Dept d
+          LEFT JOIN Dept pd ON d.DEPTPARENT = pd.DEPTNO
+          LEFT JOIN USERGROUP ug ON d.UserGroupNo = ug.USERGROUPNO
+          ${whereClause}
+        ) AS paginated_results
+        WHERE row_num > @offset AND row_num <= @offset + @limit
       `;
 
       const dataRequest = pool.request();
@@ -329,18 +335,21 @@ class PersonnelController {
       const total = countResult.recordset[0].total;
 
       // Get paginated data with parent title info
+      // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
       const dataQuery = `
-        SELECT 
-          t.*,
-          pt.TITLENAME as PARENT_TITLENAME,
-          pt.TITLECODE as PARENT_TITLECODE,
-          (SELECT COUNT(*) FROM Person p WHERE p.TITLENO = t.TITLENO AND (p.FLAGDEL IS NULL OR p.FLAGDEL != 'Y')) as PERSON_COUNT
-        FROM Title t
-        LEFT JOIN Title pt ON t.TITLEPARENT = pt.TITLENO
-        ${whereClause}
-        ORDER BY t.TITLENO
-        OFFSET @offset ROWS
-        FETCH NEXT @limit ROWS ONLY
+        SELECT *
+        FROM (
+          SELECT 
+            t.*,
+            pt.TITLENAME as PARENT_TITLENAME,
+            pt.TITLECODE as PARENT_TITLECODE,
+            (SELECT COUNT(*) FROM Person p WHERE p.TITLENO = t.TITLENO AND (p.FLAGDEL IS NULL OR p.FLAGDEL != 'Y')) as PERSON_COUNT,
+            ROW_NUMBER() OVER (ORDER BY t.TITLENO) as row_num
+          FROM Title t
+          LEFT JOIN Title pt ON t.TITLEPARENT = pt.TITLENO
+          ${whereClause}
+        ) AS paginated_results
+        WHERE row_num > @offset AND row_num <= @offset + @limit
       `;
 
       const dataRequest = pool.request();
@@ -451,16 +460,19 @@ class PersonnelController {
       const total = countResult.recordset[0].total;
 
       // Get paginated data with member count
+      // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
       const dataQuery = `
-        SELECT 
-          ug.*,
-          (SELECT COUNT(*) FROM USERGROUP_MEMBER ugm WHERE ugm.USERGROUPNO = ug.USERGROUPNO) as MEMBER_COUNT,
-          (SELECT COUNT(*) FROM Dept d WHERE d.UserGroupNo = ug.USERGROUPNO) as DEPT_COUNT
-        FROM USERGROUP ug
-        ${whereClause}
-        ORDER BY ug.USERGROUPNO
-        OFFSET @offset ROWS
-        FETCH NEXT @limit ROWS ONLY
+        SELECT *
+        FROM (
+          SELECT 
+            ug.*,
+            (SELECT COUNT(*) FROM USERGROUP_MEMBER ugm WHERE ugm.USERGROUPNO = ug.USERGROUPNO) as MEMBER_COUNT,
+            (SELECT COUNT(*) FROM Dept d WHERE d.UserGroupNo = ug.USERGROUPNO) as DEPT_COUNT,
+            ROW_NUMBER() OVER (ORDER BY ug.USERGROUPNO) as row_num
+          FROM USERGROUP ug
+          ${whereClause}
+        ) AS paginated_results
+        WHERE row_num > @offset AND row_num <= @offset + @limit
       `;
 
       const dataRequest = pool.request();
@@ -559,28 +571,31 @@ class PersonnelController {
       const total = countResult.recordset[0].total;
 
       // Get paginated member data
+      // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
       const dataQuery = `
-        SELECT 
-          ugm.*,
-          p.PERSONCODE,
-          p.FIRSTNAME,
-          p.LASTNAME,
-          p.PERSON_NAME,
-          p.EMAIL,
-          p.PHONE,
-          d.DEPTNAME,
-          d.DEPTCODE,
-          t.TITLENAME,
-          t.TITLECODE
-        FROM USERGROUP_MEMBER ugm
-        INNER JOIN Person p ON ugm.PERSON = p.PERSONNO
-        LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
-        LEFT JOIN Title t ON p.TITLENO = t.TITLENO
-        WHERE ugm.USERGROUPNO = @userGroupNo
-        AND (p.FLAGDEL IS NULL OR p.FLAGDEL != 'Y')
-        ORDER BY p.PERSON_NAME
-        OFFSET @offset ROWS
-        FETCH NEXT @limit ROWS ONLY
+        SELECT *
+        FROM (
+          SELECT 
+            ugm.*,
+            p.PERSONCODE,
+            p.FIRSTNAME,
+            p.LASTNAME,
+            p.PERSON_NAME,
+            p.EMAIL,
+            p.PHONE,
+            d.DEPTNAME,
+            d.DEPTCODE,
+            t.TITLENAME,
+            t.TITLECODE,
+            ROW_NUMBER() OVER (ORDER BY p.PERSON_NAME) as row_num
+          FROM USERGROUP_MEMBER ugm
+          INNER JOIN Person p ON ugm.PERSON = p.PERSONNO
+          LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+          LEFT JOIN Title t ON p.TITLENO = t.TITLENO
+          WHERE ugm.USERGROUPNO = @userGroupNo
+          AND (p.FLAGDEL IS NULL OR p.FLAGDEL != 'Y')
+        ) AS paginated_results
+        WHERE row_num > @offset AND row_num <= @offset + @limit
       `;
 
       const dataRequest = pool.request();

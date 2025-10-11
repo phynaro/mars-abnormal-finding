@@ -9,7 +9,7 @@
     --top-nav-height: 4rem;            /* Height of top navigation bar */
     
     /* Neutral surfaces */
-    --background: 0 0% 100%;          /* #FFFFFF - White */
+    --background: 0 0% 98%;          /* #FFFFFF - White */
     --foreground: 0 0% 24%;           /* #3C3C3C - Gray text */
   
     --card: 0 0% 100%;                /* #FFFFFF - White cards */
@@ -116,6 +116,9 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  tbody {
+    @apply bg-card;
   }
 }
 

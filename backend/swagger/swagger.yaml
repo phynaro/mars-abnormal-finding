@@ -4810,11 +4810,11 @@ components:
           example: 1
         lineId:
           type: string
-          description: LINE ID from _secUsers table
+          description: LINE ID from UserExtension table
           example: "U1234567890abcdef"
         avatarUrl:
           type: string
-          description: Avatar URL from _secUsers table
+          description: Avatar URL from UserExtension table
           example: "/uploads/avatars/418/avatar.jpg"
         lastLogin:
           type: string
@@ -4838,7 +4838,7 @@ components:
         ticket_number:
           type: string
           description: Unique ticket number
-          example: "TKT-2024-001"
+          example: "AB25-00001"
         title:
           type: string
           description: Ticket title/summary

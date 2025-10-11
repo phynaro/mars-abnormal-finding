@@ -144,6 +144,7 @@ const TargetManagementPage: React.FC = () => {
       
       const response = await targetService.getTargets(filters);
       if (response.success) {
+        console.log("targets", response.data);
         setTargets(response.data);
       } else {
         setTargets([]);

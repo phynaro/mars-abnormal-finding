@@ -119,24 +119,27 @@ const getProductionUnits = async (req, res) => {
     request.input('limit', sql.Int, parseInt(limit));
 
     const result = await request.query(`
-      SELECT 
-        p.PUNO, p.PUCODE, p.PUNAME, p.PUPARENT, p.PUREFCODE,
-        p.PULOCATION, p.LATITUDE, p.LONGITUDE, p.IMG, p.NOTE,
-        p.HIERARCHYNO, p.CURR_LEVEL, p.TEXT1, p.TEXT2, p.TEXT3,
-        pt.PUTYPENAME, pt.PUTYPECODE,
-        ps.PUSTATUSNAME, ps.PUSTATUSCODE,
-        s.SiteName, s.SiteCode,
-        d.DEPTNAME, d.DEPTCODE,
-        pg.PUGROUPNAME
-      FROM PU p
-      LEFT JOIN PUType pt ON p.PUTYPENO = pt.PUTYPENO
-      LEFT JOIN PUStatus ps ON p.PUSTATUSNO = ps.PUSTATUSNO
-      LEFT JOIN Site s ON p.SiteNo = s.SiteNo
-      LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
-      LEFT JOIN PUGroup pg ON p.PUGROUPNO = pg.PUGROUPNO
-      ${whereClause}
-      ORDER BY p.HIERARCHYNO, p.PUCODE
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          p.PUNO, p.PUCODE, p.PUNAME, p.PUPARENT, p.PUREFCODE,
+          p.PULOCATION, p.LATITUDE, p.LONGITUDE, p.IMG, p.NOTE,
+          p.HIERARCHYNO, p.CURR_LEVEL, p.TEXT1, p.TEXT2, p.TEXT3,
+          pt.PUTYPENAME, pt.PUTYPECODE,
+          ps.PUSTATUSNAME, ps.PUSTATUSCODE,
+          s.SiteName, s.SiteCode,
+          d.DEPTNAME, d.DEPTCODE,
+          pg.PUGROUPNAME,
+          ROW_NUMBER() OVER (ORDER BY p.HIERARCHYNO, p.PUCODE) as row_num
+        FROM PU p
+        LEFT JOIN PUType pt ON p.PUTYPENO = pt.PUTYPENO
+        LEFT JOIN PUStatus ps ON p.PUSTATUSNO = ps.PUSTATUSNO
+        LEFT JOIN Site s ON p.SiteNo = s.SiteNo
+        LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        LEFT JOIN PUGroup pg ON p.PUGROUPNO = pg.PUGROUPNO
+        ${whereClause}
+      ) AS paginated_results
+      WHERE row_num > @offset AND row_num <= @offset + @limit
     `);
 
     // Get total count
@@ -222,31 +225,34 @@ const getEquipment = async (req, res) => {
     request.input('limit', sql.Int, parseInt(limit));
 
     const result = await request.query(`
-      SELECT 
-        e.EQNO, e.EQCODE, e.EQNAME, e.EQPARENT, e.EQREFCODE,
-        e.ASSETNO, e.EQMODEL, e.EQSERIALNO, e.EQBrand,
-        e.Location, e.Room, e.IMG, e.NOTE,
-        e.HIERARCHYNO, e.CURR_LEVEL,
-        e.EQ_SPEC_DATA1, e.EQ_SPEC_DATA2, e.EQ_SPEC_DATA3, e.EQ_SPEC_DATA4, e.EQ_SPEC_DATA5,
-        p.PUCODE, p.PUNAME,
-        et.EQTYPENAME, et.EQTYPECODE,
-        es.EQSTATUSNAME, es.EQSTATUSCODE,
-        s.SiteName, s.SiteCode,
-        d_own.DEPTNAME as OwnerDeptName, d_own.DEPTCODE as OwnerDeptCode,
-        d_maint.DEPTNAME as MaintDeptName, d_maint.DEPTCODE as MaintDeptCode,
-        b.BUILDINGNAME, f.FLOORNAME
-      FROM EQ e
-      LEFT JOIN PU p ON e.PUNO = p.PUNO
-      LEFT JOIN EQType et ON e.EQTYPENO = et.EQTYPENO
-      LEFT JOIN EQStatus es ON e.EQSTATUSNO = es.EQSTATUSNO
-      LEFT JOIN Site s ON e.SiteNo = s.SiteNo
-      LEFT JOIN Dept d_own ON e.DEPT_OWN = d_own.DEPTNO
-      LEFT JOIN Dept d_maint ON e.DEPT_MAINT = d_maint.DEPTNO
-      LEFT JOIN EQ_Building b ON e.EQBuildingNo = b.BUILDINGNO
-      LEFT JOIN EQ_Floor f ON e.EQFloorNo = f.FLOORNO
-      ${whereClause}
-      ORDER BY e.HIERARCHYNO, e.EQCODE
-      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      SELECT *
+      FROM (
+        SELECT 
+          e.EQNO, e.EQCODE, e.EQNAME, e.EQPARENT, e.EQREFCODE,
+          e.ASSETNO, e.EQMODEL, e.EQSERIALNO, e.EQBrand,
+          e.Location, e.Room, e.IMG, e.NOTE,
+          e.HIERARCHYNO, e.CURR_LEVEL,
+          e.EQ_SPEC_DATA1, e.EQ_SPEC_DATA2, e.EQ_SPEC_DATA3, e.EQ_SPEC_DATA4, e.EQ_SPEC_DATA5,
+          p.PUCODE, p.PUNAME,
+          et.EQTYPENAME, et.EQTYPECODE,
+          es.EQSTATUSNAME, es.EQSTATUSCODE,
+          s.SiteName, s.SiteCode,
+          d_own.DEPTNAME as OwnerDeptName, d_own.DEPTCODE as OwnerDeptCode,
+          d_maint.DEPTNAME as MaintDeptName, d_maint.DEPTCODE as MaintDeptCode,
+          b.BUILDINGNAME, f.FLOORNAME,
+          ROW_NUMBER() OVER (ORDER BY e.HIERARCHYNO, e.EQCODE) as row_num
+        FROM EQ e
+        LEFT JOIN PU p ON e.PUNO = p.PUNO
+        LEFT JOIN EQType et ON e.EQTYPENO = et.EQTYPENO
+        LEFT JOIN EQStatus es ON e.EQSTATUSNO = es.EQSTATUSNO
+        LEFT JOIN Site s ON e.SiteNo = s.SiteNo
+        LEFT JOIN Dept d_own ON e.DEPT_OWN = d_own.DEPTNO
+        LEFT JOIN Dept d_maint ON e.DEPT_MAINT = d_maint.DEPTNO
+        LEFT JOIN EQ_Building b ON e.EQBuildingNo = b.BUILDINGNO
+        LEFT JOIN EQ_Floor f ON e.EQFloorNo = f.FLOORNO
+        ${whereClause}
+      ) AS paginated_results
+      WHERE row_num > @offset AND row_num <= @offset + @limit
     `);
 
     // Get total count
@@ -468,26 +474,31 @@ const getDepartmentHierarchyDetails = async (req, res) => {
     }
 
     // Get production units for this department with pagination
+    // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
     const puQuery = deptNo === 'general' || deptNo == 0
-      ? `SELECT p.PUNO, p.PUCODE, p.PUNAME, p.PUPARENT, p.HIERARCHYNO,
-                pt.PUTYPENAME, ps.PUSTATUSNAME,
-                COUNT(*) OVER() as TotalCount
-         FROM PU p
-         LEFT JOIN PUType pt ON p.PUTYPENO = pt.PUTYPENO
-         LEFT JOIN PUStatus ps ON p.PUSTATUSNO = ps.PUSTATUSNO
-         WHERE p.FLAGDEL = 'F' AND p.SiteNo = @siteNo 
-           AND (p.DEPTNO = 0 OR p.DEPTNO IS NULL)
-         ORDER BY p.HIERARCHYNO, p.PUCODE
-         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`
-      : `SELECT p.PUNO, p.PUCODE, p.PUNAME, p.PUPARENT, p.HIERARCHYNO,
-                pt.PUTYPENAME, ps.PUSTATUSNAME,
-                COUNT(*) OVER() as TotalCount
-         FROM PU p
-         LEFT JOIN PUType pt ON p.PUTYPENO = pt.PUTYPENO
-         LEFT JOIN PUStatus ps ON p.PUSTATUSNO = ps.PUSTATUSNO
-         WHERE p.FLAGDEL = 'F' AND p.SiteNo = @siteNo AND p.DEPTNO = @deptNo
-         ORDER BY p.HIERARCHYNO, p.PUCODE
-         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY`;
+      ? `SELECT *
+         FROM (
+           SELECT p.PUNO, p.PUCODE, p.PUNAME, p.PUPARENT, p.HIERARCHYNO,
+                  pt.PUTYPENAME, ps.PUSTATUSNAME,
+                  ROW_NUMBER() OVER (ORDER BY p.HIERARCHYNO, p.PUCODE) as row_num
+           FROM PU p
+           LEFT JOIN PUType pt ON p.PUTYPENO = pt.PUTYPENO
+           LEFT JOIN PUStatus ps ON p.PUSTATUSNO = ps.PUSTATUSNO
+           WHERE p.FLAGDEL = 'F' AND p.SiteNo = @siteNo 
+             AND (p.DEPTNO = 0 OR p.DEPTNO IS NULL)
+         ) AS paginated_results
+         WHERE row_num > @offset AND row_num <= @offset + @limit`
+      : `SELECT *
+         FROM (
+           SELECT p.PUNO, p.PUCODE, p.PUNAME, p.PUPARENT, p.HIERARCHYNO,
+                  pt.PUTYPENAME, ps.PUSTATUSNAME,
+                  ROW_NUMBER() OVER (ORDER BY p.HIERARCHYNO, p.PUCODE) as row_num
+           FROM PU p
+           LEFT JOIN PUType pt ON p.PUTYPENO = pt.PUTYPENO
+           LEFT JOIN PUStatus ps ON p.PUSTATUSNO = ps.PUSTATUSNO
+           WHERE p.FLAGDEL = 'F' AND p.SiteNo = @siteNo AND p.DEPTNO = @deptNo
+         ) AS paginated_results
+         WHERE row_num > @offset AND row_num <= @offset + @limit`;
 
     const puResult = await pool.request()
       .input('siteNo', sql.Int, siteNo)
