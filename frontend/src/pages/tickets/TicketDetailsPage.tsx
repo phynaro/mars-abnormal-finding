@@ -39,7 +39,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { FileUpload } from "@/components/ui/file-upload";
 import {
@@ -2053,6 +2053,9 @@ const TicketDetailsPage: React.FC = () => {
       {/* Cedar Integration Info Modal */}
       <Dialog open={cedarInfoOpen} onOpenChange={setCedarInfoOpen}>
         <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="sr-only">Cedar Integration Details</DialogTitle>
+          </DialogHeader>
           <div className="space-y-4">
             <h3 className="text-lg font-semibold">Cedar Integration Details</h3>
             <div className="space-y-3 text-sm">

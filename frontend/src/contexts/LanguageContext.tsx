@@ -36,6 +36,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.warning': 'Warning',
     'common.search': 'Search',
     'common.clear': 'Clear',
+    'common.close': 'Close',
     // Navigation
     'nav.dashboard': 'Dashboard',
     'nav.tickets': 'Tickets',
@@ -651,6 +652,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.warning': 'คำเตือน',
     'common.search': 'ค้นหาปัญหา',
     'common.clear': 'ล้าง',
+    'common.close': 'ปิด',
     
     // Navigation
     'nav.dashboard': 'แดชบอร์ด',
