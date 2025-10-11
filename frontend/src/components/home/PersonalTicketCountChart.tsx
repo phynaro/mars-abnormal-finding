@@ -1,0 +1,158 @@
+import React from "react";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+  Bar,
+  Line,
+} from "recharts";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { BarChart3, Settings } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+
+export type PersonalTicketCountChartProps = {
+  data: Array<{ period: string; tickets: number; target: number }>;
+  loading: boolean;
+  error: string | null;
+  onKpiSetupClick: () => void;
+  selectedYear: number;
+};
+
+const PersonalTicketCountChart: React.FC<PersonalTicketCountChartProps> = ({
+  data,
+  loading,
+  error,
+  onKpiSetupClick,
+  selectedYear,
+}) => {
+  const { t } = useLanguage();
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const dataPoint = payload[0].payload;
+      const period = dataPoint.period;
+
+      const getPeriodDateRange = (currentPeriod: string, year: number) => {
+        const newYearDay = new Date(year, 0, 1);
+        const firstSunday = new Date(newYearDay);
+        const dayOfWeek = newYearDay.getDay();
+        const daysToSubtract = dayOfWeek === 0 ? 0 : dayOfWeek;
+        firstSunday.setDate(newYearDay.getDate() - daysToSubtract);
+
+        const periodNumber = parseInt(currentPeriod.replace("P", ""), 10);
+        const periodStartDate = new Date(firstSunday);
+        periodStartDate.setDate(
+          firstSunday.getDate() + (periodNumber - 1) * 28,
+        );
+
+        const periodEndDate = new Date(periodStartDate);
+        periodEndDate.setDate(periodStartDate.getDate() + 27);
+
+        return {
+          startDate: periodStartDate.toLocaleDateString(),
+          endDate: periodEndDate.toLocaleDateString(),
+        };
+      };
+
+      const dateRange = getPeriodDateRange(period, selectedYear);
+
+      return (
+        <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+          <p className="font-medium text-foreground">{period}</p>
+          <p className="text-sm text-muted-foreground mb-2">
+            {`${dateRange.startDate} - ${dateRange.endDate}`}
+          </p>
+          <div className="space-y-1">
+            <p className="text-sm">
+              <span className="text-brand font-medium">
+                {t("homepage.myTickets")}:
+              </span>{" "}
+              {dataPoint.tickets}
+            </p>
+            <p className="text-sm">
+              <span className="text-destructive font-medium">Target:</span>{" "}
+              {dataPoint.target}
+            </p>
+          </div>
+        </div>
+      );
+    }
+    return null;
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <BarChart3 className="h-5 w-5" />
+            <span>{t("homepage.myReportCasePerPeriod")}</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onKpiSetupClick}
+            className="flex items-center space-x-1"
+          >
+            <Settings className="h-4 w-4" />
+            <span>{t("homepage.setupKPI")}</span>
+          </Button>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center justify-center h-[300px]">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+          </div>
+        ) : error ? (
+          <div className="flex items-center justify-center h-[300px] text-red-600">
+            <div className="text-center">
+              <p className="font-medium">
+                {t("homepage.errorLoadingChartData")}
+              </p>
+              <p className="text-sm">{error}</p>
+            </div>
+          </div>
+        ) : data.length > 0 ? (
+          <ResponsiveContainer width="100%" height={300}>
+            <ComposedChart data={data}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="period" />
+              <YAxis />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend />
+              <Bar
+                dataKey="tickets"
+                fill="hsl(var(--primary))"
+                name={t("homepage.myTickets")}
+              />
+              <Line
+                type="monotone"
+                dataKey="target"
+                stroke="hsl(var(--destructive))"
+                strokeWidth={2}
+                name={t("homepage.target")}
+                dot={false}
+              />
+            </ComposedChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-[300px] text-gray-500">
+            <div className="text-center">
+              <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
+              <p>{t("homepage.noTicketDataAvailable")}</p>
+              <p className="text-sm">{t("homepage.startCreatingTickets")}</p>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
+export default PersonalTicketCountChart;

@@ -1,11 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { useToast } from '@/hooks/useToast';
 import administrationService, { 
   type TicketApproval, 
@@ -13,10 +6,9 @@ import administrationService, {
   type Area, 
   type Line, 
   type Plant, 
-  type Person,
-  getApprovalLevelName
+  type Person
 } from '@/services/administrationService';
-import { Plus, Edit, Trash2, Search, CheckSquare, Square } from 'lucide-react';
+import { ApprovalFormView, ApprovalListView } from '@/components/ticket-approval';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
@@ -84,11 +76,6 @@ const TicketApprovalManagementPage: React.FC = () => {
       console.error('Error checking existing approval levels:', error);
       setExistingApprovalLevels([]);
     }
-  }
-
-  // Check if approval level is disabled
-  const isApprovalLevelDisabled = (level: number) => {
-    return viewMode === 'create' && existingApprovalLevels.includes(level);
   }
 
   // Copy permissions from another user
@@ -880,581 +867,68 @@ const TicketApprovalManagementPage: React.FC = () => {
     }, 0);
   }
 
-  const filteredApprovals = approvals.filter(approval => {
-    const matchesSearch = approval.personno.toString().includes(searchTerm) ||
-                         approval.person_name?.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesActive = filterActive === 'all' || 
-                         (filterActive === 'active' && approval.is_active) ||
-                         (filterActive === 'inactive' && !approval.is_active);
-    return matchesSearch && matchesActive;
-  });
-
-  const getLocationSummary = (approval: TicketApproval) => {
-    const parts = [
-      approval.plant_name || approval.plant_code,
-      approval.area_name || approval.area_code,
-      approval.line_name || approval.line_code,
-      approval.machine_name || approval.machine_code
-    ].filter(Boolean);
-
-    if (parts.length === 0) {
-      return approval.location_scope || 'All Locations';
-    }
-
-    return parts.join(' → ');
-  };
-
   if (viewMode === 'create' || viewMode === 'edit') {
     return (
-      <div className="container mx-auto p-6">
-        <div className="max-w-6xl mx-auto">
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {viewMode === 'create' ? 'Create New Ticket Approval' : 'Edit Ticket Approval'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Person Selection */}
-                <div>
-                  <Label htmlFor="personno">Person *</Label>
-                  <div className="relative person-search-container">
-                    <Input
-                      id="personno"
-                      value={personSearch}
-                      onChange={(e) => {
-                        handlePersonSearch(e.target.value);
-                        setShowPersonSearch(true);
-                      }}
-                      onFocus={() => setShowPersonSearch(true)}
-                      placeholder="Search for person..."
-                      required
-                      className={!formData.personno ? "border-red-500" : ""}
-                    />
-                    {!formData.personno && (
-                      <p className="text-sm text-red-500 mt-1">Please select a person</p>
-                    )}
-                    {showPersonSearch && persons.length > 0 && (
-                      <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
-                        {persons.map((person) => (
-                          <div
-                            key={person.PERSONNO}
-                            className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
-                            onClick={() => selectPerson(person)}
-                          >
-                            <div className="font-medium">{person.PERSON_NAME}</div>
-                            <div className="text-sm text-gray-500">
-                              {person.PERSONCODE} • {person.FIRSTNAME} {person.LASTNAME}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Approval Level */}
-                <div>
-                  <Label htmlFor="approval_level">Approval Level *</Label>
-                  <Select
-                    value={formData.approval_level.toString()}
-                    onValueChange={(value) => setFormData({ ...formData, approval_level: parseInt(value) })}
-                    disabled={viewMode === 'edit'}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select approval level" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem 
-                        value="1" 
-                        disabled={isApprovalLevelDisabled(1)}
-                      >
-                        Level 1 {isApprovalLevelDisabled(1) && '(Already exists)'}
-                        </SelectItem>
-                      <SelectItem 
-                        value="2" 
-                        disabled={isApprovalLevelDisabled(2)}
-                      >
-                        Level 2 {isApprovalLevelDisabled(2) && '(Already exists)'}
-                      </SelectItem>
-                      <SelectItem 
-                        value="3" 
-                        disabled={isApprovalLevelDisabled(3)}
-                      >
-                        Level 3 {isApprovalLevelDisabled(3) && '(Already exists)'}
-                      </SelectItem>
-                      <SelectItem 
-                        value="4" 
-                        disabled={isApprovalLevelDisabled(4)}
-                      >
-                        Level 4 {isApprovalLevelDisabled(4) && '(Already exists)'}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {viewMode === 'edit' && (
-                    <p className="text-sm text-gray-500 mt-1">
-                      Approval level cannot be changed when editing
-                    </p>
-                  )}
-                  {viewMode === 'create' && existingApprovalLevels.length > 0 && (
-                    <p className="text-sm text-amber-600 mt-1">
-                      Some approval levels are disabled because they already exist for this user
-                    </p>
-                  )}
-                  {viewMode === 'create' && formData.personno > 0 && (
-                    <div className="mt-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setShowCopyDialog(true)}
-                        className="text-xs"
-                      >
-                        Copy from existing user
-                      </Button>
-                    </div>
-                  )}
-                </div>
-
-                {/* Hierarchical Selection */}
-                <div>
-                  <Label>Select Lines *</Label>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                    {/* Plants Column */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm">Plants</CardTitle>
-                          <div className="flex gap-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleSelectAllPlants}
-                              className="text-xs px-2 py-1"
-                            >
-                              <CheckSquare className="w-3 h-3 mr-1" />
-                              All
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleClearAllPlants}
-                              className="text-xs px-2 py-1"
-                            >
-                              <Square className="w-3 h-3 mr-1" />
-                              Clear
-                            </Button>
-                </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                          {plants.map((plant) => (
-                            <div key={plant.id} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`plant-${plant.id}`}
-                                checked={isPlantSelected(plant.code)}
-                                onCheckedChange={(checked) => 
-                                  handlePlantSelection(plant.code, checked as boolean)
-                                }
-                              />
-                              <Label htmlFor={`plant-${plant.id}`} className="text-sm">
-                                {plant.name}
-                              </Label>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Areas Column */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm">Areas</CardTitle>
-                          <div className="flex gap-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleSelectAllAreas}
-                              className="text-xs px-2 py-1"
-                              disabled={filteredAreas.length === 0}
-                            >
-                              <CheckSquare className="w-3 h-3 mr-1" />
-                              All
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleClearAllAreas}
-                              className="text-xs px-2 py-1"
-                            >
-                              <Square className="w-3 h-3 mr-1" />
-                              Clear
-                            </Button>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                          {filteredAreas.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-4">
-                              Select plants first
-                            </p>
-                          ) : (
-                            filteredAreas.map((area) => {
-                              const plant = plants.find(p => p.id === area.plant_id);
-                              if (!plant) return null; // Skip if plant not found
-                              return (
-                                <div key={area.id} className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`area-${area.id}`}
-                                    checked={isAreaSelected(plant.code, area.code)}
-                                    onCheckedChange={(checked) => 
-                                      handleAreaSelection(area.code, plant.code, checked as boolean)
-                                    }
-                                  />
-                                  <Label htmlFor={`area-${area.id}`} className="text-sm">
-                                    {plant.name} - {area.name}
-                                  </Label>
-                                </div>
-                              );
-                            }).filter(Boolean)
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-
-                    {/* Lines Column */}
-                    <Card>
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                          <CardTitle className="text-sm">Lines</CardTitle>
-                          <div className="flex gap-1">
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleSelectAllLines}
-                              className="text-xs px-2 py-1"
-                              disabled={filteredLines.length === 0}
-                            >
-                              <CheckSquare className="w-3 h-3 mr-1" />
-                              All
-                            </Button>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={handleClearAllLines}
-                              className="text-xs px-2 py-1"
-                            >
-                              <Square className="w-3 h-3 mr-1" />
-                              Clear
-                            </Button>
-                          </div>
-                        </div>
-                      </CardHeader>
-                      <CardContent className="pt-0">
-                        <div className="space-y-2 max-h-60 overflow-y-auto">
-                          {filteredLines.length === 0 ? (
-                            <p className="text-sm text-gray-500 text-center py-4">
-                              Select areas first
-                            </p>
-                          ) : (
-                            filteredLines.map((line) => {
-                              const area = areas.find(a => a.id === line.area_id);
-                              const plant = plants.find(p => p.id === line.plant_id);
-                              if (!area || !plant) return null; // Skip if area or plant not found
-                              return (
-                                <div key={line.id} className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`line-${line.id}`}
-                                    checked={isLineSelected(plant.code, area.code, line.code)}
-                                    onCheckedChange={(checked) => 
-                                      handleLineSelection(line.code, plant.code, area.code, checked as boolean)
-                                    }
-                                  />
-                                  <Label htmlFor={`line-${line.id}`} className="text-sm">
-                                    {plant.name} - {area.name} - {line.name}
-                                  </Label>
-                                </div>
-                              );
-                            }).filter(Boolean)
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                  
-                  {formData.hierarchies.length > 0 && (
-                    <div className="mt-2 p-2 bg-blue-50 rounded-md">
-                      <p className="text-sm text-blue-700">
-                        Selected: {formData.hierarchies.length} location(s) - {formData.hierarchies.map(h => {
-                          const parts = [h.plant_code];
-                          if (h.area_code) parts.push(h.area_code);
-                          if (h.line_code) parts.push(h.line_code);
-                          if (h.machine_code) parts.push(h.machine_code);
-                          return parts.join('-');
-                        }).join(', ')}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Status */}
-                <div>
-                  <Label htmlFor="is_active">Status</Label>
-                  <Select
-                    value={formData.is_active ? 'active' : 'inactive'}
-                    onValueChange={(value) => setFormData({ ...formData, is_active: value === 'active' })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="inactive">Inactive</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="flex gap-2 pt-4">
-                  <Button 
-                    type="submit" 
-                    disabled={loading || !formData.personno || formData.hierarchies.length === 0 || !formData.approval_level}
-                  >
-                    {loading ? 'Saving...' : (viewMode === 'create' ? 'Create' : 'Update')}
-                  </Button>
-                  <Button type="button" variant="outline" onClick={() => setViewMode('list')}>
-                    Cancel
-                  </Button>
-                </div>
-              </form>
-            </CardContent>
-          </Card>
-        </div>
-        {/* Copy Permissions Dialog */}
-        {showCopyDialog && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md mx-4">
-              <CardHeader>
-                <CardTitle>Copy Permissions from Existing User</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Select User to Copy From */}
-                <div>
-                  <Label htmlFor="copy-from-user">Select User to Copy From *</Label>
-                  <Select
-                    value={copyFromPersonno?.toString() || ''}
-                    onValueChange={(value) => setCopyFromPersonno(parseInt(value))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select user" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {approvals
-                        .filter(approval => approval.personno !== formData.personno) // Exclude current user
-                        .reduce((unique, approval) => {
-                          if (!unique.find(u => u.personno === approval.personno)) {
-                            unique.push(approval);
-                          }
-                          return unique;
-                        }, [] as TicketApproval[])
-                        .map((approval) => (
-                          <SelectItem key={approval.personno} value={approval.personno.toString()}>
-                            {approval.person_name || `Person #${approval.personno}`}
-                          </SelectItem>
-                        ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                {/* Select Approval Level to Copy From */}
-                {copyFromPersonno && (
-                  <div>
-                    <Label htmlFor="copy-from-level">Select Approval Level to Copy From *</Label>
-                    <Select
-                      value={copyFromApprovalLevel?.toString() || ''}
-                      onValueChange={(value) => setCopyFromApprovalLevel(parseInt(value))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select approval level" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {approvals
-                          .filter(approval => approval.personno === copyFromPersonno)
-                          .reduce((unique, approval) => {
-                            if (!unique.find(u => u.approval_level === approval.approval_level)) {
-                              unique.push(approval);
-                            }
-                            return unique;
-                          }, [] as TicketApproval[])
-                          .map((approval) => (
-                            <SelectItem key={approval.approval_level} value={approval.approval_level.toString()}>
-                              Level {approval.approval_level}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-
-                <div className="flex gap-2 pt-4">
-                  <Button 
-                    onClick={handleCopyPermissions}
-                    disabled={loading || !copyFromPersonno || !copyFromApprovalLevel}
-                  >
-                    {loading ? 'Copying...' : 'Copy Permissions'}
-                  </Button>
-                  <Button 
-                    variant="outline" 
-                    onClick={() => {
-                      setShowCopyDialog(false);
-                      setCopyFromPersonno(null);
-                      setCopyFromApprovalLevel(null);
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-    </div>
-  );
+      <ApprovalFormView
+        viewMode={viewMode}
+        loading={loading}
+        formData={formData}
+        persons={persons}
+        plants={plants}
+        areas={areas}
+        lines={lines}
+        filteredAreas={filteredAreas}
+        filteredLines={filteredLines}
+        existingApprovalLevels={existingApprovalLevels}
+        personSearch={personSearch}
+        showPersonSearch={showPersonSearch}
+        showCopyDialog={showCopyDialog}
+        copyFromPersonno={copyFromPersonno}
+        copyFromApprovalLevel={copyFromApprovalLevel}
+        approvals={approvals}
+        onSubmit={handleSubmit}
+        onCancel={() => setViewMode('list')}
+        onPersonSearchChange={(search) => {
+          handlePersonSearch(search);
+          setShowPersonSearch(true);
+        }}
+        onPersonSearchFocus={() => setShowPersonSearch(true)}
+        onPersonSelect={selectPerson}
+        onApprovalLevelChange={(level) => setFormData({ ...formData, approval_level: level })}
+        onStatusChange={(isActive) => setFormData({ ...formData, is_active: isActive })}
+        onShowCopyDialog={setShowCopyDialog}
+        setCopyFromPersonno={setCopyFromPersonno}
+        setCopyFromApprovalLevel={setCopyFromApprovalLevel}
+        onCopyPermissions={handleCopyPermissions}
+        isPlantSelected={isPlantSelected}
+        isAreaSelected={isAreaSelected}
+        isLineSelected={isLineSelected}
+        onPlantSelection={handlePlantSelection}
+        onAreaSelection={handleAreaSelection}
+        onLineSelection={handleLineSelection}
+        onSelectAllPlants={handleSelectAllPlants}
+        onClearAllPlants={handleClearAllPlants}
+        onSelectAllAreas={handleSelectAllAreas}
+        onClearAllAreas={handleClearAllAreas}
+        onSelectAllLines={handleSelectAllLines}
+        onClearAllLines={handleClearAllLines}
+      />
+    );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold">Ticket Approval Management</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage who can approve tickets across plants, areas, lines, and machines.
-          </p>
-        </div>
-        <Button onClick={handleCreate} disabled={loading}>
-          <Plus className="w-4 h-4 mr-2" />
-          New Approval
-        </Button>
-      </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Existing Approvals</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="relative w-full md:w-80">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search by person or ID"
-                className="pl-9"
-              />
-            </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="active-filter" className="text-sm text-muted-foreground">
-                Status
-              </Label>
-              <Select value={filterActive} onValueChange={setFilterActive}>
-                <SelectTrigger id="active-filter" className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="bg-muted text-left text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2">Person</th>
-                  <th className="px-3 py-2">Approval Level</th>
-                  <th className="px-3 py-2">Locations</th>
-                  <th className="px-3 py-2">Assignments</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2 text-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredApprovals.map((approval) => (
-                  <tr key={`${approval.personno}-${approval.approval_level}`} className="border-b last:border-b-0">
-                    <td className="px-3 py-3">
-                      <div className="font-medium">
-                        {approval.person_name || `Person #${approval.personno}`}
-                      </div>
-                      <div className="text-xs text-muted-foreground">#{approval.personno}</div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="font-medium">Level {approval.approval_level}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {getApprovalLevelName(approval.approval_level)}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="max-w-xs truncate" title={getLocationSummary(approval)}>
-                        {getLocationSummary(approval)}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge variant="secondary">{approval.total_approvals ?? '-'}</Badge>
-                    </td>
-                    <td className="px-3 py-3">
-                      <Badge variant={approval.is_active ? 'default' : 'secondary'}>
-                        {approval.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEditApproval(approval)}
-                          disabled={loading}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteApproval(approval)}
-                          className="text-destructive"
-                          disabled={loading}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {filteredApprovals.length === 0 && (
-                  <tr>
-                    <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
-                      {searchTerm ? 'No approvals match your search.' : 'No ticket approvals found yet.'}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+    <ApprovalListView
+      approvals={approvals}
+      loading={loading}
+      searchTerm={searchTerm}
+      filterActive={filterActive}
+      onSearchChange={setSearchTerm}
+      onFilterChange={setFilterActive}
+      onCreate={handleCreate}
+      onEdit={handleEditApproval}
+      onDelete={handleDeleteApproval}
+    />
   );
-}
+};
 
 export default TicketApprovalManagementPage;

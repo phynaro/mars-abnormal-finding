@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
+import { hierarchyService, type PUCritical } from '@/services/hierarchyService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/ui/file-upload';
@@ -24,6 +25,7 @@ interface PUCODEResult {
   LINE: string;
   MACHINE: string;
   NUMBER: string;
+  PUCRITICALNO: number; // Added Critical Level
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -35,11 +37,12 @@ const TicketCreatePage: React.FC = () => {
 
   const [submitting, setSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState<Pick<CreateTicketRequest, 'title' | 'description' | 'severity_level' | 'priority'> & { puno?: number; equipment_id?: number }>({
+  const [formData, setFormData] = useState<Pick<CreateTicketRequest, 'title' | 'description' | 'severity_level' | 'priority'> & { puno?: number; equipment_id?: number; pucriticalno?: number }>({
     title: '',
     description: '',
     puno: undefined,
     equipment_id: undefined,
+    pucriticalno: undefined,
     severity_level: 'medium',
     priority: 'normal',
   });
@@ -65,6 +68,10 @@ const TicketCreatePage: React.FC = () => {
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
   const [equipmentLoading, setEquipmentLoading] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
+
+  // Critical levels state
+  const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
+  const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
 
   // Generate previews and revoke URLs on unmount/change
   const previews = useMemo(() => selectedFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [selectedFiles]);
@@ -251,6 +258,31 @@ const TicketCreatePage: React.FC = () => {
     }
   }, [selectedMachine]);
 
+  // Load critical levels on component mount
+  useEffect(() => {
+    loadCriticalLevels();
+  }, []);
+
+  // Load critical levels function
+  const loadCriticalLevels = async () => {
+    try {
+      setCriticalLevelsLoading(true);
+      const response = await hierarchyService.getPUCriticalLevels();
+      if (response.success) {
+        setCriticalLevels(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading critical levels:', error);
+      toast({
+        title: t('common.error'),
+        description: 'Failed to load critical levels',
+        variant: 'destructive'
+      });
+    } finally {
+      setCriticalLevelsLoading(false);
+    }
+  };
+
   // Click outside handler to close dropdown
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -279,6 +311,11 @@ const TicketCreatePage: React.FC = () => {
     setMachineSearchQuery(machine.PUCODE);
     setMachineSearchDropdownOpen(false);
     
+    // Auto-populate critical level from machine's PUCRITICALNO
+    if (machine.PUCRITICALNO) {
+      handleInputChange('pucriticalno', machine.PUCRITICALNO);
+    }
+    
     // Clear equipment selection when machine changes
     clearEquipmentSelection();
     
@@ -294,6 +331,7 @@ const TicketCreatePage: React.FC = () => {
     setMachineSearchQuery('');
     setMachineSearchResults([]);
     handleInputChange('puno', undefined);
+    handleInputChange('pucriticalno', undefined);
     
     // Clear equipment selection when machine is cleared
     clearEquipmentSelection();
@@ -335,6 +373,7 @@ const TicketCreatePage: React.FC = () => {
         description: formData.description.trim(),
         puno: formData.puno,
         equipment_id: formData.equipment_id,
+        pucriticalno: formData.pucriticalno,
         severity_level: formData.severity_level,
         priority: formData.priority,
       };
@@ -391,12 +430,12 @@ const TicketCreatePage: React.FC = () => {
         <CardContent className="pt-6">
           <form ref={formRef} onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-2 lg:gap-x-10">
             {/* LEFT COLUMN: Machine Selection & Attachments */}
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* Simplified Machine Selection */}
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <Label htmlFor="machine-search" className="text-base font-semibold">{t('ticket.wizardSelectMachine')} *</Label>
                 
-                <div className="space-y-3">
+                <div className="space-y-2">
                   <div className="relative">
                     <Input
                       ref={searchInputRef}
@@ -464,16 +503,19 @@ const TicketCreatePage: React.FC = () => {
                   
                   {/* Equipment Selection */}
                   {selectedMachine && equipmentList.length > 0 && (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       <Label htmlFor="equipment-select" className="text-base font-semibold">Equipment (Optional)</Label>
                       
                       <Select
                         value={selectedEquipment?.EQNO.toString() || 'none'}
                         onValueChange={onSelectEquipment}
                         disabled={equipmentLoading}
+                        
                       >
                         <SelectTrigger>
-                          <SelectValue placeholder={equipmentLoading ? "Loading equipment..." : "Select equipment..."} />
+                          <SelectValue placeholder={equipmentLoading ? "Loading equipment..." : "Select equipment..."}>
+                            {selectedEquipment ? selectedEquipment.EQCODE : (equipmentLoading ? "Loading equipment..." : "Select equipment...")}
+                          </SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="none">No specific equipment</SelectItem>
@@ -521,25 +563,29 @@ const TicketCreatePage: React.FC = () => {
                         </div>
                       )}
                       
-                      <p className="text-xs text-gray-500">
-                        Select specific equipment if the issue is related to a particular component
-                      </p>
+                      {!selectedEquipment && (
+                        <p className="text-xs text-gray-500">
+                          Select specific equipment if the issue is related to a particular component
+                        </p>
+                      )}
                     </div>
                   )}
                   
-                  <p className="text-xs text-gray-500">
-                    {t('ticket.typeToSearch')}
-                  </p>
+                  {!selectedMachine && (
+                    <p className="text-xs text-gray-500">
+                      {t('ticket.typeToSearch')}
+                    </p>
+                  )}
                 </div>
 
                 {errors.machine && <p className="text-sm text-red-500">{errors.machine}</p>}
               </div>
 
               {/* Attach images (before) */}
-              <div className="space-y-3">
+              <div className="space-y-2">
                 <Label htmlFor="images" className="text-base font-semibold">{t('ticket.attachImages')} *</Label>
                 <div
-                  className={`border-2 border-dashed rounded-xl p-8 transition-all duration-200 ${
+                  className={`border-2 border-dashed rounded-xl p-4 transition-all duration-200 ${
                     submitting
                       ? 'opacity-70 cursor-not-allowed border-muted-foreground/20'
                       : isDragOver
@@ -555,8 +601,8 @@ const TicketCreatePage: React.FC = () => {
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
                 >
-                  <div className="flex flex-col items-center gap-3 text-center">
-                    <Upload className={`h-12 w-12 transition-colors ${
+                  <div className="flex flex-col items-center gap-2 text-center">
+                    <Upload className={`h-8 w-8 transition-colors ${
                       isDragOver ? 'text-primary' : 'text-muted-foreground'
                     }`} />
                     <div className="space-y-1">
@@ -602,10 +648,10 @@ const TicketCreatePage: React.FC = () => {
                       <span className="text-sm text-muted-foreground">{t('ticket.selectedFiles')} {selectedFiles.length} file(s)</span>
                       <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedFiles([])} disabled={submitting}>{t('ticket.clearAll')}</Button>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 max-h-60 overflow-y-auto pr-1">
+                    <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 max-h-48 overflow-y-auto pr-1">
                       {previews.map((p, idx) => (
                         <div key={idx} className="group relative overflow-hidden rounded-lg border">
-                          <img src={p.url} alt={p.file.name} className="h-40 w-full object-cover" />
+                          <img src={p.url} alt={p.file.name} className="h-24 w-full object-cover" />
                           <button
                             type="button"
                             className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
@@ -632,7 +678,7 @@ const TicketCreatePage: React.FC = () => {
             </div>
 
             {/* RIGHT COLUMN: Title, Description, Severity & Priority */}
-            <div className="space-y-6">
+            <div className="space-y-4">
               {/* Problem Title */}
               <div className="space-y-2">
                 <Label htmlFor="title">{t('ticket.problemTitle')} *</Label>
@@ -660,8 +706,29 @@ const TicketCreatePage: React.FC = () => {
                 {errors.description && <p className="text-sm text-red-500">{errors.description}</p>}
               </div>
 
+              {/* Critical Level */}
+              <div className="space-y-2">
+                <Label htmlFor="critical">Critical Level</Label>
+                <Select
+                  value={formData.pucriticalno?.toString() || ''}
+                  onValueChange={(v) => handleInputChange('pucriticalno', parseInt(v))}
+                  disabled={criticalLevelsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={criticalLevelsLoading ? "Loading critical levels..." : "Select critical level..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {criticalLevels.map((level) => (
+                      <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
+                        {level.PUCRITICALNAME}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
               {/* Severity & Priority */}
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {/* <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="severity_level">{t('ticket.severity')}</Label>
                   <Select value={formData.severity_level} onValueChange={(v) => handleInputChange('severity_level', v as any)}>
@@ -686,7 +753,7 @@ const TicketCreatePage: React.FC = () => {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
+              </div> */}
             </div>
           </form>
         </CardContent>

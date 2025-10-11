@@ -9,6 +9,7 @@ export interface Ticket {
   description: string;
   pucode?: string; // New field for PUCODE
   puno?: number; // New field for PU ID
+  pucriticalno?: number; // New field for Critical Level
   cedar_wocode?: string; // CEDAR work order code
   plant_id?: number;
   area_id?: number;
@@ -128,6 +129,7 @@ export interface CreateTicketRequest {
   pucode?: string; // New field for PUCODE
   puno?: number; // New field for PU ID
   equipment_id?: number; // New field for Equipment ID
+  pucriticalno?: number; // New field for Critical Level
   plant_id?: number;
   area_id?: number;
   line_id?: number;
@@ -207,6 +209,7 @@ export interface PendingTicket {
   pucode?: string;
   pu_name?: string;
   pu_pucode?: string;
+  pucriticalno?: number; // New field for Critical Level
   pudescription?: string;
   digit_count?: number;
   machine_name?: string;

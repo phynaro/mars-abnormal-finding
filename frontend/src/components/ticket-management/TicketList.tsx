@@ -44,6 +44,8 @@ import {
   getTicketPriorityClass,
   getTicketSeverityClass,
   getTicketStatusClass,
+  getCriticalLevelClass,
+  getCriticalLevelText,
 } from "@/utils/ticketBadgeStyles";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -702,13 +704,16 @@ export const TicketList: React.FC = () => {
                     {ticket.description}
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <Badge className={getTicketPriorityClass(ticket.priority)}>
+                    {/* <Badge className={getTicketPriorityClass(ticket.priority)}>
                       {ticket.priority?.toUpperCase()}
                     </Badge>
                     <Badge
                       className={getTicketSeverityClass(ticket.severity_level)}
                     >
                       {ticket.severity_level?.toUpperCase()}
+                    </Badge> */}
+                    <Badge className={getCriticalLevelClass(ticket.pucriticalno)}>
+                      {getCriticalLevelText(ticket.pucriticalno, t)}
                     </Badge>
                     <Badge variant="outline" className="text-xs">
                       {ticket.pu_name || ticket.pucode || 'N/A'}
@@ -747,8 +752,9 @@ export const TicketList: React.FC = () => {
                     <th className="px-4 py-2">{t('ticket.ticketNumber')}</th>
                     <th className="px-4 py-2">{t('ticket.title')}</th>
                     <th className="px-4 py-2">{t('ticket.status')}</th>
-                    <th className="px-4 py-2">{t('ticket.priority')}</th>
-                    <th className="px-4 py-2">{t('ticket.severity')}</th>
+                    {/* <th className="px-4 py-2">{t('ticket.priority')}</th>
+                    <th className="px-4 py-2">{t('ticket.severity')}</th> */}
+                    <th className="px-4 py-2">{t('ticket.critical')}</th>
                     <th className="px-4 py-2">PU Name</th>
                     <th className="px-4 py-2">{t('ticket.createdBy')}</th>
                     <th className="px-4 py-2">{t('ticket.assignedTo')}</th>
@@ -780,6 +786,13 @@ export const TicketList: React.FC = () => {
                       </td>
                       <td className="px-4 py-2">
                         <Badge
+                          className= {`whitespace-nowrap ${getCriticalLevelClass(ticket.pucriticalno)}`}
+                        >
+                          {getCriticalLevelText(ticket.pucriticalno, t)}
+                        </Badge>
+                      </td>
+                      {/* <td className="px-4 py-2">
+                        <Badge
                           className={getTicketPriorityClass(ticket.priority)}
                         >
                           {ticket.priority?.toUpperCase()}
@@ -793,7 +806,7 @@ export const TicketList: React.FC = () => {
                         >
                           {ticket.severity_level?.toUpperCase()}
                         </Badge>
-                      </td>
+                      </td> */}
                       <td className="px-4 py-2">
                         <span className="text-sm">
                           {ticket.pu_name || ticket.pucode || 'N/A'}

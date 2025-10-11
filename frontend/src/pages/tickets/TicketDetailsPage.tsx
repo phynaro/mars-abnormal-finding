@@ -49,6 +49,8 @@ import {
   getTicketPriorityClass,
   getTicketSeverityClass,
   getTicketStatusClass,
+  getCriticalLevelText,
+  getCriticalLevelClass,
 } from "@/utils/ticketBadgeStyles";
 
 const TicketDetailsPage: React.FC = () => {
@@ -1135,7 +1137,7 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
               )}
 
-              <div className="grid gap-4 sm:grid-cols-3">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
                 <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     {t('ticket.status')}
@@ -1146,7 +1148,7 @@ const TicketDetailsPage: React.FC = () => {
                     {ticket.status?.replace("_", " ").toUpperCase()}
                   </Badge>
                 </div>
-                <div>
+                {/* <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     {t('ticket.priority')}
                   </p>
@@ -1164,6 +1166,16 @@ const TicketDetailsPage: React.FC = () => {
                     className={`mt-1 ${getTicketSeverityClass(ticket.severity_level)}`}
                   >
                     {ticket.severity_level?.toUpperCase() || "N/A"}
+                  </Badge>
+                </div> */}
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    {t('ticket.critical')}
+                  </p>
+                  <Badge
+                    className={`mt-1 whitespace-nowrap ${getCriticalLevelClass(ticket.pucriticalno)}`}
+                  >
+                    {getCriticalLevelText(ticket.pucriticalno, t)}
                   </Badge>
                 </div>
               </div>

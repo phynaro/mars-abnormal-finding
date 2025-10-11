@@ -33,4 +33,7 @@ router.get('/distinct/plants', authenticateToken, hierarchyController.getDistinc
 // Get distinct areas from PUExtension (for filters)
 router.get('/distinct/areas', authenticateToken, hierarchyController.getDistinctAreas);
 
+// Get PUCritical levels
+router.get('/pucritical', authenticateToken, hierarchyController.getPUCriticalLevels);
+
 module.exports = router;

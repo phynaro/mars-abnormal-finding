@@ -26,6 +26,16 @@ const SEVERITY_CLASSES: Record<string, string> = {
   low: "bg-blue-600 text-white border-blue-700",
 };
 
+const CRITICAL_LEVEL_CLASSES: Record<number, string> = {
+  1: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  2: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  3: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  4: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
+  5: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200",
+  6: "bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200",
+  7: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
+};
+
 export const getTicketStatusClass = (status?: string) => {
   if (!status) return "border-slate-200 bg-slate-50 text-slate-700";
   return (
@@ -47,5 +57,39 @@ export const getTicketSeverityClass = (severity?: string) => {
   return (
     SEVERITY_CLASSES[severity.toLowerCase()] ??
     "bg-slate-600 text-white border-slate-700"
+  );
+};
+
+// Helper function to get critical level text
+export const getCriticalLevelText = (level: number | null | undefined, t: (key: string) => string): string => {
+  if (!level) return "N/A";
+  
+  switch (level) {
+    case 1:
+      return t('ticket.criticalLevel1');
+    case 2:
+      return t('ticket.criticalLevel2');
+    case 3:
+      return t('ticket.criticalLevel3');
+    case 4:
+      return t('ticket.criticalLevel4');
+    case 5:
+      return t('ticket.criticalLevel5');
+    case 6:
+      return t('ticket.criticalLevel6');
+    case 7:
+      return t('ticket.criticalLevel7');
+    default:
+      return "N/A";
+  }
+};
+
+// Helper function to get critical level CSS classes
+export const getCriticalLevelClass = (level: number | null | undefined): string => {
+  if (!level) return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
+  
+  return (
+    CRITICAL_LEVEL_CLASSES[level] ??
+    "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
   );
 };

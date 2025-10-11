@@ -2,6 +2,12 @@ import authService from './authService';
 import { getAuthHeaders } from '../utils/authHeaders';
 import type { HierarchySiteOverview, HierarchyDepartmentDetailsResponse } from '@/types/hierarchy';
 
+export interface PUCritical {
+  PUCRITICALNO: number;
+  PUCRITICALNAME: string;
+  PUCRITICALCODE?: string;
+}
+
 class HierarchyService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/assets`;
 
@@ -27,6 +33,14 @@ class HierarchyService {
       throw Object.assign(new Error('Failed to load department details'), { status: res.status, body: text });
     }
     return res.json();
+  }
+
+  async getPUCriticalLevels(): Promise<{success: boolean; data: PUCritical[]}> {
+    const baseURL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
+    const response = await fetch(`${baseURL}/hierarchy/pucritical`, {
+      headers: this.headers()
+    });
+    return await response.json();
   }
 }
 

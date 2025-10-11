@@ -62,6 +62,7 @@ const createTicket = async (req, res) => {
         const pucode = typeof rawBody.pucode === 'string' ? rawBody.pucode : rawBody.pucode?.toString?.();
         const puno = parseOptionalInt(rawBody.puno);
         const equipmentIdInput = parseOptionalInt(rawBody.equipment_id);
+        const pucriticalnoInput = parseOptionalInt(rawBody.pucriticalno);
         const severityLevel = typeof rawBody.severity_level === 'string' ? rawBody.severity_level : rawBody.severity_level?.toString?.();
         const priorityLevel = typeof rawBody.priority === 'string' ? rawBody.priority : rawBody.priority?.toString?.();
         const imageType = typeof rawBody.image_type === 'string' && rawBody.image_type.trim()
@@ -106,13 +107,13 @@ const createTicket = async (req, res) => {
         // Create ticket record
         const ticketInsertResult = await runQuery(pool, `
             INSERT INTO Tickets (
-                ticket_number, title, description, puno, equipment_id,
+                ticket_number, title, description, puno, equipment_id, pucriticalno,
                 severity_level, priority,
                 created_by,
                 status, created_at, updated_at
             )
             VALUES (
-                @ticket_number, @title, @description, @puno, @equipment_id,
+                @ticket_number, @title, @description, @puno, @equipment_id, @pucriticalno,
                 @severity_level, @priority,
                 @created_by,
                 'open', GETDATE(), GETDATE()
@@ -124,6 +125,7 @@ const createTicket = async (req, res) => {
             { name: 'description', type: sql.NVarChar(sql.MAX), value: description },
             { name: 'puno', type: sql.Int, value: puno },
             { name: 'equipment_id', type: sql.Int, value: validatedEquipmentId },
+            { name: 'pucriticalno', type: sql.Int, value: pucriticalnoInput },
             { name: 'severity_level', type: sql.VarChar(20), value: severityLevel || 'medium' },
             { name: 'priority', type: sql.VarChar(20), value: priorityLevel || 'normal' },
             { name: 'created_by', type: sql.Int, value: created_by }

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
+import { hierarchyService, type PUCritical } from '@/services/hierarchyService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/ui/file-upload';
@@ -22,6 +23,7 @@ interface PUCODEResult {
   LINE: string;
   MACHINE: string;
   NUMBER: string;
+  PUCRITICALNO: number; // Added Critical Level
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api';
@@ -65,6 +67,7 @@ const TicketCreateWizardPage: React.FC = () => {
   const [description, setDescription] = useState('');
   const [pucode, setPucode] = useState('');
   const [puno, setPuno] = useState<number | undefined>(undefined);
+  const [pucriticalno, setPucriticalno] = useState<number | undefined>(undefined);
   const [severity, setSeverity] = useState<'low'|'medium'|'high'|'critical'>('medium');
   const [priority, setPriority] = useState<'low'|'normal'|'high'|'urgent'>('normal');
 
@@ -73,6 +76,10 @@ const TicketCreateWizardPage: React.FC = () => {
   const [equipmentLoading, setEquipmentLoading] = useState(false);
   const [selectedEquipment, setSelectedEquipment] = useState<Equipment | null>(null);
   const [redirectTicketId, setRedirectTicketId] = useState<number | null>(null);
+
+  // Critical levels state
+  const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
+  const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
 
   // Images
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
@@ -187,6 +194,31 @@ const TicketCreateWizardPage: React.FC = () => {
     }
   }, [selectedMachine]);
 
+  // Load critical levels on component mount
+  useEffect(() => {
+    loadCriticalLevels();
+  }, []);
+
+  // Load critical levels function
+  const loadCriticalLevels = async () => {
+    try {
+      setCriticalLevelsLoading(true);
+      const response = await hierarchyService.getPUCriticalLevels();
+      if (response.success) {
+        setCriticalLevels(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading critical levels:', error);
+      toast({
+        title: t('common.error'),
+        description: 'Failed to load critical levels',
+        variant: 'destructive'
+      });
+    } finally {
+      setCriticalLevelsLoading(false);
+    }
+  };
+
   // Load equipment function
   const loadEquipment = async () => {
     if (!selectedMachine) {
@@ -221,6 +253,11 @@ const TicketCreateWizardPage: React.FC = () => {
     setMachineSearchQuery(machine.PUCODE);
     setMachineSearchDropdownOpen(false);
     
+    // Auto-populate critical level from machine's PUCRITICALNO
+    if (machine.PUCRITICALNO) {
+      setPucriticalno(machine.PUCRITICALNO);
+    }
+    
     // Clear equipment selection when machine changes
     clearEquipmentSelection();
     
@@ -237,6 +274,7 @@ const TicketCreateWizardPage: React.FC = () => {
     setMachineSearchResults([]);
     setPucode('');
     setPuno(undefined);
+    setPucriticalno(undefined);
     setMachineSearchDropdownOpen(false);
     setIsSearching(false);
     setMachineSearchLoading(false);
@@ -307,6 +345,7 @@ const TicketCreateWizardPage: React.FC = () => {
         pucode: pucode.trim(),
         puno: puno,
         equipment_id: selectedEquipment?.EQNO,
+        pucriticalno: pucriticalno,
         severity_level: severity,
         priority,
       };
@@ -609,6 +648,26 @@ const TicketCreateWizardPage: React.FC = () => {
             <StepIllustration step="severity_priority" />
             <div className="space-y-4">
               <div>
+                <Label className="text-base font-semibold">Critical Level</Label>
+                <Select
+                  value={pucriticalno?.toString() || ''}
+                  onValueChange={(v) => setPucriticalno(parseInt(v))}
+                  disabled={criticalLevelsLoading}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={criticalLevelsLoading ? "Loading critical levels..." : "Select critical level..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {criticalLevels.map((level) => (
+                      <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
+                        {level.PUCRITICALNAME}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
                 <Label className="text-base font-semibold">{t('ticket.severity')}</Label>
                 <Select value={severity} onValueChange={(v) => setSeverity(v as any)}>
                   <SelectTrigger className="mt-2">
@@ -667,6 +726,12 @@ const TicketCreateWizardPage: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.title')}:</span> 
                   <span className="font-medium">{title}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Critical Level:</span> 
+                  <span className="font-medium">
+                    {pucriticalno ? criticalLevels.find(level => level.PUCRITICALNO === pucriticalno)?.PUCRITICALNAME || `Level ${pucriticalno}` : '-'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.severity')}:</span> 

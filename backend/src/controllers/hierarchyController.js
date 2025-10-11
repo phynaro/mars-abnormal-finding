@@ -231,7 +231,8 @@ const searchPUCODE = async (req, res) => {
                     PUTYPENO,
                     PUSTATUSNO,
                     DEPTNO,
-                    SiteNo
+                    SiteNo,
+                    PUCRITICALNO
                 FROM PU 
                 WHERE (PUCODE LIKE @search OR PUNAME LIKE @search)
                 AND FLAGDEL = 'F'
@@ -255,7 +256,8 @@ const searchPUCODE = async (req, res) => {
                 PUTYPENO: row.PUTYPENO,
                 PUSTATUSNO: row.PUSTATUSNO,
                 DEPTNO: row.DEPTNO,
-                SiteNo: row.SiteNo
+                SiteNo: row.SiteNo,
+                PUCRITICALNO: row.PUCRITICALNO
             };
         });
 
@@ -537,6 +539,34 @@ const getDistinctAreas = async (req, res) => {
     }
 };
 
+// Get PUCritical levels for dropdown
+const getPUCriticalLevels = async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const result = await pool.request().query(`
+            SELECT 
+                PUCRITICALNO,
+                PUCRITICALNAME,
+                PUCRITICALCODE
+            FROM PUCritical
+            WHERE FLAGDEL = 'F' AND PUCRITICALNO >=4
+            ORDER BY PUCRITICALNO
+        `);
+        
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+    } catch (error) {
+        console.error('Get PUCritical levels error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch critical levels',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getPlants,
     getAllAreas,
@@ -547,5 +577,6 @@ module.exports = {
     getPUCODEDetails,
     generatePUCODE,
     getDistinctPlants,
-    getDistinctAreas
+    getDistinctAreas,
+    getPUCriticalLevels
 };
