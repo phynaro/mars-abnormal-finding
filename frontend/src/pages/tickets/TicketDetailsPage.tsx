@@ -71,6 +71,7 @@ const TicketDetailsPage: React.FC = () => {
   // Add key to prevent unnecessary re-mounts
   const componentKey = `ticket-${ticketId}`;
   const mountCountRef = useRef(0);
+  const fetchInProgressRef = useRef(false);
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -166,7 +167,14 @@ const TicketDetailsPage: React.FC = () => {
   };
 
   const fetchTicketDetails = useCallback(async () => {
+    // Prevent duplicate calls using ref
+    if (fetchInProgressRef.current) {
+      console.log('⏸️ Skipping duplicate fetch - already in progress');
+      return;
+    }
+    
     try {
+      fetchInProgressRef.current = true;
       setLoading(true);
       console.log('🔄 Fetching ticket details for ID:', ticketId);
       const response = await ticketService.getTicketById(parseInt(ticketId!));
@@ -181,6 +189,7 @@ const TicketDetailsPage: React.FC = () => {
       setError(t('ticket.errorLoadingTickets'));
     } finally {
       setLoading(false);
+      fetchInProgressRef.current = false;
     }
   }, [ticketId, t]);
 
@@ -199,6 +208,8 @@ const TicketDetailsPage: React.FC = () => {
     console.log('🏁 TicketDetailsPage mounted - Mount #', mountCountRef.current);
     return () => {
       console.log('👋 TicketDetailsPage unmounted - Mount #', mountCountRef.current);
+      // Reset fetch flag on unmount
+      fetchInProgressRef.current = false;
     };
   }, []);
 
