@@ -71,8 +71,10 @@ const TicketDetailsPage: React.FC = () => {
   // Add key to prevent unnecessary re-mounts
   const componentKey = `ticket-${ticketId}`;
   const mountCountRef = useRef(0);
-  const fetchInProgressRef = useRef(false);
   const [ticket, setTicket] = useState<Ticket | null>(null);
+  
+  // Global cache to prevent duplicate API calls across component re-mounts
+  const ticketCacheRef = useRef<Map<string, { data: Ticket | null; loading: boolean; timestamp: number }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -167,29 +169,52 @@ const TicketDetailsPage: React.FC = () => {
   };
 
   const fetchTicketDetails = useCallback(async () => {
-    // Prevent duplicate calls using ref
-    if (fetchInProgressRef.current) {
-      console.log('⏸️ Skipping duplicate fetch - already in progress');
+    if (!ticketId) return;
+    
+    const cacheKey = `ticket-${ticketId}`;
+    const cached = ticketCacheRef.current.get(cacheKey);
+    const now = Date.now();
+    const CACHE_DURATION = 5000; // 5 seconds
+    
+    // Check if we have recent cached data
+    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+      console.log('📦 Using cached ticket data for ID:', ticketId);
+      setTicket(cached.data);
+      setLoading(false);
+      return;
+    }
+    
+    // Check if another instance is already loading this ticket
+    if (cached && cached.loading) {
+      console.log('⏸️ Skipping duplicate fetch - already loading in another instance');
       return;
     }
     
     try {
-      fetchInProgressRef.current = true;
+      // Mark as loading in cache
+      ticketCacheRef.current.set(cacheKey, { data: null, loading: true, timestamp: now });
       setLoading(true);
       console.log('🔄 Fetching ticket details for ID:', ticketId);
-      const response = await ticketService.getTicketById(parseInt(ticketId!));
+      
+      const response = await ticketService.getTicketById(parseInt(ticketId));
       if (response.success) {
-        setTicket(response.data);
-        console.log('✅ Ticket loaded successfully:', response.data);
+        const ticketData = response.data;
+        // Cache the successful result
+        ticketCacheRef.current.set(cacheKey, { data: ticketData, loading: false, timestamp: now });
+        setTicket(ticketData);
+        console.log('✅ Ticket loaded successfully:', ticketData);
       } else {
         setError(t('ticket.failedToFetchTickets'));
+        // Clear cache on error
+        ticketCacheRef.current.delete(cacheKey);
       }
     } catch (err) {
       console.error("Error fetching ticket:", err);
       setError(t('ticket.errorLoadingTickets'));
+      // Clear cache on error
+      ticketCacheRef.current.delete(cacheKey);
     } finally {
       setLoading(false);
-      fetchInProgressRef.current = false;
     }
   }, [ticketId, t]);
 
@@ -208,8 +233,6 @@ const TicketDetailsPage: React.FC = () => {
     console.log('🏁 TicketDetailsPage mounted - Mount #', mountCountRef.current);
     return () => {
       console.log('👋 TicketDetailsPage unmounted - Mount #', mountCountRef.current);
-      // Reset fetch flag on unmount
-      fetchInProgressRef.current = false;
     };
   }, []);
 
