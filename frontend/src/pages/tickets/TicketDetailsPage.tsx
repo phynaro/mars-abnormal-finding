@@ -164,10 +164,11 @@ const TicketDetailsPage: React.FC = () => {
   const fetchTicketDetails = useCallback(async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fetching ticket details for ID:', ticketId);
       const response = await ticketService.getTicketById(parseInt(ticketId!));
       if (response.success) {
         setTicket(response.data);
-        console.log(response.data);
+        console.log('✅ Ticket loaded successfully:', response.data);
       } else {
         setError(t('ticket.failedToFetchTickets'));
       }
@@ -180,6 +181,7 @@ const TicketDetailsPage: React.FC = () => {
   }, [ticketId, t]);
 
   useEffect(() => {
+    console.log('🚀 TicketDetailsPage useEffect triggered with ticketId:', ticketId);
     if (ticketId) {
       fetchTicketDetails();
     } else {
@@ -187,6 +189,13 @@ const TicketDetailsPage: React.FC = () => {
       setLoading(false);
     }
   }, [ticketId, fetchTicketDetails]);
+
+  useEffect(() => {
+    console.log('🏁 TicketDetailsPage mounted');
+    return () => {
+      console.log('👋 TicketDetailsPage unmounted');
+    };
+  }, []);
 
   // Load failure modes only when finish modal opens
   useEffect(() => {

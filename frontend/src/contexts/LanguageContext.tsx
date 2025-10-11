@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from 'react';
 
 export type Language = 'en' | 'th';
 
@@ -1282,7 +1282,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     setLanguageState(lang);
   };
 
-  const t = (key: string, params?: Record<string, string | number>): string => {
+  const t = useCallback((key: string, params?: Record<string, string | number>): string => {
     let translation = translations[language][key] || key;
     
     if (params) {
@@ -1292,7 +1292,7 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
     }
     
     return translation;
-  };
+  }, [language]);
 
   const value: LanguageContextType = {
     language,
