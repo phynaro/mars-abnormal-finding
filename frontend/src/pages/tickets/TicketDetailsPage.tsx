@@ -79,6 +79,7 @@ const TicketDetailsPage: React.FC = () => {
   const [, setProgressMap] = useState<Record<number, number>>({});
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [cedarInfoOpen, setCedarInfoOpen] = useState(false);
   const { user } = useAuth();
   const { t } = useLanguage();
   // Action modal hooks must be declared before any early returns
@@ -422,8 +423,8 @@ const TicketDetailsPage: React.FC = () => {
   ) => {
     const accentClasses =
       accent === "before"
-        ? "border-red-200/70 ring-red-100/50 active:ring-2 dark:border-red-500/60 dark:ring-red-900/40"
-        : "border-emerald-200/70 ring-emerald-100/50 active:ring-2 dark:border-emerald-500/60 dark:ring-emerald-900/40";
+        ? "border-red-200/70 ring-red-100/50 hover:ring-2 dark:border-red-500/60 dark:ring-red-900/40"
+        : "border-emerald-200/70 ring-emerald-100/50 hover:ring-2 dark:border-emerald-500/60 dark:ring-emerald-900/40";
 
     return (
       <div
@@ -447,7 +448,7 @@ const TicketDetailsPage: React.FC = () => {
         </button>
         {(isApprover || isCreator) && (
           <button
-            className="absolute right-3 top-3 hidden rounded-full bg-white/90 p-1 text-red-600 shadow-sm transition active:bg-white group-hover:block sm:group-hover:block"
+            className="absolute right-3 top-3 hidden rounded-full bg-white/90 p-1 text-red-600 shadow-sm transition hover:bg-white group-hover:block"
             title="Delete image"
             onClick={async () => {
               try {
@@ -1145,50 +1146,64 @@ const TicketDetailsPage: React.FC = () => {
                   <Badge className={getCedarSyncStatusClass(ticket.cedar_sync_status)}>
                     {getCedarSyncStatusText(ticket.cedar_sync_status)}
                   </Badge>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 active:bg-gray-200 dark:bg-gray-700 dark:active:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors touch-manipulation">
-                          <Info className="h-3 w-3" />
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent className="max-w-xs" side="top">
-                        <div className="space-y-2 text-sm">
-                          <div className="font-medium">Cedar Integration Details</div>
-                          <div className="space-y-1">
-                            <div className="flex justify-between">
-                              <span className="text-gray-500">Status:</span>
-                              <span className="font-medium">{getCedarSyncStatusText(ticket.cedar_sync_status)}</span>
+                  <div className="relative">
+                    {/* Desktop: Tooltip on hover */}
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button 
+                            className="hidden sm:inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors"
+                            onClick={() => setCedarInfoOpen(true)}
+                          >
+                            <Info className="h-3 w-3" />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent className="max-w-xs" side="top">
+                          <div className="space-y-2 text-sm">
+                            <div className="font-medium">Cedar Integration Details</div>
+                            <div className="space-y-1">
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">Status:</span>
+                                <span className="font-medium">{getCedarSyncStatusText(ticket.cedar_sync_status)}</span>
+                              </div>
+                              {ticket.cedar_wono && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">WO Number:</span>
+                                  <span className="font-mono">{ticket.cedar_wono}</span>
+                                </div>
+                              )}
+                              {ticket.cedar_wocode && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">WO Code:</span>
+                                  <span className="font-mono">{ticket.cedar_wocode}</span>
+                                </div>
+                              )}
+                              {ticket.cedar_last_sync && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">Last Sync:</span>
+                                  <span className="text-xs">{formatCommentTime(ticket.cedar_last_sync)}</span>
+                                </div>
+                              )}
+                              {ticket.cedar_sync_error && (
+                                <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs">
+                                  <div className="font-medium text-red-800 dark:text-red-200">Error:</div>
+                                  <div className="text-red-700 dark:text-red-300 mt-1">{ticket.cedar_sync_error}</div>
+                                </div>
+                              )}
                             </div>
-                            {ticket.cedar_wono && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-500">WO Number:</span>
-                                <span className="font-mono">{ticket.cedar_wono}</span>
-                              </div>
-                            )}
-                            {ticket.cedar_wocode && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-500">WO Code:</span>
-                                <span className="font-mono">{ticket.cedar_wocode}</span>
-                              </div>
-                            )}
-                            {ticket.cedar_last_sync && (
-                              <div className="flex justify-between">
-                                <span className="text-gray-500">Last Sync:</span>
-                                <span className="text-xs">{formatCommentTime(ticket.cedar_last_sync)}</span>
-                              </div>
-                            )}
-                            {ticket.cedar_sync_error && (
-                              <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs">
-                                <div className="font-medium text-red-800 dark:text-red-200">Error:</div>
-                                <div className="text-red-700 dark:text-red-300 mt-1">{ticket.cedar_sync_error}</div>
-                              </div>
-                            )}
                           </div>
-                        </div>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                    
+                    {/* Mobile: Direct button click */}
+                    <button 
+                      className="sm:hidden inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 active:bg-gray-200 dark:bg-gray-700 dark:active:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors touch-manipulation"
+                      onClick={() => setCedarInfoOpen(true)}
+                    >
+                      <Info className="h-3 w-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1245,7 +1260,7 @@ const TicketDetailsPage: React.FC = () => {
                     {ticket.reporter_phone && (
                       <a
                         href={`tel:${ticket.reporter_phone}`}
-                        className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 active:bg-green-200 dark:bg-green-900 dark:active:bg-green-800 text-green-700 dark:text-green-300 transition-colors touch-manipulation"
+                        className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-700 dark:text-green-300 transition-colors"
                         title={`Call ${ticket.reporter_name}: ${ticket.reporter_phone}`}
                       >
                         <Phone className="h-3 w-3" />
@@ -1263,7 +1278,7 @@ const TicketDetailsPage: React.FC = () => {
                       {ticket.assignee_phone && (
                         <a
                           href={`tel:${ticket.assignee_phone}`}
-                          className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 active:bg-green-200 dark:bg-green-900 dark:active:bg-green-800 text-green-700 dark:text-green-300 transition-colors touch-manipulation"
+                          className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-700 dark:text-green-300 transition-colors"
                           title={`Call ${ticket.assignee_name}: ${ticket.assignee_phone}`}
                         >
                           <Phone className="h-3 w-3" />
@@ -1704,7 +1719,7 @@ const TicketDetailsPage: React.FC = () => {
                               <button
                                 type="button"
                                 key={u.id}
-                                className="w-full text-left px-3 py-2 text-sm active:bg-hover active:text-hover-foreground"
+                                className="w-full text-left px-3 py-2 text-sm hover:bg-hover hover:text-hover-foreground"
                                 onClick={() => {
                                   setActionExtraId(String(u.id));
                                   setAssigneeQuery(u.name);
@@ -1878,7 +1893,7 @@ const TicketDetailsPage: React.FC = () => {
                             <button
                               type="button"
                               key={u.id}
-                              className="w-full text-left px-3 py-2 text-sm active:bg-hover active:text-hover-foreground"
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-hover hover:text-hover-foreground"
                               onClick={() => {
                                 setActionExtraId(String(u.id));
                                 setAssigneeQuery(u.name);
@@ -1934,7 +1949,7 @@ const TicketDetailsPage: React.FC = () => {
                           <button
                             type="button"
                             key={u.id}
-                            className="w-full text-left px-3 py-2 text-sm active:bg-hover active:text-hover-foreground"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-hover hover:text-hover-foreground"
                             onClick={() => {
                               setActionExtraId(String(u.id));
                               setAssigneeQuery(u.name);
@@ -2029,6 +2044,55 @@ const TicketDetailsPage: React.FC = () => {
                 disabled={deleting || !deleteComment.trim()}
               >
                 {deleting ? t('ticket.deleting') : t('ticket.confirmDelete')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cedar Integration Info Modal */}
+      <Dialog open={cedarInfoOpen} onOpenChange={setCedarInfoOpen}>
+        <DialogContent className="max-w-md">
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold">Cedar Integration Details</h3>
+            <div className="space-y-3 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Status:</span>
+                <Badge className={getCedarSyncStatusClass(ticket?.cedar_sync_status)}>
+                  {getCedarSyncStatusText(ticket?.cedar_sync_status)}
+                </Badge>
+              </div>
+              {ticket?.cedar_wono && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">WO Number:</span>
+                  <span className="font-mono">{ticket.cedar_wono}</span>
+                </div>
+              )}
+              {ticket?.cedar_wocode && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">WO Code:</span>
+                  <span className="font-mono">{ticket.cedar_wocode}</span>
+                </div>
+              )}
+              {ticket?.cedar_last_sync && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Last Sync:</span>
+                  <span className="text-xs">{formatCommentTime(ticket.cedar_last_sync)}</span>
+                </div>
+              )}
+              {ticket?.cedar_sync_error && (
+                <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/20 rounded text-xs">
+                  <div className="font-medium text-red-800 dark:text-red-200">Error:</div>
+                  <div className="text-red-700 dark:text-red-300 mt-1">{ticket.cedar_sync_error}</div>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setCedarInfoOpen(false)}
+              >
+                {t('common.close')}
               </Button>
             </div>
           </div>
