@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket } from "@/services/ticketService";
@@ -161,6 +161,24 @@ const TicketDetailsPage: React.FC = () => {
     return '/tickets';
   };
 
+  const fetchTicketDetails = useCallback(async () => {
+    try {
+      setLoading(true);
+      const response = await ticketService.getTicketById(parseInt(ticketId!));
+      if (response.success) {
+        setTicket(response.data);
+        console.log(response.data);
+      } else {
+        setError(t('ticket.failedToFetchTickets'));
+      }
+    } catch (err) {
+      console.error("Error fetching ticket:", err);
+      setError(t('ticket.errorLoadingTickets'));
+    } finally {
+      setLoading(false);
+    }
+  }, [ticketId, t]);
+
   useEffect(() => {
     if (ticketId) {
       fetchTicketDetails();
@@ -168,7 +186,7 @@ const TicketDetailsPage: React.FC = () => {
       setError("No ticket ID provided");
       setLoading(false);
     }
-  }, [ticketId]);
+  }, [ticketId, fetchTicketDetails]);
 
   // Load failure modes only when finish modal opens
   useEffect(() => {
@@ -186,24 +204,6 @@ const TicketDetailsPage: React.FC = () => {
     };
     loadFailureModes();
   }, [actionOpen, actionType]);
-
-  const fetchTicketDetails = async () => {
-    try {
-      setLoading(true);
-      const response = await ticketService.getTicketById(parseInt(ticketId!));
-      if (response.success) {
-        setTicket(response.data);
-        console.log(response.data);
-      } else {
-        setError(t('ticket.failedToFetchTickets'));
-      }
-    } catch (err) {
-      console.error("Error fetching ticket:", err);
-      setError(t('ticket.errorLoadingTickets'));
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Load assignees only when modal is open with specific actions
   useEffect(() => {
