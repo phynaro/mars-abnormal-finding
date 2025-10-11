@@ -27,6 +27,7 @@ import {
   Play,
   UserPlus,
   Phone,
+  Info,
 } from "lucide-react";
 import { getApiBaseUrl, getFileUrl } from "@/utils/url";
 import { Input } from "@/components/ui/input";
@@ -41,6 +42,12 @@ import {
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { FileUpload } from "@/components/ui/file-upload";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import authService from "@/services/authService";
@@ -52,6 +59,38 @@ import {
   getCriticalLevelText,
   getCriticalLevelClass,
 } from "@/utils/ticketBadgeStyles";
+
+// Helper function to get Cedar sync status badge styling
+const getCedarSyncStatusClass = (status: string | null) => {
+  switch (status) {
+    case 'success':
+      return 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-700';
+    case 'error':
+      return 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-700';
+    case 'pending':
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-200 dark:border-yellow-700';
+    case 'syncing':
+      return 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700';
+    default:
+      return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600';
+  }
+};
+
+// Helper function to get Cedar sync status text
+const getCedarSyncStatusText = (status: string | null) => {
+  switch (status) {
+    case 'success':
+      return 'Synced';
+    case 'error':
+      return 'Error';
+    case 'pending':
+      return 'Pending';
+    case 'syncing':
+      return 'Syncing';
+    default:
+      return 'Unknown';
+  }
+};
 
 const TicketDetailsPage: React.FC = () => {
   const { ticketId } = useParams<{ ticketId: string }>();
@@ -1136,6 +1175,62 @@ const TicketDetailsPage: React.FC = () => {
                   </p>
                 </div>
               )}
+
+              {/* Cedar Integration Status */}
+              <div>
+                <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  Cedar Sync
+                </p>
+                <div className="mt-1 flex items-center gap-2">
+                  <Badge className={getCedarSyncStatusClass(ticket.cedar_sync_status)}>
+                    {getCedarSyncStatusText(ticket.cedar_sync_status)}
+                  </Badge>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors">
+                          <Info className="h-3 w-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs">
+                        <div className="space-y-2 text-sm">
+                          <div className="font-medium">Cedar Integration Details</div>
+                          <div className="space-y-1">
+                            <div className="flex justify-between">
+                              <span className="text-gray-500">Status:</span>
+                              <span className="font-medium">{getCedarSyncStatusText(ticket.cedar_sync_status)}</span>
+                            </div>
+                            {ticket.cedar_wono && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">WO Number:</span>
+                                <span className="font-mono">{ticket.cedar_wono}</span>
+                              </div>
+                            )}
+                            {ticket.cedar_wocode && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">WO Code:</span>
+                                <span className="font-mono">{ticket.cedar_wocode}</span>
+                              </div>
+                            )}
+                            {ticket.cedar_last_sync && (
+                              <div className="flex justify-between">
+                                <span className="text-gray-500">Last Sync:</span>
+                                <span className="text-xs">{formatCommentTime(ticket.cedar_last_sync)}</span>
+                              </div>
+                            )}
+                            {ticket.cedar_sync_error && (
+                              <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs">
+                                <div className="font-medium text-red-800 dark:text-red-200">Error:</div>
+                                <div className="text-red-700 dark:text-red-300 mt-1">{ticket.cedar_sync_error}</div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </div>
+              </div>
 
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-2">
                 <div>

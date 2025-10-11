@@ -11,6 +11,10 @@ export interface Ticket {
   puno?: number; // New field for PU ID
   pucriticalno?: number; // New field for Critical Level
   cedar_wocode?: string; // CEDAR work order code
+  cedar_wono?: number; // CEDAR work order number
+  cedar_sync_status?: string; // Cedar sync status (success, error, pending, syncing)
+  cedar_last_sync?: string; // Last sync timestamp
+  cedar_sync_error?: string; // Cedar sync error message
   plant_id?: number;
   area_id?: number;
   line_id?: number;
