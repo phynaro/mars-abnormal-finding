@@ -422,8 +422,8 @@ const TicketDetailsPage: React.FC = () => {
   ) => {
     const accentClasses =
       accent === "before"
-        ? "border-red-200/70 ring-red-100/50 hover:ring-2 dark:border-red-500/60 dark:ring-red-900/40"
-        : "border-emerald-200/70 ring-emerald-100/50 hover:ring-2 dark:border-emerald-500/60 dark:ring-emerald-900/40";
+        ? "border-red-200/70 ring-red-100/50 active:ring-2 dark:border-red-500/60 dark:ring-red-900/40"
+        : "border-emerald-200/70 ring-emerald-100/50 active:ring-2 dark:border-emerald-500/60 dark:ring-emerald-900/40";
 
     return (
       <div
@@ -447,7 +447,7 @@ const TicketDetailsPage: React.FC = () => {
         </button>
         {(isApprover || isCreator) && (
           <button
-            className="absolute right-3 top-3 hidden rounded-full bg-white/90 p-1 text-red-600 shadow-sm transition hover:bg-white group-hover:block"
+            className="absolute right-3 top-3 hidden rounded-full bg-white/90 p-1 text-red-600 shadow-sm transition active:bg-white group-hover:block sm:group-hover:block"
             title="Delete image"
             onClick={async () => {
               try {
@@ -1136,17 +1136,6 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
               )}
 
-              {ticket.cedar_wocode && (
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    CEDAR WO
-                  </p>
-                  <p className="mt-1 font-mono text-sm text-gray-900 dark:text-gray-100">
-                    {ticket.cedar_wocode}
-                  </p>
-                </div>
-              )}
-
               {/* Cedar Integration Status */}
               <div>
                 <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -1159,11 +1148,11 @@ const TicketDetailsPage: React.FC = () => {
                   <TooltipProvider>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <button className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors">
+                        <button className="inline-flex items-center justify-center h-5 w-5 rounded-full bg-gray-100 active:bg-gray-200 dark:bg-gray-700 dark:active:bg-gray-600 text-gray-600 dark:text-gray-300 transition-colors touch-manipulation">
                           <Info className="h-3 w-3" />
                         </button>
                       </TooltipTrigger>
-                      <TooltipContent className="max-w-xs">
+                      <TooltipContent className="max-w-xs" side="top">
                         <div className="space-y-2 text-sm">
                           <div className="font-medium">Cedar Integration Details</div>
                           <div className="space-y-1">
@@ -1256,7 +1245,7 @@ const TicketDetailsPage: React.FC = () => {
                     {ticket.reporter_phone && (
                       <a
                         href={`tel:${ticket.reporter_phone}`}
-                        className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-700 dark:text-green-300 transition-colors"
+                        className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 active:bg-green-200 dark:bg-green-900 dark:active:bg-green-800 text-green-700 dark:text-green-300 transition-colors touch-manipulation"
                         title={`Call ${ticket.reporter_name}: ${ticket.reporter_phone}`}
                       >
                         <Phone className="h-3 w-3" />
@@ -1274,7 +1263,7 @@ const TicketDetailsPage: React.FC = () => {
                       {ticket.assignee_phone && (
                         <a
                           href={`tel:${ticket.assignee_phone}`}
-                          className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 hover:bg-green-200 dark:bg-green-900 dark:hover:bg-green-800 text-green-700 dark:text-green-300 transition-colors"
+                          className="inline-flex items-center justify-center h-6 w-6 rounded-full bg-green-100 active:bg-green-200 dark:bg-green-900 dark:active:bg-green-800 text-green-700 dark:text-green-300 transition-colors touch-manipulation"
                           title={`Call ${ticket.assignee_name}: ${ticket.assignee_phone}`}
                         >
                           <Phone className="h-3 w-3" />
@@ -1715,7 +1704,7 @@ const TicketDetailsPage: React.FC = () => {
                               <button
                                 type="button"
                                 key={u.id}
-                                className="w-full text-left px-3 py-2 text-sm hover:bg-hover hover:text-hover-foreground"
+                                className="w-full text-left px-3 py-2 text-sm active:bg-hover active:text-hover-foreground"
                                 onClick={() => {
                                   setActionExtraId(String(u.id));
                                   setAssigneeQuery(u.name);
@@ -1889,7 +1878,7 @@ const TicketDetailsPage: React.FC = () => {
                             <button
                               type="button"
                               key={u.id}
-                              className="w-full text-left px-3 py-2 text-sm hover:bg-hover hover:text-hover-foreground"
+                              className="w-full text-left px-3 py-2 text-sm active:bg-hover active:text-hover-foreground"
                               onClick={() => {
                                 setActionExtraId(String(u.id));
                                 setAssigneeQuery(u.name);
@@ -1945,7 +1934,7 @@ const TicketDetailsPage: React.FC = () => {
                           <button
                             type="button"
                             key={u.id}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-hover hover:text-hover-foreground"
+                            className="w-full text-left px-3 py-2 text-sm active:bg-hover active:text-hover-foreground"
                             onClick={() => {
                               setActionExtraId(String(u.id));
                               setAssigneeQuery(u.name);
