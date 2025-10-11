@@ -36,6 +36,13 @@ const CRITICAL_LEVEL_CLASSES: Record<number, string> = {
   7: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200",
 };
 
+const CEDAR_SYNC_STATUS_CLASSES: Record<string, string> = {
+  success: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-700',
+  error: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-200 dark:border-red-700',
+  pending: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-200 dark:border-yellow-700',
+  syncing: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700',
+};
+
 export const getTicketStatusClass = (status?: string) => {
   if (!status) return "border-slate-200 bg-slate-50 text-slate-700";
   return (
@@ -92,4 +99,32 @@ export const getCriticalLevelClass = (level: number | null | undefined): string 
     CRITICAL_LEVEL_CLASSES[level] ??
     "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200"
   );
+};
+
+// Helper function to get Cedar sync status badge styling
+export const getCedarSyncStatusClass = (status: string | null | undefined): string => {
+  if (!status) return 'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600';
+  
+  return (
+    CEDAR_SYNC_STATUS_CLASSES[status.toLowerCase()] ??
+    'bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-600'
+  );
+};
+
+// Helper function to get Cedar sync status text
+export const getCedarSyncStatusText = (status: string | null | undefined): string => {
+  if (!status) return 'Unknown';
+  
+  switch (status.toLowerCase()) {
+    case 'success':
+      return 'Synced';
+    case 'error':
+      return 'Error';
+    case 'pending':
+      return 'Pending';
+    case 'syncing':
+      return 'Syncing';
+    default:
+      return 'Unknown';
+  }
 };
