@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, Camera } from 'lucide-react';
 import authService from '@/services/authService';
+import { compressTicketImage, formatFileSize } from '@/utils/imageCompression';
 
 // Machine data type from PU table
 
@@ -54,6 +55,7 @@ const TicketCreatePage: React.FC = () => {
   const [isDragOver, setIsDragOver] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Machine selection state - simplified approach
@@ -378,7 +380,25 @@ const TicketCreatePage: React.FC = () => {
         priority: formData.priority,
       };
 
-      const createRes = await ticketService.createTicket(payload, selectedFiles, 'before');
+      // Compress images before upload to prevent 413 errors
+      let filesToUpload = selectedFiles;
+      if (selectedFiles.length > 0) {
+        console.log(`Compressing ${selectedFiles.length} images before upload...`);
+        filesToUpload = await Promise.all(
+          selectedFiles.map(async (file, index) => {
+            console.log(`Compressing image ${index + 1}/${selectedFiles.length}: ${formatFileSize(file.size)}`);
+            const compressed = await compressTicketImage(file, { 
+              maxWidth: 1920, 
+              maxHeight: 1920, 
+              quality: 0.9 
+            });
+            console.log(`Compressed to: ${formatFileSize(compressed.size)}`);
+            return compressed;
+          })
+        );
+      }
+
+      const createRes = await ticketService.createTicket(payload, filesToUpload, 'before');
       const ticketId = createRes.data.id;
 
       try {
@@ -612,18 +632,33 @@ const TicketCreatePage: React.FC = () => {
                         {isDragOver ? t('ticket.dropFilesHere') : t('ticket.dragDropFiles')}
                       </p>
                       {!isDragOver && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            fileInputRef.current?.click();
-                          }}
-                          disabled={submitting}
-                        >
-                          {t('ticket.browseFiles')}
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              fileInputRef.current?.click();
+                            }}
+                            disabled={submitting}
+                          >
+                            {t('ticket.browseFiles')}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              cameraInputRef.current?.click();
+                            }}
+                            disabled={submitting}
+                            title="Take Photo"
+                          >
+                            <Camera className="h-4 w-4" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -635,6 +670,17 @@ const TicketCreatePage: React.FC = () => {
                     id="images"
                     type="file"
                     accept="image/png,image/jpeg,image/jpg"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileInputChange}
+                    disabled={submitting}
+                  />
+                  <Input
+                    ref={cameraInputRef}
+                    id="camera"
+                    type="file"
+                    accept="image/*"
+                    capture="environment"
                     multiple
                     className="hidden"
                     onChange={handleFileInputChange}

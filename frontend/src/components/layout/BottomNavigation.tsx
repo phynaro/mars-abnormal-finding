@@ -33,36 +33,34 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
       label: 'Home',
       icon: <Home className="h-5 w-5" />,
       path: '/home',
-      permissionLevel: 1,
+      permissionLevel: 0,
     },
     {
       id: 'dashboard',
       label: 'Dashboard',
       icon: <LayoutDashboard className="h-5 w-5" />,
       path: '/dashboard',
-      permissionLevel: 1,
+      permissionLevel: 0,
     },
     {
       id: 'tickets',
       label: 'Tickets',
       icon: <Ticket className="h-5 w-5" />,
       path: '/tickets',
-      permissionLevel: 1,
+      permissionLevel: 0,
     },
     {
       id: 'profile',
       label: 'Profile',
       icon: <User className="h-5 w-5" />,
       path: '/profile',
-      permissionLevel: 1,
+      permissionLevel: 0,
     },
   ];
 
   const canAccess = (permissionLevel: number) => {
-    if (user?.permissionLevel === undefined) {
-      return true;
-    }
-    return user.permissionLevel >= permissionLevel;
+    // Bottom navigation doesn't require any permissions
+    return true;
   };
 
   const isActive = (path: string) => {

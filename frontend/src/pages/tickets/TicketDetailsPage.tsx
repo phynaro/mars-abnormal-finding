@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ticketService } from "@/services/ticketService";
-import type { Ticket } from "@/services/ticketService";
+import type { Ticket, SingleTicketResponse } from "@/services/ticketService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +41,7 @@ import {
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
-import { FileUpload } from "@/components/ui/file-upload";
+import { FileUpload, type FileUploadRef } from "@/components/ui/file-upload";
 import {
   Tooltip,
   TooltipContent,
@@ -61,29 +61,50 @@ import {
   getCedarSyncStatusClass,
   getCedarSyncStatusText,
 } from "@/utils/ticketBadgeStyles";
+import { compressTicketImage, formatFileSize } from "@/utils/imageCompression";
 
+type TicketCacheEntry = { data: Ticket; timestamp: number };
+
+const TICKET_CACHE_DURATION_MS = 5000;
+const ticketDataCache = new Map<number, TicketCacheEntry>();
+const pendingTicketRequests = new Map<number, Promise<SingleTicketResponse>>();
 
 const TicketDetailsPage: React.FC = () => {
   const { ticketId } = useParams<{ ticketId: string }>();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  // Add key to prevent unnecessary re-mounts
-  const componentKey = `ticket-${ticketId}`;
+
   const mountCountRef = useRef(0);
+  const beforeFileUploadRef = useRef<FileUploadRef>(null);
+  const afterFileUploadRef = useRef<FileUploadRef>(null);
   const [ticket, setTicket] = useState<Ticket | null>(null);
-  
-  // Global cache to prevent duplicate API calls across component re-mounts
-  const ticketCacheRef = useRef<Map<string, { data: Ticket | null; loading: boolean; timestamp: number }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [deletingImageId, setDeletingImageId] = useState<number | null>(null);
   // Separate file queues for before/after uploads
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragTarget, setDragTarget] = useState<"before" | "after" | null>(null);
   const [, setProgressMap] = useState<Record<number, number>>({});
+  
+  // Generate previews for selected files
+  const beforePreviews = useMemo(() => {
+    return beforeFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) }));
+  }, [beforeFiles]);
+  
+  const afterPreviews = useMemo(() => {
+    return afterFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) }));
+  }, [afterFiles]);
+  
+  // Clean up object URLs when files change
+  useEffect(() => {
+    return () => {
+      beforePreviews.forEach(p => URL.revokeObjectURL(p.url));
+      afterPreviews.forEach(p => URL.revokeObjectURL(p.url));
+    };
+  }, [beforePreviews, afterPreviews]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [cedarInfoOpen, setCedarInfoOpen] = useState(false);
@@ -150,6 +171,14 @@ const TicketDetailsPage: React.FC = () => {
 
   // Ref for assignee dropdown to handle click outside
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
+  const isMountedRef = useRef(false);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   // Function to determine where to navigate back to
   const getBackNavigation = () => {
@@ -170,51 +199,56 @@ const TicketDetailsPage: React.FC = () => {
 
   const fetchTicketDetails = useCallback(async () => {
     if (!ticketId) return;
-    
-    const cacheKey = `ticket-${ticketId}`;
-    const cached = ticketCacheRef.current.get(cacheKey);
+
+    const numericId = parseInt(ticketId, 10);
+    const cacheEntry = ticketDataCache.get(numericId);
     const now = Date.now();
-    const CACHE_DURATION = 5000; // 5 seconds
-    
-    // Check if we have recent cached data
-    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+
+    if (cacheEntry && (now - cacheEntry.timestamp) < TICKET_CACHE_DURATION_MS) {
       console.log('📦 Using cached ticket data for ID:', ticketId);
-      setTicket(cached.data);
-      setLoading(false);
+      if (isMountedRef.current) {
+        setTicket(cacheEntry.data);
+        setLoading(false);
+      }
       return;
     }
-    
-    // Check if another instance is already loading this ticket
-    if (cached && cached.loading) {
-      console.log('⏸️ Skipping duplicate fetch - already loading in another instance');
-      return;
-    }
-    
-    try {
-      // Mark as loading in cache
-      ticketCacheRef.current.set(cacheKey, { data: null, loading: true, timestamp: now });
-      setLoading(true);
+
+    setLoading(true);
+    setError(null);
+
+    let request = pendingTicketRequests.get(numericId);
+    if (!request) {
       console.log('🔄 Fetching ticket details for ID:', ticketId);
-      
-      const response = await ticketService.getTicketById(parseInt(ticketId));
+      request = ticketService.getTicketById(numericId);
+      pendingTicketRequests.set(numericId, request);
+    } else {
+      console.log('⏳ Reusing in-flight request for ticket ID:', ticketId);
+    }
+
+    try {
+      const response = await request;
+
       if (response.success) {
-        const ticketData = response.data;
-        // Cache the successful result
-        ticketCacheRef.current.set(cacheKey, { data: ticketData, loading: false, timestamp: now });
-        setTicket(ticketData);
-        console.log('✅ Ticket loaded successfully:', ticketData);
-      } else {
+        ticketDataCache.set(numericId, { data: response.data, timestamp: Date.now() });
+        if (isMountedRef.current) {
+          setTicket(response.data);
+          console.log('✅ Ticket loaded successfully:', response.data);
+        }
+      } else if (isMountedRef.current) {
         setError(t('ticket.failedToFetchTickets'));
-        // Clear cache on error
-        ticketCacheRef.current.delete(cacheKey);
       }
     } catch (err) {
       console.error("Error fetching ticket:", err);
-      setError(t('ticket.errorLoadingTickets'));
-      // Clear cache on error
-      ticketCacheRef.current.delete(cacheKey);
+      if (isMountedRef.current) {
+        setError(t('ticket.errorLoadingTickets'));
+      }
     } finally {
-      setLoading(false);
+      if (pendingTicketRequests.get(numericId) === request) {
+        pendingTicketRequests.delete(numericId);
+      }
+      if (isMountedRef.current) {
+        setLoading(false);
+      }
     }
   }, [ticketId, t]);
 
@@ -322,15 +356,25 @@ const TicketDetailsPage: React.FC = () => {
 
       // Upload files sequentially to get per-file progress
       for (let i = 0; i < selectedFiles.length; i++) {
-        const file = selectedFiles[i];
+        const originalFile = selectedFiles[i];
+        
+        // Compress image before upload to prevent 413 errors
+        console.log(`Compressing image ${i + 1}/${selectedFiles.length}: ${formatFileSize(originalFile.size)}`);
+        const compressedFile = await compressTicketImage(originalFile, { 
+          maxWidth: 1920, 
+          maxHeight: 1920, 
+          quality: 0.9 
+        });
+        console.log(`Compressed to: ${formatFileSize(compressedFile.size)}`);
+        
         await new Promise<void>((resolve, reject) => {
           const xhr = new XMLHttpRequest();
           xhr.open("POST", `${getApiBaseUrl()}/tickets/${ticket.id}/images`);
           xhr.setRequestHeader("Authorization", `Bearer ${token}`);
           const form = new FormData();
-          form.append("image", file);
+          form.append("image", compressedFile);
           form.append("image_type", imageType);
-          form.append("image_name", file.name);
+          form.append("image_name", compressedFile.name);
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
               const percent = Math.round((e.loaded / e.total) * 100);
@@ -496,20 +540,42 @@ const TicketDetailsPage: React.FC = () => {
         </button>
         {(isApprover || isCreator) && (
           <button
-            className="absolute right-3 top-3 hidden rounded-full bg-white/90 p-1 text-red-600 shadow-sm transition hover:bg-white group-hover:block"
+            className="absolute right-3 top-3 hidden rounded-full bg-white/90 p-1 text-red-600 shadow-sm transition hover:bg-white group-hover:block disabled:opacity-50"
             title="Delete image"
+            disabled={deletingImageId === img.id}
             onClick={async () => {
+              if (!confirm('Are you sure you want to delete this image?')) {
+                return;
+              }
+              
+              setDeletingImageId(img.id);
+              
               try {
+                // Clear the cache to force a fresh fetch
+                const numericId = parseInt(ticketId!, 10);
+                ticketDataCache.delete(numericId);
+                
                 await ticketService.deleteTicketImage(ticket!.id, img.id);
+                
+                // Force refresh the ticket details
                 await fetchTicketDetails();
+                
+                console.log('Image deleted successfully');
               } catch (e) {
+                console.error('Failed to delete image:', e);
                 alert(
                   e instanceof Error ? e.message : "Failed to delete image",
                 );
+              } finally {
+                setDeletingImageId(null);
               }
             }}
           >
-            <Trash2 className="h-4 w-4" />
+            {deletingImageId === img.id ? (
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-red-600 border-t-transparent" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
           </button>
         )}
       </div>
@@ -893,12 +959,54 @@ const TicketDetailsPage: React.FC = () => {
                       {t('ticket.dragDropOrChoose')}
                     </p>
                     <FileUpload
+                      ref={beforeFileUploadRef}
                       accept="image/*"
                       multiple
-                      onChange={(files) => setBeforeFiles(Array.from(files || []))}
+                      onChange={(files) => {
+                        if (files && files.length > 0) {
+                          const newFiles = Array.from(files);
+                          setBeforeFiles(prev => [...prev, ...newFiles]);
+                        }
+                      }}
                       className="mt-3"
                       placeholder={t('ticket.chooseFiles')}
+                      showCamera={true}
                     />
+                    
+                    {/* Preview selected before images */}
+                    {beforePreviews.length > 0 && (
+                      <div className="mt-4">
+                        <p className="text-sm font-medium text-red-700 dark:text-red-200 mb-2">
+                          Selected Images ({beforePreviews.length})
+                        </p>
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                          {beforePreviews.map((preview, idx) => (
+                            <div key={idx} className="relative group">
+                              <img
+                                src={preview.url}
+                                alt={preview.file.name}
+                                className="w-full h-24 object-cover rounded border"
+                              />
+                              <button
+                                type="button"
+                                className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={() => setBeforeFiles(prev => prev.filter((_, i) => i !== idx))}
+                                disabled={uploading}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 rounded-b">
+                                <div className="truncate">{preview.file.name}</div>
+                                <div className="text-xs opacity-75">
+                                  {(preview.file.size / (1024 * 1024)).toFixed(1)}MB
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    
                     <div className="mt-3 flex flex-wrap justify-end gap-2">
                       <Button
                         size="sm"
@@ -915,7 +1023,10 @@ const TicketDetailsPage: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => setBeforeFiles([])}
+                          onClick={() => {
+                            setBeforeFiles([]);
+                            beforeFileUploadRef.current?.reset();
+                          }}
                           disabled={uploading}
                         >
                           {t('common.clear')}
@@ -979,12 +1090,54 @@ const TicketDetailsPage: React.FC = () => {
                         {t('ticket.dragDropOrChoose')}
                       </p>
                       <FileUpload
+                        ref={afterFileUploadRef}
                         accept="image/*"
                         multiple
-                        onChange={(files) => setAfterFiles(Array.from(files || []))}
+                        onChange={(files) => {
+                          if (files && files.length > 0) {
+                            const newFiles = Array.from(files);
+                            setAfterFiles(prev => [...prev, ...newFiles]);
+                          }
+                        }}
                         className="mt-3"
                         placeholder={t('ticket.chooseFiles')}
+                        showCamera={true}
                       />
+                      
+                      {/* Preview selected after images */}
+                      {afterPreviews.length > 0 && (
+                        <div className="mt-4">
+                          <p className="text-sm font-medium text-emerald-700 dark:text-emerald-200 mb-2">
+                            Selected Images ({afterPreviews.length})
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                            {afterPreviews.map((preview, idx) => (
+                              <div key={idx} className="relative group">
+                                <img
+                                  src={preview.url}
+                                  alt={preview.file.name}
+                                  className="w-full h-24 object-cover rounded border"
+                                />
+                                <button
+                                  type="button"
+                                  className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  onClick={() => setAfterFiles(prev => prev.filter((_, i) => i !== idx))}
+                                  disabled={uploading}
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                                <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 rounded-b">
+                                  <div className="truncate">{preview.file.name}</div>
+                                  <div className="text-xs opacity-75">
+                                    {(preview.file.size / (1024 * 1024)).toFixed(1)}MB
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      
                       <div className="mt-3 flex flex-wrap justify-end gap-2">
                         <Button
                           size="sm"
@@ -1001,7 +1154,10 @@ const TicketDetailsPage: React.FC = () => {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => setAfterFiles([])}
+                            onClick={() => {
+                              setAfterFiles([]);
+                              afterFileUploadRef.current?.reset();
+                            }}
                             disabled={uploading}
                           >
                             {t('common.clear')}

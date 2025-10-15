@@ -21,13 +21,10 @@ export const useBottomNavigation = (options: UseBottomNavigationOptions = {}) =>
   useEffect(() => {
     const checkScreenSize = () => {
       const isMobileView = window.innerWidth < 1024; // lg breakpoint
-      setIsMobile(isMobileView);
+      const newVisibility = showOnMobileOnly ? (isMobileView && !shouldHideOnPath) : !shouldHideOnPath;
       
-      if (showOnMobileOnly) {
-        setIsVisible(isMobileView && !shouldHideOnPath);
-      } else {
-        setIsVisible(!shouldHideOnPath);
-      }
+      setIsMobile(isMobileView);
+      setIsVisible(newVisibility);
     };
 
     // Check on mount
@@ -42,11 +39,8 @@ export const useBottomNavigation = (options: UseBottomNavigationOptions = {}) =>
 
   // Update visibility when path changes
   useEffect(() => {
-    if (showOnMobileOnly) {
-      setIsVisible(isMobile && !shouldHideOnPath);
-    } else {
-      setIsVisible(!shouldHideOnPath);
-    }
+    const newVisibility = showOnMobileOnly ? (isMobile && !shouldHideOnPath) : !shouldHideOnPath;
+    setIsVisible(newVisibility);
   }, [location.pathname, isMobile, shouldHideOnPath, showOnMobileOnly]);
 
   return {

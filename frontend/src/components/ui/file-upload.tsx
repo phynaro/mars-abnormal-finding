@@ -9,6 +9,7 @@ interface FileUploadProps {
   className?: string;
   disabled?: boolean;
   placeholder?: string;
+  showCamera?: boolean;
 }
 
 export interface FileUploadRef {
@@ -21,7 +22,8 @@ export const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
   onChange,
   className = "",
   disabled = false,
-  placeholder = "Choose Files"
+  placeholder = "Choose Files",
+  showCamera = false
 }, ref) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -45,6 +47,7 @@ export const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
     }
   };
 
+
   return (
     <div className={`relative ${className}`}>
       {/* Hidden file input */}
@@ -54,11 +57,12 @@ export const FileUpload = forwardRef<FileUploadRef, FileUploadProps>(({
         accept={accept}
         multiple={multiple}
         onChange={handleFileChange}
-        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
+        className="hidden"
         disabled={disabled}
       />
       
-      {/* Custom styled button */}
+      
+      {/* Single Choose Files button */}
       <Button
         type="button"
         variant="outline"

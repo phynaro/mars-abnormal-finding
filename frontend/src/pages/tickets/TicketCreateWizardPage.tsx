@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { X } from 'lucide-react';
 import authService from '@/services/authService';
+import { compressTicketImage, formatFileSize } from '@/utils/imageCompression';
 
 // Machine data type from PU table
 interface PUCODEResult {
@@ -355,7 +356,22 @@ const TicketCreateWizardPage: React.FC = () => {
       if (beforeFiles.length > 0) {
         setImagesUploading(true);
         try { 
-          await ticketService.uploadTicketImages(ticketId, beforeFiles, 'before'); 
+          // Compress images before upload to prevent 413 errors
+          console.log(`Compressing ${beforeFiles.length} images before upload...`);
+          const compressedFiles = await Promise.all(
+            beforeFiles.map(async (file, index) => {
+              console.log(`Compressing image ${index + 1}/${beforeFiles.length}: ${formatFileSize(file.size)}`);
+              const compressed = await compressTicketImage(file, { 
+                maxWidth: 1920, 
+                maxHeight: 1920, 
+                quality: 0.9 
+              });
+              console.log(`Compressed to: ${formatFileSize(compressed.size)}`);
+              return compressed;
+            })
+          );
+          
+          await ticketService.uploadTicketImages(ticketId, compressedFiles, 'before'); 
           
           // Trigger LINE notification after images are uploaded
           try {
@@ -581,9 +597,15 @@ const TicketCreateWizardPage: React.FC = () => {
             <FileUpload 
               accept="image/*" 
               multiple 
-              onChange={(files) => setBeforeFiles(Array.from(files || []))} 
+              onChange={(files) => {
+                if (files && files.length > 0) {
+                  const newFiles = Array.from(files);
+                  setBeforeFiles(prev => [...prev, ...newFiles]);
+                }
+              }} 
               className="mb-3"
               placeholder={t('ticket.chooseFiles')}
+              showCamera={true}
             />
               {beforeFiles.length > 0 && (
                 <div className="grid grid-cols-2 gap-3 mt-3">
@@ -667,7 +689,7 @@ const TicketCreateWizardPage: React.FC = () => {
                 </Select>
               </div>
 
-              <div>
+              {/* <div>
                 <Label className="text-base font-semibold">{t('ticket.severity')}</Label>
                 <Select value={severity} onValueChange={(v) => setSeverity(v as any)}>
                   <SelectTrigger className="mt-2">
@@ -695,7 +717,7 @@ const TicketCreateWizardPage: React.FC = () => {
                     <SelectItem value="urgent">{t('ticket.urgent')}</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
+              </div> */}
             </div>
           </>
         )}

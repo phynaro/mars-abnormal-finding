@@ -14,6 +14,7 @@ import Cropper from 'react-easy-crop';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { HelpCircle, Key, MessageSquare, User } from 'lucide-react';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
+import { compressImage, formatFileSize, isFileSizeValid } from '@/utils/imageCompression';
 
 const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
@@ -86,7 +87,7 @@ const ProfilePage: React.FC = () => {
 
 
   // Avatar crop handlers
-  const onSelectAvatar: React.ChangeEventHandler<HTMLInputElement> = (e) => {
+  const onSelectAvatar: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
     const file = e.target.files?.[0];
     if (!file) {
       return;
@@ -99,16 +100,22 @@ const ProfilePage: React.FC = () => {
         return;
       }
       
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        alert(t('profile.imageTooLarge'));
+      // Validate file size (max 20MB for mobile compatibility)
+      if (!isFileSizeValid(file, 20)) {
+        alert(`${t('profile.imageTooLarge')} (${formatFileSize(file.size)})`);
         return;
       }
       
-      const url = URL.createObjectURL(file);
+      // Compress image before showing cropper (especially important for mobile)
+      console.log(`Original file size: ${formatFileSize(file.size)}`);
+      const compressedFile = await compressImage(file, { maxWidth: 1024, quality: 0.8 });
+      console.log(`Compressed file size: ${formatFileSize(compressedFile.size)}`);
+      
+      const url = URL.createObjectURL(compressedFile);
       setImageSrc(url);
       setShowCropper(true);
     } catch (error) {
+      console.error('Avatar selection error:', error);
       alert(t('profile.failedToLoadImage'));
     }
   };
@@ -116,6 +123,7 @@ const ProfilePage: React.FC = () => {
   const onCropComplete = useCallback((_: any, croppedPixels: any) => {
     setCroppedAreaPixels(croppedPixels);
   }, []);
+
 
   async function getCroppedBlob(imageSrc: string, cropPixels: { x: number; y: number; width: number; height: number }): Promise<Blob> {
     const img: HTMLImageElement = await new Promise((resolve, reject) => {
@@ -159,8 +167,8 @@ const ProfilePage: React.FC = () => {
               reject(new Error('Failed to create blob from canvas'));
             }
           }, 
-          'image/png', 
-          0.92
+          'image/jpeg', 
+          0.85
         );
       });
     } catch (error) {
@@ -181,7 +189,7 @@ const ProfilePage: React.FC = () => {
         throw new Error('Failed to create cropped blob');
       }
       
-      const file = new File([blob], 'avatar_cropped.png', { type: 'image/png' });
+      const file = new File([blob], 'avatar_cropped.jpg', { type: 'image/jpeg' });
       
       setShowCropper(false);
       
