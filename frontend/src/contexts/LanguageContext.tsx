@@ -26,6 +26,8 @@ const translations: Record<Language, Record<string, string>> = {
     'common.error': 'Error',
     'common.success': 'Success',
     'common.cancel': 'Cancel',
+    'common.apply': 'Apply',
+    'common.reset': 'Reset',
     'common.save': 'Save',
     'common.edit': 'Edit',
     'common.delete': 'Delete',
@@ -75,7 +77,12 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Dashboard
     'dashboard.welcome': 'Welcome',
-    
+    'dashboard.plant': 'Plant',
+    'dashboard.allPlants': 'All Plants',
+    'dashboard.unsavedChanges': 'You have unsaved changes',
+    'dashboard.reset': 'Reset',
+    'dashboard.applyFilters': 'Apply Filters',
+    'dashboard.pleaseCheckYourConnectionAndTryAgain': 'Please check your connection and try again. If the problem persists, contact your system administrator.',
     // Profile
     'profile.title': 'User Profile',
     'profile.personalInfo': 'Personal Information',
@@ -289,6 +296,7 @@ const translations: Record<Language, Record<string, string>> = {
     'personalFilter.year': 'Year',
     'personalFilter.period': 'Period',
     'personalFilter.applyFilters': 'Apply Filters',
+    'personalFilter.unsavedChanges': 'Unsaved changes',
     
     // Common chart labels
     'chart.FinishedTickets': 'Finished Tickets',
@@ -635,6 +643,63 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.noDataAvailable': 'No data available',
     'dashboard.clickedOn': 'Clicked on',
     'dashboard.ticketsOnDate': 'tickets',
+    
+    // Personal KPI Comparison
+    'dashboard.personalKPIComparison.title': 'Personal KPI Comparison',
+    'dashboard.personalKPIComparison.description': 'Compare personal KPIs across all users with filtering capabilities',
+    'dashboard.personalKPIComparison.filters': 'Filters',
+    'dashboard.personalKPIComparison.year': 'Year',
+    'dashboard.personalKPIComparison.period': 'Period',
+    'dashboard.personalKPIComparison.users': 'Users',
+    'dashboard.personalKPIComparison.kpi': 'KPI',
+    'dashboard.personalKPIComparison.selectYear': 'Select Year',
+    'dashboard.personalKPIComparison.selectPeriod': 'Select Period',
+    'dashboard.personalKPIComparison.selectKPI': 'Select KPI',
+    'dashboard.personalKPIComparison.searchUsers': 'Search users...',
+    'dashboard.personalKPIComparison.selectAll': 'Select All',
+    'dashboard.personalKPIComparison.deselectAll': 'Deselect All',
+    'dashboard.personalKPIComparison.more': 'more',
+    'dashboard.personalKPIComparison.noUsersFound': 'No users found',
+    'dashboard.personalKPIComparison.summary': 'Showing {userCount} of {totalUsers} users for {year} P{period} - {kpi}',
+    'dashboard.personalKPIComparison.totalUsers': 'Total Users',
+    'dashboard.personalKPIComparison.outOf': 'out of {total}',
+    'dashboard.personalKPIComparison.average': 'Average',
+    'dashboard.personalKPIComparison.averageDescription': 'Average value across selected users',
+    'dashboard.personalKPIComparison.highest': 'Highest',
+    'dashboard.personalKPIComparison.highestDescription': 'Highest value among selected users',
+    'dashboard.personalKPIComparison.lowest': 'Lowest',
+    'dashboard.personalKPIComparison.lowestDescription': 'Lowest value among selected users',
+    'dashboard.personalKPIComparison.dateRange': 'Date Range',
+    'dashboard.personalKPIComparison.dateRangeDescription': 'Period {period} of {year}: {startDate} to {endDate}',
+    'dashboard.personalKPIComparison.errorLoadingChart': 'Error loading chart data',
+    'dashboard.personalKPIComparison.noDataDescription': 'No data available for the selected filters',
+    'dashboard.personalKPIComparison.errorFetchingData': 'Failed to fetch KPI comparison data',
+    
+    // KPI Names
+    'dashboard.personalKPIComparison.ticketCountCreated': 'Ticket Count (Created)',
+    'dashboard.personalKPIComparison.ticketCountClosed': 'Ticket Count (Closed)',
+    'dashboard.personalKPIComparison.downtimeSavedCreated': 'Downtime Saved (Created)',
+    'dashboard.personalKPIComparison.downtimeSavedAssigned': 'Downtime Saved (Assigned)',
+    'dashboard.personalKPIComparison.costSavedCreated': 'Cost Saved (Created)',
+    'dashboard.personalKPIComparison.costSavedAssigned': 'Cost Saved (Assigned)',
+    'dashboard.personalKPIComparison.ontimePercentage': 'Ontime Percentage',
+    'dashboard.personalKPIComparison.avgResolutionHours': 'Average Resolution (Hours)',
+    
+    // Filter Mode and Navigation
+    'dashboard.personalKPIComparison.filterMode': 'Filter Mode',
+    'dashboard.personalKPIComparison.navigation': 'Quick Navigation',
+    'dashboard.personalKPIComparison.previous': 'Previous',
+    'dashboard.personalKPIComparison.next': 'Next',
+    'dashboard.personalKPIComparison.yearSummary': 'Showing {userCount} of {totalUsers} users for {year} - {kpi}',
+    'dashboard.personalKPIComparison.periodSummary': 'Showing {userCount} of {totalUsers} users for {year} P{period} - {kpi}',
+    'dashboard.personalKPIComparison.yearRangeDescription': 'Company Year {year}: {startDate} to {endDate}',
+    'dashboard.personalKPIComparison.periodRangeDescription': 'Period {period} of {year}: {startDate} to {endDate}',
+    'dashboard.personalKPIComparison.noDataAvailable': 'No data available',
+    'dashboard.personalKPIComparison.export': 'Export',
+    'dashboard.personalKPIComparison.department': 'Department',
+    'dashboard.personalKPIComparison.selectDepartments': 'Select Departments',
+    'dashboard.personalKPIComparison.allDepartments': 'All Departments',
+    'dashboard.personalKPIComparison.noDepartmentsFound': 'No departments found',
   },
   th: {
     // Common
@@ -653,7 +718,8 @@ const translations: Record<Language, Record<string, string>> = {
     'common.search': 'ค้นหาปัญหา',
     'common.clear': 'ล้าง',
     'common.close': 'ปิด',
-    
+    'common.apply': 'ตกลง',
+    'common.reset': 'รีเซ็ต',
     // Navigation
     'nav.dashboard': 'แดชบอร์ด',
     'nav.tickets': 'งาน',
@@ -692,8 +758,13 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Dashboard
     'dashboard.welcome': 'ยินดีต้อนรับ',
-    
-    // Profile
+    'dashboard.plant': 'โรงงาน',
+    'dashboard.allPlants': 'ทุกโรงงาน',
+    'dashboard.unsavedChanges': 'มีการเปลี่ยนแปลงที่ไม่ได้บันทึก',
+    'dashboard.reset': 'รีเซ็ต',
+    'dashboard.applyFilters': 'ตกลง',
+    'dashboard.pleaseCheckYourConnectionAndTryAgain': 'กรุณาตรวจสอบการเชื่อมต่อและลองใหม่ ถ้าปัญหายังคงมีอยู่ กรุณาติดต่อผู้ดูแลระบบ',
+    // Profile  
     'profile.title': 'โปรไฟล์ผู้ใช้',
     'profile.personalInfo': 'ข้อมูลส่วนตัว',
     'profile.workInfo': 'ข้อมูลการทำงาน',
@@ -906,6 +977,7 @@ const translations: Record<Language, Record<string, string>> = {
     'personalFilter.year': 'ปี',
     'personalFilter.period': 'ช่วงเวลา',
     'personalFilter.applyFilters': 'ใช้ตัวกรอง',
+    'personalFilter.unsavedChanges': 'มีการเปลี่ยนแปลงที่ยังไม่ได้บันทึก',
     
     // Common chart labels
     'chart.FinishedTickets': 'งานที่เสร็จสิ้น',
@@ -1174,7 +1246,7 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.pendingTickets': 'รายงานที่รอดำเนินการ',
     'dashboard.totalDowntimeAvoidance': 'เวลาหยุดทำงานที่หลีกเลี่ยงได้ทั้งหมด',
     'dashboard.totalCostAvoidance': 'ต้นทุนที่หลีกเลี่ยงได้ทั้งหมด',
-    'dashboard.topReporter': 'ผู้รายงานยอดเยี่ยม',
+    'dashboard.topReporter': 'ผู้แจ้งปัญหายอดเยี่ยม',
     'dashboard.topCostSaver': 'ผู้ประหยัดต้นทุนยอดเยี่ยม',
     'dashboard.topDowntimeSaver': 'ผู้ประหยัดเวลาหยุดทำงานยอดเยี่ยม',
     'dashboard.participation': 'การมีส่วนร่วม',
@@ -1256,6 +1328,63 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.noDataAvailable': 'ไม่มีข้อมูล',
     'dashboard.clickedOn': 'คลิกที่',
     'dashboard.ticketsOnDate': 'รายงาน',
+    
+    // Personal KPI Comparison
+    'dashboard.personalKPIComparison.title': 'เปรียบเทียบ KPI ส่วนบุคคล',
+    'dashboard.personalKPIComparison.description': 'เปรียบเทียบ KPI ส่วนบุคคลของผู้ใช้ทั้งหมดพร้อมความสามารถในการกรอง',
+    'dashboard.personalKPIComparison.filters': 'ตัวกรอง',
+    'dashboard.personalKPIComparison.year': 'ปี',
+    'dashboard.personalKPIComparison.period': 'ช่วงเวลา',
+    'dashboard.personalKPIComparison.users': 'ผู้ใช้',
+    'dashboard.personalKPIComparison.kpi': 'KPI',
+    'dashboard.personalKPIComparison.selectYear': 'เลือกปี',
+    'dashboard.personalKPIComparison.selectPeriod': 'เลือกช่วงเวลา',
+    'dashboard.personalKPIComparison.selectKPI': 'เลือก KPI',
+    'dashboard.personalKPIComparison.searchUsers': 'ค้นหาผู้ใช้...',
+    'dashboard.personalKPIComparison.selectAll': 'เลือกทั้งหมด',
+    'dashboard.personalKPIComparison.deselectAll': 'ยกเลิกการเลือก',
+    'dashboard.personalKPIComparison.more': 'เพิ่มเติม',
+    'dashboard.personalKPIComparison.noUsersFound': 'ไม่พบผู้ใช้',
+    'dashboard.personalKPIComparison.summary': 'แสดง {userCount} จาก {totalUsers} ผู้ใช้สำหรับปี {year} P{period} - {kpi}',
+    'dashboard.personalKPIComparison.totalUsers': 'ผู้ใช้ทั้งหมด',
+    'dashboard.personalKPIComparison.outOf': 'จาก {total}',
+    'dashboard.personalKPIComparison.average': 'ค่าเฉลี่ย',
+    'dashboard.personalKPIComparison.averageDescription': 'ค่าเฉลี่ยของผู้ใช้ที่เลือก',
+    'dashboard.personalKPIComparison.highest': 'สูงสุด',
+    'dashboard.personalKPIComparison.highestDescription': 'ค่าสูงสุดในผู้ใช้ที่เลือก',
+    'dashboard.personalKPIComparison.lowest': 'ต่ำสุด',
+    'dashboard.personalKPIComparison.lowestDescription': 'ค่าต่ำสุดในผู้ใช้ที่เลือก',
+    'dashboard.personalKPIComparison.dateRange': 'ช่วงวันที่',
+    'dashboard.personalKPIComparison.dateRangeDescription': 'ช่วงเวลา {period} ของปี {year}: {startDate} ถึง {endDate}',
+    'dashboard.personalKPIComparison.errorLoadingChart': 'เกิดข้อผิดพลาดในการโหลดข้อมูลแผนภูมิ',
+    'dashboard.personalKPIComparison.noDataDescription': 'ไม่มีข้อมูลสำหรับตัวกรองที่เลือก',
+    'dashboard.personalKPIComparison.errorFetchingData': 'ไม่สามารถดึงข้อมูลการเปรียบเทียบ KPI ได้',
+    
+    // KPI Names
+    'dashboard.personalKPIComparison.ticketCountCreated': 'จำนวนรายงาน (สร้าง)',
+    'dashboard.personalKPIComparison.ticketCountClosed': 'จำนวนรายงาน (ปิด)',
+    'dashboard.personalKPIComparison.downtimeSavedCreated': 'เวลาหยุดทำงานที่หลีกเลี่ยงได้ (สร้าง)',
+    'dashboard.personalKPIComparison.downtimeSavedAssigned': 'เวลาหยุดทำงานที่หลีกเลี่ยงได้ (รับผิดชอบ)',
+    'dashboard.personalKPIComparison.costSavedCreated': 'ต้นทุนที่หลีกเลี่ยงได้ (สร้าง)',
+    'dashboard.personalKPIComparison.costSavedAssigned': 'ต้นทุนที่หลีกเลี่ยงได้ (รับผิดชอบ)',
+    'dashboard.personalKPIComparison.ontimePercentage': 'เปอร์เซ็นต์การส่งตรงเวลา',
+    'dashboard.personalKPIComparison.avgResolutionHours': 'เวลาเฉลี่ยในการแก้ไข (ชั่วโมง)',
+    
+    // Filter Mode and Navigation
+    'dashboard.personalKPIComparison.filterMode': 'โหมดตัวกรอง',
+    'dashboard.personalKPIComparison.navigation': 'การนำทางด่วน',
+    'dashboard.personalKPIComparison.previous': 'ก่อนหน้า',
+    'dashboard.personalKPIComparison.next': 'ถัดไป',
+    'dashboard.personalKPIComparison.yearSummary': 'แสดง {userCount} จาก {totalUsers} ผู้ใช้สำหรับปี {year} - {kpi}',
+    'dashboard.personalKPIComparison.periodSummary': 'แสดง {userCount} จาก {totalUsers} ผู้ใช้สำหรับปี {year} P{period} - {kpi}',
+    'dashboard.personalKPIComparison.yearRangeDescription': 'ปีบริษัท {year}: {startDate} ถึง {endDate}',
+    'dashboard.personalKPIComparison.periodRangeDescription': 'ช่วงเวลา {period} ของปี {year}: {startDate} ถึง {endDate}',
+    'dashboard.personalKPIComparison.noDataAvailable': 'ไม่มีข้อมูล',
+    'dashboard.personalKPIComparison.export': 'ส่งออก',
+    'dashboard.personalKPIComparison.department': 'แผนก',
+    'dashboard.personalKPIComparison.selectDepartments': 'เลือกแผนก',
+    'dashboard.personalKPIComparison.allDepartments': 'ทุกแผนก',
+    'dashboard.personalKPIComparison.noDepartmentsFound': 'ไม่พบแผนก',
   }
 };
 

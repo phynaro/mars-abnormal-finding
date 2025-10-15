@@ -1,5 +1,6 @@
 import React from "react";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertTriangle, CheckCircle, DollarSign, TrendingDown, TrendingUp } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -219,53 +220,40 @@ const PersonalKPITiles: React.FC<PersonalKPITilesProps> = ({
 
   const renderKpiTile = (kpi: any, index: number) => (
     <Card key={`${kpi.title}-${index}`}>
-      <CardContent className="p-6">
+      <CardContent className="p-4">
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm font-medium text-muted-foreground">
               {kpi.title}
             </p>
             {kpi.tooltip ? (
-              <p
-                className="text-2xl font-bold cursor-help"
-                title={kpi.tooltip}
-              >
-                {kpi.value}
-              </p>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <p className="text-2xl font-bold cursor-help">{kpi.value}</p>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>{kpi.tooltip}</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             ) : (
               <p className="text-2xl font-bold">{kpi.value}</p>
             )}
             {kpi.change !== undefined && (
               <div className="flex items-center mt-1">
-                {kpi.changeType === "increase" ? (
+                {kpi.change > 0 ? (
                   <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
-                ) : kpi.changeType === "decrease" ? (
-                  <TrendingDown className="h-3 w-3 text-red-500 mr-1" />
                 ) : (
-                  <div className="h-3 w-3 bg-muted rounded-full mr-1" />
+                  <TrendingDown className="h-3 w-3 text-red-500 mr-1" />
                 )}
-                <span
-                  className={`text-xs ${
-                    kpi.changeType === "increase"
-                      ? "text-green-500"
-                      : kpi.changeType === "decrease"
-                      ? "text-red-500"
-                      : "text-gray-400"
-                  }`}
-                >
-                  {kpi.changeType === "no_change"
-                    ? t("homepage.noChange")
-                    : `${Math.abs(kpi.change).toFixed(1)}%`}
+                <span className={`text-xs ${kpi.change > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                  {`${Math.abs(kpi.change).toFixed(1)}%`}
                 </span>
               </div>
             )}
-            {kpi.changeDescription && (
-              <div className="text-xs text-muted-foreground mt-1">
-                {kpi.changeDescription}
-              </div>
-            )}
           </div>
-          <div className={`p-2 rounded-lg bg-muted/50 ${kpi.color}`}>
+          <div className={`p-2 rounded-lg ${kpi.color}`}>
             {kpi.icon}
           </div>
         </div>

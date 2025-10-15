@@ -54,19 +54,22 @@ const userController = {
           // Create UserExtension record if it doesn't exist
           await pool.request()
             .input('userID', sql.VarChar(50), userId)
+            .input('personNo', sql.Int, req.user.id)
             .input('lineId', sql.NVarChar(500), lineId || null)
             .query(`
-              INSERT INTO UserExtension (UserID, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
-              VALUES (@userID, 'Y', NULL, NULL, NULL, GETDATE(), GETDATE(), @lineId, NULL, 1)
+              INSERT INTO UserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+              VALUES (@userID, @personNo, 'Y', NULL, NULL, NULL, GETDATE(), GETDATE(), @lineId, NULL, 1)
             `);
         } else {
           // Update existing UserExtension record
           await pool.request()
             .input('userID', sql.VarChar(50), userId)
+            .input('personNo', sql.Int, req.user.id)
             .input('lineId', sql.NVarChar(500), lineId || null)
             .query(`
               UPDATE UserExtension
-              SET LineID = @lineId,
+              SET PersonNo = @personNo,
+                  LineID = @lineId,
                   UpdatedAt = GETDATE()
               WHERE UserID = @userID
             `);
@@ -100,18 +103,20 @@ const userController = {
         // Create UserExtension record if it doesn't exist
         await pool.request()
           .input('userID', sql.VarChar, userId)
+          .input('personNo', sql.Int, req.user.id)
           .input('avatarUrl', sql.NVarChar(500), relativePath)
           .query(`
-            INSERT INTO UserExtension (UserID, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
-            VALUES (@userID, 'Y', NULL, NULL, NULL, GETDATE(), GETDATE(), NULL, @avatarUrl, 1)
+            INSERT INTO UserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+            VALUES (@userID, @personNo, 'Y', NULL, NULL, NULL, GETDATE(), GETDATE(), NULL, @avatarUrl, 1)
           `);
       } else {
         // Update existing UserExtension record
         await pool.request()
           .input('userID', sql.VarChar, userId)
+          .input('personNo', sql.Int, req.user.id)
           .input('avatarUrl', sql.NVarChar(500), relativePath)
           .query(`
-            UPDATE UserExtension SET AvatarUrl = @avatarUrl, UpdatedAt = GETDATE() WHERE UserID = @userID
+            UPDATE UserExtension SET PersonNo = @personNo, AvatarUrl = @avatarUrl, UpdatedAt = GETDATE() WHERE UserID = @userID
           `);
       }
 

@@ -122,6 +122,7 @@ const login = async (req, res) => {
           u.LastDate,
           u.ExpireDate,
           u.NeverExpireFlag,
+          ue.PersonNo as UserExtensionPersonNo,
           ue.EmailVerified,
           ue.EmailVerificationToken,
           ue.EmailVerificationExpires,
@@ -218,10 +219,29 @@ const login = async (req, res) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    // Update last login
-    await pool.request()
-      .input('userID', sql.VarChar, user.UserID)
-      .query('UPDATE UserExtension SET LastLogin = GETDATE() WHERE UserID = @userID');
+    // Check if UserExtension record exists, create if not
+    if (!user.CreatedAt) {
+      // Create UserExtension record if it doesn't exist (first login)
+      await pool.request()
+        .input('userID', sql.VarChar, user.UserID)
+        .input('personNo', sql.Int, user.PersonNo)
+        .query(`
+          INSERT INTO UserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+          VALUES (@userID, @personNo, 'Y', NULL, NULL, GETDATE(), GETDATE(), GETDATE(), NULL, NULL, 1)
+        `);
+    } else {
+      // Update last login for existing UserExtension record
+      await pool.request()
+        .input('userID', sql.VarChar, user.UserID)
+        .input('personNo', sql.Int, user.PersonNo)
+        .query(`
+          UPDATE UserExtension 
+          SET LastLogin = GETDATE(), 
+              PersonNo = @personNo,
+              UpdatedAt = GETDATE() 
+          WHERE UserID = @userID
+        `);
+    }
 
     // Remove sensitive data
     delete user.Passwd;

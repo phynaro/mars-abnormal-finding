@@ -36,20 +36,23 @@ const PersonalKPISection: React.FC<PersonalKPISectionProps> = ({
       loading={personalKPILoading}
       error={personalKPIError}
     />
-    <PersonalTicketCountChart
-      data={personalTicketData}
-      loading={personalTicketLoading}
-      error={personalTicketError}
-      onKpiSetupClick={() => onKpiSetupClick("report")}
-      selectedYear={selectedYear}
-    />
-    <PersonalFinishedTicketChart
-      data={personalFinishedTicketData}
-      loading={personalFinishedTicketLoading}
-      error={personalFinishedTicketError}
-      onKpiSetupClick={() => onKpiSetupClick("fix")}
-      selectedYear={selectedYear}
-    />
+    {/* Charts section - side by side on large screens, stacked on smaller screens */}
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+      <PersonalTicketCountChart
+        data={personalTicketData}
+        loading={personalTicketLoading}
+        error={personalTicketError}
+        onKpiSetupClick={() => onKpiSetupClick("report")}
+        selectedYear={selectedYear}
+      />
+      <PersonalFinishedTicketChart
+        data={personalFinishedTicketData}
+        loading={personalFinishedTicketLoading}
+        error={personalFinishedTicketError}
+        onKpiSetupClick={() => onKpiSetupClick("fix")}
+        selectedYear={selectedYear}
+      />
+    </div>
   </div>
 );
 

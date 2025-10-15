@@ -13,6 +13,7 @@ import personalTargetService from "@/services/personalTargetService";
 import PersonalKPISetupModal from "@/components/personal/PersonalKPISetupModal";
 import PersonalFilterModal from "@/components/personal/PersonalFilterModal";
 import { getAvatarUrl } from "@/utils/url";
+import { formatLocalDate, calculatePeriodForDate, getDateRangeForFilter } from "@/utils/periodCalculations";
 import PendingTicketsSection from "@/components/home/PendingTicketsSection";
 import PersonalKPISection from "@/components/home/PersonalKPISection";
 
@@ -30,10 +31,15 @@ const HomePage: React.FC = () => {
     pages: 0
   });
 
-  // Personal tab time range filter state
+  // Personal tab time range filter state - Applied (currently active)
   const [personalTimeFilter, setPersonalTimeFilter] = useState<string>('this-period');
   const [personalSelectedYear, setPersonalSelectedYear] = useState<number>(new Date().getFullYear());
   const [personalSelectedPeriod, setPersonalSelectedPeriod] = useState<number>(1);
+
+  // Personal tab time range filter state - Pending (changes not yet applied)
+  const [pendingPersonalTimeFilter, setPendingPersonalTimeFilter] = useState<string>('this-period');
+  const [pendingPersonalSelectedYear, setPendingPersonalSelectedYear] = useState<number>(new Date().getFullYear());
+  const [pendingPersonalSelectedPeriod, setPendingPersonalSelectedPeriod] = useState<number>(1);
 
   // Personal ticket data state
   const [personalTicketData, setPersonalTicketData] = useState<Array<{ period: string; tickets: number; target: number }>>([]);
@@ -109,6 +115,13 @@ const HomePage: React.FC = () => {
     fetchPersonalKPIData();
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
+  // Initialize pending personal filters when modal opens
+  useEffect(() => {
+    if (personalFilterModalOpen) {
+      resetPendingPersonalFilters();
+    }
+  }, [personalFilterModalOpen]);
+
 
   const subtitleSource = user as unknown as
     | { title?: string; departmentName?: string }
@@ -135,6 +148,30 @@ const HomePage: React.FC = () => {
     setKpiSetupModalOpen(true);
   };
 
+  // Apply pending personal filters
+  const applyPersonalFilters = () => {
+    setPersonalTimeFilter(pendingPersonalTimeFilter);
+    setPersonalSelectedYear(pendingPersonalSelectedYear);
+    setPersonalSelectedPeriod(pendingPersonalSelectedPeriod);
+    setPersonalFilterModalOpen(false);
+  };
+
+  // Reset pending personal filters to current applied filters
+  const resetPendingPersonalFilters = () => {
+    setPendingPersonalTimeFilter(personalTimeFilter);
+    setPendingPersonalSelectedYear(personalSelectedYear);
+    setPendingPersonalSelectedPeriod(personalSelectedPeriod);
+  };
+
+  // Check if there are pending personal filter changes
+  const hasPendingPersonalChanges = () => {
+    return (
+      pendingPersonalTimeFilter !== personalTimeFilter ||
+      pendingPersonalSelectedYear !== personalSelectedYear ||
+      pendingPersonalSelectedPeriod !== personalSelectedPeriod
+    );
+  };
+
   // Fetch personal ticket data
   const fetchPersonalTicketData = async () => {
     if (!isAuthenticated || !user) {
@@ -146,7 +183,7 @@ const HomePage: React.FC = () => {
       setPersonalTicketLoading(true);
       setPersonalTicketError(null);
 
-      const dateRange = getPersonalDateRange(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
+      const dateRange = getDateRangeForFilter(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
       const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
       
       const params = {
@@ -206,7 +243,7 @@ const HomePage: React.FC = () => {
       setPersonalFinishedTicketLoading(true);
       setPersonalFinishedTicketError(null);
 
-      const dateRange = getPersonalDateRange(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
+      const dateRange = getDateRangeForFilter(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
       const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
       
       const params = {
@@ -266,7 +303,7 @@ const HomePage: React.FC = () => {
       setPersonalKPILoading(true);
       setPersonalKPIError(null);
 
-      const dateRange = getPersonalDateRange(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
+      const dateRange = getDateRangeForFilter(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -294,128 +331,6 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // Utility function to format date as YYYY-MM-DD in local timezone
-  const formatLocalDate = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  // Utility function to calculate period for a specific date (based on backend logic)
-  const calculatePeriodForDate = (date: Date, year: number) => {
-    const firstDayOfYear = new Date(year, 0, 1, 0, 0, 0, 0);
-    const firstSunday = new Date(firstDayOfYear);
-    
-    // Adjust to first Sunday
-    const dayOfWeek = firstDayOfYear.getDay();
-    const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-    firstSunday.setDate(firstDayOfYear.getDate() + daysToAdd);
-    
-    // Calculate period number (1-based)
-    const daysSinceFirstSunday = Math.floor((date.getTime() - firstSunday.getTime()) / (1000 * 60 * 60 * 24));
-    const periodNumber = Math.floor(daysSinceFirstSunday / 28) + 1;
-    
-    return {
-      period: periodNumber,
-      firstSunday
-    };
-  };
-
-  // Utility function to get date range based on time filter (similar to AbnormalReportDashboardV2Page)
-  const getPersonalDateRange = (timeFilter: string, year?: number, period?: number) => {
-    const now = new Date();
-    const currentYear = year || now.getFullYear();
-    
-    switch (timeFilter) {
-      case 'this-year':
-        // For this-year, we need to find the first Sunday of the week containing New Year's Day
-        const newYearDay = new Date(currentYear, 0, 1); // January 1st
-        const firstSundayOfYear = new Date(newYearDay);
-        const dayOfWeek = newYearDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const daysToSubtract = dayOfWeek === 0 ? 0 : dayOfWeek; // Go back to Sunday
-        firstSundayOfYear.setDate(newYearDay.getDate() - daysToSubtract);
-        
-        // Calculate the end date (13 periods * 28 days = 364 days)
-        const yearEndDate = new Date(firstSundayOfYear);
-        yearEndDate.setDate(firstSundayOfYear.getDate() + 363); // 364 days - 1 (inclusive)
-        
-        return {
-          startDate: formatLocalDate(firstSundayOfYear),
-          endDate: formatLocalDate(yearEndDate),
-          compare_startDate: `${currentYear - 1}-01-01`,
-          compare_endDate: `${currentYear - 1}-12-31`
-        };
-      case 'last-year':
-        return {
-          startDate: `${currentYear - 1}-01-01`,
-          endDate: `${currentYear - 1}-12-31`,
-          compare_startDate: `${currentYear - 2}-01-01`,
-          compare_endDate: `${currentYear - 2}-12-31`
-        };
-      case 'this-period':
-        // Calculate current 28-day period based on first Sunday of the year
-        const currentPeriodInfo = calculatePeriodForDate(now, currentYear);
-        const currentPeriod = currentPeriodInfo.period;
-        
-        // Calculate current period start and end dates
-        const currentPeriodStartDate = new Date(currentPeriodInfo.firstSunday);
-        currentPeriodStartDate.setDate(currentPeriodInfo.firstSunday.getDate() + (currentPeriod - 1) * 28);
-        
-        const currentPeriodEndDate = new Date(currentPeriodStartDate);
-        currentPeriodEndDate.setDate(currentPeriodStartDate.getDate() + 27); // 28 days - 1
-        
-        // Calculate previous period for comparison
-        const currentPrevPeriodStartDate = new Date(currentPeriodStartDate);
-        currentPrevPeriodStartDate.setDate(currentPeriodStartDate.getDate() - 28);
-        
-        const currentPrevPeriodEndDate = new Date(currentPrevPeriodStartDate);
-        currentPrevPeriodEndDate.setDate(currentPrevPeriodStartDate.getDate() + 27);
-        
-        return {
-          startDate: formatLocalDate(currentPeriodStartDate),
-          endDate: formatLocalDate(currentPeriodEndDate),
-          compare_startDate: formatLocalDate(currentPrevPeriodStartDate),
-          compare_endDate: formatLocalDate(currentPrevPeriodEndDate)
-        };
-      case 'select-period':
-        // Correct period calculation: 28-day periods starting from first Sunday of the week containing New Year's Day
-        const newYearDayForPeriod = new Date(currentYear, 0, 1); // January 1st
-        const firstSundayForPeriod = new Date(newYearDayForPeriod);
-        const dayOfWeekForPeriod = newYearDayForPeriod.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const daysToSubtractForPeriod = dayOfWeekForPeriod === 0 ? 0 : dayOfWeekForPeriod; // Go back to Sunday
-        firstSundayForPeriod.setDate(newYearDayForPeriod.getDate() - daysToSubtractForPeriod);
-        
-        // Calculate the specific period start date
-        const periodStartDate = new Date(firstSundayForPeriod);
-        periodStartDate.setDate(firstSundayForPeriod.getDate() + (period! - 1) * 28);
-        
-        // Calculate the period end date (28 days later)
-        const periodEndDate = new Date(periodStartDate);
-        periodEndDate.setDate(periodStartDate.getDate() + 27); // 28 days - 1
-        
-        // Calculate previous period for comparison
-        const prevPeriodStartDate = new Date(periodStartDate);
-        prevPeriodStartDate.setDate(periodStartDate.getDate() - 28);
-        
-        const prevPeriodEndDate = new Date(prevPeriodStartDate);
-        prevPeriodEndDate.setDate(prevPeriodStartDate.getDate() + 27);
-        
-        return {
-          startDate: formatLocalDate(periodStartDate),
-          endDate: formatLocalDate(periodEndDate),
-          compare_startDate: formatLocalDate(prevPeriodStartDate),
-          compare_endDate: formatLocalDate(prevPeriodEndDate)
-        };
-      default:
-        return {
-          startDate: `${currentYear}-01-01`,
-          endDate: `${currentYear}-12-31`,
-          compare_startDate: `${currentYear - 1}-01-01`,
-          compare_endDate: `${currentYear - 1}-12-31`
-        };
-    }
-  };
 
   return (
     <div className="container mx-auto px-4 py-6 space-y-4">
@@ -484,7 +399,7 @@ const HomePage: React.FC = () => {
                   <span className="text-muted-foreground">{t('homepage.range')}:</span>
                   <span className="text-foreground font-medium">
                     {(() => {
-                      const dateRange = getPersonalDateRange(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
+                      const dateRange = getDateRangeForFilter(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
                       return `${dateRange.startDate} - ${dateRange.endDate}`;
                     })()}
                   </span>
@@ -545,12 +460,15 @@ const HomePage: React.FC = () => {
       <PersonalFilterModal
         open={personalFilterModalOpen}
         onOpenChange={setPersonalFilterModalOpen}
-        timeFilter={personalTimeFilter}
-        setTimeFilter={setPersonalTimeFilter}
-        selectedYear={personalSelectedYear}
-        setSelectedYear={setPersonalSelectedYear}
-        selectedPeriod={personalSelectedPeriod}
-        setSelectedPeriod={setPersonalSelectedPeriod}
+        timeFilter={pendingPersonalTimeFilter}
+        setTimeFilter={setPendingPersonalTimeFilter}
+        selectedYear={pendingPersonalSelectedYear}
+        setSelectedYear={setPendingPersonalSelectedYear}
+        selectedPeriod={pendingPersonalSelectedPeriod}
+        setSelectedPeriod={setPendingPersonalSelectedPeriod}
+        onApply={applyPersonalFilters}
+        onReset={resetPendingPersonalFilters}
+        hasPendingChanges={hasPendingPersonalChanges()}
       />
     </div>
   );

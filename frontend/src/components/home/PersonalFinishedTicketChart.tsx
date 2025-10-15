@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { BarChart3, Settings } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { getPeriodDateRange } from "@/utils/periodCalculations";
 
 export type PersonalFinishedTicketChartProps = {
   data: Array<{ period: string; tickets: number; target: number }>;
@@ -33,29 +34,13 @@ const PersonalFinishedTicketChart: React.FC<
       const dataPoint = payload[0].payload;
       const period = dataPoint.period;
 
-      const getPeriodDateRange = (currentPeriod: string, year: number) => {
-        const newYearDay = new Date(year, 0, 1);
-        const firstSunday = new Date(newYearDay);
-        const dayOfWeek = newYearDay.getDay();
-        const daysToSubtract = dayOfWeek === 0 ? 0 : dayOfWeek;
-        firstSunday.setDate(newYearDay.getDate() - daysToSubtract);
-
-        const periodNumber = parseInt(currentPeriod.replace("P", ""), 10);
-        const periodStartDate = new Date(firstSunday);
-        periodStartDate.setDate(
-          firstSunday.getDate() + (periodNumber - 1) * 28,
-        );
-
-        const periodEndDate = new Date(periodStartDate);
-        periodEndDate.setDate(periodStartDate.getDate() + 27);
-
-        return {
-          startDate: periodStartDate.toLocaleDateString(),
-          endDate: periodEndDate.toLocaleDateString(),
-        };
+      const periodNumber = parseInt(period.replace("P", ""), 10);
+      const { startDate, endDate } = getPeriodDateRange(selectedYear, periodNumber);
+      
+      const dateRange = {
+        startDate: startDate.toLocaleDateString(),
+        endDate: endDate.toLocaleDateString(),
       };
-
-      const dateRange = getPeriodDateRange(period, selectedYear);
 
       return (
         <div className="bg-background border border-border rounded-lg p-3 shadow-lg">

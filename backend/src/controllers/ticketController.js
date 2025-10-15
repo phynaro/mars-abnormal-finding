@@ -6022,10 +6022,10 @@ const getUserPendingTickets = async (req, res) => {
     const offset = (page - 1) * limit;
     const pool = await sql.connect(dbConfig);
 
-    // First, get total count for pagination
+    // First, get total count for pagination with deduplication
     const countRequest = pool.request();
     const countQuery = `
-            SELECT COUNT(*) as total
+            SELECT COUNT(DISTINCT t.id) as total
             FROM Tickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
@@ -6058,110 +6058,123 @@ const getUserPendingTickets = async (req, res) => {
 
     const total = countResult.recordset[0].total;
 
-    // Query to get tickets related to the user with same format as getTickets
-    // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
+    // Query to get tickets related to the user with deduplication
+    // Using nested queries to properly handle deduplication and pagination
     const query = `
             SELECT *
             FROM (
                 SELECT 
-                    t.*,
-                    r.PERSON_NAME as reporter_name,
-                    r.EMAIL as reporter_email,
-                    r.PHONE as reporter_phone,
-                    a.PERSON_NAME as assignee_name,
-                    a.EMAIL as assignee_email,
-                    a.PHONE as assignee_phone,
-                    -- Hierarchy information from PUExtension
-                    pe.pucode,
-                    pe.plant as plant_code,
-                    pe.area as area_code,
-                    pe.line as line_code,
-                    pe.machine as machine_code,
-                    pe.number as machine_number,
-                    pe.pudescription as pudescription,
-                    pe.digit_count,
-                    -- Hierarchy names based on digit patterns
-                    (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
-                     WHERE pe2.plant = pe.plant 
-                     AND pe2.area IS NULL 
-                     AND pe2.line IS NULL 
-                     AND pe2.machine IS NULL) as plant_name,
-                    (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
-                     WHERE pe2.plant = pe.plant 
-                     AND pe2.area = pe.area 
-                     AND pe2.line IS NULL 
-                     AND pe2.machine IS NULL) as area_name,
-                    (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
-                     WHERE pe2.plant = pe.plant 
-                     AND pe2.area = pe.area 
-                     AND pe2.line = pe.line 
-                     AND pe2.machine IS NULL) as line_name,
-                    (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
-                     WHERE pe2.plant = pe.plant 
-                     AND pe2.area = pe.area 
-                     AND pe2.line = pe.line 
-                     AND pe2.machine = pe.machine) as machine_name,
-                    -- PU information
-                    pu.PUCODE as pu_pucode,
-                    pu.PUNAME as pu_name,
-                    -- User's relationship to this ticket
-                    CASE 
-                        WHEN t.status = 'escalated' AND ta.approval_level >= 3 THEN 'escalate_approver'
-                        WHEN t.status = 'reviewed' AND ta.approval_level = 4 THEN 'close_approver'
-                        WHEN t.status = 'finished' AND t.created_by = @userId THEN 'review_approver'
-                        WHEN t.status = 'in_progress' AND t.assigned_to = @userId THEN 'assignee'
-                        WHEN t.status = 'reopened_in_progress' AND t.assigned_to = @userId THEN 'assignee'
-                        WHEN t.status = 'planed' AND t.assigned_to = @userId THEN 'assignee'
-                        WHEN t.status = 'open' AND ta.approval_level >= 2 THEN 'accept_approver'
-                        WHEN t.status = 'accepted' AND (ta.approval_level = 2 OR ta.approval_level = 3) THEN 'planner'
-                        WHEN t.status = 'rejected_pending_l3_review' AND ta.approval_level >= 3 THEN 'reject_approver'
-                        WHEN t.assigned_to = @userId THEN 'assignee'
-                        WHEN t.created_by = @userId THEN 'requester'
-                        ELSE 'viewer'
-                    END as user_relationship,
-                    ta.approval_level as user_approval_level,
-                    -- Action person names
-                    accepted_person.PERSON_NAME as accepted_by_name,
-                    escalated_person.PERSON_NAME as escalated_by_name,
-                    reviewed_person.PERSON_NAME as reviewed_by_name,
-                    finished_person.PERSON_NAME as finished_by_name,
-                    rejected_person.PERSON_NAME as rejected_by_name,
-                    ROW_NUMBER() OVER (ORDER BY t.created_at DESC) as row_num
-                FROM Tickets t
-                LEFT JOIN Person r ON t.created_by = r.PERSONNO
-                LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
-                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId 
-                    AND ta.plant_code = pe.plant 
-                    AND ta.is_active = 1
-                    AND (
-                        -- Exact line match
-                        (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                        OR
-                        -- Area-level approval (area matches, line is null in approval)
-                        (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                        OR
-                        -- Plant-level approval (area and line are null in approval)
-                        (ta.area_code IS NULL AND ta.line_code IS NULL)
+                    *,
+                    ROW_NUMBER() OVER (ORDER BY created_at DESC) as row_num
+                FROM (
+                    SELECT 
+                        t.*,
+                        r.PERSON_NAME as reporter_name,
+                        r.EMAIL as reporter_email,
+                        r.PHONE as reporter_phone,
+                        a.PERSON_NAME as assignee_name,
+                        a.EMAIL as assignee_email,
+                        a.PHONE as assignee_phone,
+                        -- Hierarchy information from PUExtension (prioritize most specific)
+                        pe.pucode,
+                        pe.plant as plant_code,
+                        pe.area as area_code,
+                        pe.line as line_code,
+                        pe.machine as machine_code,
+                        pe.number as machine_number,
+                        pe.pudescription as pudescription,
+                        pe.digit_count,
+                        -- Hierarchy names based on digit patterns
+                        (SELECT TOP 1 pudescription 
+                         FROM PUExtension pe2 
+                         WHERE pe2.plant = pe.plant 
+                         AND pe2.area IS NULL 
+                         AND pe2.line IS NULL 
+                         AND pe2.machine IS NULL) as plant_name,
+                        (SELECT TOP 1 pudescription 
+                         FROM PUExtension pe2 
+                         WHERE pe2.plant = pe.plant 
+                         AND pe2.area = pe.area 
+                         AND pe2.line IS NULL 
+                         AND pe2.machine IS NULL) as area_name,
+                        (SELECT TOP 1 pudescription 
+                         FROM PUExtension pe2 
+                         WHERE pe2.plant = pe.plant 
+                         AND pe2.area = pe.area 
+                         AND pe2.line = pe.line 
+                         AND pe2.machine IS NULL) as line_name,
+                        (SELECT TOP 1 pudescription 
+                         FROM PUExtension pe2 
+                         WHERE pe2.plant = pe.plant 
+                         AND pe2.area = pe.area 
+                         AND pe2.line = pe.line 
+                         AND pe2.machine = pe.machine) as machine_name,
+                        -- PU information
+                        pu.PUCODE as pu_pucode,
+                        pu.PUNAME as pu_name,
+                        -- User's relationship to this ticket (prioritize highest approval level)
+                        CASE 
+                            WHEN t.status = 'escalated' AND ta.approval_level >= 3 THEN 'escalate_approver'
+                            WHEN t.status = 'reviewed' AND ta.approval_level = 4 THEN 'close_approver'
+                            WHEN t.status = 'finished' AND t.created_by = @userId THEN 'review_approver'
+                            WHEN t.status = 'in_progress' AND t.assigned_to = @userId THEN 'assignee'
+                            WHEN t.status = 'reopened_in_progress' AND t.assigned_to = @userId THEN 'assignee'
+                            WHEN t.status = 'planed' AND t.assigned_to = @userId THEN 'assignee'
+                            WHEN t.status = 'open' AND ta.approval_level >= 2 THEN 'accept_approver'
+                            WHEN t.status = 'accepted' AND (ta.approval_level = 2 OR ta.approval_level = 3) THEN 'planner'
+                            WHEN t.status = 'rejected_pending_l3_review' AND ta.approval_level >= 3 THEN 'reject_approver'
+                            WHEN t.assigned_to = @userId THEN 'assignee'
+                            WHEN t.created_by = @userId THEN 'requester'
+                            ELSE 'viewer'
+                        END as user_relationship,
+                        ta.approval_level as user_approval_level,
+                        -- Action person names
+                        accepted_person.PERSON_NAME as accepted_by_name,
+                        escalated_person.PERSON_NAME as escalated_by_name,
+                        reviewed_person.PERSON_NAME as reviewed_by_name,
+                        finished_person.PERSON_NAME as finished_by_name,
+                        rejected_person.PERSON_NAME as rejected_by_name,
+                        -- Deduplication: prioritize rows with higher digit_count and approval_level
+                        ROW_NUMBER() OVER (
+                            PARTITION BY t.id 
+                            ORDER BY 
+                                ISNULL(pe.digit_count, 0) DESC,
+                                ISNULL(ta.approval_level, 0) DESC,
+                                t.created_at DESC
+                        ) as dedup_row_num
+                    FROM Tickets t
+                    LEFT JOIN Person r ON t.created_by = r.PERSONNO
+                    LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
+                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                        AND ta.plant_code = pe.plant 
+                        AND ta.is_active = 1
+                        AND (
+                            -- Exact line match
+                            (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                            OR
+                            -- Area-level approval (area matches, line is null in approval)
+                            (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                            OR
+                            -- Plant-level approval (area and line are null in approval)
+                            (ta.area_code IS NULL AND ta.line_code IS NULL)
+                        )
+                    LEFT JOIN Person accepted_person ON t.accepted_by = accepted_person.PERSONNO
+                    LEFT JOIN Person escalated_person ON t.escalated_by = escalated_person.PERSONNO
+                    LEFT JOIN Person reviewed_person ON t.reviewed_by = reviewed_person.PERSONNO
+                    LEFT JOIN Person finished_person ON t.finished_by = finished_person.PERSONNO
+                    LEFT JOIN Person rejected_person ON t.rejected_by = rejected_person.PERSONNO
+                    WHERE (
+                        -- Tickets created by the user
+                        t.created_by = @userId
+                        OR 
+                        -- Tickets where user has approval_level >= 2 for the line/area/plant
+                        (ta.approval_level >= 2 AND ta.is_active = 1)
                     )
-                LEFT JOIN Person accepted_person ON t.accepted_by = accepted_person.PERSONNO
-                LEFT JOIN Person escalated_person ON t.escalated_by = escalated_person.PERSONNO
-                LEFT JOIN Person reviewed_person ON t.reviewed_by = reviewed_person.PERSONNO
-                LEFT JOIN Person finished_person ON t.finished_by = finished_person.PERSONNO
-                LEFT JOIN Person rejected_person ON t.rejected_by = rejected_person.PERSONNO
-                WHERE (
-                    -- Tickets created by the user
-                    t.created_by = @userId
-                    OR 
-                    -- Tickets where user has approval_level >= 2 for the line/area/plant
-                    (ta.approval_level >= 2 AND ta.is_active = 1)
-                )
-                AND t.status NOT IN ('closed', 'canceled', 'rejected_final')
+                    AND t.status NOT IN ('closed', 'canceled', 'rejected_final')
+                ) AS deduped_results
+                WHERE dedup_row_num = 1
             ) AS paginated_results
             WHERE row_num > @offset AND row_num <= @offset + @limit
         `;
@@ -6243,42 +6256,14 @@ const getUserTicketCountPerPeriod = async (req, res) => {
 
     const pool = await sql.connect(dbConfig);
 
-    // Build WHERE clause for user's tickets (same logic as getUserPendingTickets)
-    let whereClause = `WHERE (
-            -- Tickets created by the user
-            t.created_by = @userId
-            OR 
-            -- Tickets where user has approval_level > 2 for the line
-            (ta.approval_level > 2 AND ta.is_active = 1)
-        ) AND YEAR(t.created_at) = @year`;
+    // Note: WHERE clause logic moved into main query for better DateDim integration
 
-    // Add date range filter if provided
-    if (startDate && endDate) {
-      whereClause += ` AND t.created_at >= @startDate AND t.created_at <= @endDate`;
-    }
-
-    // Exclude canceled tickets
-    whereClause += ` AND t.status != 'canceled'`;
-
-    // Get tickets count per period (monthly periods P1-P12)
+    // Get tickets count per period (28-day periods P1-P13)
+    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/PUExtension matches
     const query = `
             SELECT 
-                CASE 
-                    WHEN MONTH(t.created_at) = 1 THEN 'P1'
-                    WHEN MONTH(t.created_at) = 2 THEN 'P2'
-                    WHEN MONTH(t.created_at) = 3 THEN 'P3'
-                    WHEN MONTH(t.created_at) = 4 THEN 'P4'
-                    WHEN MONTH(t.created_at) = 5 THEN 'P5'
-                    WHEN MONTH(t.created_at) = 6 THEN 'P6'
-                    WHEN MONTH(t.created_at) = 7 THEN 'P7'
-                    WHEN MONTH(t.created_at) = 8 THEN 'P8'
-                    WHEN MONTH(t.created_at) = 9 THEN 'P9'
-                    WHEN MONTH(t.created_at) = 10 THEN 'P10'
-                    WHEN MONTH(t.created_at) = 11 THEN 'P11'
-                    WHEN MONTH(t.created_at) = 12 THEN 'P12'
-                    ELSE 'P13'
-                END as period,
-                COUNT(*) as tickets
+                CONCAT('P', dd.PeriodNo) as period,
+                COUNT(DISTINCT t.id) as tickets
             FROM Tickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
@@ -6295,25 +6280,19 @@ const getUserTicketCountPerPeriod = async (req, res) => {
                     -- Plant-level approval (area and line are null in approval)
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
-            ${whereClause}
-            GROUP BY 
-                CASE 
-                    WHEN MONTH(t.created_at) = 1 THEN 'P1'
-                    WHEN MONTH(t.created_at) = 2 THEN 'P2'
-                    WHEN MONTH(t.created_at) = 3 THEN 'P3'
-                    WHEN MONTH(t.created_at) = 4 THEN 'P4'
-                    WHEN MONTH(t.created_at) = 5 THEN 'P5'
-                    WHEN MONTH(t.created_at) = 6 THEN 'P6'
-                    WHEN MONTH(t.created_at) = 7 THEN 'P7'
-                    WHEN MONTH(t.created_at) = 8 THEN 'P8'
-                    WHEN MONTH(t.created_at) = 9 THEN 'P9'
-                    WHEN MONTH(t.created_at) = 10 THEN 'P10'
-                    WHEN MONTH(t.created_at) = 11 THEN 'P11'
-                    WHEN MONTH(t.created_at) = 12 THEN 'P12'
-                    ELSE 'P13'
-                END
-            ORDER BY period
-        `;
+            JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+            WHERE (
+                -- Tickets created by the user
+                t.created_by = @userId
+                OR 
+                -- Tickets where user has approval_level > 2 for the line
+                (ta.approval_level > 2 AND ta.is_active = 1)
+            ) AND dd.CompanyYear = @year
+            AND t.status != 'canceled'
+            ${startDate && endDate ? 'AND t.created_at >= @startDate AND t.created_at <= @endDate' : ''}
+            GROUP BY dd.PeriodNo
+            ORDER BY dd.PeriodNo
+`;
 
     // Build the request with parameters
     let request = pool
@@ -6409,42 +6388,14 @@ const getUserFinishedTicketCountPerPeriod = async (req, res) => {
       });
     }
 
-    // Build WHERE clause for user's Finished tickets (same logic as getUserPendingTickets)
-    let whereClause = `WHERE (
-            -- Tickets Finished by the user
-            t.finished_by = @userId
-            OR 
-            -- Tickets where user has approval_level > 2 for the line and was involved
-            (ta.approval_level > 2 AND ta.is_active = 1)
-        ) AND YEAR(t.finished_at) = @year`;
+    // Note: WHERE clause logic moved into main query for better DateDim integration
 
-    // Add date range filter if provided (based on finished_at)
-    if (startDate && endDate) {
-      whereClause += ` AND t.finished_at >= @startDate AND t.finished_at <= @endDate`;
-    }
-
-    // Only include tickets with status "closed" or "finished"
-    whereClause += ` AND t.status IN ('closed', 'finished')`;
-
-    // Get Finished tickets count per period (monthly periods P1-P12)
+    // Get Finished tickets count per period (28-day periods P1-P13)
+    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/PUExtension matches
     const query = `
             SELECT 
-                CASE 
-                    WHEN MONTH(t.finished_at) = 1 THEN 'P1'
-                    WHEN MONTH(t.finished_at) = 2 THEN 'P2'
-                    WHEN MONTH(t.finished_at) = 3 THEN 'P3'
-                    WHEN MONTH(t.finished_at) = 4 THEN 'P4'
-                    WHEN MONTH(t.finished_at) = 5 THEN 'P5'
-                    WHEN MONTH(t.finished_at) = 6 THEN 'P6'
-                    WHEN MONTH(t.finished_at) = 7 THEN 'P7'
-                    WHEN MONTH(t.finished_at) = 8 THEN 'P8'
-                    WHEN MONTH(t.finished_at) = 9 THEN 'P9'
-                    WHEN MONTH(t.finished_at) = 10 THEN 'P10'
-                    WHEN MONTH(t.finished_at) = 11 THEN 'P11'
-                    WHEN MONTH(t.finished_at) = 12 THEN 'P12'
-                    ELSE 'P13'
-                END as period,
-                COUNT(*) as tickets
+                CONCAT('P', dd.PeriodNo) as period,
+                COUNT(DISTINCT t.id) as tickets
             FROM Tickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
             LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
@@ -6461,24 +6412,18 @@ const getUserFinishedTicketCountPerPeriod = async (req, res) => {
                     -- Plant-level approval (area and line are null in approval)
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
-            ${whereClause}
-            GROUP BY 
-                CASE 
-                    WHEN MONTH(t.finished_at) = 1 THEN 'P1'
-                    WHEN MONTH(t.finished_at) = 2 THEN 'P2'
-                    WHEN MONTH(t.finished_at) = 3 THEN 'P3'
-                    WHEN MONTH(t.finished_at) = 4 THEN 'P4'
-                    WHEN MONTH(t.finished_at) = 5 THEN 'P5'
-                    WHEN MONTH(t.finished_at) = 6 THEN 'P6'
-                    WHEN MONTH(t.finished_at) = 7 THEN 'P7'
-                    WHEN MONTH(t.finished_at) = 8 THEN 'P8'
-                    WHEN MONTH(t.finished_at) = 9 THEN 'P9'
-                    WHEN MONTH(t.finished_at) = 10 THEN 'P10'
-                    WHEN MONTH(t.finished_at) = 11 THEN 'P11'
-                    WHEN MONTH(t.finished_at) = 12 THEN 'P12'
-                    ELSE 'P13'
-                END
-            ORDER BY period
+            JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.finished_at AS DATE)
+            WHERE (
+                -- Tickets Finished by the user
+                t.finished_by = @userId
+                OR 
+                -- Tickets where user has approval_level > 2 for the line and was involved
+                (ta.approval_level > 2 AND ta.is_active = 1)
+            ) AND dd.CompanyYear = @year
+            AND t.status IN ('closed', 'finished')
+            ${startDate && endDate ? 'AND t.finished_at >= @startDate AND t.finished_at <= @endDate' : ''}
+            GROUP BY dd.PeriodNo
+            ORDER BY dd.PeriodNo
         `;
 
     // Build the request with parameters
@@ -6572,15 +6517,16 @@ const getPersonalKPIData = async (req, res) => {
     const isL2Plus = l2Result.recordset[0].l2_count > 0;
 
     // Get current period data - REPORTER metrics (for all users)
+    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/PUExtension matches
     const reporterMetricsQuery = `
             SELECT 
-                COUNT(*) as totalReportsThisPeriod,
-                SUM(CASE WHEN status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as resolvedReportsThisPeriod,
-                SUM(CASE WHEN status NOT IN ('closed', 'Finished', 'canceled') THEN 1 ELSE 0 END) as pendingReportsThisPeriod,
-                SUM(CASE WHEN status IN ('closed', 'Finished') THEN 
+                COUNT(DISTINCT t.id) as totalReportsThisPeriod,
+                COUNT(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN t.id END) as resolvedReportsThisPeriod,
+                COUNT(DISTINCT CASE WHEN status NOT IN ('closed', 'finished', 'canceled') THEN t.id END) as pendingReportsThisPeriod,
+                SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                     COALESCE(downtime_avoidance_hours, 0) 
                 ELSE 0 END) as downtimeAvoidedByReportsThisPeriod,
-                SUM(CASE WHEN status IN ('closed', 'Finished') THEN 
+                SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsThisPeriod
             FROM Tickets t
@@ -6611,15 +6557,16 @@ const getPersonalKPIData = async (req, res) => {
         `;
 
     // Get comparison period data - REPORTER metrics
+    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/PUExtension matches
     const reporterComparisonQuery = `
             SELECT 
-                COUNT(*) as totalReportsLastPeriod,
-                SUM(CASE WHEN status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as resolvedReportsLastPeriod,
-                SUM(CASE WHEN status NOT IN ('closed', 'Finished', 'canceled') THEN 1 ELSE 0 END) as pendingReportsLastPeriod,
-                SUM(CASE WHEN status IN ('closed', 'Finished') THEN 
+                COUNT(DISTINCT t.id) as totalReportsLastPeriod,
+                COUNT(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN t.id END) as resolvedReportsLastPeriod,
+                COUNT(DISTINCT CASE WHEN status NOT IN ('closed', 'finished', 'canceled') THEN t.id END) as pendingReportsLastPeriod,
+                SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                     COALESCE(downtime_avoidance_hours, 0) 
                 ELSE 0 END) as downtimeAvoidedByReportsLastPeriod,
-                SUM(CASE WHEN status IN ('closed', 'Finished') THEN 
+                SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsLastPeriod
             FROM Tickets t
@@ -6674,11 +6621,11 @@ const getPersonalKPIData = async (req, res) => {
     if (isL2Plus) {
       const actionPersonMetricsQuery = `
                 SELECT 
-                    COUNT(*) as totalCasesFixedThisPeriod,
-                    SUM(CASE WHEN status IN ('closed', 'Finished') THEN 
+                    COUNT(DISTINCT t.id) as totalCasesFixedThisPeriod,
+                    SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                         COALESCE(downtime_avoidance_hours, 0) 
                     ELSE 0 END) as downtimeAvoidedByFixesThisPeriod,
-                    SUM(CASE WHEN status IN ('closed', 'Finished') THEN 
+                    SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesThisPeriod
                 FROM Tickets t
@@ -6710,11 +6657,11 @@ const getPersonalKPIData = async (req, res) => {
 
       const actionPersonComparisonQuery = `
                 SELECT 
-                    COUNT(*) as totalCasesFixedLastPeriod,
-                    SUM(CASE WHEN status IN ('closed', 'Finished') THEN 
+                    COUNT(DISTINCT t.id) as totalCasesFixedLastPeriod,
+                    SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                         COALESCE(downtime_avoidance_hours, 0) 
                     ELSE 0 END) as downtimeAvoidedByFixesLastPeriod,
-                    SUM(CASE WHEN status IN ('closed', 'Finished') THEN 
+                    SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesLastPeriod
                 FROM Tickets t

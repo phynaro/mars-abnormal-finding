@@ -15,6 +15,9 @@ interface PersonalFilterModalProps {
   setSelectedYear: (value: number) => void;
   selectedPeriod: number;
   setSelectedPeriod: (value: number) => void;
+  onApply: () => void;
+  onReset: () => void;
+  hasPendingChanges: boolean;
 }
 
 const PersonalFilterModal: React.FC<PersonalFilterModalProps> = ({
@@ -26,6 +29,9 @@ const PersonalFilterModal: React.FC<PersonalFilterModalProps> = ({
   setSelectedYear,
   selectedPeriod,
   setSelectedPeriod,
+  onApply,
+  onReset,
+  hasPendingChanges,
 }) => {
   const { t } = useLanguage();
   
@@ -87,10 +93,33 @@ const PersonalFilterModal: React.FC<PersonalFilterModalProps> = ({
             </>
           )}
           
-          <div className="flex justify-end">
-            <Button onClick={() => onOpenChange(false)}>
-              {t('personalFilter.applyFilters')}
-            </Button>
+          <div className="flex justify-between items-center pt-4 border-t">
+            <div className="text-sm text-muted-foreground">
+              {hasPendingChanges && (
+                <span className="text-orange-600">{t('personalFilter.unsavedChanges')}</span>
+              )}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => {
+                onReset();
+                onOpenChange(false);
+              }}>
+                {t('common.cancel')}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={onReset}
+                disabled={!hasPendingChanges}
+              >
+                {t('common.reset')}
+              </Button>
+              <Button 
+                onClick={onApply}
+                disabled={!hasPendingChanges}
+              >
+                {t('common.apply')}
+              </Button>
+            </div>
           </div>
         </div>
       </DialogContent>

@@ -23,6 +23,7 @@ import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
 import authService from '@/services/authService';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
+import { formatLocalDate, calculatePeriodForDate, getDateRangeForFilter } from '@/utils/periodCalculations';
 
 // Utility function for dynamic currency formatting
 const formatCurrencyDynamic = (amount: number): { display: string; tooltip: string } => {
@@ -347,136 +348,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-  // Utility function to format date as YYYY-MM-DD in local timezone
-  const formatLocalDate = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-
-  // Utility function to calculate period for a specific date (based on backend logic)
-  const calculatePeriodForDate = (date: Date, year: number) => {
-    const firstDayOfYear = new Date(year, 0, 1, 0, 0, 0, 0);
-    const firstSunday = new Date(firstDayOfYear);
-    
-    // Adjust to first Sunday
-    const dayOfWeek = firstDayOfYear.getDay();
-    const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-    firstSunday.setDate(firstDayOfYear.getDate() + daysToAdd);
-    
-    // Calculate period number (1-based)
-    const daysSinceFirstSunday = Math.floor((date.getTime() - firstSunday.getTime()) / (1000 * 60 * 60 * 24));
-    const periodNumber = Math.floor(daysSinceFirstSunday / 28) + 1;
-    
-    return {
-      period: periodNumber,
-      firstSunday
-    };
-  };
-
-  // Utility function to get date range based on time filter
-  const getDateRange = (timeFilter: string, year?: number, period?: number) => {
-    const now = new Date();
-    const currentYear = year || now.getFullYear();
-    
-    switch (timeFilter) {
-      case 'this-year':
-        // For this-year, we need to find the first Sunday of the week containing New Year's Day
-        const newYearDay = new Date(currentYear, 0, 1); // January 1st
-        const firstSundayOfYear = new Date(newYearDay);
-        const dayOfWeek = newYearDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const daysToSubtract = dayOfWeek === 0 ? 0 : dayOfWeek; // Go back to Sunday
-        firstSundayOfYear.setDate(newYearDay.getDate() - daysToSubtract);
-        
-        // Calculate the end date (13 periods * 28 days = 364 days)
-        const yearEndDate = new Date(firstSundayOfYear);
-        yearEndDate.setDate(firstSundayOfYear.getDate() + 363); // 364 days - 1 (inclusive)
-        
-        return {
-          startDate: formatLocalDate(firstSundayOfYear),
-          endDate: formatLocalDate(yearEndDate),
-          compare_startDate: `${currentYear - 1}-01-01`,
-          compare_endDate: `${currentYear - 1}-12-31`
-        };
-      case 'last-year':
-        // For last-year, we need to find the first Sunday of the week containing New Year's Day of the selected year
-        const lastYearNewYearDay = new Date(currentYear, 0, 1); // January 1st of the selected year
-        const lastYearFirstSunday = new Date(lastYearNewYearDay);
-        const lastYearDayOfWeek = lastYearNewYearDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
-        const lastYearDaysToSubtract = lastYearDayOfWeek === 0 ? 0 : lastYearDayOfWeek; // Go back to Sunday
-        lastYearFirstSunday.setDate(lastYearNewYearDay.getDate() - lastYearDaysToSubtract);
-        
-        // Calculate the end date (13 periods * 28 days = 364 days)
-        const lastYearEndDate = new Date(lastYearFirstSunday);
-        lastYearEndDate.setDate(lastYearFirstSunday.getDate() + 363); // 364 days - 1 (inclusive)
-        
-        return {
-          startDate: formatLocalDate(lastYearFirstSunday),
-          endDate: formatLocalDate(lastYearEndDate),
-          compare_startDate: `${currentYear - 1}-01-01`,
-          compare_endDate: `${currentYear - 1}-12-31`
-        };
-      case 'this-period':
-        // Calculate current 28-day period based on first Sunday of the year
-        const currentPeriodInfo = calculatePeriodForDate(now, currentYear);
-        const currentPeriod = currentPeriodInfo.period;
-        
-        // Calculate current period start and end dates
-        const currentPeriodStartDate = new Date(currentPeriodInfo.firstSunday);
-        currentPeriodStartDate.setDate(currentPeriodInfo.firstSunday.getDate() + (currentPeriod - 1) * 28);
-        
-        const currentPeriodEndDate = new Date(currentPeriodStartDate);
-        currentPeriodEndDate.setDate(currentPeriodStartDate.getDate() + 27); // 28 days - 1
-        
-        // Calculate previous period for comparison
-        const currentPrevPeriodStartDate = new Date(currentPeriodStartDate);
-        currentPrevPeriodStartDate.setDate(currentPeriodStartDate.getDate() - 28);
-        
-        const currentPrevPeriodEndDate = new Date(currentPrevPeriodStartDate);
-        currentPrevPeriodEndDate.setDate(currentPrevPeriodStartDate.getDate() + 27);
-        
-        return {
-          startDate: formatLocalDate(currentPeriodStartDate),
-          endDate: formatLocalDate(currentPeriodEndDate),
-          compare_startDate: formatLocalDate(currentPrevPeriodStartDate),
-          compare_endDate: formatLocalDate(currentPrevPeriodEndDate)
-        };
-      case 'select-period':
-        // For select-period, we'll use a simple 28-day period calculation
-        const periodStart = new Date(currentYear, 0, 1);
-        const firstSunday = new Date(periodStart);
-        const selectPeriodDayOfWeek = periodStart.getDay();
-        const selectPeriodDaysToAdd = selectPeriodDayOfWeek === 0 ? 0 : 7 - selectPeriodDayOfWeek;
-        firstSunday.setDate(periodStart.getDate() + selectPeriodDaysToAdd);
-        
-        const periodStartDate = new Date(firstSunday);
-        periodStartDate.setDate(firstSunday.getDate() + (period! - 1) * 28);
-        
-        const periodEndDate = new Date(periodStartDate);
-        periodEndDate.setDate(periodStartDate.getDate() + 27);
-        
-        const prevPeriodStartDate = new Date(periodStartDate);
-        prevPeriodStartDate.setDate(periodStartDate.getDate() - 28);
-        
-        const prevPeriodEndDate = new Date(prevPeriodStartDate);
-        prevPeriodEndDate.setDate(prevPeriodStartDate.getDate() + 27);
-        
-        return {
-          startDate: periodStartDate.toISOString().split('T')[0],
-          endDate: periodEndDate.toISOString().split('T')[0],
-          compare_startDate: prevPeriodStartDate.toISOString().split('T')[0],
-          compare_endDate: prevPeriodEndDate.toISOString().split('T')[0]
-        };
-      default:
-        return {
-          startDate: `${currentYear}-01-01`,
-          endDate: `${currentYear}-12-31`,
-          compare_startDate: `${currentYear - 1}-01-01`,
-          compare_endDate: `${currentYear - 1}-12-31`
-        };
-    }
-  };
 
   // Helper functions for active filters
   const hasActiveFilters = () => {
@@ -597,7 +468,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       // Record start time for minimum loading duration
       const startTime = Date.now();
       
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
@@ -676,7 +547,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     try {
       setUserActivityLoading(true);
       
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
@@ -701,7 +572,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setCalendarHeatmapLoading(true);
       
       // Calculate the year based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
       
       
@@ -730,7 +601,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setDowntimeTrendLoading(true);
       
       // Calculate the year based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
       
       const params = {
@@ -759,7 +630,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setCostAvoidanceLoading(true);
       
       // Calculate the year based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
       
       const params = {
@@ -787,7 +658,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setDowntimeImpactLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -816,7 +687,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setCostImpactLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -844,7 +715,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setOntimeRateByAreaLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -879,7 +750,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       }
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -913,7 +784,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       }
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -940,7 +811,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setResolveDurationByAreaLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -992,7 +863,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setCostByFailureModeLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -1020,7 +891,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setDowntimeByFailureModeLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -1048,7 +919,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setCostImpactReporterLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -1076,7 +947,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setDowntimeImpactReporterLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
       
       const params = {
         startDate: dateRange.startDate,
@@ -1596,7 +1467,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <span className="text-muted-foreground">{t('dashboard.range')}:</span>
               <span className="text-foreground font-medium">
                 {(() => {
-                  const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+                  const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
                   return `${dateRange.startDate} - ${dateRange.endDate}`;
                 })()}
               </span>
@@ -1714,7 +1585,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               )}
 
               <div className="space-y-2">
-                <label className="text-sm font-medium">Plant</label>
+                <label className="text-sm font-medium">{t('dashboard.plant')}</label>
                 <Select value={pendingPlantFilter} onValueChange={(value) => {
                   setPendingPlantFilter(value);
                   setPendingAreaFilter('all'); // Reset area when plant changes
@@ -1723,7 +1594,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                     <SelectValue placeholder={plantsLoading ? 'Loading Plants...' : 'Plant'} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all">All Plants</SelectItem>
+                    <SelectItem value="all">{t('dashboard.allPlants')}</SelectItem>
                     {plants.map(plant => (
                       <SelectItem key={plant.code} value={plant.code}>
                         {plant.name}
@@ -1753,7 +1624,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <div className="flex justify-between items-center pt-4 border-t">
               <div className="text-sm text-muted-foreground">
                 {hasPendingChanges() && (
-                  <span className="text-orange-600">You have unsaved changes</span>
+                  <span className="text-orange-600">{t('dashboard.unsavedChanges')}</span>
                 )}
               </div>
               <div className="flex gap-2">
@@ -1761,20 +1632,20 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   resetPendingFilters();
                   setIsFilterModalOpen(false);
                 }}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button 
                   variant="outline" 
                   onClick={resetPendingFilters}
                   disabled={!hasPendingChanges()}
                 >
-                  Reset
+                  {t('common.reset')}
                 </Button>
                 <Button 
                   onClick={applyFilters}
                   disabled={!hasPendingChanges()}
                 >
-                  Apply Filters
+                  {t('common.apply')}
                 </Button>
               </div>
             </div>
@@ -1794,7 +1665,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <span>{error}</span>
             </div>
             <div className="mt-2 text-sm text-red-700">
-              Please check your connection and try again. If the problem persists, contact your system administrator.
+              {t('dashboard.pleaseCheckYourConnectionAndTryAgain')}
             </div>
           </CardContent>
         </Card>
@@ -1936,6 +1807,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
+              ) : participationChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load participation data.<br />
+                    Please check your connection or contact support.
+                  </p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <ComposedChart data={participationChartData}>
@@ -1961,6 +1841,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               {ticketsClosedLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : ticketsClosedChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load tickets closed data.<br />
+                    Please check your connection or contact support.
+                  </p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -1990,6 +1879,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 <div className="flex items-center justify-center h-[400px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
+              ) : areaActivityChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load area activity data.<br />
+                    Please check your connection or contact support.
+                  </p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={Math.max(300, areaActivityChartData.length * 40 + 60)}>
                   <BarChart 
@@ -2012,7 +1910,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
           {/* Who Active (User) */}
           <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => {
-            const dateRange = getDateRange(timeFilter, selectedYear, selectedPeriod);
+            const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
             const params = new URLSearchParams({
               startDate: dateRange.startDate,
               endDate: dateRange.endDate,
@@ -2033,6 +1931,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               {userActivityLoading ? (
                 <div className="flex items-center justify-center h-[400px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : userActivityChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load user activity data.<br />
+                    Please check your connection or contact support.
+                  </p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={Math.max(400, userActivityChartData.length * 48 + 40)}>
@@ -2095,6 +2002,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             {calendarHeatmapLoading ? (
               <div className="flex items-center justify-center h-[200px]">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+              </div>
+            ) : calendarData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[200px] text-muted-foreground">
+                <AlertTriangle className="h-8 w-8 mb-2" />
+                <p className="text-sm font-medium">No Data Available</p>
+                <p className="text-xs text-center mt-1">
+                  Unable to load calendar heatmap data.<br />
+                  Please check your connection or contact support.
+                </p>
               </div>
             ) : (
               <div className="calendar-heatmap-container">
@@ -2164,6 +2080,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
+              ) : downtimeTrendChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load downtime trend data.<br />
+                    Please check your connection or contact support.
+                  </p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <AreaChart data={downtimeTrendChartData}>
@@ -2210,6 +2135,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               {costAvoidanceLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : costAvoidanceChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load cost avoidance data.<br />
+                    Please check your connection or contact support.
+                  </p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -2308,6 +2242,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 <div className="flex items-center justify-center h-[400px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
+              ) : downtimeImpactReporterChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load downtime impact reporter data.<br />
+                    Please check your connection or contact support.
+                  </p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={Math.max(400, downtimeImpactReporterChartData.length * 48 + 40)}>
                   <BarChart 
@@ -2366,6 +2309,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               {costImpactReporterLoading ? (
                 <div className="flex items-center justify-center h-[400px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : costImpactReporterChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load cost impact reporter data.<br />
+                    Please check your connection or contact support.
+                  </p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={Math.max(400, costImpactReporterChartData.length * 48 + 40)}>
@@ -2430,6 +2382,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                 </div>
+              ) : downtimeByFailureModeChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load downtime by failure mode data.<br />
+                    Please check your connection or contact support.
+                  </p>
+                </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
                   <ComposedChart data={downtimeByFailureModeChartData}>
@@ -2491,6 +2452,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               {costByFailureModeLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : costByFailureModeChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load cost by failure mode data.<br />
+                    Please check your connection or contact support.
+                  </p>
                 </div>
               ) : (
                 <ResponsiveContainer width="100%" height={300}>
@@ -2564,6 +2534,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   <div className="flex items-center justify-center h-[300px]">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                   </div>
+                ) : resolveDurationByAreaChartData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                    <AlertTriangle className="h-8 w-8 mb-2" />
+                    <p className="text-sm font-medium">No Data Available</p>
+                    <p className="text-xs text-center mt-1">
+                      Unable to load resolve duration by area data.<br />
+                      Please check your connection or contact support.
+                    </p>
+                  </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={resolveDurationByAreaChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
@@ -2614,6 +2593,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 {resolveDurationByUserLoading ? (
                   <div className="flex items-center justify-center h-[400px]">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                  </div>
+                ) : resolveDurationByUserChartData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                    <AlertTriangle className="h-8 w-8 mb-2" />
+                    <p className="text-sm font-medium">No Data Available</p>
+                    <p className="text-xs text-center mt-1">
+                      Unable to load resolve duration by user data.<br />
+                      Please check your connection or contact support.
+                    </p>
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={Math.max(400, resolveDurationByUserChartData.length * 48 + 40)}>
@@ -2673,6 +2661,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   <div className="flex items-center justify-center h-[300px]">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
                   </div>
+                ) : ontimeRateByAreaChartData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                    <AlertTriangle className="h-8 w-8 mb-2" />
+                    <p className="text-sm font-medium">No Data Available</p>
+                    <p className="text-xs text-center mt-1">
+                      Unable to load ontime rate by area data.<br />
+                      Please check your connection or contact support.
+                    </p>
+                  </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={300}>
                     <BarChart data={ontimeRateByAreaChartData} layout="vertical" margin={{ top: 20, right: 30, left: 20, bottom: 20 }}>
@@ -2726,6 +2723,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 {ontimeRateByUserLoading ? (
                   <div className="flex items-center justify-center h-[400px]">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                  </div>
+                ) : ontimeRateByUserChartData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                    <AlertTriangle className="h-8 w-8 mb-2" />
+                    <p className="text-sm font-medium">No Data Available</p>
+                    <p className="text-xs text-center mt-1">
+                      Unable to load ontime rate by user data.<br />
+                      Please check your connection or contact support.
+                    </p>
                   </div>
                 ) : (
                   <ResponsiveContainer width="100%" height={Math.max(400, ontimeRateByUserChartData.length * 48 + 40)}>

@@ -10,7 +10,7 @@ import RegisterPage from './pages/auth/RegisterPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
 import WelcomePage from './pages/home/WelcomePage';
 import HomePage from './pages/home/HomePage';
-import DashboardPage from './pages/dashboard/DashboardPage';
+
 import DashboardMaintenanceKPIPage from './pages/dashboard/DashboardMaintenanceKPIPage';
 import DashboardPreventiveMaintenancePage from './pages/dashboard/DashboardPreventiveMaintenancePage';
 import DashboardCalibrationPage from './pages/dashboard/DashboardCalibrationPage';
@@ -19,6 +19,7 @@ import DashboardSparePartPage from './pages/dashboard/DashboardSparePartPage';
 import DashboardBacklogPage from './pages/dashboard/DashboardBacklogPage';
 import DashboardBacklogDetailPage from './pages/dashboard/DashboardBacklogDetailPage';
 import AbnormalReportDashboardV2Page from './pages/dashboard/AbnormalReportDashboardV2Page';
+import PersonalKPIComparisonPage from './pages/dashboard/PersonalKPIComparisonPage';
 import UserActivityChartPage from './pages/charts/UserActivityChartPage';
 import TargetManagementPage from './pages/settings/TargetManagementPage';
 import UserManagementPage from './pages/settings/UserManagementPage';
@@ -93,7 +94,7 @@ const AppContent: React.FC = () => {
   // Public Route Component (moved inside to access auth context)
   const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { isAuthenticated, redirectUrl, clearRedirectUrl, user } = useAuth();
-    
+  
     if (isAuthenticated) {
       // Handle redirect URL if present, otherwise go to dashboard
       if (redirectUrl) {
@@ -101,9 +102,9 @@ const AppContent: React.FC = () => {
         clearRedirectUrl(); // Clear immediately to prevent loops
         return <Navigate to={destination} replace />;
       } else {
-        // Check if this is a first-time user (no last login or very recent account)
-        const isFirstTime = !user?.lastLogin || 
-          (user?.lastLogin && new Date(user.lastLogin) > new Date(Date.now() - 24 * 60 * 60 * 1000)); // Within 24 hours
+        console.log('lastLogin', user.lastLogin);
+        // Check if this is a first-time user (no lastLogin record)
+        const isFirstTime = !user?.lastLogin;
         
         if (isFirstTime) {
           return <Navigate to="/welcome" replace />;
@@ -160,6 +161,7 @@ const AppContent: React.FC = () => {
           <Route path="home" element={<HomePage />} />
           <Route path="dashboard" element={<Navigate to="/dashboard/abnormal" replace />} />
           <Route path="dashboard/abnormal" element={<AbnormalReportDashboardV2Page />} />
+          <Route path="dashboard/personal-kpi-comparison" element={<PersonalKPIComparisonPage />} />
           <Route path="dashboard/maintenance-kpi" element={<DashboardMaintenanceKPIPage />} />
           <Route path="dashboard/preventive-maintenance" element={<DashboardPreventiveMaintenancePage />} />
           <Route path="dashboard/calibration" element={<DashboardCalibrationPage />} />

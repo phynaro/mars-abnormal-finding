@@ -1,5 +1,6 @@
 import authService from './authService';
 import { getAuthHeaders } from '../utils/authHeaders';
+import type { PersonalKPIComparisonDataPoint, PersonalKPIComparisonResponse } from '../types/personalKPIComparison';
 
 export type GroupBy = 'daily' | 'weekly' | 'period';
 
@@ -532,6 +533,7 @@ export interface DowntimeImpactReporterLeaderboardResponse {
   };
 }
 
+
 class DashboardService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/dashboard`;
   private hierarchyURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/hierarchy`;
@@ -909,6 +911,20 @@ class DashboardService {
     const url = `${this.baseURL}/downtime-impact-reporter-leaderboard?${queryParams.toString()}`;
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch downtime impact reporter leaderboard data');
+    return res.json();
+  }
+
+  // Get Personal KPI Comparison Data
+  async getPersonalKPIComparison(params: {
+    startDate: string;
+    endDate: string;
+  }): Promise<PersonalKPIComparisonResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
+    const url = `${this.baseURL}/personal-kpi-comparison?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch personal KPI comparison data');
     return res.json();
   }
 }

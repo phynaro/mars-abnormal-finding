@@ -50,7 +50,7 @@ export const menuItems: MenuItem[] = [
       // { id: 'dashboard-calibration', label: 'Calibration', icon: <FileText className="h-4 w-4" />, path: '/dashboard/calibration', permissionLevel: 1 },
       // { id: 'dashboard-mcc', label: 'MCC', icon: <FileText className="h-4 w-4" />, path: '/dashboard/mcc', permissionLevel: 1 },
       // { id: 'dashboard-spare-part', label: 'Spare Part', icon: <Boxes className="h-4 w-4" />, path: '/dashboard/spare-part', permissionLevel: 1 },
-     
+     { id: 'dashboard-personal-kpi', label: 'Personal KPI', icon: <BarChart3 className="h-4 w-4" />, path: '/dashboard/personal-kpi-comparison', permissionLevel: 1 },
     ]
   },
   // {

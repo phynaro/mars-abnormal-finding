@@ -14,7 +14,7 @@ function getDateRangeFromPeriods(year, fromPeriod, toPeriod) {
   const dayOfWeek = firstDayOfYear.getDay();
   
   const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-  firstSunday.setDate(firstDayOfYear.getDate() + daysToAdd);
+  firstSunday.setDate(firstDayOfYear.getDate() - daysToAdd);
   
   //console.log('firstSunday (local):', firstSunday.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
   
@@ -83,7 +83,7 @@ function calculatePeriodForDate(date, year) {
   // Adjust to first Sunday
   const dayOfWeek = firstDayOfYear.getDay();
   const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-  firstSunday.setDate(firstDayOfYear.getDate() + daysToAdd);
+  firstSunday.setDate(firstDayOfYear.getDate() - daysToAdd);
   
   // Calculate period number (1-based)
   const daysSinceFirstSunday = Math.floor((date - firstSunday) / (1000 * 60 * 60 * 24));
@@ -104,13 +104,14 @@ function getCurrentPeriodAndWeek(date = new Date()) {
   
   // Calculate which week within the period (1-4, since each period has 28 days = 4 weeks)
   const firstDayOfYear = new Date(year, 0, 1, 0, 0, 0, 0);
+  
   const firstSunday = new Date(firstDayOfYear);
   
   // Adjust to first Sunday
   const dayOfWeek = firstDayOfYear.getDay();
   const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-  firstSunday.setDate(firstDayOfYear.getDate() + daysToAdd);
-  
+  firstSunday.setDate(firstDayOfYear.getDate() - daysToAdd);
+  console.log('firstSunday:', firstSunday.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
   // Calculate days since first Sunday
   const daysSinceFirstSunday = Math.floor((date - firstSunday) / (1000 * 60 * 60 * 24));
   
@@ -1236,57 +1237,20 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
       area
     } = req.query;
 
-    // Build WHERE clause for tickets with plant/area filtering via PUExtension
-    let ticketsWhereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)}`;
-    
-    if (plant && plant !== 'all') {
-      ticketsWhereClause += ` AND pe.plant = '${plant}'`;
-    }
-    
-    if (area && area !== 'all') {
-      ticketsWhereClause += ` AND pe.area = '${area}'`;
-    }
-
-    // Get tickets count per period with plant/area filtering
+    // Get tickets count per period with plant/area filtering using DateDim for proper 28-day periods
     const ticketsQuery = `
       SELECT 
-        CASE 
-          WHEN MONTH(t.created_at) = 1 THEN 'P1'
-          WHEN MONTH(t.created_at) = 2 THEN 'P2'
-          WHEN MONTH(t.created_at) = 3 THEN 'P3'
-          WHEN MONTH(t.created_at) = 4 THEN 'P4'
-          WHEN MONTH(t.created_at) = 5 THEN 'P5'
-          WHEN MONTH(t.created_at) = 6 THEN 'P6'
-          WHEN MONTH(t.created_at) = 7 THEN 'P7'
-          WHEN MONTH(t.created_at) = 8 THEN 'P8'
-          WHEN MONTH(t.created_at) = 9 THEN 'P9'
-          WHEN MONTH(t.created_at) = 10 THEN 'P10'
-          WHEN MONTH(t.created_at) = 11 THEN 'P11'
-          WHEN MONTH(t.created_at) = 12 THEN 'P12'
-          ELSE 'P13'
-        END as period,
+        CONCAT('P', dd.PeriodNo) as period,
         COUNT(*) as tickets,
         COUNT(DISTINCT t.created_by) as uniqueReporters
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      ${ticketsWhereClause}
-      GROUP BY 
-        CASE 
-          WHEN MONTH(t.created_at) = 1 THEN 'P1'
-          WHEN MONTH(t.created_at) = 2 THEN 'P2'
-          WHEN MONTH(t.created_at) = 3 THEN 'P3'
-          WHEN MONTH(t.created_at) = 4 THEN 'P4'
-          WHEN MONTH(t.created_at) = 5 THEN 'P5'
-          WHEN MONTH(t.created_at) = 6 THEN 'P6'
-          WHEN MONTH(t.created_at) = 7 THEN 'P7'
-          WHEN MONTH(t.created_at) = 8 THEN 'P8'
-          WHEN MONTH(t.created_at) = 9 THEN 'P9'
-          WHEN MONTH(t.created_at) = 10 THEN 'P10'
-          WHEN MONTH(t.created_at) = 11 THEN 'P11'
-          WHEN MONTH(t.created_at) = 12 THEN 'P12'
-          ELSE 'P13'
-        END
-      ORDER BY period
+      JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+      WHERE dd.CompanyYear = ${parseInt(year)}
+        ${plant && plant !== 'all' ? `AND pe.plant = '${plant}'` : ''}
+        ${area && area !== 'all' ? `AND pe.area = '${area}'` : ''}
+      GROUP BY dd.PeriodNo
+      ORDER BY dd.PeriodNo
     `;
 
     // Get targets for the same year, plant, and area
@@ -1400,56 +1364,21 @@ exports.getTicketsClosedPerPeriod = async (req, res) => {
       area
     } = req.query;
 
-    // Build WHERE clause for Finished tickets with plant/area filtering via PUExtension
-    let ticketsWhereClause = `WHERE YEAR(t.finished_at) = ${parseInt(year)} AND t.status IN ('closed', 'resolved') AND t.finished_at IS NOT NULL`;
-    
-    if (plant && plant !== 'all') {
-      ticketsWhereClause += ` AND pe.plant = '${plant}'`;
-    }
-    
-    if (area && area !== 'all') {
-      ticketsWhereClause += ` AND pe.area = '${area}'`;
-    }
-
-    // Get tickets closed count per period with plant/area filtering
+    // Get tickets closed count per period with plant/area filtering using DateDim for proper 28-day periods
     const ticketsQuery = `
       SELECT 
-        CASE 
-          WHEN MONTH(t.finished_at) = 1 THEN 'P1'
-          WHEN MONTH(t.finished_at) = 2 THEN 'P2'
-          WHEN MONTH(t.finished_at) = 3 THEN 'P3'
-          WHEN MONTH(t.finished_at) = 4 THEN 'P4'
-          WHEN MONTH(t.finished_at) = 5 THEN 'P5'
-          WHEN MONTH(t.finished_at) = 6 THEN 'P6'
-          WHEN MONTH(t.finished_at) = 7 THEN 'P7'
-          WHEN MONTH(t.finished_at) = 8 THEN 'P8'
-          WHEN MONTH(t.finished_at) = 9 THEN 'P9'
-          WHEN MONTH(t.finished_at) = 10 THEN 'P10'
-          WHEN MONTH(t.finished_at) = 11 THEN 'P11'
-          WHEN MONTH(t.finished_at) = 12 THEN 'P12'
-          ELSE 'P13'
-        END as period,
+        CONCAT('P', dd.PeriodNo) as period,
         COUNT(*) as ticketsClosed
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      ${ticketsWhereClause}
-      GROUP BY 
-        CASE 
-          WHEN MONTH(t.finished_at) = 1 THEN 'P1'
-          WHEN MONTH(t.finished_at) = 2 THEN 'P2'
-          WHEN MONTH(t.finished_at) = 3 THEN 'P3'
-          WHEN MONTH(t.finished_at) = 4 THEN 'P4'
-          WHEN MONTH(t.finished_at) = 5 THEN 'P5'
-          WHEN MONTH(t.finished_at) = 6 THEN 'P6'
-          WHEN MONTH(t.finished_at) = 7 THEN 'P7'
-          WHEN MONTH(t.finished_at) = 8 THEN 'P8'
-          WHEN MONTH(t.finished_at) = 9 THEN 'P9'
-          WHEN MONTH(t.finished_at) = 10 THEN 'P10'
-          WHEN MONTH(t.finished_at) = 11 THEN 'P11'
-          WHEN MONTH(t.finished_at) = 12 THEN 'P12'
-          ELSE 'P13'
-        END
-      ORDER BY period
+      JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.finished_at AS DATE)
+      WHERE dd.CompanyYear = ${parseInt(year)} 
+        AND t.status IN ('closed', 'resolved') 
+        AND t.finished_at IS NOT NULL
+        ${plant && plant !== 'all' ? `AND pe.plant = '${plant}'` : ''}
+        ${area && area !== 'all' ? `AND pe.area = '${area}'` : ''}
+      GROUP BY dd.PeriodNo
+      ORDER BY dd.PeriodNo
     `;
 
     // Get targets for the same year, plant, and area (type = 'close case')
@@ -1829,47 +1758,18 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
       
       downtimeQuery = `
         SELECT 
-          CASE 
-            WHEN MONTH(t.created_at) = 1 THEN 'P1'
-            WHEN MONTH(t.created_at) = 2 THEN 'P2'
-            WHEN MONTH(t.created_at) = 3 THEN 'P3'
-            WHEN MONTH(t.created_at) = 4 THEN 'P4'
-            WHEN MONTH(t.created_at) = 5 THEN 'P5'
-            WHEN MONTH(t.created_at) = 6 THEN 'P6'
-            WHEN MONTH(t.created_at) = 7 THEN 'P7'
-            WHEN MONTH(t.created_at) = 8 THEN 'P8'
-            WHEN MONTH(t.created_at) = 9 THEN 'P9'
-            WHEN MONTH(t.created_at) = 10 THEN 'P10'
-            WHEN MONTH(t.created_at) = 11 THEN 'P11'
-            WHEN MONTH(t.created_at) = 12 THEN 'P12'
-            ELSE 'P13'
-          END as period,
+          CONCAT('P', dd.PeriodNo) as period,
           pe.plant as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
         FROM Tickets t
         LEFT JOIN PUExtension pe ON t.puno = pe.puno
-        WHERE YEAR(t.created_at) = ${parseInt(year)}
+        JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        WHERE dd.CompanyYear = ${parseInt(year)}
           AND t.status IN ('closed', 'resolved')
           AND pe.plant IS NOT NULL
-        GROUP BY 
-          CASE 
-            WHEN MONTH(t.created_at) = 1 THEN 'P1'
-            WHEN MONTH(t.created_at) = 2 THEN 'P2'
-            WHEN MONTH(t.created_at) = 3 THEN 'P3'
-            WHEN MONTH(t.created_at) = 4 THEN 'P4'
-            WHEN MONTH(t.created_at) = 5 THEN 'P5'
-            WHEN MONTH(t.created_at) = 6 THEN 'P6'
-            WHEN MONTH(t.created_at) = 7 THEN 'P7'
-            WHEN MONTH(t.created_at) = 8 THEN 'P8'
-            WHEN MONTH(t.created_at) = 9 THEN 'P9'
-            WHEN MONTH(t.created_at) = 10 THEN 'P10'
-            WHEN MONTH(t.created_at) = 11 THEN 'P11'
-            WHEN MONTH(t.created_at) = 12 THEN 'P12'
-            ELSE 'P13'
-          END,
-          pe.plant
-        ORDER BY period, pe.plant
+        GROUP BY dd.PeriodNo, pe.plant
+        ORDER BY dd.PeriodNo, pe.plant
       `;
     } else if (!area || area === 'all') {
       // Condition 2: Show group by area if any plant selected but no area selected
@@ -1879,48 +1779,19 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
       
       downtimeQuery = `
         SELECT 
-          CASE 
-            WHEN MONTH(t.created_at) = 1 THEN 'P1'
-            WHEN MONTH(t.created_at) = 2 THEN 'P2'
-            WHEN MONTH(t.created_at) = 3 THEN 'P3'
-            WHEN MONTH(t.created_at) = 4 THEN 'P4'
-            WHEN MONTH(t.created_at) = 5 THEN 'P5'
-            WHEN MONTH(t.created_at) = 6 THEN 'P6'
-            WHEN MONTH(t.created_at) = 7 THEN 'P7'
-            WHEN MONTH(t.created_at) = 8 THEN 'P8'
-            WHEN MONTH(t.created_at) = 9 THEN 'P9'
-            WHEN MONTH(t.created_at) = 10 THEN 'P10'
-            WHEN MONTH(t.created_at) = 11 THEN 'P11'
-            WHEN MONTH(t.created_at) = 12 THEN 'P12'
-            ELSE 'P13'
-          END as period,
+          CONCAT('P', dd.PeriodNo) as period,
           pe.area as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
         FROM Tickets t
         LEFT JOIN PUExtension pe ON t.puno = pe.puno
-        WHERE YEAR(t.created_at) = ${parseInt(year)}
+        JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        WHERE dd.CompanyYear = ${parseInt(year)}
           AND t.status IN ('closed', 'resolved')
           AND pe.plant = '${plant}'
           AND pe.area IS NOT NULL
-        GROUP BY 
-          CASE 
-            WHEN MONTH(t.created_at) = 1 THEN 'P1'
-            WHEN MONTH(t.created_at) = 2 THEN 'P2'
-            WHEN MONTH(t.created_at) = 3 THEN 'P3'
-            WHEN MONTH(t.created_at) = 4 THEN 'P4'
-            WHEN MONTH(t.created_at) = 5 THEN 'P5'
-            WHEN MONTH(t.created_at) = 6 THEN 'P6'
-            WHEN MONTH(t.created_at) = 7 THEN 'P7'
-            WHEN MONTH(t.created_at) = 8 THEN 'P8'
-            WHEN MONTH(t.created_at) = 9 THEN 'P9'
-            WHEN MONTH(t.created_at) = 10 THEN 'P10'
-            WHEN MONTH(t.created_at) = 11 THEN 'P11'
-            WHEN MONTH(t.created_at) = 12 THEN 'P12'
-            ELSE 'P13'
-          END,
-          pe.area
-        ORDER BY period, pe.area
+        GROUP BY dd.PeriodNo, pe.area
+        ORDER BY dd.PeriodNo, pe.area
       `;
     } else {
       // Condition 3: Show group by equipment (machine/line) if any area filter is selected
@@ -1930,21 +1801,7 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
       
       downtimeQuery = `
         SELECT 
-          CASE 
-            WHEN MONTH(t.created_at) = 1 THEN 'P1'
-            WHEN MONTH(t.created_at) = 2 THEN 'P2'
-            WHEN MONTH(t.created_at) = 3 THEN 'P3'
-            WHEN MONTH(t.created_at) = 4 THEN 'P4'
-            WHEN MONTH(t.created_at) = 5 THEN 'P5'
-            WHEN MONTH(t.created_at) = 6 THEN 'P6'
-            WHEN MONTH(t.created_at) = 7 THEN 'P7'
-            WHEN MONTH(t.created_at) = 8 THEN 'P8'
-            WHEN MONTH(t.created_at) = 9 THEN 'P9'
-            WHEN MONTH(t.created_at) = 10 THEN 'P10'
-            WHEN MONTH(t.created_at) = 11 THEN 'P11'
-            WHEN MONTH(t.created_at) = 12 THEN 'P12'
-            ELSE 'P13'
-          END as period,
+          CONCAT('P', dd.PeriodNo) as period,
           CASE 
             WHEN pe.machine IS NOT NULL THEN pe.machine
             WHEN pe.line IS NOT NULL THEN pe.line
@@ -1954,32 +1811,18 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
           SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
         FROM Tickets t
         LEFT JOIN PUExtension pe ON t.puno = pe.puno
-        WHERE YEAR(t.created_at) = ${parseInt(year)}
+        JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        WHERE dd.CompanyYear = ${parseInt(year)}
           AND t.status IN ('closed', 'resolved')
           AND pe.plant = '${plant}'
           AND pe.area = '${area}'
-        GROUP BY 
-          CASE 
-            WHEN MONTH(t.created_at) = 1 THEN 'P1'
-            WHEN MONTH(t.created_at) = 2 THEN 'P2'
-            WHEN MONTH(t.created_at) = 3 THEN 'P3'
-            WHEN MONTH(t.created_at) = 4 THEN 'P4'
-            WHEN MONTH(t.created_at) = 5 THEN 'P5'
-            WHEN MONTH(t.created_at) = 6 THEN 'P6'
-            WHEN MONTH(t.created_at) = 7 THEN 'P7'
-            WHEN MONTH(t.created_at) = 8 THEN 'P8'
-            WHEN MONTH(t.created_at) = 9 THEN 'P9'
-            WHEN MONTH(t.created_at) = 10 THEN 'P10'
-            WHEN MONTH(t.created_at) = 11 THEN 'P11'
-            WHEN MONTH(t.created_at) = 12 THEN 'P12'
-            ELSE 'P13'
-          END,
+        GROUP BY dd.PeriodNo,
           CASE 
             WHEN pe.machine IS NOT NULL THEN pe.machine
             WHEN pe.line IS NOT NULL THEN pe.line
             ELSE 'Unknown Equipment'
           END
-        ORDER BY period, 
+        ORDER BY dd.PeriodNo, 
           CASE 
             WHEN pe.machine IS NOT NULL THEN pe.machine
             WHEN pe.line IS NOT NULL THEN pe.line
@@ -2067,58 +1910,22 @@ exports.getCostAvoidanceData = async (req, res) => {
       area
     } = req.query;
 
-    // Build WHERE clause based on filters with plant/area filtering via PUExtension
-    let whereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)} AND t.status IN ('closed', 'resolved')`;
-    
-    if (plant && plant !== 'all') {
-      whereClause += ` AND pe.plant = '${plant}'`;
-    }
-    
-    if (area && area !== 'all') {
-      whereClause += ` AND pe.area = '${area}'`;
-    }
-
-    // Get cost avoidance data by period for the specified year and plant/area
+    // Get cost avoidance data by period for the specified year and plant/area using DateDim for proper 28-day periods
     const costAvoidanceQuery = `
       SELECT 
-        CASE 
-          WHEN MONTH(t.created_at) = 1 THEN 'P1'
-          WHEN MONTH(t.created_at) = 2 THEN 'P2'
-          WHEN MONTH(t.created_at) = 3 THEN 'P3'
-          WHEN MONTH(t.created_at) = 4 THEN 'P4'
-          WHEN MONTH(t.created_at) = 5 THEN 'P5'
-          WHEN MONTH(t.created_at) = 6 THEN 'P6'
-          WHEN MONTH(t.created_at) = 7 THEN 'P7'
-          WHEN MONTH(t.created_at) = 8 THEN 'P8'
-          WHEN MONTH(t.created_at) = 9 THEN 'P9'
-          WHEN MONTH(t.created_at) = 10 THEN 'P10'
-          WHEN MONTH(t.created_at) = 11 THEN 'P11'
-          WHEN MONTH(t.created_at) = 12 THEN 'P12'
-          ELSE 'P13'
-        END as period,
+        CONCAT('P', dd.PeriodNo) as period,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance,
         AVG(ISNULL(t.cost_avoidance, 0)) as avg_cost_per_case
       FROM Tickets t
       LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      ${whereClause}
-      GROUP BY 
-        CASE 
-          WHEN MONTH(t.created_at) = 1 THEN 'P1'
-          WHEN MONTH(t.created_at) = 2 THEN 'P2'
-          WHEN MONTH(t.created_at) = 3 THEN 'P3'
-          WHEN MONTH(t.created_at) = 4 THEN 'P4'
-          WHEN MONTH(t.created_at) = 5 THEN 'P5'
-          WHEN MONTH(t.created_at) = 6 THEN 'P6'
-          WHEN MONTH(t.created_at) = 7 THEN 'P7'
-          WHEN MONTH(t.created_at) = 8 THEN 'P8'
-          WHEN MONTH(t.created_at) = 9 THEN 'P9'
-          WHEN MONTH(t.created_at) = 10 THEN 'P10'
-          WHEN MONTH(t.created_at) = 11 THEN 'P11'
-          WHEN MONTH(t.created_at) = 12 THEN 'P12'
-          ELSE 'P13'
-        END
-      ORDER BY period
+      JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+      WHERE dd.CompanyYear = ${parseInt(year)} 
+        AND t.status IN ('closed', 'resolved')
+        ${plant && plant !== 'all' ? `AND pe.plant = '${plant}'` : ''}
+        ${area && area !== 'all' ? `AND pe.area = '${area}'` : ''}
+      GROUP BY dd.PeriodNo
+      ORDER BY dd.PeriodNo
     `;
 
     const result = await pool.request().query(costAvoidanceQuery);
@@ -3774,8 +3581,12 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
 
     // Calculate comparison metrics with enhanced logic
     const calculateGrowthRate = (current, previous) => {
+      // Convert null values to 0
+      const currentValue = current || 0;
+      const previousValue = previous || 0;
+      
       // Both values are 0 - no change
-      if (current === 0 && previous === 0) {
+      if (currentValue === 0 && previousValue === 0) {
         return {
           percentage: 0,
           type: 'no_change',
@@ -3784,25 +3595,25 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       }
       
       // Previous was 0, current has value - new activity
-      if (previous === 0 && current > 0) {
+      if (previousValue === 0 && currentValue > 0) {
         return {
           percentage: 100,
           type: 'new_activity',
-          description: 'New activity (0 → ' + current + ')'
+          description: 'New activity (0 → ' + currentValue + ')'
         };
       }
       
       // Current is 0, previous had value - activity stopped
-      if (current === 0 && previous > 0) {
+      if (currentValue === 0 && previousValue > 0) {
         return {
           percentage: -100,
           type: 'activity_stopped',
-          description: 'Activity stopped (' + previous + ' → 0)'
+          description: 'Activity stopped (' + previousValue + ' → 0)'
         };
       }
       
       // Both have values - calculate percentage change
-      const percentage = ((current - previous) / previous) * 100;
+      const percentage = ((currentValue - previousValue) / previousValue) * 100;
       return {
         percentage: percentage,
         type: percentage > 0 ? 'increase' : percentage < 0 ? 'decrease' : 'no_change',
@@ -3822,23 +3633,23 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       downtimeAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalDowntimeAvoidance, compareKPIs.totalDowntimeAvoidance)
     };
 
-    // Format response
+    // Format response - ensure null values are converted to 0
     const response = {
       success: true,
       data: {
         kpis: {
-          totalTicketsThisPeriod: currentKPIs.totalTickets,
-          totalTicketsLastPeriod: compareKPIs.totalTickets,
-          closedTicketsThisPeriod: currentKPIs.closedTickets,
-          closedTicketsLastPeriod: compareKPIs.closedTickets,
-          waitingTicketsThisPeriod: currentKPIs.waitingTickets,
-          waitingTicketsLastPeriod: compareKPIs.waitingTickets,
-          pendingTicketsThisPeriod: currentKPIs.pendingTickets,
-          pendingTicketsLastPeriod: compareKPIs.pendingTickets,
-          totalDowntimeAvoidanceThisPeriod: currentKPIs.totalDowntimeAvoidance,
-          totalDowntimeAvoidanceLastPeriod: compareKPIs.totalDowntimeAvoidance,
-          totalCostAvoidanceThisPeriod: currentKPIs.totalCostAvoidance,
-          totalCostAvoidanceLastPeriod: compareKPIs.totalCostAvoidance
+          totalTicketsThisPeriod: currentKPIs.totalTickets || 0,
+          totalTicketsLastPeriod: compareKPIs.totalTickets || 0,
+          closedTicketsThisPeriod: currentKPIs.closedTickets || 0,
+          closedTicketsLastPeriod: compareKPIs.closedTickets || 0,
+          waitingTicketsThisPeriod: currentKPIs.waitingTickets || 0,
+          waitingTicketsLastPeriod: compareKPIs.waitingTickets || 0,
+          pendingTicketsThisPeriod: currentKPIs.pendingTickets || 0,
+          pendingTicketsLastPeriod: compareKPIs.pendingTickets || 0,
+          totalDowntimeAvoidanceThisPeriod: currentKPIs.totalDowntimeAvoidance || 0,
+          totalDowntimeAvoidanceLastPeriod: compareKPIs.totalDowntimeAvoidance || 0,
+          totalCostAvoidanceThisPeriod: currentKPIs.totalCostAvoidance || 0,
+          totalCostAvoidanceLastPeriod: compareKPIs.totalCostAvoidance || 0
         },
         topPerformers: {
           topReporter: topReporter ? {
@@ -3895,3 +3706,181 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
     });
   }
 };
+
+/**
+ * Get Personal KPI Comparison Data
+ * Returns KPI data for all users with tickets in the specified date range
+ */
+const getPersonalKPIComparison = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    const pool = await sql.connect(dbConfig);
+
+    // Get all users who have tickets in the date range with their KPI data
+    const query = `
+      WITH UserKPIData AS (
+        SELECT 
+          p.PERSONNO as personno,
+          p.PERSON_NAME as personName,
+          p.DEPTNO as deptNo,
+          ue.AvatarUrl as avatarUrl,
+          d.DEPTCODE as deptCode,
+          d.DEPTNAME as deptName,
+          -- Ticket Count (Created) - status not in 'rejected_final'
+          COUNT(CASE WHEN t.created_by = p.PERSONNO AND t.status NOT IN ('rejected_final') THEN 1 END) as ticketCountCreated,
+          
+          -- Ticket Count (Closed) - assigned_to and status = 'closed'
+          COUNT(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' THEN 1 END) as ticketCountClosed,
+          
+          -- Downtime Saved (Created) - created_by and status = 'closed'
+          ISNULL(SUM(CASE WHEN t.created_by = p.PERSONNO AND t.status = 'closed' THEN t.downtime_avoidance_hours END), 0) as downtimeSavedCreated,
+          
+          -- Downtime Saved (Assigned) - assigned_to and status = 'closed'
+          ISNULL(SUM(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' THEN t.downtime_avoidance_hours END), 0) as downtimeSavedAssigned,
+          
+          -- Cost Saved (Created) - created_by and status = 'closed'
+          ISNULL(SUM(CASE WHEN t.created_by = p.PERSONNO AND t.status = 'closed' THEN t.cost_avoidance END), 0) as costSavedCreated,
+          
+          -- Cost Saved (Assigned) - assigned_to and status = 'closed'
+          ISNULL(SUM(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' THEN t.cost_avoidance END), 0) as costSavedAssigned,
+          
+          -- Ontime Percentage - assigned_to and status = 'closed'
+          CASE 
+            WHEN COUNT(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' THEN 1 END) > 0 
+            THEN CAST(COUNT(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' AND t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0 / 
+                     COUNT(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' THEN 1 END) AS DECIMAL(5,2))
+            ELSE 0 
+          END as ontimePercentage,
+          
+          -- Average Resolution Hours - assigned_to and status = 'closed' with both timestamps
+          CASE 
+            WHEN COUNT(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' AND t.actual_start_at IS NOT NULL AND t.actual_finish_at IS NOT NULL THEN 1 END) > 0
+            THEN CAST(AVG(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' AND t.actual_start_at IS NOT NULL AND t.actual_finish_at IS NOT NULL 
+                        THEN DATEDIFF(hour, t.actual_start_at, t.actual_finish_at) END) AS DECIMAL(10,2))
+            ELSE 0 
+          END as avgResolutionHours
+          
+        FROM Person p
+        LEFT JOIN UserExtension ue ON p.PERSONNO = ue.PersonNo
+        LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        LEFT JOIN Tickets t ON (t.created_by = p.PERSONNO OR t.assigned_to = p.PERSONNO)
+          AND t.created_at >= @startDate 
+          AND t.created_at <= @endDate
+        WHERE p.FLAGDEL != 'Y'
+        GROUP BY p.PERSONNO, p.PERSON_NAME, p.DEPTNO, ue.AvatarUrl, d.DEPTCODE, d.DEPTNAME
+        HAVING COUNT(t.id) > 0  -- Only include users who have tickets in the date range
+      )
+      SELECT 
+        personno,
+        personName,
+        deptNo,
+        deptCode,
+        deptName,
+        ISNULL(avatarUrl, '') as avatarUrl,
+        ticketCountCreated,
+        ticketCountClosed,
+        downtimeSavedCreated,
+        downtimeSavedAssigned,
+        costSavedCreated,
+        costSavedAssigned,
+        ontimePercentage,
+        avgResolutionHours
+      FROM UserKPIData
+      ORDER BY personName
+    `;
+
+    const result = await pool.request()
+      .input('startDate', sql.DateTime, startDate)
+      .input('endDate', sql.DateTime, endDate)
+      .query(query);
+
+    // Get unique departments from users who have tickets in the date range
+    const departmentsQuery = `
+      SELECT DISTINCT d.DEPTNO, d.DEPTCODE, d.DEPTNAME
+      FROM Person p
+      INNER JOIN Dept d ON p.DEPTNO = d.DEPTNO
+      INNER JOIN Tickets t ON (t.created_by = p.PERSONNO OR t.assigned_to = p.PERSONNO)
+      WHERE p.FLAGDEL != 'Y' 
+        AND t.created_at >= @startDate 
+        AND t.created_at <= @endDate
+      ORDER BY d.DEPTNAME
+    `;
+
+    const departmentsResult = await pool.request()
+      .input('startDate', sql.DateTime, startDate)
+      .input('endDate', sql.DateTime, endDate)
+      .query(departmentsQuery);
+
+    // Generate avatar colors and initials for each user
+    const users = result.recordset.map((user, index) => {
+      const name = user.personName || 'Unknown User';
+      const nameParts = name.split(' ');
+      const initials = nameParts.length >= 2 
+        ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+        : nameParts[0] ? nameParts[0][0].toUpperCase() : 'U';
+      
+      // Generate consistent color based on user index
+      const colors = [
+        '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+        '#06B6D4', '#F97316', '#84CC16', '#EC4899', '#6366F1',
+        '#14B8A6', '#F43F5E', '#8B5A2B', '#059669', '#DC2626'
+      ];
+      const bgColor = colors[index % colors.length];
+
+      return {
+        personno: user.personno,
+        personName: user.personName,
+        deptNo: user.deptNo || null,
+        deptCode: user.deptCode || null,
+        deptName: user.deptName || null,
+        avatarUrl: user.avatarUrl,
+        initials: initials,
+        bgColor: bgColor,
+        ticketCountCreated: user.ticketCountCreated || 0,
+        ticketCountClosed: user.ticketCountClosed || 0,
+        downtimeSavedCreated: user.downtimeSavedCreated || 0,
+        downtimeSavedAssigned: user.downtimeSavedAssigned || 0,
+        costSavedCreated: user.costSavedCreated || 0,
+        costSavedAssigned: user.costSavedAssigned || 0,
+        ontimePercentage: user.ontimePercentage || 0,
+        avgResolutionHours: user.avgResolutionHours || 0
+      };
+    });
+
+    const response = {
+      success: true,
+      data: {
+        users: users,
+        departments: departmentsResult.recordset,
+        summary: {
+          totalUsers: users.length,
+          dateRange: {
+            startDate: startDate,
+            endDate: endDate
+          }
+        }
+      }
+    };
+
+    res.json(response);
+
+  } catch (error) {
+    console.error('Error in getPersonalKPIComparison:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+exports.getPersonalKPIComparison = getPersonalKPIComparison;

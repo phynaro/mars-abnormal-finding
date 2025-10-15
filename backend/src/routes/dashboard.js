@@ -86,4 +86,7 @@ router.get('/cost-impact-reporter-leaderboard', requireFormPermission('TKT', 'vi
 // Get Downtime Impact Reporter Leaderboard Data (requires TKT form view permission)
 router.get('/downtime-impact-reporter-leaderboard', requireFormPermission('TKT', 'view'), dashboardController.getDowntimeImpactReporterLeaderboard);
 
+// Get Personal KPI Comparison Data (requires TKT form view permission)
+router.get('/personal-kpi-comparison', requireFormPermission('TKT', 'view'), dashboardController.getPersonalKPIComparison);
+
 module.exports = router;

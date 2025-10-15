@@ -19,11 +19,11 @@ export default defineConfig({
   },
   server: {
     port: 3000,
-    host: true,
+    host: '0.0.0.0',
     allowedHosts: ['localhost', '127.0.0.1', '192.168.0.241', 'pch.trazor.cloud'],
     hmr: {
-      port: 3000,
-      host: '192.168.0.241'
+      host: 'pch.trazor.cloud',
+      protocol: 'wss'
     }
   },
   build: {
