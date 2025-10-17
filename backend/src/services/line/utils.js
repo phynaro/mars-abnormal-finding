@@ -75,7 +75,7 @@ function getNotificationSubtitle(messageType) {
     escalated: 'ใบงานถูกส่งต่อให้ผู้จัดการระดับสูง',
     closed: 'ใบงานถูกปิด',
     reopened: 'ใบงานถูกเปิดใหม่',
-    reassigned: 'ใบงานถูกมอบหมายใหม่',
+    reassigned: 'ใบงานถูกมอบหมาย',
   };
 
   return subtitles[messageType] || 'การแจ้งเตือนจากระบบ Abnormal Finding';

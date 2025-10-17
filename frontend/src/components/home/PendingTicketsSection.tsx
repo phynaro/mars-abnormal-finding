@@ -347,15 +347,15 @@ const renderMobileCardContent = (
           </span>
         </div>
       ) : null;
-    case "reporter_name":
-      return ticket.reporter_name ? (
-        <div className="flex items-center gap-2">
-          <User className="w-4 h-4 text-muted-foreground" />
-          <span>
-            {t("homepage.createdBy")}: {ticket.reporter_name}
-          </span>
-        </div>
-      ) : null;
+      case "reporter_name":
+        return ticket.reporter_name ? (
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-muted-foreground" />
+            <span>
+              {t("homepage.createdBy")}: {ticket.reporter_name}
+            </span>
+          </div>
+        ) : null;
     case "created_at":
       return (
         <div className="flex items-center gap-2">
@@ -648,9 +648,14 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
                   </div>
                   <div className="text-lg font-semibold">{ticket.title}</div>
                 </div>
-                <Badge className={getTicketStatusClass(ticket.status)}>
-                  {ticket.status.replace("_", " ").toUpperCase()}
-                </Badge>
+                <div className="flex gap-2 items-center">
+                  <Badge className={getCriticalLevelClass(ticket.pucriticalno)}>
+                    {getCriticalLevelText(ticket.pucriticalno, t)}
+                  </Badge>
+                  <Badge className={getTicketStatusClass(ticket.status)}>
+                    {ticket.status.replace("_", " ").toUpperCase()}
+                  </Badge>
+                </div>
               </div>
               <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
                 {ticket.description}
@@ -662,9 +667,6 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
                 <Badge className={getTicketSeverityClass(ticket.severity_level)}>
                   {ticket.severity_level?.toUpperCase()}
                 </Badge> */}
-                <Badge className={getCriticalLevelClass(ticket.pucriticalno)}>
-                  {getCriticalLevelText(ticket.pucriticalno, t)}
-                </Badge>
                 <Badge variant="outline" className="text-xs">
                   {ticket.pu_name || ticket.pucode || "N/A"}
                 </Badge>
@@ -672,7 +674,7 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
               </div>
 
               <div className="mt-3 text-sm text-muted-foreground space-y-1">
-                {config.columns.slice(6).map((column) => {
+                {config.columns.slice(5).map((column) => {
                   const content = renderMobileCardContent(
                     ticket,
                     column.key,
@@ -683,12 +685,12 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
                 })}
               </div>
 
-              <div className="mt-4 text-xs text-muted-foreground">
+              {/* <div className="mt-4 text-xs text-muted-foreground">
                 <span>
                   {t("ticket.created")}{" "}
                   {new Date(ticket.created_at).toLocaleDateString()}
                 </span>
-              </div>
+              </div> */}
             </div>
           ))}
         </div>

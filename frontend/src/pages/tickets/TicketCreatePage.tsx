@@ -11,9 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Upload, X, Camera } from 'lucide-react';
+import { Upload, X } from 'lucide-react';
 import authService from '@/services/authService';
-import { compressTicketImage, formatFileSize } from '@/utils/imageCompression';
+import { compressTicketImage, formatFileSize, compressImage } from '@/utils/imageCompression';
 
 // Machine data type from PU table
 
@@ -52,10 +52,12 @@ const TicketCreatePage: React.FC = () => {
 
   // Image selection state
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [previewFiles, setPreviewFiles] = useState<File[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const cameraInputRef = useRef<HTMLInputElement | null>(null);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Machine selection state - simplified approach
@@ -75,13 +77,91 @@ const TicketCreatePage: React.FC = () => {
   const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
 
-  // Generate previews and revoke URLs on unmount/change
-  const previews = useMemo(() => selectedFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [selectedFiles]);
+  // Create optimized preview images for faster loading
+  useEffect(() => {
+    if (selectedFiles.length > 0) {
+      // Only create preview files if we don't already have them
+      if (previewFiles.length === 0) {
+        createPreviewImages();
+      } else if (previewFiles.length > 0 && previewUrls.length === 0) {
+        // We have preview files but no URLs, recreate URLs from existing files
+        const urls = previewFiles.map(f => URL.createObjectURL(f));
+        setPreviewUrls(urls);
+      }
+    } else {
+      // Clean up when no files selected
+      cleanupPreviewUrls();
+      setPreviewFiles([]);
+    }
+  }, [selectedFiles.length, previewFiles.length, previewUrls.length]);
+  
+  // Clean up URLs when files change
+  useEffect(() => {
+    if (selectedFiles.length === 0 && previewUrls.length > 0) {
+      // Files were cleared, clean up everything
+      cleanupPreviewUrls();
+      setPreviewFiles([]);
+    } else if (selectedFiles.length > 0 && previewFiles.length > 0 && selectedFiles.length !== previewFiles.length) {
+      // File count changed, recreate preview images
+      cleanupPreviewUrls();
+      setPreviewFiles([]);
+      createPreviewImages();
+    }
+  }, [selectedFiles.length]);
+  
+  const createPreviewImages = async () => {
+    if (selectedFiles.length === 0) return;
+    
+    setPreviewLoading(true);
+    
+    // Set a timeout for preview creation (3 seconds)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Preview creation timeout')), 3000);
+    });
+    
+    try {
+      // Create optimized preview images (smaller, faster loading)
+      const optimizedFiles = await Promise.race([
+        Promise.all(
+          selectedFiles.map(async (file) => {
+            return await compressImage(file, {
+              maxWidth: 400,  // Much smaller for preview
+              maxHeight: 400,
+              quality: 0.7,   // Lower quality for speed
+              format: 'jpeg'
+            });
+          })
+        ),
+        timeoutPromise
+      ]) as File[];
+      
+      setPreviewFiles(optimizedFiles);
+      
+      // Create URLs from optimized files
+      const urls = optimizedFiles.map(f => URL.createObjectURL(f));
+      setPreviewUrls(urls);
+    } catch (error) {
+      console.error('Error creating preview images:', error);
+      // Fallback to original files if compression fails or times out
+      const urls = selectedFiles.map(f => URL.createObjectURL(f));
+      setPreviewUrls(urls);
+      // Don't set previewFiles to avoid confusion
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+  
+  const cleanupPreviewUrls = () => {
+    previewUrls.forEach(url => URL.revokeObjectURL(url));
+    setPreviewUrls([]);
+  };
+  
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      previews.forEach((p) => URL.revokeObjectURL(p.url));
+      previewUrls.forEach(url => URL.revokeObjectURL(url));
     };
-  }, [previews]);
+  }, []);
 
   // Global drag and drop handlers for the entire page
   useEffect(() => {
@@ -632,33 +712,18 @@ const TicketCreatePage: React.FC = () => {
                         {isDragOver ? t('ticket.dropFilesHere') : t('ticket.dragDropFiles')}
                       </p>
                       {!isDragOver && (
-                        <div className="flex gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              fileInputRef.current?.click();
-                            }}
-                            disabled={submitting}
-                          >
-                            {t('ticket.browseFiles')}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              cameraInputRef.current?.click();
-                            }}
-                            disabled={submitting}
-                            title="Take Photo"
-                          >
-                            <Camera className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            fileInputRef.current?.click();
+                          }}
+                          disabled={submitting}
+                        >
+                          {t('ticket.browseFiles')}
+                        </Button>
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground">
@@ -675,17 +740,6 @@ const TicketCreatePage: React.FC = () => {
                     onChange={handleFileInputChange}
                     disabled={submitting}
                   />
-                  <Input
-                    ref={cameraInputRef}
-                    id="camera"
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    multiple
-                    className="hidden"
-                    onChange={handleFileInputChange}
-                    disabled={submitting}
-                  />
                 </div>
 
                 {selectedFiles.length > 0 && (
@@ -695,9 +749,20 @@ const TicketCreatePage: React.FC = () => {
                       <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedFiles([])} disabled={submitting}>{t('ticket.clearAll')}</Button>
                     </div>
                     <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 max-h-48 overflow-y-auto pr-1">
-                      {previews.map((p, idx) => (
+                      {selectedFiles.map((file, idx) => (
                         <div key={idx} className="group relative overflow-hidden rounded-lg border">
-                          <img src={p.url} alt={p.file.name} className="h-24 w-full object-cover" />
+                          {previewLoading || !previewUrls[idx] ? (
+                            <div className="h-24 w-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                              <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                            </div>
+                          ) : (
+                            <img 
+                              src={previewUrls[idx]} 
+                              alt={file.name} 
+                              className="h-24 w-full object-cover" 
+                              loading="lazy"
+                            />
+                          )}
                           <button
                             type="button"
                             className="absolute inset-0 flex items-center justify-center bg-black/60 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100"
@@ -707,9 +772,9 @@ const TicketCreatePage: React.FC = () => {
                             {t('ticket.remove')}
                           </button>
                           <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-2 py-1 text-xs text-white">
-                            <div className="truncate">{p.file.name}</div>
+                            <div className="truncate">{file.name}</div>
                             <div className="text-xs opacity-75">
-                              {(p.file.size / (1024 * 1024)).toFixed(1)}MB
+                              {(file.size / (1024 * 1024)).toFixed(1)}MB
                             </div>
                           </div>
                         </div>
@@ -754,7 +819,7 @@ const TicketCreatePage: React.FC = () => {
 
               {/* Critical Level */}
               <div className="space-y-2">
-                <Label htmlFor="critical">Critical Level</Label>
+                <Label htmlFor="critical">{t('ticket.criticalLevel')}</Label>
                 <Select
                   value={formData.pucriticalno?.toString() || ''}
                   onValueChange={(v) => handleInputChange('pucriticalno', parseInt(v))}

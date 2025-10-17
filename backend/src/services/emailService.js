@@ -1,4 +1,5 @@
 const { Resend } = require('resend');
+const { getCriticalLevelText } = require('../utils/criticalMapping');
 
 // Initialize Resend with API key (only if provided)
 let resend = null;
@@ -285,13 +286,7 @@ const EMAIL_TEMPLATES = {
             margin: 20px 0;
             border: 1px solid #e9ecef;
           }
-          .priority-high { color: #dc3545; }
-          .priority-medium { color: #fd7e14; }
-          .priority-low { color: #28a745; }
-          .severity-critical { color: #dc3545; }
-          .severity-high { color: #fd7e14; }
-          .severity-medium { color: #28a745; }
-          .severity-low { color: #007BFF; }
+          .critical-level { color: #dc3545; font-weight: 600; }
           .btn {
             display: inline-block;
             margin-top: 20px;
@@ -327,13 +322,12 @@ const EMAIL_TEMPLATES = {
               <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
               <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
               <p><span class="highlight">Reported By:</span> ${reporterName}</p>
-              <p><span class="highlight">Priority:</span> <span class="priority-${ticketData.priority}">${ticketData.priority?.toUpperCase() || 'NORMAL'}</span></p>
-              <p><span class="highlight">Severity:</span> <span class="severity-${ticketData.severity_level}">${ticketData.severity_level?.toUpperCase() || 'MEDIUM'}</span></p>
+              <p><span class="highlight">Critical Level:</span> <span class="critical-level">${getCriticalLevelText(ticketData.pucriticalno)}</span></p>
               ${ticketData.estimated_downtime_hours ? `<p><span class="highlight">Estimated Downtime:</span> ${ticketData.estimated_downtime_hours} hours</p>` : ''}
               <p><span class="highlight">Created:</span> ${new Date(ticketData.created_at).toLocaleString()}</p>
             </div>
             
-            <p><span class="highlight">Action Required:</span> Please review this ticket and take appropriate action based on the severity and priority level.</p>
+            <p><span class="highlight">Action Required:</span> Please review this ticket and take appropriate action based on the critical level.</p>
             
             <div style="text-align: center;">
               <a href="${process.env.FRONTEND_URL || 'http://localhost:3000'}/tickets/${ticketData.id}" class="btn">View Ticket Details</a>
@@ -442,8 +436,7 @@ const EMAIL_TEMPLATES = {
             
             <div class="ticket-info">
               <p><span class="highlight">Title:</span> ${ticketData.title}</p>
-              <p><span class="highlight">Severity:</span> ${ticketData.severity_level?.toUpperCase()}</p>
-              <p><span class="highlight">Priority:</span> ${ticketData.priority?.toUpperCase()}</p>
+              <p><span class="highlight">Critical Level:</span> ${getCriticalLevelText(ticketData.pucriticalno)}</p>
               <p><span class="highlight">Affected Point:</span> ${ticketData.affected_point_name} (${ticketData.affected_point_type})</p>
             </div>
             
@@ -546,8 +539,7 @@ const EMAIL_TEMPLATES = {
             
             <div class="ticket-info">
               <p><span class="highlight">Title:</span> ${ticketData.title}</p>
-              <p><span class="highlight">Severity:</span> ${ticketData.severity_level?.toUpperCase()}</p>
-              <p><span class="highlight">Priority:</span> ${ticketData.priority?.toUpperCase()}</p>
+              <p><span class="highlight">Critical Level:</span> ${getCriticalLevelText(ticketData.pucriticalno)}</p>
             </div>
             
             <div style="text-align: center;">
@@ -1860,8 +1852,7 @@ class EmailService {
               <div class="content">
                 <p><span class="highlight">Title:</span> ${ticketData.title}</p>
                 <p><span class="highlight">Reported By:</span> ${reporterName}</p>
-                <p><span class="highlight">Priority:</span> ${ticketData.priority?.toUpperCase()}</p>
-                <p><span class="highlight">Severity:</span> ${ticketData.severity_level?.toUpperCase()}</p>
+                <p><span class="highlight">Critical Level:</span> ${getCriticalLevelText(ticketData.pucriticalno)}</p>
                 <p><span class="highlight">Status:</span> <span class="status-blue">Pre-Assigned</span></p>
                 <p>You have been pre-assigned to this ticket. Please review and accept or reject it.</p>
               </div>
@@ -1992,7 +1983,7 @@ class EmailService {
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
                   <p><span class="highlight">Reassigned By:</span> ${reassignerName}</p>
                   <p><span class="highlight">Status:</span> <span class="status-blue">Reassigned</span></p>
-                  <p><span class="highlight">Reason:</span> ${reassignmentReason || 'งานได้รับการมอบหมายใหม่ให้คุณ'}</p>
+                  <p><span class="highlight">Reason:</span> ${reassignmentReason || 'งานได้รับการมอบหมายให้คุณ'}</p>
                 </div>
                 
                 <div style="text-align: center;">

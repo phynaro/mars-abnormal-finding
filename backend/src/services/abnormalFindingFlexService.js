@@ -70,7 +70,7 @@ const STATE_LABELS_TH = Object.freeze({
   [TicketState.REJECT_FINAL]: "ปฏิเสธขั้นสุดท้าย",
   [TicketState.Finished]: "เสร็จสิ้น",
   [TicketState.REVIEWED]: "ตรวจสอบแล้ว รอการปิด",
-  [TicketState.REASSIGNED]: "มอบหมายใหม่",
+  [TicketState.REASSIGNED]: "มอบหมาย",
   [TicketState.ESCALATED]: "ส่งต่อให้หัวหน้างาน",
   [TicketState.CLOSED]: "ปิดเคส",
   [TicketState.REOPENED]: "เปิดเคสใหม่",

@@ -3,6 +3,7 @@ const dbConfig = require("../config/dbConfig");
 const emailService = require("../services/emailService");
 const abnFlexService = require("../services/abnormalFindingFlexService");
 const cedarIntegrationService = require("../services/cedarIntegrationService");
+const { getCriticalLevelText } = require("../utils/criticalMapping");
 const fs = require("fs");
 const path = require("path");
 
@@ -28,318 +29,6 @@ const {
   runQuery,
 } = require("./ticketController/helpers");
 
-// const createTicket = async (req, res) => {
-//   const fsPromises = fs.promises;
-//   let pool;
-//   let transaction;
-//   const savedFilePaths = []; // Track uploaded files for cleanup
-
-//   try {
-//     const rawBody = req.body ? { ...req.body } : {};
-//     if (typeof rawBody.payload === "string") {
-//       try {
-//         const parsedPayload = JSON.parse(rawBody.payload);
-//         Object.assign(rawBody, parsedPayload);
-//       } catch (parseErr) {
-//         return res.status(400).json({
-//           success: false,
-//           message: "Invalid ticket payload format",
-//           error: parseErr.message,
-//         });
-//       }
-//       delete rawBody.payload;
-//     }
-
-//     const parseOptionalInt = (value) => {
-//       if (value === undefined || value === null || value === "") return null;
-//       if (typeof value === "number") {
-//         return Number.isNaN(value) ? null : value;
-//       }
-//       const parsed = parseInt(value, 10);
-//       return Number.isNaN(parsed) ? null : parsed;
-//     };
-
-//     const title =
-//       typeof rawBody.title === "string"
-//         ? rawBody.title
-//         : rawBody.title?.toString?.();
-//     const description =
-//       typeof rawBody.description === "string"
-//         ? rawBody.description
-//         : rawBody.description?.toString?.();
-//     const pucode =
-//       typeof rawBody.pucode === "string"
-//         ? rawBody.pucode
-//         : rawBody.pucode?.toString?.();
-//     const puno = parseOptionalInt(rawBody.puno);
-//     const equipmentIdInput = parseOptionalInt(rawBody.equipment_id);
-//     const pucriticalnoInput = parseOptionalInt(rawBody.pucriticalno);
-//     const severityLevel =
-//       typeof rawBody.severity_level === "string"
-//         ? rawBody.severity_level
-//         : rawBody.severity_level?.toString?.();
-//     const priorityLevel =
-//       typeof rawBody.priority === "string"
-//         ? rawBody.priority
-//         : rawBody.priority?.toString?.();
-//     const imageType =
-//       typeof rawBody.image_type === "string" && rawBody.image_type.trim()
-//         ? rawBody.image_type.trim()
-//         : "before";
-
-//     const files = Array.isArray(req.files) ? req.files : [];
-//     const created_by = req.user.id; // From auth middleware
-
-//     if (!title || !description || !puno) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Title, description, and PU ID are required",
-//       });
-//     }
-
-//     pool = await sql.connect(dbConfig);
-
-//     // ✨ START TRANSACTION
-//     transaction = new sql.Transaction(pool);
-//     await transaction.begin();
-
-//     const ticket_number = await generateTicketNumber(pool);
-
-//     // Validate equipment_id if provided (use transaction)
-//     let validatedEquipmentId = null;
-//     if (equipmentIdInput) {
-//       const equipmentCheck = await new sql.Request(transaction)
-//         .input("equipment_id", sql.Int, equipmentIdInput)
-//         .input("puno", sql.Int, puno).query(`
-//                     SELECT EQNO, EQCODE, EQNAME, PUNO
-//                     FROM EQ 
-//                     WHERE EQNO = @equipment_id AND PUNO = @puno AND FLAGDEL = 'F'
-//                 `);
-
-//       if (equipmentCheck.recordset.length === 0) {
-//         await transaction.rollback();
-//         return res.status(400).json({
-//           success: false,
-//           message:
-//             "Equipment not found or does not belong to the selected production unit",
-//         });
-//       }
-
-//       validatedEquipmentId = equipmentIdInput;
-//     }
-
-//     // ✨ STEP 1: Create ticket record (within transaction)
-//     const ticketInsertResult = await new sql.Request(transaction)
-//       .input("ticket_number", sql.VarChar(20), ticket_number)
-//       .input("title", sql.NVarChar(255), title)
-//       .input("description", sql.NVarChar(sql.MAX), description)
-//       .input("puno", sql.Int, puno)
-//       .input("equipment_id", sql.Int, validatedEquipmentId)
-//       .input("pucriticalno", sql.Int, pucriticalnoInput)
-//       .input("severity_level", sql.VarChar(20), severityLevel || "medium")
-//       .input("priority", sql.VarChar(20), priorityLevel || "normal")
-//       .input("created_by", sql.Int, created_by).query(`
-//                 INSERT INTO Tickets (
-//                     ticket_number, title, description, puno, equipment_id, pucriticalno,
-//                     severity_level, priority, created_by, status, created_at, updated_at
-//                 )
-//                 VALUES (
-//                     @ticket_number, @title, @description, @puno, @equipment_id, @pucriticalno,
-//                     @severity_level, @priority, @created_by, 'open', GETDATE(), GETDATE()
-//                 );
-//                 SELECT SCOPE_IDENTITY() as ticket_id;
-//             `);
-
-//     const ticketId = ticketInsertResult.recordset[0]?.ticket_id;
-
-//     if (!ticketId) {
-//       await transaction.rollback();
-//       throw new Error("Failed to retrieve ticket identifier");
-//     }
-
-//     console.log(`🔍 DEBUG: ticketId = ${ticketId}`);
-
-//     // ✨ STEP 2: Upload images and insert metadata (within transaction)
-//     if (files.length > 0) {
-//       const uploadDir = path.join(
-//         __dirname,
-//         "..",
-//         "uploads",
-//         "tickets",
-//         String(ticketId)
-//       );
-
-//       try {
-//         // Create directory
-//         await fsPromises.mkdir(uploadDir, { recursive: true });
-
-//         // Upload all files first
-//         for (const file of files) {
-//           const ext = path.extname(file.originalname) || ".jpg";
-//           const safeBase =
-//             path
-//               .basename(file.originalname, ext)
-//               .replace(/[^a-zA-Z0-9_-]/g, "_") || "image";
-//           const unique = `${Date.now()}_${Math.random()
-//             .toString(36)
-//             .slice(-6)}`;
-//           const fileName = `${unique}_${safeBase}${ext.toLowerCase()}`;
-//           const fullPath = path.join(uploadDir, fileName);
-
-//           // Write file to disk
-//           await fsPromises.writeFile(fullPath, file.buffer);
-//           savedFilePaths.push(fullPath);
-
-//           // Insert metadata into database (within transaction)
-//           const relativePath = `/uploads/tickets/${ticketId}/${fileName}`;
-//           await new sql.Request(transaction)
-//             .input("ticket_id", sql.Int, ticketId)
-//             .input("image_type", sql.VarChar(20), imageType)
-//             .input("image_url", sql.NVarChar(500), relativePath)
-//             .input(
-//               "image_name",
-//               sql.NVarChar(255),
-//               file.originalname || fileName
-//             )
-//             .input("uploaded_by", sql.Int, created_by).query(`
-//                             INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
-//                             VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
-//                         `);
-//         }
-
-//         console.log(
-//           `✅ Successfully uploaded ${files.length} image(s) for ticket ${ticketId}`
-//         );
-//       } catch (imageErr) {
-//         console.error(
-//           "❌ Failed to upload images, rolling back transaction:",
-//           imageErr
-//         );
-
-//         // Cleanup uploaded files
-//         for (const fullPath of savedFilePaths) {
-//           try {
-//             await fsPromises.unlink(fullPath);
-//           } catch (unlinkErr) {
-//             console.error(`Failed to delete file ${fullPath}:`, unlinkErr);
-//           }
-//         }
-
-//         // Rollback transaction (this will remove ticket and any inserted image records)
-//         await transaction.rollback();
-
-//         return res.status(500).json({
-//           success: false,
-//           message:
-//             "Failed to save ticket images. Ticket creation has been rolled back.",
-//           error: imageErr.message,
-//         });
-//       }
-//     }
-
-//     // ✨ COMMIT TRANSACTION - All database operations succeeded
-//     await transaction.commit();
-//     console.log(`✅ Transaction committed successfully for ticket ${ticketId}`);
-
-//     // ✨ STEP 3: Fetch ticket details (after commit, using pool not transaction)
-//     const ticketWithHierarchy = await new sql.Request(pool).input(
-//       "ticket_id",
-//       sql.Int,
-//       ticketId
-//     ).query(`
-//                 SELECT 
-//                     t.*,
-//                     pe.pucode,
-//                     pe.plant as plant_code,
-//                     pe.area as area_code,
-//                     pe.line as line_code,
-//                     pe.machine as machine_code,
-//                     pe.number as machine_number,
-//                     pe.puname as plant_name,
-//                     pe.pudescription as pudescription,
-//                     pe.digit_count,
-//                     pu.PUCODE as pu_pucode,
-//                     pu.PUNAME as pu_name,
-//                     eq.EQNO as equipment_id,
-//                     eq.EQCODE as equipment_code,
-//                     eq.EQNAME as equipment_name
-//                 FROM Tickets t
-//                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-//                 LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-//                 LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
-//                 WHERE t.id = @ticket_id
-//             `);
-
-//     const ticketData = ticketWithHierarchy.recordset[0];
-
-//     if (!ticketData) {
-//       throw new Error("Failed to load ticket details after creation");
-//     }
-
-//     // ✨ STEP 4: Send notifications (only after successful commit)
-//     await safeSendEmail("send new ticket notifications", async () => {
-//       try {
-//         // No need for artificial delay - transaction is already committed
-//         const notificationUsers = await getTicketNotificationRecipients(
-//           ticketId,
-//           "create",
-//           created_by
-//         );
-
-//         console.log(`\n=== TICKET CREATION NOTIFICATIONS SUMMARY ===`);
-//         console.log(`Ticket: ${ticket_number} (ID: ${ticketId})`);
-//         console.log(`Action: CREATE`);
-
-//         // ... [All your notification code remains the same] ...
-//       } catch (error) {
-//         // ⚠️ Note: We DON'T rollback here - ticket is already committed
-//         // Notification failures should be logged but shouldn't fail the ticket creation
-//         console.error(
-//           "⚠️  Error sending notifications (ticket still created):",
-//           error
-//         );
-//       }
-//     });
-
-//     // ✨ Return success response
-//     res.status(201).json({
-//       success: true,
-//       message: "Ticket created successfully",
-//       data: {
-//         id: ticketId,
-//         ticket_number: ticket_number,
-//         // ... [rest of your response data] ...
-//       },
-//     });
-//   } catch (error) {
-//     // Rollback transaction if it exists and hasn't been committed/rolled back
-//     if (transaction && transaction._aborted === false) {
-//       try {
-//         await transaction.rollback();
-//         console.log("✅ Transaction rolled back due to error");
-//       } catch (rollbackErr) {
-//         console.error("❌ Failed to rollback transaction:", rollbackErr);
-//       }
-//     }
-
-//     // Cleanup any uploaded files
-//     for (const fullPath of savedFilePaths) {
-//       try {
-//         await fsPromises.unlink(fullPath);
-//       } catch (unlinkErr) {
-//         console.error(`Failed to delete file ${fullPath}:`, unlinkErr);
-//       }
-//     }
-
-//     console.error("Error creating ticket:", error);
-//     res.status(500).json({
-//       success: false,
-//       message: "Failed to create ticket",
-//       error: error.message,
-//     });
-//   }
-// };
-// Create a new ticket
 const createTicket = async (req, res) => {
     const fsPromises = fs.promises;
 
@@ -483,17 +172,20 @@ const createTicket = async (req, res) => {
 
         // Persist uploaded images (if any) and rollback ticket if this fails
         if (files.length > 0) {
-            const uploadDir = path.join(__dirname, '..', 'uploads', 'tickets', String(ticketId));
+            const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'tickets', String(ticketId));
             const savedFilePaths = [];
 
             try {
                 await fsPromises.mkdir(uploadDir, { recursive: true });
 
-                for (const file of files) {
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
                     const ext = path.extname(file.originalname) || '.jpg';
-                    const safeBase = path.basename(file.originalname, ext).replace(/[^a-zA-Z0-9_-]/g, '_') || 'image';
-                    const unique = `${Date.now()}_${Math.random().toString(36).slice(-6)}`;
-                    const fileName = `${unique}_${safeBase}${ext.toLowerCase()}`;
+                    const timestamp = Date.now();
+                    const sequence = i + 1;
+                    
+                    // Use ticket number for easier search and identification
+                    const fileName = `${ticket_number}_${imageType}_${sequence}_${timestamp}${ext.toLowerCase()}`;
                     const fullPath = path.join(uploadDir, fileName);
 
                     await fsPromises.writeFile(fullPath, file.buffer);
@@ -507,7 +199,7 @@ const createTicket = async (req, res) => {
                         { name: 'ticket_id', type: sql.Int, value: ticketId },
                         { name: 'image_type', type: sql.VarChar(20), value: imageType },
                         { name: 'image_url', type: sql.NVarChar(500), value: relativePath },
-                        { name: 'image_name', type: sql.NVarChar(255), value: file.originalname || fileName },
+                        { name: 'image_name', type: sql.NVarChar(255), value: fileName },
                         { name: 'uploaded_by', type: sql.Int, value: created_by }
                     ]);
                 }
@@ -631,6 +323,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
                     description,
                     pucode: ticketData.pucode,
                     plant_code: ticketData.plant_code,
+                    pucriticalno: ticketData.pucriticalno,
                     area_code: ticketData.area_code,
                     line_code: ticketData.line_code,
                     machine_code: ticketData.machine_code,
@@ -712,10 +405,11 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
                         heroImageUrl: heroImageUrl,
                         detailUrl: `${process.env.FRONTEND_URL}/tickets/${ticketId}`,
                         extraKVs: [
-                            { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
-                            { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },
+                            // { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
+                            // { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },
+                            { label: 'Critical Level', value: (getCriticalLevelText(ticketData.pucriticalno)).toUpperCase() },
                             { label: 'Reported by', value: reporterName }
-                        ]
+                        ] 
                     };
 
                     const linePromises = lineRecipients.map(user => {
@@ -1557,21 +1251,42 @@ const uploadTicketImage = async (req, res) => {
         .json({ success: false, message: "No image file uploaded" });
     }
 
-    // Build public URL path for the uploaded file
-    const relativePath = `/uploads/tickets/${id}/${req.file.filename}`;
-
     const pool = await sql.connect(dbConfig);
 
-    // Ensure ticket exists
-    const exists = await pool
+    // Ensure ticket exists and get ticket number
+    const ticketResult = await pool
       .request()
       .input("id", sql.Int, id)
-      .query("SELECT id FROM Tickets WHERE id = @id");
-    if (exists.recordset.length === 0) {
+      .query("SELECT id, ticket_number FROM Tickets WHERE id = @id");
+    if (ticketResult.recordset.length === 0) {
       return res
         .status(404)
         .json({ success: false, message: "Ticket not found" });
     }
+    
+    const ticket = ticketResult.recordset[0];
+    const ticketNumber = ticket.ticket_number;
+    
+    // Use ticket number for easier search and identification
+    const timestamp = Date.now();
+    const ext = path.extname(req.file.originalname) || '.jpg';
+    let newFileName = `${ticketNumber}_${image_type}_${timestamp}${ext.toLowerCase()}`;
+    
+    // Rename the uploaded file to use ticket number-based naming
+    const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'tickets', String(id));
+    const oldPath = path.join(uploadDir, req.file.filename);
+    const newPath = path.join(uploadDir, newFileName);
+    
+    try {
+      await fs.promises.rename(oldPath, newPath);
+    } catch (renameError) {
+      console.error('Error renaming file:', renameError);
+      // If rename fails, use the original filename
+      newFileName = req.file.filename;
+    }
+    
+    // Build public URL path for the renamed file
+    const relativePath = `/uploads/tickets/${id}/${newFileName}`;
 
     // Insert image record
     const result = await pool
@@ -1579,11 +1294,7 @@ const uploadTicketImage = async (req, res) => {
       .input("ticket_id", sql.Int, id)
       .input("image_type", sql.VarChar(20), image_type)
       .input("image_url", sql.NVarChar(500), relativePath)
-      .input(
-        "image_name",
-        sql.NVarChar(255),
-        image_name || req.file.originalname
-      )
+      .input("image_name", sql.NVarChar(255), newFileName)
       .input("uploaded_by", sql.Int, user_id).query(`
                 INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
                 VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
@@ -1631,26 +1342,50 @@ const uploadTicketImages = async (req, res) => {
 
     const pool = await sql.connect(dbConfig);
 
-    // Ensure ticket exists
-    const exists = await pool
+    // Ensure ticket exists and get ticket number
+    const ticketResult = await pool
       .request()
       .input("id", sql.Int, id)
-      .query("SELECT id FROM Tickets WHERE id = @id");
-    if (exists.recordset.length === 0) {
+      .query("SELECT id, ticket_number FROM Tickets WHERE id = @id");
+    if (ticketResult.recordset.length === 0) {
       return res
         .status(404)
         .json({ success: false, message: "Ticket not found" });
     }
+    
+    const ticket = ticketResult.recordset[0];
+    const ticketNumber = ticket.ticket_number;
 
     const inserted = [];
-    for (const file of files) {
-      const relativePath = `/uploads/tickets/${id}/${file.filename}`;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const timestamp = Date.now();
+      const sequence = i + 1;
+      
+      // Use ticket number for easier search and identification
+      const ext = path.extname(file.originalname) || '.jpg';
+      let newFileName = `${ticketNumber}_${image_type}_${sequence}_${timestamp}${ext.toLowerCase()}`;
+      
+      // Rename the uploaded file to use ticket number-based naming
+      const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'tickets', String(id));
+      const oldPath = path.join(uploadDir, file.filename);
+      const newPath = path.join(uploadDir, newFileName);
+      
+      try {
+        await fs.promises.rename(oldPath, newPath);
+      } catch (renameError) {
+        console.error('Error renaming file:', renameError);
+        // If rename fails, use the original filename
+        newFileName = file.filename;
+      }
+      
+      const relativePath = `/uploads/tickets/${id}/${newFileName}`;
       const result = await pool
         .request()
         .input("ticket_id", sql.Int, id)
         .input("image_type", sql.VarChar(20), image_type)
         .input("image_url", sql.NVarChar(500), relativePath)
-        .input("image_name", sql.NVarChar(255), file.originalname)
+        .input("image_name", sql.NVarChar(255), newFileName)
         .input("uploaded_by", sql.Int, user_id).query(`
                     INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
                     VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
@@ -1661,7 +1396,7 @@ const uploadTicketImages = async (req, res) => {
         ticket_id: parseInt(id, 10),
         image_type,
         image_url: relativePath,
-        image_name: file.originalname,
+        image_name: newFileName,
         uploaded_at: new Date().toISOString(),
         uploaded_by: user_id,
       });
@@ -1814,32 +1549,31 @@ const deleteTicketImage = async (req, res) => {
 
     const image = imgResult.recordset[0];
 
-    // Ownership/role check: reporter, assignee, or L2+ can delete
+    // Get ticket basic info for ownership check
     const ticketResult = await pool
       .request()
       .input("ticket_id", sql.Int, id)
-      .input("userId", sql.Int, req.user.id).query(`
-                SELECT 
-                    t.created_by, 
-                    t.assigned_to,
-                    pe.area as area_code,
-                    ta.approval_level as user_approval_level
-                FROM Tickets t
-                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId 
-                    AND ta.plant_code = pe.plant 
-                    AND ISNULL(ta.area_code, '') = ISNULL(pe.area, '')
-                    AND ISNULL(ta.line_code, '') = ISNULL(pe.line, '')
-                    AND ta.is_active = 1
-                WHERE t.id = @ticket_id
-            `);
-    const ticketRow = ticketResult.recordset[0];
-    const isOwner =
-      ticketRow &&
-      (ticketRow.created_by === req.user.id ||
-        ticketRow.assigned_to === req.user.id);
-    const isL2Plus = (ticketRow?.user_approval_level || 0) >= 2; // L2 or L3
+      .query(`
+        SELECT created_by, assigned_to, puno
+        FROM Tickets 
+        WHERE id = @ticket_id
+      `);
+    
+    if (ticketResult.recordset.length === 0) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Ticket not found" });
+    }
+    
+    const ticket = ticketResult.recordset[0];
+    
+    // Check ownership: creator, assignee, or L2+ can delete
+    const isOwner = ticket.created_by === req.user.id || ticket.assigned_to === req.user.id;
+    
+    // Get user's max approval level for this PU using helper
+    const userMaxApprovalLevel = await getUserMaxApprovalLevelForPU(req.user.id, ticket.puno);
+    const isL2Plus = userMaxApprovalLevel >= 2;
+    
     if (!isOwner && !isL2Plus) {
       return res
         .status(403)
@@ -5418,7 +5152,7 @@ const reassignTicket = async (req, res) => {
                 "Unknown Asset",
               problem: ticketData.title || "No description",
               actionBy: reassignerName,
-              comment: notes || "งานได้รับการมอบหมายใหม่และกำหนดตารางเวลาใหม่",
+              comment: notes || "งานได้รับการมอบหมายและกำหนดตารางเวลาใหม่",
               detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
               extraKVs: [
                 {

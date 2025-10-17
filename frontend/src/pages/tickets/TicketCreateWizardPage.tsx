@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { X } from 'lucide-react';
 import authService from '@/services/authService';
-import { compressTicketImage, formatFileSize } from '@/utils/imageCompression';
+import { compressTicketImage, formatFileSize, compressImage } from '@/utils/imageCompression';
 
 // Machine data type from PU table
 interface PUCODEResult {
@@ -51,6 +51,12 @@ const TicketCreateWizardPage: React.FC = () => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [imagesUploading, setImagesUploading] = useState(false);
+  const [submitProgress, setSubmitProgress] = useState<{
+    stage: 'creating' | 'compressing' | 'uploading' | 'complete' | null;
+    currentImage?: number;
+    totalImages?: number;
+    message: string;
+  }>({ stage: null, message: '' });
 
   // Machine selection state
   const [machineSearchQuery, setMachineSearchQuery] = useState('');
@@ -84,8 +90,16 @@ const TicketCreateWizardPage: React.FC = () => {
 
   // Images
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
-  const previews = useMemo(() => beforeFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) })), [beforeFiles]);
-  useEffect(() => () => { previews.forEach(p => URL.revokeObjectURL(p.url)); }, [previews]);
+  const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  const [previewFiles, setPreviewFiles] = useState<File[]>([]);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      previewUrls.forEach(url => URL.revokeObjectURL(url));
+    };
+  }, []);
 
   // Improved machine search function with better UX
   const searchMachines = async (query: string) => {
@@ -350,13 +364,23 @@ const TicketCreateWizardPage: React.FC = () => {
         severity_level: severity,
         priority,
       };
+      
+      // Stage 1: Creating ticket
+      setSubmitProgress({ stage: 'creating', message: 'Creating ticket...' });
       const created = await ticketService.createTicket(payload);
       const ticketId = created.data.id;
       
       if (beforeFiles.length > 0) {
         setImagesUploading(true);
         try { 
-          // Compress images before upload to prevent 413 errors
+          // Stage 2: Compressing images
+          setSubmitProgress({ 
+            stage: 'compressing', 
+            currentImage: 0, 
+            totalImages: beforeFiles.length,
+            message: `Compressing image 0/${beforeFiles.length}...` 
+          });
+          
           console.log(`Compressing ${beforeFiles.length} images before upload...`);
           const compressedFiles = await Promise.all(
             beforeFiles.map(async (file, index) => {
@@ -367,9 +391,26 @@ const TicketCreateWizardPage: React.FC = () => {
                 quality: 0.9 
               });
               console.log(`Compressed to: ${formatFileSize(compressed.size)}`);
+              
+              // Update progress after each image compression
+              setSubmitProgress({ 
+                stage: 'compressing', 
+                currentImage: index + 1, 
+                totalImages: beforeFiles.length,
+                message: `Compressing image ${index + 1}/${beforeFiles.length}...` 
+              });
+              
               return compressed;
             })
           );
+          
+          // Stage 3: Uploading images
+          setSubmitProgress({ 
+            stage: 'uploading', 
+            currentImage: 0,
+            totalImages: beforeFiles.length,
+            message: `Uploading ${beforeFiles.length} image(s)...` 
+          });
           
           await ticketService.uploadTicketImages(ticketId, compressedFiles, 'before'); 
           
@@ -393,8 +434,14 @@ const TicketCreateWizardPage: React.FC = () => {
         }
       }
       
-      setRedirectTicketId(ticketId);
+      // Stage 4: Complete
+      setSubmitProgress({ stage: 'complete', message: 'Ticket created successfully!' });
+      
+      // Brief delay before redirect to show completion
+      setTimeout(() => setRedirectTicketId(ticketId), 500);
     } catch (e) {
+      // Reset progress on error
+      setSubmitProgress({ stage: null, message: '' });
       toast({ title: t('common.error'), description: e instanceof Error ? e.message : t('ticket.failedToCreateTicket'), variant: 'destructive' });
     } finally {
       if (isMountedRef.current) {
@@ -406,6 +453,179 @@ const TicketCreateWizardPage: React.FC = () => {
 
   const progress = Math.round(((currentIndex + 1) / stepsOrder.length) * 100);
   const step = stepsOrder[currentIndex];
+
+  // Only create preview URLs when needed (images step or review step)
+  const needsPreviews = step === 'images' || step === 'review';
+  
+  // Create optimized preview images for faster loading
+  useEffect(() => {
+    if (needsPreviews && beforeFiles.length > 0) {
+      // Create preview files if we don't have them
+      if (previewFiles.length === 0) {
+        createPreviewImages();
+      } else if (previewFiles.length > 0 && previewUrls.length === 0) {
+        // We have preview files but no URLs, recreate URLs from existing files
+        const urls = previewFiles.map(f => URL.createObjectURL(f));
+        setPreviewUrls(urls);
+      }
+    } else if (!needsPreviews && previewUrls.length > 0) {
+      // Only clean up URLs when leaving both images and review steps
+      cleanupPreviewUrls();
+    }
+  }, [beforeFiles, needsPreviews, previewFiles.length, previewUrls.length]);
+  
+  // Clean up URLs when files change (but keep them if we're on a step that needs them)
+  useEffect(() => {
+    if (beforeFiles.length === 0 && previewUrls.length > 0) {
+      // Files were cleared, clean up everything
+      cleanupPreviewUrls();
+      setPreviewFiles([]);
+    } else if (beforeFiles.length > 0 && previewFiles.length > 0 && beforeFiles.length !== previewFiles.length) {
+      // File count changed, recreate preview images
+      cleanupPreviewUrls();
+      setPreviewFiles([]);
+      if (needsPreviews) {
+        createPreviewImages();
+      }
+    }
+  }, [beforeFiles.length]);
+  
+  const createPreviewImages = async () => {
+    if (beforeFiles.length === 0) return;
+    
+    setPreviewLoading(true);
+    
+    // Set a timeout for preview creation (3 seconds)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Preview creation timeout')), 3000);
+    });
+    
+    try {
+      // Create optimized preview images (smaller, faster loading)
+      const optimizedFiles = await Promise.race([
+        Promise.all(
+          beforeFiles.map(async (file) => {
+            return await compressImage(file, {
+              maxWidth: 400,  // Much smaller for preview
+              maxHeight: 400,
+              quality: 0.7,   // Lower quality for speed
+              format: 'jpeg'
+            });
+          })
+        ),
+        timeoutPromise
+      ]) as File[];
+      
+      setPreviewFiles(optimizedFiles);
+      
+      // Create URLs from optimized files
+      const urls = optimizedFiles.map(f => URL.createObjectURL(f));
+      setPreviewUrls(urls);
+    } catch (error) {
+      console.error('Error creating preview images:', error);
+      // Fallback to original files if compression fails or times out
+      const urls = beforeFiles.map(f => URL.createObjectURL(f));
+      setPreviewUrls(urls);
+      // Don't set previewFiles to avoid confusion
+    } finally {
+      setPreviewLoading(false);
+    }
+  };
+  
+  const cleanupPreviewUrls = () => {
+    previewUrls.forEach(url => URL.revokeObjectURL(url));
+    setPreviewUrls([]);
+  };
+
+  const SubmitProgressOverlay: React.FC<{
+    stage: 'creating' | 'compressing' | 'uploading' | 'complete' | null;
+    currentImage?: number;
+    totalImages?: number;
+    message: string;
+  }> = ({ stage, currentImage, totalImages, message }) => {
+    if (!stage) return null;
+    
+    const stages = [
+      { key: 'creating', label: 'Creating ticket', icon: '📝' },
+      { key: 'compressing', label: 'Compressing images', icon: '🗜️' },
+      { key: 'uploading', label: 'Uploading images', icon: '📤' },
+      { key: 'complete', label: 'Complete!', icon: '✅' }
+    ];
+    
+    const currentStageIndex = stages.findIndex(s => s.key === stage);
+    
+    return (
+      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl">
+          <div className="text-center">
+            {/* Header */}
+            <div className="mb-6">
+              <div className="text-2xl mb-2">{stages[currentStageIndex]?.icon}</div>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Creating Ticket
+              </h3>
+            </div>
+            
+            {/* Progress Steps */}
+            <div className="space-y-3 mb-6">
+              {stages.map((stageItem, index) => {
+                const isCompleted = index < currentStageIndex;
+                const isCurrent = index === currentStageIndex;
+                const isPending = index > currentStageIndex;
+                
+                return (
+                  <div key={stageItem.key} className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                      isCompleted 
+                        ? 'bg-green-500 text-white' 
+                        : isCurrent 
+                        ? 'bg-brand text-white' 
+                        : 'bg-gray-200 dark:bg-gray-700 text-gray-500'
+                    }`}>
+                      {isCompleted ? '✓' : isCurrent ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                      ) : index + 1}
+                    </div>
+                    <span className={`text-sm ${
+                      isCompleted || isCurrent 
+                        ? 'text-gray-900 dark:text-gray-100 font-medium' 
+                        : 'text-gray-500'
+                    }`}>
+                      {stageItem.label}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            
+            {/* Current Status Message */}
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                {message}
+              </p>
+              
+              {/* Image Progress for compression/upload stages */}
+              {(stage === 'compressing' || stage === 'uploading') && currentImage !== undefined && totalImages !== undefined && (
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-brand h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${(currentImage / totalImages) * 100}%` }}
+                  ></div>
+                </div>
+              )}
+            </div>
+            
+            {/* Success message for complete stage */}
+            {stage === 'complete' && (
+              <div className="text-green-600 dark:text-green-400 font-medium">
+                Redirecting to ticket...
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const StepIllustration: React.FC<{ step: StepKey }> = ({ step }) => (
     <div className="w-full flex justify-center mb-4">
@@ -419,6 +639,8 @@ const TicketCreateWizardPage: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-4 max-w-xl">
+      <SubmitProgressOverlay {...submitProgress} />
+      
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <Button variant="outline" onClick={() => navigate(-1)}>{t('ticket.wizardBack')}</Button>
@@ -609,9 +831,20 @@ const TicketCreateWizardPage: React.FC = () => {
             />
               {beforeFiles.length > 0 && (
                 <div className="grid grid-cols-2 gap-3 mt-3">
-                  {previews.map((p, idx) => (
+                  {beforeFiles.map((file, idx) => (
                     <div key={idx} className="relative border rounded overflow-hidden">
-                      <img src={p.url} alt={p.file.name} className="w-full h-32 object-cover" />
+                      {previewLoading || !previewUrls[idx] ? (
+                        <div className="w-full h-32 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                          <div className="w-6 h-6 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                        </div>
+                      ) : (
+                        <img 
+                          src={previewUrls[idx]} 
+                          alt={file.name} 
+                          className="w-full h-32 object-cover" 
+                          loading="lazy"
+                        />
+                      )}
                       <button 
                         type="button" 
                         className="absolute top-1 right-1 bg-white/80 border rounded px-1 text-xs" 
@@ -755,14 +988,14 @@ const TicketCreateWizardPage: React.FC = () => {
                     {pucriticalno ? criticalLevels.find(level => level.PUCRITICALNO === pucriticalno)?.PUCRITICALNAME || `Level ${pucriticalno}` : '-'}
                   </span>
                 </div>
-                <div className="flex justify-between">
+                {/* <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.severity')}:</span> 
                   <span className="font-medium capitalize">{severity}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.priority')}:</span> 
                   <span className="font-medium capitalize">{priority}</span>
-                </div>
+                </div> */}
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.wizardUploadImages')}:</span> 
                   <span className="font-medium">{beforeFiles.length} photo(s)</span>
@@ -774,9 +1007,20 @@ const TicketCreateWizardPage: React.FC = () => {
                 <div className="mt-4">
                   <Label className="text-sm font-medium">{t('ticket.wizardImagePreview')}:</Label>
                   <div className="grid grid-cols-2 gap-2 mt-2">
-                    {previews.map((p, idx) => (
+                    {beforeFiles.map((file, idx) => (
                       <div key={idx} className="relative border rounded overflow-hidden">
-                        <img src={p.url} alt={p.file.name} className="w-full h-24 object-cover" />
+                        {previewLoading || !previewUrls[idx] ? (
+                          <div className="w-full h-24 bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+                            <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                          </div>
+                        ) : (
+                          <img 
+                            src={previewUrls[idx]} 
+                            alt={file.name} 
+                            className="w-full h-24 object-cover" 
+                            loading="lazy"
+                          />
+                        )}
                       </div>
                     ))}
                   </div>

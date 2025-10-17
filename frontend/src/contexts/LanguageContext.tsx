@@ -361,7 +361,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.criticalLevel3': 'No Information',
     'ticket.criticalLevel4': 'No Information',
     'ticket.criticalLevel5': 'Production Stop',
-    'ticket.criticalLevel6': 'Production Rate Dropped',
+    'ticket.criticalLevel6': 'Production Dropped',
     'ticket.criticalLevel7': 'No Impact',
     'ticket.finished': 'Finished',
     'ticket.escalated': 'Escalated',
@@ -551,6 +551,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.working': 'Working...',
     'ticket.chooseFiles': 'Choose Files',
     'ticket.showing': 'Showing',
+    'ticket.criticalLevel': 'Critical Level',
     'ticketManagement.title': 'Abnormal Finding Report',
     'ticketManagement.createTicket': 'Create Ticket',
     // Dashboard specific
@@ -1035,7 +1036,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.rejectedFinal': 'ปฏิเสธ (สุดท้าย)',
     
     // Critical levels
-    'ticket.critical': 'วิกฤต',
+    'ticket.critical': 'ความรุนแรง',
     'ticket.criticalLevel1': 'ไม่มีข้อมูล',
     'ticket.criticalLevel2': 'ไม่มีข้อมูล',
     'ticket.criticalLevel3': 'ไม่มีข้อมูล',
@@ -1169,12 +1170,12 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.ticketNotFound': 'ไม่พบรายงาน',
     'ticket.ticketNotFoundDescription': 'ไม่พบรายงานที่ร้องขอ',
     'ticket.backToTickets': 'กลับไปยังรายการงาน',
-    'ticket.accept': 'ยอมรับ',
-    'ticket.overrideAccept': 'ข้ามและยอมรับ',
+    'ticket.accept': 'รับงาน',
+    'ticket.overrideAccept': 'ข้ามและรับงาน',
     'ticket.finalReject': 'ปฏิเสธขั้นสุดท้าย',
     'ticket.finish': 'เสร็จสิ้น',
     'ticket.escalate': 'ยกระดับ',
-    'ticket.reassign': 'มอบหมายใหม่',
+    'ticket.reassign': 'มอบหมาย',
     'ticket.imageEvidence': 'หลักฐานรูปภาพ',
     'ticket.before': 'ก่อน',
     'ticket.after': 'หลัง',
@@ -1235,6 +1236,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticketManagement.title': 'รายงานความผิดปกติ',
     'ticketManagement.createTicket': 'แจ้งความผิดปกติ',
     'ticket.showing': 'กำลังแสดง',
+    'ticket.criticalLevel': 'ระดับความสำคัญ *',
   
   
     

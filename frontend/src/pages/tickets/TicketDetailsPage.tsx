@@ -50,6 +50,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useToast } from "@/hooks/useToast";
 import authService from "@/services/authService";
 import { formatTimelineTime, formatCommentTime } from "@/utils/timezone";
 import {
@@ -61,7 +62,7 @@ import {
   getCedarSyncStatusClass,
   getCedarSyncStatusText,
 } from "@/utils/ticketBadgeStyles";
-import { compressTicketImage, formatFileSize } from "@/utils/imageCompression";
+import { compressTicketImage, formatFileSize, compressImage } from "@/utils/imageCompression";
 
 type TicketCacheEntry = { data: Ticket; timestamp: number };
 
@@ -85,31 +86,141 @@ const TicketDetailsPage: React.FC = () => {
   // Separate file queues for before/after uploads
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
   const [afterFiles, setAfterFiles] = useState<File[]>([]);
+  const [beforePreviewUrls, setBeforePreviewUrls] = useState<string[]>([]);
+  const [afterPreviewUrls, setAfterPreviewUrls] = useState<string[]>([]);
+  const [beforePreviewFiles, setBeforePreviewFiles] = useState<File[]>([]);
+  const [afterPreviewFiles, setAfterPreviewFiles] = useState<File[]>([]);
+  const [beforePreviewLoading, setBeforePreviewLoading] = useState(false);
+  const [afterPreviewLoading, setAfterPreviewLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [dragTarget, setDragTarget] = useState<"before" | "after" | null>(null);
   const [, setProgressMap] = useState<Record<number, number>>({});
   
-  // Generate previews for selected files
-  const beforePreviews = useMemo(() => {
-    return beforeFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) }));
-  }, [beforeFiles]);
+  // Create optimized preview images for before files
+  useEffect(() => {
+    if (beforeFiles.length > 0) {
+      if (beforePreviewFiles.length === 0) {
+        createBeforePreviewImages();
+      } else if (beforePreviewFiles.length > 0 && beforePreviewUrls.length === 0) {
+        const urls = beforePreviewFiles.map(f => URL.createObjectURL(f));
+        setBeforePreviewUrls(urls);
+      }
+    } else {
+      cleanupBeforePreviewUrls();
+      setBeforePreviewFiles([]);
+    }
+  }, [beforeFiles.length, beforePreviewFiles.length, beforePreviewUrls.length]);
   
-  const afterPreviews = useMemo(() => {
-    return afterFiles.map((f) => ({ file: f, url: URL.createObjectURL(f) }));
-  }, [afterFiles]);
+  // Create optimized preview images for after files
+  useEffect(() => {
+    if (afterFiles.length > 0) {
+      if (afterPreviewFiles.length === 0) {
+        createAfterPreviewImages();
+      } else if (afterPreviewFiles.length > 0 && afterPreviewUrls.length === 0) {
+        const urls = afterPreviewFiles.map(f => URL.createObjectURL(f));
+        setAfterPreviewUrls(urls);
+      }
+    } else {
+      cleanupAfterPreviewUrls();
+      setAfterPreviewFiles([]);
+    }
+  }, [afterFiles.length, afterPreviewFiles.length, afterPreviewUrls.length]);
   
-  // Clean up object URLs when files change
+  const createBeforePreviewImages = async () => {
+    if (beforeFiles.length === 0) return;
+    
+    setBeforePreviewLoading(true);
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Preview creation timeout')), 3000);
+    });
+    
+    try {
+      const optimizedFiles = await Promise.race([
+        Promise.all(
+          beforeFiles.map(async (file) => {
+            return await compressImage(file, {
+              maxWidth: 400,
+              maxHeight: 400,
+              quality: 0.7,
+              format: 'jpeg'
+            });
+          })
+        ),
+        timeoutPromise
+      ]) as File[];
+      
+      setBeforePreviewFiles(optimizedFiles);
+      const urls = optimizedFiles.map(f => URL.createObjectURL(f));
+      setBeforePreviewUrls(urls);
+    } catch (error) {
+      console.error('Error creating before preview images:', error);
+      const urls = beforeFiles.map(f => URL.createObjectURL(f));
+      setBeforePreviewUrls(urls);
+    } finally {
+      setBeforePreviewLoading(false);
+    }
+  };
+  
+  const createAfterPreviewImages = async () => {
+    if (afterFiles.length === 0) return;
+    
+    setAfterPreviewLoading(true);
+    
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Preview creation timeout')), 3000);
+    });
+    
+    try {
+      const optimizedFiles = await Promise.race([
+        Promise.all(
+          afterFiles.map(async (file) => {
+            return await compressImage(file, {
+              maxWidth: 400,
+              maxHeight: 400,
+              quality: 0.7,
+              format: 'jpeg'
+            });
+          })
+        ),
+        timeoutPromise
+      ]) as File[];
+      
+      setAfterPreviewFiles(optimizedFiles);
+      const urls = optimizedFiles.map(f => URL.createObjectURL(f));
+      setAfterPreviewUrls(urls);
+    } catch (error) {
+      console.error('Error creating after preview images:', error);
+      const urls = afterFiles.map(f => URL.createObjectURL(f));
+      setAfterPreviewUrls(urls);
+    } finally {
+      setAfterPreviewLoading(false);
+    }
+  };
+  
+  const cleanupBeforePreviewUrls = () => {
+    beforePreviewUrls.forEach(url => URL.revokeObjectURL(url));
+    setBeforePreviewUrls([]);
+  };
+  
+  const cleanupAfterPreviewUrls = () => {
+    afterPreviewUrls.forEach(url => URL.revokeObjectURL(url));
+    setAfterPreviewUrls([]);
+  };
+  
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
-      beforePreviews.forEach(p => URL.revokeObjectURL(p.url));
-      afterPreviews.forEach(p => URL.revokeObjectURL(p.url));
+      beforePreviewUrls.forEach(url => URL.revokeObjectURL(url));
+      afterPreviewUrls.forEach(url => URL.revokeObjectURL(url));
     };
-  }, [beforePreviews, afterPreviews]);
+  }, []);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [cedarInfoOpen, setCedarInfoOpen] = useState(false);
   const { user } = useAuth();
   const { t } = useLanguage();
+  const { toast } = useToast();
   // Action modal hooks must be declared before any early returns
   type ActionType =
     | "accept"
@@ -374,7 +485,7 @@ const TicketDetailsPage: React.FC = () => {
           const form = new FormData();
           form.append("image", compressedFile);
           form.append("image_type", imageType);
-          form.append("image_name", compressedFile.name);
+          // image_name will be generated by backend using ticket number
           xhr.upload.onprogress = (e) => {
             if (e.lengthComputable) {
               const percent = Math.round((e.loaded / e.total) * 100);
@@ -538,7 +649,7 @@ const TicketDetailsPage: React.FC = () => {
             className="h-32 w-full object-cover transition-transform duration-200 sm:h-36 lg:h-40"
           />
         </button>
-        {(isApprover || isCreator) && (
+        {(isCreator || isAssignedUser || isL2Plus) && (
           <button
             className="absolute right-3 top-3 hidden rounded-full bg-white/90 p-1 text-red-600 shadow-sm transition hover:bg-white group-hover:block disabled:opacity-50"
             title="Delete image"
@@ -551,21 +662,29 @@ const TicketDetailsPage: React.FC = () => {
               setDeletingImageId(img.id);
               
               try {
-                // Clear the cache to force a fresh fetch
-                const numericId = parseInt(ticketId!, 10);
-                ticketDataCache.delete(numericId);
-                
                 await ticketService.deleteTicketImage(ticket!.id, img.id);
                 
-                // Force refresh the ticket details
-                await fetchTicketDetails();
+                // Update ticket state locally without full refresh
+                setTicket(prevTicket => {
+                  if (!prevTicket) return prevTicket;
+                  return {
+                    ...prevTicket,
+                    images: prevTicket.images?.filter(image => image.id !== img.id) || []
+                  };
+                });
                 
-                console.log('Image deleted successfully');
+                toast({
+                  title: t('common.success'),
+                  description: 'Image deleted successfully',
+                  variant: 'default'
+                });
               } catch (e) {
                 console.error('Failed to delete image:', e);
-                alert(
-                  e instanceof Error ? e.message : "Failed to delete image",
-                );
+                toast({
+                  title: t('common.error'),
+                  description: e instanceof Error ? e.message : "Failed to delete image",
+                  variant: 'destructive'
+                });
               } finally {
                 setDeletingImageId(null);
               }
@@ -895,8 +1014,8 @@ const TicketDetailsPage: React.FC = () => {
                   setDeleteOpen(true);
                 }}
               >
-                <Trash2 className="mr-2 h-4 w-4" />
-                {t('ticket.delete')}
+                <Trash2 className="h-4 w-4" />
+                {/* {t('ticket.delete')} */}
               </Button>
             )}
           </div>
@@ -927,7 +1046,6 @@ const TicketDetailsPage: React.FC = () => {
                   </div>
                   <Badge className="border-red-200 bg-white/70 text-red-700 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-200">
                     {beforeImages.length} {t('ticket.photo')}
-                    {beforeImages.length === 1 ? "" : "s"}
                   </Badge>
                 </div>
 
@@ -974,19 +1092,26 @@ const TicketDetailsPage: React.FC = () => {
                     />
                     
                     {/* Preview selected before images */}
-                    {beforePreviews.length > 0 && (
+                    {beforeFiles.length > 0 && (
                       <div className="mt-4">
                         <p className="text-sm font-medium text-red-700 dark:text-red-200 mb-2">
-                          Selected Images ({beforePreviews.length})
+                          Selected Images ({beforeFiles.length})
                         </p>
                         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                          {beforePreviews.map((preview, idx) => (
+                          {beforeFiles.map((file, idx) => (
                             <div key={idx} className="relative group">
-                              <img
-                                src={preview.url}
-                                alt={preview.file.name}
-                                className="w-full h-24 object-cover rounded border"
-                              />
+                              {beforePreviewLoading || !beforePreviewUrls[idx] ? (
+                                <div className="w-full h-24 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded border">
+                                  <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                                </div>
+                              ) : (
+                                <img
+                                  src={beforePreviewUrls[idx]}
+                                  alt={file.name}
+                                  className="w-full h-24 object-cover rounded border"
+                                  loading="lazy"
+                                />
+                              )}
                               <button
                                 type="button"
                                 className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -996,9 +1121,9 @@ const TicketDetailsPage: React.FC = () => {
                                 <X className="w-3 h-3" />
                               </button>
                               <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 rounded-b">
-                                <div className="truncate">{preview.file.name}</div>
+                                <div className="truncate">{file.name}</div>
                                 <div className="text-xs opacity-75">
-                                  {(preview.file.size / (1024 * 1024)).toFixed(1)}MB
+                                  {(file.size / (1024 * 1024)).toFixed(1)}MB
                                 </div>
                               </div>
                             </div>
@@ -1007,19 +1132,19 @@ const TicketDetailsPage: React.FC = () => {
                       </div>
                     )}
                     
-                    <div className="mt-3 flex flex-wrap justify-end gap-2">
-                      <Button
-                        size="sm"
-                        disabled={beforeFiles.length === 0 || uploading}
-                        onClick={() => handleImageUpload("before")}
-                      >
-                        {uploading
-                          ? t('ticket.uploading')
-                          : beforeFiles.length > 1
-                            ? `${t('ticket.upload')} ${beforeFiles.length} ${t('ticket.images')}`
-                            : `${t('ticket.upload')} ${t('ticket.image')}`}
-                      </Button>
-                      {beforeFiles.length > 0 && (
+                    {beforeFiles.length > 0 && (
+                      <div className="mt-3 flex flex-wrap justify-end gap-2">
+                        <Button
+                          size="sm"
+                          disabled={beforeFiles.length === 0 || uploading}
+                          onClick={() => handleImageUpload("before")}
+                        >
+                          {uploading
+                            ? t('ticket.uploading')
+                            : beforeFiles.length > 1
+                              ? `${t('ticket.upload')} ${beforeFiles.length} ${t('ticket.images')}`
+                              : `${t('ticket.upload')} ${t('ticket.image')}`}
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"
@@ -1031,8 +1156,8 @@ const TicketDetailsPage: React.FC = () => {
                         >
                           {t('common.clear')}
                         </Button>
-                      )}
-                    </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1058,7 +1183,6 @@ const TicketDetailsPage: React.FC = () => {
                     </div>
                     <Badge className="border-emerald-200 bg-white/70 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-950/40 dark:text-emerald-200">
                       {afterImages.length} {t('ticket.photo')}
-                      {afterImages.length === 1 ? "" : "s"}
                     </Badge>
                   </div>
 
@@ -1105,19 +1229,26 @@ const TicketDetailsPage: React.FC = () => {
                       />
                       
                       {/* Preview selected after images */}
-                      {afterPreviews.length > 0 && (
+                      {afterFiles.length > 0 && (
                         <div className="mt-4">
                           <p className="text-sm font-medium text-emerald-700 dark:text-emerald-200 mb-2">
-                            Selected Images ({afterPreviews.length})
+                            Selected Images ({afterFiles.length})
                           </p>
                           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
-                            {afterPreviews.map((preview, idx) => (
+                            {afterFiles.map((file, idx) => (
                               <div key={idx} className="relative group">
-                                <img
-                                  src={preview.url}
-                                  alt={preview.file.name}
-                                  className="w-full h-24 object-cover rounded border"
-                                />
+                                {afterPreviewLoading || !afterPreviewUrls[idx] ? (
+                                  <div className="w-full h-24 bg-gray-100 dark:bg-gray-800 flex items-center justify-center rounded border">
+                                    <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                                  </div>
+                                ) : (
+                                  <img
+                                    src={afterPreviewUrls[idx]}
+                                    alt={file.name}
+                                    className="w-full h-24 object-cover rounded border"
+                                    loading="lazy"
+                                  />
+                                )}
                                 <button
                                   type="button"
                                   className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1127,9 +1258,9 @@ const TicketDetailsPage: React.FC = () => {
                                   <X className="w-3 h-3" />
                                 </button>
                                 <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs p-1 rounded-b">
-                                  <div className="truncate">{preview.file.name}</div>
+                                  <div className="truncate">{file.name}</div>
                                   <div className="text-xs opacity-75">
-                                    {(preview.file.size / (1024 * 1024)).toFixed(1)}MB
+                                    {(file.size / (1024 * 1024)).toFixed(1)}MB
                                   </div>
                                 </div>
                               </div>
@@ -1138,19 +1269,19 @@ const TicketDetailsPage: React.FC = () => {
                         </div>
                       )}
                       
-                      <div className="mt-3 flex flex-wrap justify-end gap-2">
-                        <Button
-                          size="sm"
-                          disabled={afterFiles.length === 0 || uploading}
-                          onClick={() => handleImageUpload("after")}
-                        >
-                          {uploading
-                            ? t('ticket.uploading')
-                            : afterFiles.length > 1
-                              ? `${t('ticket.upload')} ${afterFiles.length} ${t('ticket.images')}`
-                              : `${t('ticket.upload')} ${t('ticket.image')}`}
-                        </Button>
-                        {afterFiles.length > 0 && (
+                      {afterFiles.length > 0 && (
+                        <div className="mt-3 flex flex-wrap justify-end gap-2">
+                          <Button
+                            size="sm"
+                            disabled={afterFiles.length === 0 || uploading}
+                            onClick={() => handleImageUpload("after")}
+                          >
+                            {uploading
+                              ? t('ticket.uploading')
+                              : afterFiles.length > 1
+                                ? `${t('ticket.upload')} ${afterFiles.length} ${t('ticket.images')}`
+                                : `${t('ticket.upload')} ${t('ticket.image')}`}
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"
@@ -1162,8 +1293,8 @@ const TicketDetailsPage: React.FC = () => {
                           >
                             {t('common.clear')}
                           </Button>
-                        )}
-                      </div>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1491,14 +1622,14 @@ const TicketDetailsPage: React.FC = () => {
                     </dd>
                   </div>
                 )}
-                <div>
+                {/* <div>
                   <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     {t('ticket.created')}
                   </dt>
                   <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                     {formatCommentTime(ticket.created_at)}
                   </dd>
-                </div>
+                </div> */}
                
 
                 {ticket.schedule_start && (
@@ -1592,9 +1723,9 @@ const TicketDetailsPage: React.FC = () => {
                           <div className="text-gray-900 dark:text-gray-100 font-medium">
                             {item.value}
                           </div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                          {/* <div className="text-xs text-gray-500 dark:text-gray-400">
                             {item.code}
-                          </div>
+                          </div> */}
                         </div>
                       </div>
                     ))}

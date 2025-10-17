@@ -84,7 +84,7 @@ async function testAllNotifications() {
       name: "REASSIGN TICKET",
       state: abnFlexService.AbnCaseState.REASSIGNED,
       caseNo: "TKT-TEST-REASSIGN",
-      comment: "งานได้รับการมอบหมายใหม่ให้คุณ"
+      comment: "งานได้รับการมอบหมายให้คุณ"
     },
     {
       name: "REOPEN TICKET",
