@@ -10,9 +10,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { X } from 'lucide-react';
+import { X, Search, Building2 } from 'lucide-react';
 import authService from '@/services/authService';
 import { compressTicketImage, formatFileSize, compressImage } from '@/utils/imageCompression';
+import HierarchicalMachineSelector from '@/components/tickets/HierarchicalMachineSelector';
 
 // Machine data type from PU table
 interface PUCODEResult {
@@ -59,6 +60,7 @@ const TicketCreateWizardPage: React.FC = () => {
   }>({ stage: null, message: '' });
 
   // Machine selection state
+  const [selectionMode, setSelectionMode] = useState<'search' | 'hierarchy'>('hierarchy');
   const [machineSearchQuery, setMachineSearchQuery] = useState('');
   const [machineSearchResults, setMachineSearchResults] = useState<PUCODEResult[]>([]);
   const [machineSearchLoading, setMachineSearchLoading] = useState(false);
@@ -317,6 +319,44 @@ const TicketCreateWizardPage: React.FC = () => {
 
   const clearEquipmentSelection = () => {
     setSelectedEquipment(null);
+  };
+
+  // Handle selection mode change
+  const handleSelectionModeChange = (mode: 'search' | 'hierarchy') => {
+    setSelectionMode(mode);
+    // Clear selections when switching modes
+    clearMachineSelection();
+  };
+
+  // Handle machine selection from hierarchical selector
+  const onHierarchicalMachineSelect = (machine: any) => {
+    // Convert hierarchical machine data to PUCODEResult format
+    const pucodeResult: PUCODEResult = {
+      PUCODE: machine.pucode,
+      PUDESC: machine.pudescription || machine.puname,
+      PUNO: machine.puno,
+      PLANT: machine.plant,
+      AREA: machine.area,
+      LINE: machine.line,
+      MACHINE: machine.machine,
+      NUMBER: machine.number,
+      PUCRITICALNO: machine.pucriticalno || 0
+    };
+    
+    setSelectedMachine(pucodeResult);
+    setPuno(machine.puno);
+    
+    // Auto-populate critical level if available (same as search functionality)
+    if (machine.pucriticalno) {
+      setPucriticalno(machine.pucriticalno);
+    }
+    
+    // Clear equipment selection when machine changes
+    clearEquipmentSelection();
+  };
+
+  const onHierarchicalMachineClear = () => {
+    clearMachineSelection();
   };
 
   const canNext = (): boolean => {
@@ -660,81 +700,139 @@ const TicketCreateWizardPage: React.FC = () => {
             <Label htmlFor="machine-search" className="text-base font-semibold">{t('ticket.wizardSelectMachine')} *</Label>
             
             <div className="space-y-3 mt-4">
-              <div className="relative">
-                <Input
-                  ref={searchInputRef}
-                  id="machine-search"
-                  value={machineSearchQuery}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    setMachineSearchQuery(value);
-                    // Keep dropdown open while typing, but don't force it if query is too short
-                    if (value.length >= 2) {
-                      setMachineSearchDropdownOpen(true);
-                    }
-                  }}
-                  onFocus={() => {
-                    if (machineSearchQuery.length >= 2 || machineSearchResults.length > 0) {
-                      setMachineSearchDropdownOpen(true);
-                    }
-                  }}
-                  placeholder={t('ticket.wizardSelectMachine')}
-                  className="pr-8"
-                />
-                {machineSearchDropdownOpen && (
-                  <div className="search-dropdown absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
-                    {machineSearchLoading || isSearching ? (
-                      <div className="p-3 text-sm text-gray-500 flex items-center gap-2">
-                        <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
-                        {t('common.loading')}
-                      </div>
-                    ) : machineSearchResults.length > 0 ? (
-                      machineSearchResults.map((result, idx) => (
-                        <button
-                          type="button"
-                          key={idx}
-                          className="w-full text-left px-3 py-3 text-sm hover:bg-hover hover:text-hover-foreground border-b last:border-b-0 transition-colors"
-                          onClick={() => onSelectMachine(result)}
-                        >
-                          <div className="font-medium text-base">{result.PUDESC}</div>
-                          <div className="text-sm mt-1">{result.PUCODE}</div>
-                        </button>
-                      ))
-                    ) : machineSearchQuery.length >= 2 ? (
-                      <div className="p-3 text-sm text-gray-500">
-                        No machines found for "{machineSearchQuery}"
-                      </div>
-                    ) : (
-                      <div className="p-3 text-sm text-gray-500">
-                        Type at least 2 characters to search
+              {/* Selection Mode Toggle */}
+              <div className="flex rounded-lg border p-1 bg-muted">
+                <button
+                  type="button"
+                  className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 ${
+                    selectionMode === 'hierarchy'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => handleSelectionModeChange('hierarchy')}
+                  disabled={submitting}
+                >
+                  <Building2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t('ticket.selectionModeHierarchy')}</span>
+                </button>
+                <button
+                  type="button"
+                  className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 ${
+                    selectionMode === 'search'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  onClick={() => handleSelectionModeChange('search')}
+                  disabled={submitting}
+                >
+                  <Search className="w-4 h-4" />
+                  <span className="hidden sm:inline">{t('ticket.selectionModeSearch')}</span>
+                </button>
+              </div>
+
+              {/* Search Mode */}
+              {selectionMode === 'search' && (
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Input
+                      ref={searchInputRef}
+                      id="machine-search"
+                      value={machineSearchQuery}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setMachineSearchQuery(value);
+                        // Keep dropdown open while typing, but don't force it if query is too short
+                        if (value.length >= 2) {
+                          setMachineSearchDropdownOpen(true);
+                        }
+                      }}
+                      onFocus={() => {
+                        if (machineSearchQuery.length >= 2 || machineSearchResults.length > 0) {
+                          setMachineSearchDropdownOpen(true);
+                        }
+                      }}
+                      placeholder={t('ticket.wizardSelectMachine')}
+                      className="pr-8"
+                    />
+                    {machineSearchDropdownOpen && (
+                      <div className="search-dropdown absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+                        {machineSearchLoading || isSearching ? (
+                          <div className="p-3 text-sm text-gray-500 flex items-center gap-2">
+                            <div className="w-4 h-4 border-2 border-gray-300 border-t-gray-600 rounded-full animate-spin"></div>
+                            {t('common.loading')}
+                          </div>
+                        ) : machineSearchResults.length > 0 ? (
+                          machineSearchResults.map((result, idx) => (
+                            <button
+                              type="button"
+                              key={idx}
+                              className="w-full text-left px-3 py-3 text-sm hover:bg-hover hover:text-hover-foreground border-b last:border-b-0 transition-colors"
+                              onClick={() => onSelectMachine(result)}
+                            >
+                              <div className="font-medium text-base">{result.PUDESC}</div>
+                              <div className="text-sm mt-1">{result.PUCODE}</div>
+                            </button>
+                          ))
+                        ) : machineSearchQuery.length >= 2 ? (
+                          <div className="p-3 text-sm text-gray-500">
+                            No machines found for "{machineSearchQuery}"
+                          </div>
+                        ) : (
+                          <div className="p-3 text-sm text-gray-500">
+                            Type at least 2 characters to search
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
-                )}
-              </div>
+                  
+                  {!selectedMachine && (
+                    <p className="text-xs text-gray-500">
+                      {t('ticket.typeToSearch')}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Hierarchy Mode */}
+              {selectionMode === 'hierarchy' && (
+                <HierarchicalMachineSelector
+                  onMachineSelect={onHierarchicalMachineSelect}
+                  onClear={onHierarchicalMachineClear}
+                  selectedMachineData={selectedMachine ? {
+                    puno: selectedMachine.PUNO,
+                    pucode: selectedMachine.PUCODE,
+                    plant: selectedMachine.PLANT,
+                    area: selectedMachine.AREA,
+                    line: selectedMachine.LINE,
+                    machine: selectedMachine.MACHINE,
+                    number: selectedMachine.NUMBER,
+                    puname: selectedMachine.PUDESC,
+                    pudescription: selectedMachine.PUDESC,
+                    digit_count: 5
+                  } : null}
+                  disabled={submitting}
+                />
+              )}
               
               {/* Selected Machine Display */}
               {selectedMachine && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <p className="text-sm font-medium text-green-800">Selected Machine</p>
+                        <p className="text-sm font-medium text-green-800 dark:text-green-200">Selected Machine</p>
                       </div>
-                      <p className="text-sm text-green-700 mb-1">{selectedMachine.PUDESC}</p>
-                      <p className="text-xs text-gray-500 mb-2">{selectedMachine.PUCODE}</p>
-                     
-                      {/* <div className="text-xs text-green-600">
-                        {selectedMachine.PLANT} → {selectedMachine.AREA} → {selectedMachine.LINE} → {selectedMachine.MACHINE} → {selectedMachine.NUMBER}
-                      </div> */}
+                      <p className="text-sm text-green-700 dark:text-green-300 mb-1">{selectedMachine.PUDESC}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{selectedMachine.PUCODE}</p>
                     </div>
                     <Button
                       type="button"
                       variant="outline"
                       size="sm"
                       onClick={clearMachineSelection}
-                      className="text-green-600 hover:text-green-700"
+                      className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                     >
                       <X className="w-4 h-4" />
                     </Button>
@@ -773,17 +871,17 @@ const TicketCreateWizardPage: React.FC = () => {
                   
                   {/* Selected Equipment Display */}
                   {selectedEquipment && (
-                    <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-2">
                             <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                            <p className="text-sm font-medium text-blue-800">Selected Equipment</p>
+                            <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Selected Equipment</p>
                           </div>
-                          <p className="text-lg font-mono text-blue-900 mb-1">{selectedEquipment.EQCODE}</p>
-                          <p className="text-sm text-blue-700 mb-2">{selectedEquipment.EQNAME}</p>
+                          <p className="text-lg font-mono text-blue-900 dark:text-blue-100 mb-1">{selectedEquipment.EQCODE}</p>
+                          <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">{selectedEquipment.EQNAME}</p>
                           {selectedEquipment.EQTYPENAME && (
-                            <div className="text-xs text-blue-600">
+                            <div className="text-xs text-blue-600 dark:text-blue-400">
                               Type: {selectedEquipment.EQTYPENAME}
                             </div>
                           )}
@@ -793,7 +891,7 @@ const TicketCreateWizardPage: React.FC = () => {
                           variant="outline"
                           size="sm"
                           onClick={clearEquipmentSelection}
-                          className="text-blue-600 hover:text-blue-700"
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                         >
                           <X className="w-4 h-4" />
                         </Button>

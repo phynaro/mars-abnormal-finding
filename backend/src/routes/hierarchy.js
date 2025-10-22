@@ -44,6 +44,5 @@ router.get('/puextension/plants/:plant/areas/:area/lines', authenticateToken, hi
 router.get('/puextension/plants/:plant/areas/:area/lines/:line/machines', authenticateToken, hierarchyController.getDistinctMachinesFromPUExtension);
 router.get('/puextension/plants/:plant/areas/:area/machines-without-lines', authenticateToken, hierarchyController.getDistinctMachinesWithoutLinesFromPUExtension);
 router.get('/puextension/plants/:plant/areas/:area/lines/:line/machines/:machine/numbers', authenticateToken, hierarchyController.getDistinctNumbersFromPUExtension);
-router.get('/puextension/plants/:plant/areas/:area/lines-or-machines', authenticateToken, hierarchyController.getLinesMachinesAfterArea);
 
 module.exports = router;

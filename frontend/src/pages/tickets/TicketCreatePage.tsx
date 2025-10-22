@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { Upload, X } from 'lucide-react';
+import { Upload, X, Search, Building2 } from 'lucide-react';
 import authService from '@/services/authService';
 import { compressTicketImage, formatFileSize, compressImage } from '@/utils/imageCompression';
 import HierarchicalMachineSelector from '@/components/tickets/HierarchicalMachineSelector';
@@ -62,7 +62,7 @@ const TicketCreatePage: React.FC = () => {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Machine selection state - simplified approach
-  const [selectionMode, setSelectionMode] = useState<'search' | 'hierarchy'>('search');
+  const [selectionMode, setSelectionMode] = useState<'search' | 'hierarchy'>('hierarchy');
   const [machineSearchQuery, setMachineSearchQuery] = useState('');
   const [machineSearchResults, setMachineSearchResults] = useState<PUCODEResult[]>([]);
   const [machineSearchLoading, setMachineSearchLoading] = useState(false);
@@ -569,7 +569,7 @@ const TicketCreatePage: React.FC = () => {
       <Card>
         <CardContent className="pt-6">
           <form ref={formRef} onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-2 lg:gap-x-10">
-            {/* LEFT COLUMN: Machine Selection & Attachments */}
+            {/* LEFT COLUMN: Machine Selection */}
             <div className="space-y-4">
               {/* Machine Selection with Toggle */}
               <div className="space-y-3">
@@ -579,19 +579,7 @@ const TicketCreatePage: React.FC = () => {
                 <div className="flex rounded-lg border p-1 bg-muted">
                   <button
                     type="button"
-                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                      selectionMode === 'search'
-                        ? 'bg-background text-foreground shadow-sm'
-                        : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                    onClick={() => handleSelectionModeChange('search')}
-                    disabled={submitting}
-                  >
-                    {t('ticket.selectionModeSearch')}
-                  </button>
-                  <button
-                    type="button"
-                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 ${
                       selectionMode === 'hierarchy'
                         ? 'bg-background text-foreground shadow-sm'
                         : 'text-muted-foreground hover:text-foreground'
@@ -599,7 +587,21 @@ const TicketCreatePage: React.FC = () => {
                     onClick={() => handleSelectionModeChange('hierarchy')}
                     disabled={submitting}
                   >
-                    {t('ticket.selectionModeHierarchy')}
+                    <Building2 className="w-4 h-4" />
+                    <span className="hidden sm:inline">{t('ticket.selectionModeHierarchy')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors flex items-center justify-center gap-2 ${
+                      selectionMode === 'search'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => handleSelectionModeChange('search')}
+                    disabled={submitting}
+                  >
+                    <Search className="w-4 h-4" />
+                    <span className="hidden sm:inline">{t('ticket.selectionModeSearch')}</span>
                   </button>
                 </div>
 
@@ -675,25 +677,22 @@ const TicketCreatePage: React.FC = () => {
                 
                 {/* Selected Machine Display */}
                 {selectedMachine && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <p className="text-sm font-medium text-green-800">{t('ticket.selectedMachine')}</p>
+                          <p className="text-sm font-medium text-green-800 dark:text-green-200">{t('ticket.selectedMachine')}</p>
                         </div>
-                        <p className="text-lg font-mono text-green-900 mb-1">{selectedMachine.PUCODE}</p>
-                        <p className="text-sm text-green-700 mb-2">{selectedMachine.PUDESC}</p>
-                        <div className="text-xs text-green-600">
-                          {selectedMachine.PLANT} → {selectedMachine.AREA} → {selectedMachine.LINE} → {selectedMachine.MACHINE} → {selectedMachine.NUMBER}
-                        </div>
+                        <p className="text-lg font-mono text-green-900 dark:text-green-100 mb-1">{selectedMachine.PUCODE}</p>
+                        <p className="text-sm text-green-700 dark:text-green-300 mb-2">{selectedMachine.PUDESC}</p>
                       </div>
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
                         onClick={clearMachineSelection}
-                        className="text-green-600 hover:text-green-700"
+                        className="text-green-600 hover:text-green-700 dark:text-green-400 dark:hover:text-green-300"
                         disabled={submitting}
                       >
                         <X className="w-4 h-4" />
@@ -735,17 +734,17 @@ const TicketCreatePage: React.FC = () => {
                     
                     {/* Selected Equipment Display */}
                     {selectedEquipment && (
-                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                              <p className="text-sm font-medium text-blue-800">Selected Equipment</p>
+                              <p className="text-sm font-medium text-blue-800 dark:text-blue-200">Selected Equipment</p>
                             </div>
-                            <p className="text-lg font-mono text-blue-900 mb-1">{selectedEquipment.EQCODE}</p>
-                            <p className="text-sm text-blue-700 mb-2">{selectedEquipment.EQNAME}</p>
+                            <p className="text-lg font-mono text-blue-900 dark:text-blue-100 mb-1">{selectedEquipment.EQCODE}</p>
+                            <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">{selectedEquipment.EQNAME}</p>
                             {selectedEquipment.EQTYPENAME && (
-                              <div className="text-xs text-blue-600">
+                              <div className="text-xs text-blue-600 dark:text-blue-400">
                                 Type: {selectedEquipment.EQTYPENAME}
                               </div>
                             )}
@@ -755,7 +754,7 @@ const TicketCreatePage: React.FC = () => {
                             variant="outline"
                             size="sm"
                             onClick={clearEquipmentSelection}
-                            className="text-blue-600 hover:text-blue-700"
+                            className="text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
                             disabled={submitting}
                           >
                             <X className="w-4 h-4" />
@@ -773,6 +772,57 @@ const TicketCreatePage: React.FC = () => {
                 )}
 
                 {errors.machine && <p className="text-sm text-red-500">{errors.machine}</p>}
+              </div>
+            </div>
+
+            {/* RIGHT COLUMN: Title, Description, Critical Level & Images */}
+            <div className="space-y-4">
+              {/* Problem Title */}
+              <div className="space-y-2">
+                <Label htmlFor="title">{t('ticket.problemTitle')} *</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => handleInputChange('title', e.target.value)}
+                  placeholder={t('ticket.addConciseTitle')}
+                  className={errors.title ? 'border-red-500' : ''}
+                />
+                {errors.title && <p className="text-sm text-red-500">{errors.title}</p>}
+              </div>
+
+              {/* Description */}
+              <div className="space-y-3">
+                <Label htmlFor="description">{t('ticket.description')} *</Label>
+                <Textarea
+                  id="description"
+                  rows={5}
+                  value={formData.description}
+                  onChange={(e) => handleInputChange('description', e.target.value)}
+                  placeholder={t('ticket.describeAbnormalFinding')}
+                  className={errors.description ? 'border-red-500' : ''}
+                />
+                {errors.description && <p className="text-sm text-red-500">{errors.description}</p>}
+              </div>
+
+              {/* Critical Level */}
+              <div className="space-y-2">
+                <Label htmlFor="critical">{t('ticket.criticalLevel')}</Label>
+                <Select
+                  value={formData.pucriticalno?.toString() || ''}
+                  onValueChange={(v) => handleInputChange('pucriticalno', parseInt(v))}
+                  disabled={criticalLevelsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={criticalLevelsLoading ? "Loading critical levels..." : "Select critical level..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {criticalLevels.map((level) => (
+                      <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
+                        {level.PUCRITICALNAME}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Attach images (before) */}
@@ -879,57 +929,6 @@ const TicketCreatePage: React.FC = () => {
                 {errors.files && (
                   <p className="text-sm text-red-500">{errors.files}</p>
                 )}
-              </div>
-            </div>
-
-            {/* RIGHT COLUMN: Title, Description, Severity & Priority */}
-            <div className="space-y-4">
-              {/* Problem Title */}
-              <div className="space-y-2">
-                <Label htmlFor="title">{t('ticket.problemTitle')} *</Label>
-                <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => handleInputChange('title', e.target.value)}
-                  placeholder={t('ticket.addConciseTitle')}
-                  className={errors.title ? 'border-red-500' : ''}
-                />
-                {errors.title && <p className="text-sm text-red-500">{errors.title}</p>}
-              </div>
-
-              {/* Description */}
-              <div className="space-y-3">
-                <Label htmlFor="description">{t('ticket.description')} *</Label>
-                <Textarea
-                  id="description"
-                  rows={5}
-                  value={formData.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
-                  placeholder={t('ticket.describeAbnormalFinding')}
-                  className={errors.description ? 'border-red-500' : ''}
-                />
-                {errors.description && <p className="text-sm text-red-500">{errors.description}</p>}
-              </div>
-
-              {/* Critical Level */}
-              <div className="space-y-2">
-                <Label htmlFor="critical">{t('ticket.criticalLevel')}</Label>
-                <Select
-                  value={formData.pucriticalno?.toString() || ''}
-                  onValueChange={(v) => handleInputChange('pucriticalno', parseInt(v))}
-                  disabled={criticalLevelsLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={criticalLevelsLoading ? "Loading critical levels..." : "Select critical level..."} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {criticalLevels.map((level) => (
-                      <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
-                        {level.PUCRITICALNAME}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
 
               {/* Severity & Priority */}

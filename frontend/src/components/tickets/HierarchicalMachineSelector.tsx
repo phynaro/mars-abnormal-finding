@@ -22,6 +22,7 @@ interface HierarchyOption {
   puname?: string;
   pudescription?: string;
   digit_count?: number;
+  pucriticalno?: number;
 }
 
 interface SelectedMachine {
@@ -117,21 +118,31 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
   const loadLines = async (plant: string, area: string) => {
     try {
       setLoadingLines(true);
-      const response = await hierarchyService.getLinesOrMachinesAfterArea(plant, area);
+      const response = await hierarchyService.getDistinctLines(plant, area);
       if (response.success) {
-        // Add lines with a "None" option if there are machines without lines
-        const linesData = response.data.lines.map(item => ({ ...item, type: 'line' }));
-        
-        // If there are machines without lines, add a "None" option
-        if (response.data.machines.length > 0) {
-          linesData.push({
-            code: 'none',
-            name: t('ticket.noneOption'),
-            type: 'none'
-          });
+        if (response.data.length > 0) {
+          // Lines found, add "No Line" option to allow viewing machines without lines
+          const linesWithNoLineOption = [
+            ...response.data,
+            {
+              code: 'none',
+              name: t('ticket.noneOption') || 'No Line'
+            }
+          ];
+          setLines(linesWithNoLineOption);
+        } else {
+          // No lines found, check for machines without lines
+          const machinesResponse = await hierarchyService.getDistinctMachinesWithoutLines(plant, area);
+          if (machinesResponse.success && machinesResponse.data.length > 0) {
+            // Machines without lines found, skip line selection and load machines directly
+            setLines([]); // Clear lines
+            setSelectedLine('none'); // Set a special value to indicate skipping lines
+            setMachines(machinesResponse.data);
+          } else {
+            // No lines and no machines without lines
+            setLines([]);
+          }
         }
-        
-        setLines(linesData);
       }
     } catch (error) {
       console.error('Error loading lines:', error);
@@ -182,7 +193,28 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
     setAreas([]);
     setLines([]);
     setMachines([]);
-    onClear();
+    
+    // Find the selected plant and set puno if available
+    const selectedPlantData = plants.find(p => p.code === value);
+    if (selectedPlantData && selectedPlantData.puno) {
+      // Create a machine-like object for plant level selection
+      const plantMachine = {
+        puno: selectedPlantData.puno,
+        pucode: selectedPlantData.code,
+        plant: selectedPlantData.code,
+        area: '',
+        line: '',
+        machine: '',
+        number: '',
+        puname: selectedPlantData.name,
+        pudescription: selectedPlantData.name,
+        digit_count: 1,
+        pucriticalno: selectedPlantData.pucriticalno || 0
+      };
+      onMachineSelect(plantMachine);
+    } else {
+      onClear();
+    }
     
     if (value) {
       loadAreas(value);
@@ -195,7 +227,28 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
     setSelectedMachine('');
     setLines([]);
     setMachines([]);
-    onClear();
+    
+    // Find the selected area and set puno if available
+    const selectedAreaData = areas.find(a => a.code === value);
+    if (selectedAreaData && selectedAreaData.puno) {
+      // Create a machine-like object for area level selection
+      const areaMachine = {
+        puno: selectedAreaData.puno,
+        pucode: `${selectedPlant}-${selectedAreaData.code}`,
+        plant: selectedPlant,
+        area: selectedAreaData.code,
+        line: '',
+        machine: '',
+        number: '',
+        puname: selectedAreaData.name,
+        pudescription: selectedAreaData.name,
+        digit_count: 2,
+        pucriticalno: selectedAreaData.pucriticalno || 0
+      };
+      onMachineSelect(areaMachine);
+    } else {
+      onClear();
+    }
     
     if (value && selectedPlant) {
       loadLines(selectedPlant, value);
@@ -206,7 +259,28 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
     setSelectedLine(value);
     setSelectedMachine('');
     setMachines([]);
-    onClear();
+    
+    // Find the selected line and set puno if available
+    const selectedLineData = lines.find(l => l.code === value);
+    if (selectedLineData && selectedLineData.puno) {
+      // Create a machine-like object for line level selection
+      const lineMachine = {
+        puno: selectedLineData.puno,
+        pucode: `${selectedPlant}-${selectedArea}-${selectedLineData.code}`,
+        plant: selectedPlant,
+        area: selectedArea,
+        line: selectedLineData.code,
+        machine: '',
+        number: '',
+        puname: selectedLineData.name,
+        pudescription: selectedLineData.name,
+        digit_count: 3,
+        pucriticalno: selectedLineData.pucriticalno || 0
+      };
+      onMachineSelect(lineMachine);
+    } else {
+      onClear();
+    }
     
     if (value && selectedPlant && selectedArea) {
       loadMachines(selectedPlant, selectedArea, value);
@@ -248,7 +322,7 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
       const area = areas.find(a => a.code === selectedArea);
       path.push(area?.name || selectedArea);
     }
-    if (selectedLine) {
+    if (selectedLine && selectedLine !== 'none') {
       const line = lines.find(l => l.code === selectedLine);
       path.push(line?.name || selectedLine);
     }
@@ -261,33 +335,6 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
 
   return (
     <div className="space-y-4">
-      {/* Hierarchy Path Display */}
-      {getSelectedPath() && (
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="pt-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                <span className="text-sm font-medium text-blue-800">{t('ticket.hierarchyPathSelected')}</span>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={clearAllSelections}
-                disabled={disabled}
-                className="text-blue-600 hover:text-blue-700"
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="mt-2 text-sm text-blue-700 font-mono">
-              {getSelectedPath()}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Cascading Dropdowns */}
       <div className="grid gap-4">
         {/* Plant Selection */}
@@ -334,8 +381,8 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
           </div>
         )}
 
-        {/* Line Selection */}
-        {selectedArea && (
+        {/* Line Selection - show when there are lines or when loading */}
+        {selectedArea && (lines.length > 0 || loadingLines) && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">{t('ticket.selectLine')}</Label>
             <Select
@@ -358,7 +405,7 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
         )}
 
         {/* Machine Selection */}
-        {selectedLine && (
+        {(selectedLine || selectedLine === 'none') && (
           <div className="space-y-2">
             <Label className="text-sm font-medium">{t('ticket.selectMachine')}</Label>
             <Select
@@ -384,7 +431,7 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
 
       {/* Help Text */}
       <p className="text-xs text-gray-500">
-        {t('ticket.hierarchyHelpText')}
+        {t('ticket.hierarchyHelpText')} You can select at any level - Plant, Area, Line, or Machine.
       </p>
     </div>
   );

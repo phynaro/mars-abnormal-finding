@@ -84,13 +84,6 @@ class HierarchyService {
     return await response.json();
   }
 
-  async getLinesOrMachinesAfterArea(plant: string, area: string): Promise<{success: boolean; data: {lines: Array<{code: string; name: string; type: string}>; machines: Array<{code: string; name: string; type: string}>}}> {
-    const baseURL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
-    const response = await fetch(`${baseURL}/hierarchy/puextension/plants/${encodeURIComponent(plant)}/areas/${encodeURIComponent(area)}/lines-or-machines`, {
-      headers: this.headers()
-    });
-    return await response.json();
-  }
 
   async getDistinctNumbers(plant: string, area: string, line: string, machine: string): Promise<{success: boolean; data: Array<{code: string; name: string}>}> {
     const baseURL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');

@@ -652,14 +652,17 @@ const getDistinctPlantsFromPUExtension = async (req, res) => {
         
         const result = await pool.request().query(`
             SELECT 
-                plant as code,
-                MIN(pudescription) as name
-            FROM PUExtension
-            WHERE plant IS NOT NULL 
-            AND plant != ''
-            AND digit_count = 1
-            GROUP BY plant
-            ORDER BY plant
+                pe.plant as code,
+                MIN(pe.pudescription) as name,
+                MIN(pe.puno) as puno,
+                MIN(pu.PUCRITICALNO) as pucriticalno
+            FROM PUExtension pe
+            LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
+            WHERE pe.plant IS NOT NULL 
+            AND pe.plant != ''
+            AND pe.digit_count = 1
+            GROUP BY pe.plant
+            ORDER BY pe.plant
         `);
 
         res.json({
@@ -695,15 +698,18 @@ const getDistinctAreasFromPUExtension = async (req, res) => {
             .input('plant', sql.NVarChar(50), plant)
             .query(`
                 SELECT 
-                    area as code,
-                    MIN(pudescription) as name
-                FROM PUExtension
-                WHERE plant = @plant
-                AND area IS NOT NULL 
-                AND area != ''
-                AND digit_count = 2
-                GROUP BY area
-                ORDER BY area
+                    pe.area as code,
+                    MIN(pe.pudescription) as name,
+                    MIN(pe.puno) as puno,
+                    MIN(pu.PUCRITICALNO) as pucriticalno
+                FROM PUExtension pe
+                LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
+                WHERE pe.plant = @plant
+                AND pe.area IS NOT NULL 
+                AND pe.area != ''
+                AND pe.digit_count = 2
+                GROUP BY pe.area
+                ORDER BY pe.area
             `);
 
         res.json({
@@ -740,16 +746,19 @@ const getDistinctLinesFromPUExtension = async (req, res) => {
             .input('area', sql.NVarChar(50), area)
             .query(`
                 SELECT 
-                    line as code,
-                    MIN(pudescription) as name
-                FROM PUExtension
-                WHERE plant = @plant
-                AND area = @area
-                AND line IS NOT NULL 
-                AND line != ''
-                AND digit_count = 3
-                GROUP BY line
-                ORDER BY line
+                    pe.line as code,
+                    MIN(pe.pudescription) as name,
+                    MIN(pe.puno) as puno,
+                    MIN(pu.PUCRITICALNO) as pucriticalno
+                FROM PUExtension pe
+                LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
+                WHERE pe.plant = @plant
+                AND pe.area = @area
+                AND pe.line IS NOT NULL 
+                AND pe.line != ''
+                AND pe.digit_count = 3
+                GROUP BY pe.line
+                ORDER BY pe.line
             `);
 
         res.json({
@@ -931,74 +940,6 @@ const getDistinctNumbersFromPUExtension = async (req, res) => {
     }
 };
 
-// Get lines OR machines after area selection (handles skipped line level)
-const getLinesMachinesAfterArea = async (req, res) => {
-    try {
-        const { plant, area } = req.params;
-        
-        if (!plant || !area) {
-            return res.status(400).json({
-                success: false,
-                message: 'Plant and area are required'
-            });
-        }
-
-        const pool = await sql.connect(dbConfig);
-        
-        // Get lines (digit_count = 3)
-        const linesResult = await pool.request()
-            .input('plant', sql.NVarChar(50), plant)
-            .input('area', sql.NVarChar(50), area)
-            .query(`
-                SELECT DISTINCT 
-                    line as code,
-                    pudescription as name,
-                    'line' as type
-                FROM PUExtension
-                WHERE plant = @plant
-                AND area = @area
-                AND line IS NOT NULL 
-                AND line != ''
-                AND digit_count = 3
-                ORDER BY line
-            `);
-
-        // Get machines without lines (digit_count = 4, line IS NULL)
-        const machinesResult = await pool.request()
-            .input('plant', sql.NVarChar(50), plant)
-            .input('area', sql.NVarChar(50), area)
-            .query(`
-                SELECT DISTINCT 
-                    machine as code,
-                    pudescription as name,
-                    'machine' as type
-                FROM PUExtension
-                WHERE plant = @plant
-                AND area = @area
-                AND line IS NULL
-                AND machine IS NOT NULL 
-                AND machine != ''
-                AND digit_count = 4
-                ORDER BY machine
-            `);
-
-        res.json({
-            success: true,
-            data: {
-                lines: linesResult.recordset,
-                machines: machinesResult.recordset
-            }
-        });
-
-    } catch (error) {
-        console.error('Error fetching lines or machines after area:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch lines or machines',
-            error: error.message
-        });
-    }
-};
 
 module.exports = {
     getPlants,
@@ -1018,6 +959,5 @@ module.exports = {
     getDistinctLinesFromPUExtension,
     getDistinctMachinesFromPUExtension,
     getDistinctMachinesWithoutLinesFromPUExtension,
-    getDistinctNumbersFromPUExtension,
-    getLinesMachinesAfterArea
+    getDistinctNumbersFromPUExtension
 };
