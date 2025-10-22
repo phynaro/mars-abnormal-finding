@@ -1,6 +1,7 @@
 import authService from './authService';
 import { getAuthHeaders } from '../utils/authHeaders';
 import type { PersonalKPIComparisonDataPoint, PersonalKPIComparisonResponse } from '../types/personalKPIComparison';
+import type { DepartmentUserKPIResponse } from '../types/departmentUserKPI';
 
 export type GroupBy = 'daily' | 'weekly' | 'period';
 
@@ -925,6 +926,34 @@ class DashboardService {
     const url = `${this.baseURL}/personal-kpi-comparison?${queryParams.toString()}`;
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch personal KPI comparison data');
+    return res.json();
+  }
+
+  // Get Department User KPI - Tickets Created
+  async getDepartmentUserKPITicketsCreated(params: {
+    deptNo: number;
+    year: number;
+  }): Promise<DepartmentUserKPIResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('deptNo', String(params.deptNo));
+    queryParams.set('year', String(params.year));
+    const url = `${this.baseURL}/department-user-kpi/tickets-created?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch department user KPI (tickets created)');
+    return res.json();
+  }
+
+  // Get Department User KPI - Tickets Assigned
+  async getDepartmentUserKPITicketsAssigned(params: {
+    deptNo: number;
+    year: number;
+  }): Promise<DepartmentUserKPIResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('deptNo', String(params.deptNo));
+    queryParams.set('year', String(params.year));
+    const url = `${this.baseURL}/department-user-kpi/tickets-assigned?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch department user KPI (tickets assigned)');
     return res.json();
   }
 }

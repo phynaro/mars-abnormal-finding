@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Users, TrendingUp } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Users, TrendingUp, Filter, ChevronRight } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import dashboardService from '@/services/dashboardService';
 import type { PersonalKPIComparisonDataPoint, Department } from '@/types/personalKPIComparison';
@@ -11,6 +12,9 @@ import { getDateRangeForFilter, calculatePeriodForDate, getCompanyYearDateRange,
 
 const PersonalKPIComparisonPage: React.FC = () => {
   const { t } = useLanguage();
+
+  // Filter panel visibility state
+  const [isFilterPanelOpen, setIsFilterPanelOpen] = useState<boolean>(true);
 
   // Filter state - auto-select current year and period
   const now = new Date();
@@ -119,6 +123,18 @@ const PersonalKPIComparisonPage: React.FC = () => {
     fetchData();
   }, [dateRange.startDate, dateRange.endDate, t]);
 
+  // Keyboard shortcut for toggling filter panel (Escape key)
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsFilterPanelOpen(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Reset selected users when data changes (if selected users are no longer available)
   useEffect(() => {
     if (allUsers.length > 0 && selectedUsers.length > 0) {
@@ -186,6 +202,20 @@ const PersonalKPIComparisonPage: React.FC = () => {
           <h1 className="text-3xl font-bold tracking-tight">{t('dashboard.personalKPIComparison.title')}</h1>
           <p className="text-muted-foreground">{t('dashboard.personalKPIComparison.description')}</p>
         </div>
+        <div className="flex items-center space-x-2">
+          {!isFilterPanelOpen && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsFilterPanelOpen(true)}
+              className="flex items-center space-x-2"
+            >
+              <Filter className="h-4 w-4" />
+              <span>{t("common.showFilters")}</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Error Alert */}
@@ -196,29 +226,32 @@ const PersonalKPIComparisonPage: React.FC = () => {
       )}
 
       {/* Main Layout: Filter Panel (Left) + Content (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className={`grid gap-6 transition-all duration-300 ${isFilterPanelOpen ? 'grid-cols-1 lg:grid-cols-4' : 'grid-cols-1'}`}>
         {/* Filter Panel - Left Side */}
-        <div className="lg:col-span-1">
-          <PersonalKPIComparisonFilter
-            selectedYear={selectedYear}
-            selectedPeriod={selectedPeriod}
-            selectedUsers={selectedUsers}
-            selectedDepartments={selectedDepartments}
-            selectedKPI={selectedKPI}
-            filterMode={filterMode}
-            availableUsers={usersFilteredByDept}
-            availableDepartments={availableDepartments}
-            onYearChange={setSelectedYear}
-            onPeriodChange={setSelectedPeriod}
-            onUsersChange={setSelectedUsers}
-            onDepartmentsChange={setSelectedDepartments}
-            onKPIChange={setSelectedKPI}
-            onFilterModeChange={setFilterMode}
-          />
-        </div>
+        {isFilterPanelOpen && (
+          <div className="lg:col-span-1">
+            <PersonalKPIComparisonFilter
+              selectedYear={selectedYear}
+              selectedPeriod={selectedPeriod}
+              selectedUsers={selectedUsers}
+              selectedDepartments={selectedDepartments}
+              selectedKPI={selectedKPI}
+              filterMode={filterMode}
+              availableUsers={usersFilteredByDept}
+              availableDepartments={availableDepartments}
+              onYearChange={setSelectedYear}
+              onPeriodChange={setSelectedPeriod}
+              onUsersChange={setSelectedUsers}
+              onDepartmentsChange={setSelectedDepartments}
+              onKPIChange={setSelectedKPI}
+              onFilterModeChange={setFilterMode}
+              onHideFilters={() => setIsFilterPanelOpen(false)}
+            />
+          </div>
+        )}
 
         {/* Right Side Content */}
-        <div className="lg:col-span-3 space-y-6">
+        <div className={`space-y-6 ${isFilterPanelOpen ? 'lg:col-span-3' : 'col-span-1'}`}>
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <Card>

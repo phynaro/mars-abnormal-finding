@@ -567,6 +567,439 @@ const getPUCriticalLevels = async (req, res) => {
     }
 };
 
+// Get machines by hierarchy from PUExtension table
+const getMachinesByHierarchy = async (req, res) => {
+    try {
+        const { plant, area, line, machine, number } = req.query;
+        
+        if (!plant) {
+            return res.status(400).json({
+                success: false,
+                message: 'Plant is required'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        // Determine expected digit count based on provided parameters
+        let expectedDigitCount = 1;
+        if (plant && area) expectedDigitCount = 2;
+        if (plant && area && line) expectedDigitCount = 3;
+        if (plant && area && line && machine) expectedDigitCount = 4;
+        if (plant && area && line && machine && number) expectedDigitCount = 5;
+
+        const request = pool.request()
+            .input('plant', sql.NVarChar(50), plant)
+            .input('expectedDigitCount', sql.Int, expectedDigitCount);
+
+        let query = `
+            SELECT 
+                puno,
+                pucode,
+                plant,
+                area,
+                line,
+                machine,
+                number,
+                puname,
+                pudescription,
+                digit_count
+            FROM PUExtension
+            WHERE plant = @plant
+            AND digit_count = @expectedDigitCount
+        `;
+
+        if (area) {
+            query += ' AND area = @area';
+            request.input('area', sql.NVarChar(50), area);
+        }
+        if (line) {
+            query += ' AND line = @line';
+            request.input('line', sql.NVarChar(50), line);
+        }
+        if (machine) {
+            query += ' AND machine = @machine';
+            request.input('machine', sql.NVarChar(50), machine);
+        }
+        if (number) {
+            query += ' AND number = @number';
+            request.input('number', sql.NVarChar(10), number);
+        }
+
+        query += ' ORDER BY pucode';
+
+        const result = await request.query(query);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching machines by hierarchy:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch machines by hierarchy',
+            error: error.message
+        });
+    }
+};
+
+// Get distinct plants from PUExtension
+const getDistinctPlantsFromPUExtension = async (req, res) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request().query(`
+            SELECT 
+                plant as code,
+                MIN(pudescription) as name
+            FROM PUExtension
+            WHERE plant IS NOT NULL 
+            AND plant != ''
+            AND digit_count = 1
+            GROUP BY plant
+            ORDER BY plant
+        `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching distinct plants from PUExtension:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch distinct plants',
+            error: error.message
+        });
+    }
+};
+
+// Get distinct areas from PUExtension for a specific plant
+const getDistinctAreasFromPUExtension = async (req, res) => {
+    try {
+        const { plant } = req.params;
+        
+        if (!plant) {
+            return res.status(400).json({
+                success: false,
+                message: 'Plant is required'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request()
+            .input('plant', sql.NVarChar(50), plant)
+            .query(`
+                SELECT 
+                    area as code,
+                    MIN(pudescription) as name
+                FROM PUExtension
+                WHERE plant = @plant
+                AND area IS NOT NULL 
+                AND area != ''
+                AND digit_count = 2
+                GROUP BY area
+                ORDER BY area
+            `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching distinct areas from PUExtension:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch distinct areas',
+            error: error.message
+        });
+    }
+};
+
+// Get distinct lines from PUExtension for a specific plant and area
+const getDistinctLinesFromPUExtension = async (req, res) => {
+    try {
+        const { plant, area } = req.params;
+        
+        if (!plant || !area) {
+            return res.status(400).json({
+                success: false,
+                message: 'Plant and area are required'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request()
+            .input('plant', sql.NVarChar(50), plant)
+            .input('area', sql.NVarChar(50), area)
+            .query(`
+                SELECT 
+                    line as code,
+                    MIN(pudescription) as name
+                FROM PUExtension
+                WHERE plant = @plant
+                AND area = @area
+                AND line IS NOT NULL 
+                AND line != ''
+                AND digit_count = 3
+                GROUP BY line
+                ORDER BY line
+            `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching distinct lines from PUExtension:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch distinct lines',
+            error: error.message
+        });
+    }
+};
+
+// Get distinct machines from PUExtension for a specific plant, area, and line
+const getDistinctMachinesFromPUExtension = async (req, res) => {
+    try {
+        const { plant, area, line } = req.params;
+        
+        if (!plant || !area || !line) {
+            return res.status(400).json({
+                success: false,
+                message: 'Plant, area, and line are required'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request()
+            .input('plant', sql.NVarChar(50), plant)
+            .input('area', sql.NVarChar(50), area)
+            .input('line', sql.NVarChar(50), line)
+            .query(`
+                SELECT 
+                    CONCAT(pe.machine, '-', pe.number) as code,
+                    pe.pudescription as name,
+                    pe.puno,
+                    pe.pucode,
+                    pe.plant,
+                    pe.area,
+                    pe.line,
+                    pe.machine,
+                    pe.number,
+                    pe.puname,
+                    pe.pudescription,
+                    pe.digit_count,
+                    pu.PUCRITICALNO as pucriticalno
+                FROM PUExtension pe
+                LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
+                WHERE pe.plant = @plant
+                AND pe.area = @area
+                AND pe.line = @line
+                AND pe.machine IS NOT NULL 
+                AND pe.machine != ''
+                ORDER BY pe.machine, pe.number
+            `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching distinct machines from PUExtension:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch distinct machines',
+            error: error.message
+        });
+    }
+};
+
+// Get distinct machines without lines from PUExtension for a specific plant and area
+const getDistinctMachinesWithoutLinesFromPUExtension = async (req, res) => {
+    try {
+        const { plant, area } = req.params;
+        
+        if (!plant || !area) {
+            return res.status(400).json({
+                success: false,
+                message: 'Plant and area are required'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request()
+            .input('plant', sql.NVarChar(50), plant)
+            .input('area', sql.NVarChar(50), area)
+            .query(`
+                SELECT 
+                    CONCAT(pe.machine, '-', pe.number) as code,
+                    pe.pudescription as name,
+                    pe.puno,
+                    pe.pucode,
+                    pe.plant,
+                    pe.area,
+                    pe.line,
+                    pe.machine,
+                    pe.number,
+                    pe.puname,
+                    pe.pudescription,
+                    pe.digit_count,
+                    pu.PUCRITICALNO as pucriticalno
+                FROM PUExtension pe
+                LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
+                WHERE pe.plant = @plant
+                AND pe.area = @area
+                AND pe.line IS NULL
+                AND pe.machine IS NOT NULL 
+                AND pe.machine != ''
+                ORDER BY pe.machine, pe.number
+            `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching distinct machines without lines from PUExtension:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch distinct machines without lines',
+            error: error.message
+        });
+    }
+};
+
+// Get distinct numbers from PUExtension for a specific plant, area, line, and machine
+const getDistinctNumbersFromPUExtension = async (req, res) => {
+    try {
+        const { plant, area, line, machine } = req.params;
+        
+        if (!plant || !area || !line || !machine) {
+            return res.status(400).json({
+                success: false,
+                message: 'Plant, area, line, and machine are required'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        const result = await pool.request()
+            .input('plant', sql.NVarChar(50), plant)
+            .input('area', sql.NVarChar(50), area)
+            .input('line', sql.NVarChar(50), line)
+            .input('machine', sql.NVarChar(50), machine)
+            .query(`
+                SELECT DISTINCT 
+                    number as code,
+                    pudescription as name
+                FROM PUExtension
+                WHERE plant = @plant
+                AND area = @area
+                AND line = @line
+                AND machine = @machine
+                AND number IS NOT NULL 
+                AND number != ''
+                AND digit_count = 5
+                ORDER BY number
+            `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching distinct numbers from PUExtension:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch distinct numbers',
+            error: error.message
+        });
+    }
+};
+
+// Get lines OR machines after area selection (handles skipped line level)
+const getLinesMachinesAfterArea = async (req, res) => {
+    try {
+        const { plant, area } = req.params;
+        
+        if (!plant || !area) {
+            return res.status(400).json({
+                success: false,
+                message: 'Plant and area are required'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+        
+        // Get lines (digit_count = 3)
+        const linesResult = await pool.request()
+            .input('plant', sql.NVarChar(50), plant)
+            .input('area', sql.NVarChar(50), area)
+            .query(`
+                SELECT DISTINCT 
+                    line as code,
+                    pudescription as name,
+                    'line' as type
+                FROM PUExtension
+                WHERE plant = @plant
+                AND area = @area
+                AND line IS NOT NULL 
+                AND line != ''
+                AND digit_count = 3
+                ORDER BY line
+            `);
+
+        // Get machines without lines (digit_count = 4, line IS NULL)
+        const machinesResult = await pool.request()
+            .input('plant', sql.NVarChar(50), plant)
+            .input('area', sql.NVarChar(50), area)
+            .query(`
+                SELECT DISTINCT 
+                    machine as code,
+                    pudescription as name,
+                    'machine' as type
+                FROM PUExtension
+                WHERE plant = @plant
+                AND area = @area
+                AND line IS NULL
+                AND machine IS NOT NULL 
+                AND machine != ''
+                AND digit_count = 4
+                ORDER BY machine
+            `);
+
+        res.json({
+            success: true,
+            data: {
+                lines: linesResult.recordset,
+                machines: machinesResult.recordset
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching lines or machines after area:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch lines or machines',
+            error: error.message
+        });
+    }
+};
+
 module.exports = {
     getPlants,
     getAllAreas,
@@ -578,5 +1011,13 @@ module.exports = {
     generatePUCODE,
     getDistinctPlants,
     getDistinctAreas,
-    getPUCriticalLevels
+    getPUCriticalLevels,
+    getMachinesByHierarchy,
+    getDistinctPlantsFromPUExtension,
+    getDistinctAreasFromPUExtension,
+    getDistinctLinesFromPUExtension,
+    getDistinctMachinesFromPUExtension,
+    getDistinctMachinesWithoutLinesFromPUExtension,
+    getDistinctNumbersFromPUExtension,
+    getLinesMachinesAfterArea
 };

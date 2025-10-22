@@ -25,6 +25,7 @@ export interface PersonalKPIComparisonFilterProps {
   onDepartmentsChange: (departments: number[]) => void;
   onKPIChange: (kpi: string) => void;
   onFilterModeChange: (mode: 'year' | 'period') => void;
+  onHideFilters: () => void;
 }
 
 const KPI_OPTIONS = [
@@ -52,7 +53,8 @@ const PersonalKPIComparisonFilter: React.FC<PersonalKPIComparisonFilterProps> = 
   onUsersChange,
   onDepartmentsChange,
   onKPIChange,
-  onFilterModeChange
+  onFilterModeChange,
+  onHideFilters
 }) => {
   const { t } = useLanguage();
 
@@ -133,9 +135,20 @@ const PersonalKPIComparisonFilter: React.FC<PersonalKPIComparisonFilterProps> = 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center space-x-2">
-          <Filter className="h-5 w-5" />
-          <span>{t('dashboard.personalKPIComparison.filters')}</span>
+        <CardTitle className="flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <Filter className="h-5 w-5" />
+            <span>{t('dashboard.personalKPIComparison.filters')}</span>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onHideFilters}
+            className="h-8 w-8 p-0"
+            title={t("common.hideFilters")}
+          >
+            <X className="h-4 w-4" />
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">

@@ -14,6 +14,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Upload, X } from 'lucide-react';
 import authService from '@/services/authService';
 import { compressTicketImage, formatFileSize, compressImage } from '@/utils/imageCompression';
+import HierarchicalMachineSelector from '@/components/tickets/HierarchicalMachineSelector';
 
 // Machine data type from PU table
 
@@ -61,6 +62,7 @@ const TicketCreatePage: React.FC = () => {
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Machine selection state - simplified approach
+  const [selectionMode, setSelectionMode] = useState<'search' | 'hierarchy'>('search');
   const [machineSearchQuery, setMachineSearchQuery] = useState('');
   const [machineSearchResults, setMachineSearchResults] = useState<PUCODEResult[]>([]);
   const [machineSearchLoading, setMachineSearchLoading] = useState(false);
@@ -424,6 +426,44 @@ const TicketCreatePage: React.FC = () => {
     }
   };
 
+  // Handle machine selection from hierarchical selector
+  const onHierarchicalMachineSelect = (machine: any) => {
+    // Convert hierarchical machine data to PUCODEResult format
+    const pucodeResult: PUCODEResult = {
+      PUCODE: machine.pucode,
+      PUDESC: machine.pudescription || machine.puname,
+      PUNO: machine.puno,
+      PLANT: machine.plant,
+      AREA: machine.area,
+      LINE: machine.line,
+      MACHINE: machine.machine,
+      NUMBER: machine.number,
+      PUCRITICALNO: machine.pucriticalno || 0
+    };
+    
+    setSelectedMachine(pucodeResult);
+    handleInputChange('puno', machine.puno);
+    
+    // Auto-populate critical level if available (same as search functionality)
+    if (machine.pucriticalno) {
+      handleInputChange('pucriticalno', machine.pucriticalno);
+    }
+    
+    // Clear equipment selection when machine changes
+    clearEquipmentSelection();
+  };
+
+  const onHierarchicalMachineClear = () => {
+    clearMachineSelection();
+  };
+
+  // Handle selection mode change
+  const handleSelectionModeChange = (mode: 'search' | 'hierarchy') => {
+    setSelectionMode(mode);
+    // Clear selections when switching modes
+    clearMachineSelection();
+  };
+
   // Equipment selection handlers
   const onSelectEquipment = (equipmentId: string) => {
     if (equipmentId === 'none') {
@@ -531,152 +571,206 @@ const TicketCreatePage: React.FC = () => {
           <form ref={formRef} onSubmit={handleSubmit} className="grid gap-6 lg:grid-cols-2 lg:gap-x-10">
             {/* LEFT COLUMN: Machine Selection & Attachments */}
             <div className="space-y-4">
-              {/* Simplified Machine Selection */}
+              {/* Machine Selection with Toggle */}
               <div className="space-y-3">
                 <Label htmlFor="machine-search" className="text-base font-semibold">{t('ticket.wizardSelectMachine')} *</Label>
                 
-                <div className="space-y-2">
-                  <div className="relative">
-                    <Input
-                      ref={searchInputRef}
-                      id="machine-search"
-                      value={machineSearchQuery}
-                      onChange={(e) => {
-                        setMachineSearchQuery(e.target.value);
-                        setMachineSearchDropdownOpen(true);
-                      }}
-                      onFocus={() => setMachineSearchDropdownOpen(true)}
-                      placeholder={t('ticket.wizardSelectMachine')}
-                      className={errors.machine ? 'border-red-500' : ''}
-                    />
-                    {machineSearchDropdownOpen && machineSearchResults.length > 0 && (
-                      <div className="search-dropdown absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
-                        {machineSearchLoading ? (
-                          <div className="p-3 text-sm text-gray-500">{t('ticket.searchMachines')}</div>
-                        ) : (
-                          machineSearchResults.map((result, idx) => (
-                            <button
-                              type="button"
-                              key={idx}
-                              className="w-full text-left px-3 py-3 text-sm hover:bg-hover hover:text-hover-foreground border-b last:border-b-0"
-                              onClick={() => onSelectMachine(result)}
-                            >
-                              <div className="font-medium text-base">{result.PUCODE}</div>
-                              <div className="text-sm opacity-80 mt-1">{result.PUDESC}</div>
-                              <div className="text-xs opacity-60 mt-1">
-                                {result.PLANT} → {result.AREA} → {result.LINE} → {result.MACHINE} → {result.NUMBER}
-                              </div>
-                            </button>
-                          ))
-                        )}
-                      </div>
+                {/* Selection Mode Toggle */}
+                <div className="flex rounded-lg border p-1 bg-muted">
+                  <button
+                    type="button"
+                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      selectionMode === 'search'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => handleSelectionModeChange('search')}
+                    disabled={submitting}
+                  >
+                    {t('ticket.selectionModeSearch')}
+                  </button>
+                  <button
+                    type="button"
+                    className={`flex-1 px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      selectionMode === 'hierarchy'
+                        ? 'bg-background text-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => handleSelectionModeChange('hierarchy')}
+                    disabled={submitting}
+                  >
+                    {t('ticket.selectionModeHierarchy')}
+                  </button>
+                </div>
+
+                {/* Search Mode */}
+                {selectionMode === 'search' && (
+                  <div className="space-y-2">
+                    <div className="relative">
+                      <Input
+                        ref={searchInputRef}
+                        id="machine-search"
+                        value={machineSearchQuery}
+                        onChange={(e) => {
+                          setMachineSearchQuery(e.target.value);
+                          setMachineSearchDropdownOpen(true);
+                        }}
+                        onFocus={() => setMachineSearchDropdownOpen(true)}
+                        placeholder={t('ticket.wizardSelectMachine')}
+                        className={errors.machine ? 'border-red-500' : ''}
+                        disabled={submitting}
+                      />
+                      {machineSearchDropdownOpen && machineSearchResults.length > 0 && (
+                        <div className="search-dropdown absolute z-20 mt-1 w-full max-h-64 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
+                          {machineSearchLoading ? (
+                            <div className="p-3 text-sm text-gray-500">{t('ticket.searchMachines')}</div>
+                          ) : (
+                            machineSearchResults.map((result, idx) => (
+                              <button
+                                type="button"
+                                key={idx}
+                                className="w-full text-left px-3 py-3 text-sm hover:bg-hover hover:text-hover-foreground border-b last:border-b-0"
+                                onClick={() => onSelectMachine(result)}
+                              >
+                                <div className="font-medium text-base">{result.PUCODE}</div>
+                                <div className="text-sm opacity-80 mt-1">{result.PUDESC}</div>
+                                <div className="text-xs opacity-60 mt-1">
+                                  {result.PLANT} → {result.AREA} → {result.LINE} → {result.MACHINE} → {result.NUMBER}
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    
+                    {!selectedMachine && (
+                      <p className="text-xs text-gray-500">
+                        {t('ticket.typeToSearch')}
+                      </p>
                     )}
                   </div>
-                  
-                  {/* Selected Machine Display */}
-                  {selectedMachine && (
-                    <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                            <p className="text-sm font-medium text-green-800">{t('ticket.selectedMachine')}</p>
-                          </div>
-                          <p className="text-lg font-mono text-green-900 mb-1">{selectedMachine.PUCODE}</p>
-                          <p className="text-sm text-green-700 mb-2">{selectedMachine.PUDESC}</p>
-                          <div className="text-xs text-green-600">
-                            {selectedMachine.PLANT} → {selectedMachine.AREA} → {selectedMachine.LINE} → {selectedMachine.MACHINE} → {selectedMachine.NUMBER}
-                          </div>
+                )}
+
+                {/* Hierarchy Mode */}
+                {selectionMode === 'hierarchy' && (
+                  <HierarchicalMachineSelector
+                    onMachineSelect={onHierarchicalMachineSelect}
+                    onClear={onHierarchicalMachineClear}
+                    selectedMachineData={selectedMachine ? {
+                      puno: selectedMachine.PUNO,
+                      pucode: selectedMachine.PUCODE,
+                      plant: selectedMachine.PLANT,
+                      area: selectedMachine.AREA,
+                      line: selectedMachine.LINE,
+                      machine: selectedMachine.MACHINE,
+                      number: selectedMachine.NUMBER,
+                      puname: selectedMachine.PUDESC,
+                      pudescription: selectedMachine.PUDESC,
+                      digit_count: 5
+                    } : null}
+                    disabled={submitting}
+                  />
+                )}
+                
+                {/* Selected Machine Display */}
+                {selectedMachine && (
+                  <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <p className="text-sm font-medium text-green-800">{t('ticket.selectedMachine')}</p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={clearMachineSelection}
-                          className="text-green-600 hover:text-green-700"
-                        >
-                          <X className="w-4 h-4" />
-                        </Button>
+                        <p className="text-lg font-mono text-green-900 mb-1">{selectedMachine.PUCODE}</p>
+                        <p className="text-sm text-green-700 mb-2">{selectedMachine.PUDESC}</p>
+                        <div className="text-xs text-green-600">
+                          {selectedMachine.PLANT} → {selectedMachine.AREA} → {selectedMachine.LINE} → {selectedMachine.MACHINE} → {selectedMachine.NUMBER}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  {/* Equipment Selection */}
-                  {selectedMachine && equipmentList.length > 0 && (
-                    <div className="space-y-2">
-                      <Label htmlFor="equipment-select" className="text-base font-semibold">Equipment (Optional)</Label>
-                      
-                      <Select
-                        value={selectedEquipment?.EQNO.toString() || 'none'}
-                        onValueChange={onSelectEquipment}
-                        disabled={equipmentLoading}
-                        
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={clearMachineSelection}
+                        className="text-green-600 hover:text-green-700"
+                        disabled={submitting}
                       >
-                        <SelectTrigger>
-                          <SelectValue placeholder={equipmentLoading ? "Loading equipment..." : "Select equipment..."}>
-                            {selectedEquipment ? selectedEquipment.EQCODE : (equipmentLoading ? "Loading equipment..." : "Select equipment...")}
-                          </SelectValue>
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">No specific equipment</SelectItem>
-                          {equipmentList.map((equipment) => (
-                            <SelectItem key={equipment.EQNO} value={equipment.EQNO.toString()}>
-                              <div className="flex flex-col">
-                                <span className="font-medium">{equipment.EQCODE}</span>
-                                <span className="text-sm text-muted-foreground">{equipment.EQNAME}</span>
-                                {equipment.EQTYPENAME && (
-                                  <span className="text-xs text-muted-foreground">Type: {equipment.EQTYPENAME}</span>
-                                )}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      
-                      {/* Selected Equipment Display */}
-                      {selectedEquipment && (
-                        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                          <div className="flex items-start justify-between">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-2 mb-2">
-                                <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
-                                <p className="text-sm font-medium text-blue-800">Selected Equipment</p>
-                              </div>
-                              <p className="text-lg font-mono text-blue-900 mb-1">{selectedEquipment.EQCODE}</p>
-                              <p className="text-sm text-blue-700 mb-2">{selectedEquipment.EQNAME}</p>
-                              {selectedEquipment.EQTYPENAME && (
-                                <div className="text-xs text-blue-600">
-                                  Type: {selectedEquipment.EQTYPENAME}
-                                </div>
+                        <X className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+                
+                {/* Equipment Selection */}
+                {selectedMachine && equipmentList.length > 0 && (
+                  <div className="space-y-2">
+                    <Label htmlFor="equipment-select" className="text-base font-semibold">Equipment (Optional)</Label>
+                    
+                    <Select
+                      value={selectedEquipment?.EQNO.toString() || 'none'}
+                      onValueChange={onSelectEquipment}
+                      disabled={equipmentLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={equipmentLoading ? "Loading equipment..." : "Select equipment..."}>
+                          {selectedEquipment ? selectedEquipment.EQCODE : (equipmentLoading ? "Loading equipment..." : "Select equipment...")}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No specific equipment</SelectItem>
+                        {equipmentList.map((equipment) => (
+                          <SelectItem key={equipment.EQNO} value={equipment.EQNO.toString()}>
+                            <div className="flex flex-col">
+                              <span className="font-medium">{equipment.EQCODE}</span>
+                              <span className="text-sm text-muted-foreground">{equipment.EQNAME}</span>
+                              {equipment.EQTYPENAME && (
+                                <span className="text-xs text-muted-foreground">Type: {equipment.EQTYPENAME}</span>
                               )}
                             </div>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={clearEquipmentSelection}
-                              className="text-blue-600 hover:text-blue-700"
-                            >
-                              <X className="w-4 h-4" />
-                            </Button>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    
+                    {/* Selected Equipment Display */}
+                    {selectedEquipment && (
+                      <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full"></div>
+                              <p className="text-sm font-medium text-blue-800">Selected Equipment</p>
+                            </div>
+                            <p className="text-lg font-mono text-blue-900 mb-1">{selectedEquipment.EQCODE}</p>
+                            <p className="text-sm text-blue-700 mb-2">{selectedEquipment.EQNAME}</p>
+                            {selectedEquipment.EQTYPENAME && (
+                              <div className="text-xs text-blue-600">
+                                Type: {selectedEquipment.EQTYPENAME}
+                              </div>
+                            )}
                           </div>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={clearEquipmentSelection}
+                            className="text-blue-600 hover:text-blue-700"
+                            disabled={submitting}
+                          >
+                            <X className="w-4 h-4" />
+                          </Button>
                         </div>
-                      )}
-                      
-                      {!selectedEquipment && (
-                        <p className="text-xs text-gray-500">
-                          Select specific equipment if the issue is related to a particular component
-                        </p>
-                      )}
-                    </div>
-                  )}
-                  
-                  {!selectedMachine && (
-                    <p className="text-xs text-gray-500">
-                      {t('ticket.typeToSearch')}
-                    </p>
-                  )}
-                </div>
+                      </div>
+                    )}
+                    
+                    {!selectedEquipment && (
+                      <p className="text-xs text-gray-500">
+                        Select specific equipment if the issue is related to a particular component
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 {errors.machine && <p className="text-sm text-red-500">{errors.machine}</p>}
               </div>

@@ -3883,4 +3883,260 @@ const getPersonalKPIComparison = async (req, res) => {
   }
 };
 
+/**
+ * Get Department User KPI - Tickets Created
+ * Returns ticket count for each user as reporter (created_by) by period
+ */
+const getDepartmentUserKPITicketsCreated = async (req, res) => {
+  try {
+    const { deptNo, year = new Date().getFullYear() } = req.query;
+
+    // Validate required parameters
+    if (!deptNo) {
+      return res.status(400).json({
+        success: false,
+        message: 'deptNo parameter is required'
+      });
+    }
+
+    const pool = await sql.connect(dbConfig);
+
+    // Get users in department with ticket counts per period using DateDim
+    const query = `
+      WITH UserPeriodTickets AS (
+        SELECT 
+          p.PERSONNO,
+          p.PERSON_NAME,
+          p.DEPTNO,
+          d.DEPTNAME,
+          dd.PeriodNo,
+          COUNT(DISTINCT t.id) as ticket_count
+        FROM Person p
+        INNER JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        LEFT JOIN Tickets t ON t.created_by = p.PERSONNO
+          AND t.status NOT IN ('rejected_final', 'canceled')
+        LEFT JOIN dbo.DateDim dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        WHERE p.DEPTNO = @deptNo 
+          AND p.FLAGDEL != 'Y'
+          AND (dd.CompanyYear = @year OR dd.CompanyYear IS NULL)
+        GROUP BY p.PERSONNO, p.PERSON_NAME, p.DEPTNO, d.DEPTNAME, dd.PeriodNo
+      ),
+      AllUserPeriods AS (
+        SELECT 
+          p.PERSONNO,
+          p.PERSON_NAME,
+          p.DEPTNO,
+          d.DEPTNAME,
+          periods.PeriodNo
+        FROM Person p
+        INNER JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        CROSS JOIN (
+          SELECT 1 AS PeriodNo UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 
+          UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 
+          UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION SELECT 12 UNION SELECT 13
+        ) periods
+        WHERE p.DEPTNO = @deptNo 
+          AND p.FLAGDEL != 'Y'
+      ),
+      FinalData AS (
+        SELECT 
+          aup.PERSONNO,
+          aup.PERSON_NAME,
+          aup.DEPTNO,
+          aup.DEPTNAME,
+          CONCAT('P', aup.PeriodNo) as period,
+          ISNULL(upt.ticket_count, 0) as tickets,
+          ISNULL(tpt.target_value, 0) as target
+        FROM AllUserPeriods aup
+        LEFT JOIN UserPeriodTickets upt 
+          ON aup.PERSONNO = upt.PERSONNO AND aup.PeriodNo = upt.PeriodNo
+        LEFT JOIN TicketPersonTarget tpt 
+          ON tpt.PERSONNO = aup.PERSONNO 
+          AND tpt.period = CONCAT('P', aup.PeriodNo)
+          AND tpt.year = @year 
+          AND tpt.type = 'report'
+      )
+      SELECT * FROM FinalData
+      ORDER BY PERSONNO, period
+    `;
+
+    const result = await pool.request()
+      .input('deptNo', sql.Int, parseInt(deptNo))
+      .input('year', sql.Int, parseInt(year))
+      .query(query);
+
+    // Group data by user
+    const userMap = {};
+    result.recordset.forEach(row => {
+      if (!userMap[row.PERSONNO]) {
+        userMap[row.PERSONNO] = {
+          personno: row.PERSONNO,
+          personName: row.PERSON_NAME,
+          deptNo: row.DEPTNO,
+          deptName: row.DEPTNAME,
+          periods: []
+        };
+      }
+      userMap[row.PERSONNO].periods.push({
+        period: row.period,
+        tickets: row.tickets,
+        target: row.target
+      });
+    });
+
+    const users = Object.values(userMap);
+    const departmentName = users.length > 0 ? users[0].deptName : 'Unknown';
+
+    res.json({
+      success: true,
+      data: {
+        users: users,
+        summary: {
+          totalUsers: users.length,
+          year: parseInt(year),
+          deptNo: parseInt(deptNo),
+          deptName: departmentName
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getDepartmentUserKPITicketsCreated:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Department User KPI - Tickets Assigned
+ * Returns ticket count for each user as assignee (assigned_to) by period
+ */
+const getDepartmentUserKPITicketsAssigned = async (req, res) => {
+  try {
+    const { deptNo, year = new Date().getFullYear() } = req.query;
+
+    // Validate required parameters
+    if (!deptNo) {
+      return res.status(400).json({
+        success: false,
+        message: 'deptNo parameter is required'
+      });
+    }
+
+    const pool = await sql.connect(dbConfig);
+
+    // Get users in department with ticket counts per period using DateDim
+    const query = `
+      WITH UserPeriodTickets AS (
+        SELECT 
+          p.PERSONNO,
+          p.PERSON_NAME,
+          p.DEPTNO,
+          d.DEPTNAME,
+          dd.PeriodNo,
+          COUNT(DISTINCT t.id) as ticket_count
+        FROM Person p
+        INNER JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        LEFT JOIN Tickets t ON t.assigned_to = p.PERSONNO
+          AND t.status NOT IN ('rejected_final', 'canceled')
+        LEFT JOIN dbo.DateDim dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        WHERE p.DEPTNO = @deptNo 
+          AND p.FLAGDEL != 'Y'
+          AND (dd.CompanyYear = @year OR dd.CompanyYear IS NULL)
+        GROUP BY p.PERSONNO, p.PERSON_NAME, p.DEPTNO, d.DEPTNAME, dd.PeriodNo
+      ),
+      AllUserPeriods AS (
+        SELECT 
+          p.PERSONNO,
+          p.PERSON_NAME,
+          p.DEPTNO,
+          d.DEPTNAME,
+          periods.PeriodNo
+        FROM Person p
+        INNER JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        CROSS JOIN (
+          SELECT 1 AS PeriodNo UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 
+          UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 
+          UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION SELECT 12 UNION SELECT 13
+        ) periods
+        WHERE p.DEPTNO = @deptNo 
+          AND p.FLAGDEL != 'Y'
+      ),
+      FinalData AS (
+        SELECT 
+          aup.PERSONNO,
+          aup.PERSON_NAME,
+          aup.DEPTNO,
+          aup.DEPTNAME,
+          CONCAT('P', aup.PeriodNo) as period,
+          ISNULL(upt.ticket_count, 0) as tickets,
+          ISNULL(tpt.target_value, 0) as target
+        FROM AllUserPeriods aup
+        LEFT JOIN UserPeriodTickets upt 
+          ON aup.PERSONNO = upt.PERSONNO AND aup.PeriodNo = upt.PeriodNo
+        LEFT JOIN TicketPersonTarget tpt 
+          ON tpt.PERSONNO = aup.PERSONNO 
+          AND tpt.period = CONCAT('P', aup.PeriodNo)
+          AND tpt.year = @year 
+          AND tpt.type = 'fix'
+      )
+      SELECT * FROM FinalData
+      ORDER BY PERSONNO, period
+    `;
+
+    const result = await pool.request()
+      .input('deptNo', sql.Int, parseInt(deptNo))
+      .input('year', sql.Int, parseInt(year))
+      .query(query);
+
+    // Group data by user
+    const userMap = {};
+    result.recordset.forEach(row => {
+      if (!userMap[row.PERSONNO]) {
+        userMap[row.PERSONNO] = {
+          personno: row.PERSONNO,
+          personName: row.PERSON_NAME,
+          deptNo: row.DEPTNO,
+          deptName: row.DEPTNAME,
+          periods: []
+        };
+      }
+      userMap[row.PERSONNO].periods.push({
+        period: row.period,
+        tickets: row.tickets,
+        target: row.target
+      });
+    });
+
+    const users = Object.values(userMap);
+    const departmentName = users.length > 0 ? users[0].deptName : 'Unknown';
+
+    res.json({
+      success: true,
+      data: {
+        users: users,
+        summary: {
+          totalUsers: users.length,
+          year: parseInt(year),
+          deptNo: parseInt(deptNo),
+          deptName: departmentName
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getDepartmentUserKPITicketsAssigned:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 exports.getPersonalKPIComparison = getPersonalKPIComparison;
+exports.getDepartmentUserKPITicketsCreated = getDepartmentUserKPITicketsCreated;
+exports.getDepartmentUserKPITicketsAssigned = getDepartmentUserKPITicketsAssigned;

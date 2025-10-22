@@ -36,4 +36,14 @@ router.get('/distinct/areas', authenticateToken, hierarchyController.getDistinct
 // Get PUCritical levels
 router.get('/pucritical', authenticateToken, hierarchyController.getPUCriticalLevels);
 
+// PUExtension hierarchy endpoints
+router.get('/puextension/machines', authenticateToken, hierarchyController.getMachinesByHierarchy);
+router.get('/puextension/plants', authenticateToken, hierarchyController.getDistinctPlantsFromPUExtension);
+router.get('/puextension/plants/:plant/areas', authenticateToken, hierarchyController.getDistinctAreasFromPUExtension);
+router.get('/puextension/plants/:plant/areas/:area/lines', authenticateToken, hierarchyController.getDistinctLinesFromPUExtension);
+router.get('/puextension/plants/:plant/areas/:area/lines/:line/machines', authenticateToken, hierarchyController.getDistinctMachinesFromPUExtension);
+router.get('/puextension/plants/:plant/areas/:area/machines-without-lines', authenticateToken, hierarchyController.getDistinctMachinesWithoutLinesFromPUExtension);
+router.get('/puextension/plants/:plant/areas/:area/lines/:line/machines/:machine/numbers', authenticateToken, hierarchyController.getDistinctNumbersFromPUExtension);
+router.get('/puextension/plants/:plant/areas/:area/lines-or-machines', authenticateToken, hierarchyController.getLinesMachinesAfterArea);
+
 module.exports = router;
