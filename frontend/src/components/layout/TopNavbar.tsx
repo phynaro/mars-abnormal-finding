@@ -67,12 +67,14 @@ const TopNavbar: React.FC<TopNavbarProps> = ({
       <div className="flex items-center justify-between">
         {/* Left side - Logo and Period/Week */}
         <div className="flex items-center gap-4">
-          <img
-            src="/MARS-icon.png"
-            alt="MARS Logo"
-            className="h-8 w-8 cursor-pointer hover:opacity-80 transition-opacity"
-            onClick={() => navigate('/home')}
-          />
+          <div className={`h-8 w-8 rounded-full flex items-center justify-center cursor-pointer hover:opacity-80 transition-opacity ${theme === 'dark' ? 'bg-white' : ''}`}>
+            <img
+              src="/MARS-icon.png"
+              alt="MARS Logo"
+              className="h-6 w-6"
+              onClick={() => navigate('/home')}
+            />
+          </div>
 
         </div>
 

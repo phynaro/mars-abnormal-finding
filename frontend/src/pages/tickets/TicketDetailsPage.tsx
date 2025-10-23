@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, SingleTicketResponse } from "@/services/ticketService";
+import { hierarchyService } from "@/services/hierarchyService";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -62,6 +63,7 @@ import {
   getCedarSyncStatusClass,
   getCedarSyncStatusText,
 } from "@/utils/ticketBadgeStyles";
+import HierarchicalMachineSelector from "@/components/tickets/HierarchicalMachineSelector";
 import { compressTicketImage, formatFileSize, compressImage } from "@/utils/imageCompression";
 
 type TicketCacheEntry = { data: Ticket; timestamp: number };
@@ -243,6 +245,16 @@ const TicketDetailsPage: React.FC = () => {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteComment, setDeleteComment] = useState("");
   const [deleting, setDeleting] = useState(false);
+  
+  // Equipment selector state for accept action
+  const [showEquipmentSelector, setShowEquipmentSelector] = useState(false);
+  const [selectedNewMachine, setSelectedNewMachine] = useState<any | null>(null);
+  const [equipmentList, setEquipmentList] = useState<any[]>([]);
+  const [equipmentLoading, setEquipmentLoading] = useState(false);
+  const [selectedEquipment, setSelectedEquipment] = useState<any | null>(null);
+  const [selectedCriticalLevel, setSelectedCriticalLevel] = useState<number | null>(null);
+  const [criticalLevels, setCriticalLevels] = useState<any[]>([]);
+  const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
   
   // Plan action specific state
   const [scheduleStart, setScheduleStart] = useState("");
@@ -708,6 +720,13 @@ const TicketDetailsPage: React.FC = () => {
     setActionComment("");
     setActionNumber("");
     setActionExtraId("");
+    // Reset equipment selector state
+    setShowEquipmentSelector(false);
+    setSelectedNewMachine(null);
+    setEquipmentList([]);
+    setSelectedEquipment(null);
+    setSelectedCriticalLevel(null);
+    setCriticalLevels([]);
     // Reset plan action fields
     setScheduleStart("");
     setScheduleFinish("");
@@ -771,6 +790,38 @@ const TicketDetailsPage: React.FC = () => {
     }
   };
 
+  // Load equipment for accept action (similar to TicketCreatePage)
+  const loadEquipmentForAccept = async (puno: number) => {
+    try {
+      setEquipmentLoading(true);
+      const response = await ticketService.getEquipmentByPUNO(puno);
+      if (response.success) {
+        setEquipmentList(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading equipment:', error);
+      setEquipmentList([]);
+    } finally {
+      setEquipmentLoading(false);
+    }
+  };
+
+  // Load critical levels for accept action
+  const loadCriticalLevelsForAccept = async () => {
+    try {
+      setCriticalLevelsLoading(true);
+      const response = await hierarchyService.getPUCriticalLevels();
+      if (response.success) {
+        setCriticalLevels(response.data || []);
+      }
+    } catch (error) {
+      console.error('Error loading critical levels:', error);
+      setCriticalLevels([]);
+    } finally {
+      setCriticalLevelsLoading(false);
+    }
+  };
+
   const performAction = async () => {
     if (!ticket) return;
     setActing(true);
@@ -780,7 +831,10 @@ const TicketDetailsPage: React.FC = () => {
           await ticketService.acceptTicket(
             ticket.id,
             actionComment || undefined,
-            undefined, // No scheduled completion date - will be set in planning phase
+            undefined, // schedule_finish
+            selectedNewMachine?.puno, // new_puno (only if new PU selected)
+            selectedEquipment?.EQNO || null, // new_equipment_id (null to clear, undefined to keep)
+            selectedCriticalLevel // new_pucriticalno (always use selected critical level if changed)
           );
           break;
         case "plan":
@@ -1963,7 +2017,7 @@ const TicketDetailsPage: React.FC = () => {
 
       {/* Confirm Action Modal with comment */}
       <Dialog open={actionOpen} onOpenChange={setActionOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className={`max-w-lg ${actionType === "accept" && showEquipmentSelector ? 'max-h-[90vh] overflow-y-auto' : ''}`}>
           <div className="space-y-4">
             <h3 className="text-lg font-semibold capitalize">
               {actionType.replace("_", " ")}
@@ -1990,6 +2044,160 @@ const TicketDetailsPage: React.FC = () => {
                 <p className="text-xs text-red-500">{t('ticket.rejectionReasonRequired')}</p>
               )}
             </div>
+            {actionType === "accept" && (
+              <div className="space-y-4">
+                {/* Current Selection Display */}
+                <div className="rounded-md border p-3 bg-gray-50 dark:bg-gray-800">
+                  <Label className="text-sm font-medium">Current Selection</Label>
+                  <div className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+                    <p className="font-medium">{ticket?.pu_pucode || ticket?.pucode || 'Not specified'}</p>
+                    <p className="text-xs text-gray-500 mt-1">{ticket?.pudescription || ticket?.pu_name || ''}</p>
+                    {ticket?.equipment_name && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Equipment: {ticket.equipment_code} - {ticket.equipment_name}
+                      </p>
+                    )}
+                    {ticket?.pucriticalno && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        Critical Level: {getCriticalLevelText(ticket.pucriticalno, t)}
+                      </p>
+                    )}
+                  </div>
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => {
+                      if (showEquipmentSelector) {
+                        // Cancel - clear all new selections
+                        setShowEquipmentSelector(false);
+                        setSelectedNewMachine(null);
+                        setEquipmentList([]);
+                        setSelectedEquipment(null);
+                        setSelectedCriticalLevel(null);
+                        setCriticalLevels([]);
+                      } else {
+                        // Change - show equipment selector
+                        setShowEquipmentSelector(true);
+                        loadCriticalLevelsForAccept();
+                      }
+                    }}
+                    className="mt-2"
+                  >
+                    {showEquipmentSelector ? 'Cancel' : 'Change'}
+                  </Button>
+                </div>
+                
+                {/* Critical Level Selection (always available) */}
+                <div className="space-y-2">
+                  <Label>Critical Level</Label>
+                  <Select
+                    value={selectedCriticalLevel?.toString() || ticket?.pucriticalno?.toString() || ''}
+                    onValueChange={(value) => {
+                      setSelectedCriticalLevel(value ? parseInt(value) : null);
+                    }}
+                    disabled={criticalLevelsLoading}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select critical level..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {criticalLevels.map((level) => (
+                        <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
+                          {level.PUCRITICALNAME}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedCriticalLevel && (
+                    <div className="p-2 bg-yellow-50 dark:bg-yellow-900 rounded text-xs">
+                      Selected: {getCriticalLevelText(selectedCriticalLevel, t)}
+                    </div>
+                  )}
+                </div>
+                
+                {/* Equipment Selector Section */}
+                {showEquipmentSelector && (
+                  <div className="border rounded-md p-4 space-y-4">
+                    <div>
+                      <Label className="text-sm font-medium mb-2">Select New Production Unit</Label>
+                      <HierarchicalMachineSelector
+                        onMachineSelect={(machine) => {
+                          setSelectedNewMachine(machine);
+                          // Load equipment for the selected PU
+                          if (machine.puno) {
+                            loadEquipmentForAccept(machine.puno);
+                          }
+                          // Load critical levels and preselect if available
+                          loadCriticalLevelsForAccept();
+                          if ((machine as any).pucriticalno) {
+                            setSelectedCriticalLevel((machine as any).pucriticalno);
+                          }
+                        }}
+                        onClear={() => {
+                          setSelectedNewMachine(null);
+                          setEquipmentList([]);
+                          setSelectedEquipment(null);
+                          setSelectedCriticalLevel(null);
+                          setCriticalLevels([]);
+                        }}
+                        selectedMachineData={selectedNewMachine}
+                        disabled={false}
+                      />
+                    </div>
+                    
+                    {/* Show selected PU info */}
+                    {selectedNewMachine && (
+                      <div className="p-3 bg-blue-50 dark:bg-blue-900 rounded text-sm">
+                        <p className="font-medium">Selected PU:</p>
+                        <p className="text-xs font-mono">{selectedNewMachine.pucode}</p>
+                        <p className="text-xs">{selectedNewMachine.pudescription}</p>
+                      </div>
+                    )}
+                    
+                    {/* Equipment Selection (if available for selected PU) */}
+                    {selectedNewMachine && equipmentList.length > 0 && (
+                      <div className="space-y-2">
+                        <Label>Select Equipment (Optional)</Label>
+                        <Select
+                          value={selectedEquipment?.EQNO.toString() || 'none'}
+                          onValueChange={(value) => {
+                            if (value === 'none') {
+                              setSelectedEquipment(null);
+                            } else {
+                              const eq = equipmentList.find(e => e.EQNO.toString() === value);
+                              setSelectedEquipment(eq || null);
+                            }
+                          }}
+                          disabled={equipmentLoading}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select equipment..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="none">No specific equipment</SelectItem>
+                            {equipmentList.map((equipment) => (
+                              <SelectItem key={equipment.EQNO} value={equipment.EQNO.toString()}>
+                                <div className="flex flex-col">
+                                  <span className="font-medium">{equipment.EQCODE}</span>
+                                  <span className="text-sm text-muted-foreground">{equipment.EQNAME}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        
+                        {selectedEquipment && (
+                          <div className="p-2 bg-green-50 dark:bg-green-900 rounded text-xs">
+                            Selected: {selectedEquipment.EQCODE} - {selectedEquipment.EQNAME}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
             {actionType === "plan" && (
               <div className="space-y-4">
                 <div className="space-y-2">

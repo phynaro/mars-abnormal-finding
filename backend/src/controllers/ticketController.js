@@ -1627,7 +1627,7 @@ const deleteTicketImage = async (req, res) => {
 const acceptTicket = async (req, res) => {
   try {
     const { id } = req.params;
-    const { notes, schedule_finish } = req.body;
+    const { notes, schedule_finish, new_puno, new_equipment_id, new_pucriticalno } = req.body;
 
     // In new workflow, scheduled completion date is optional for accept action
     // It will be set during the planning phase
@@ -1637,10 +1637,10 @@ const acceptTicket = async (req, res) => {
     // In new workflow, scheduled completion date is optional for accept action
     // No validation needed for schedule_finish
 
-    // Get current ticket status and puno
+    // Get current ticket status and equipment info
     const currentTicketResult = await runQuery(
       pool,
-      "SELECT status, created_by, assigned_to, puno FROM Tickets WHERE id = @id",
+      "SELECT status, created_by, assigned_to, puno, equipment_id, pucriticalno FROM Tickets WHERE id = @id",
       [{ name: "id", type: sql.Int, value: id }]
     );
 
@@ -1651,7 +1651,7 @@ const acceptTicket = async (req, res) => {
         message: "Ticket not found",
       });
     }
-    const { status, created_by, assigned_to, puno } = ticket;
+    const { status, created_by, assigned_to, puno, equipment_id, pucriticalno } = ticket;
 
     // Check if user has permission to accept tickets
     const permissionCheck = await checkUserActionPermission(
@@ -1665,6 +1665,69 @@ const acceptTicket = async (req, res) => {
         message:
           "You do not have permission to accept tickets for this location",
       });
+    }
+
+    // Validate new equipment parameters if provided
+    let validatedNewPuno = puno;
+    let validatedNewEquipmentId = equipment_id;
+    let validatedNewPucriticalno = pucriticalno;
+    let equipmentChanged = false;
+    let criticalLevelChanged = false;
+
+    // Check if critical level is being changed (even without PU change)
+    if (new_pucriticalno !== undefined && new_pucriticalno !== pucriticalno) {
+      validatedNewPucriticalno = new_pucriticalno;
+      criticalLevelChanged = true;
+    }
+
+    if (new_puno !== undefined && new_puno !== puno) {
+      // Validate that new_puno exists in PU table
+      const puCheck = await runQuery(
+        pool,
+        "SELECT PUNO, PUCODE, PUNAME FROM PU WHERE PUNO = @puno AND FLAGDEL != 'Y'",
+        [{ name: "puno", type: sql.Int, value: new_puno }]
+      );
+
+      if (mapRecordset(puCheck).length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Production unit not found",
+        });
+      }
+
+      validatedNewPuno = new_puno;
+      equipmentChanged = true;
+
+      // If new_equipment_id is provided, validate it belongs to the new_puno
+      if (new_equipment_id !== undefined) {
+        if (new_equipment_id === null) {
+          // Explicitly clearing equipment
+          validatedNewEquipmentId = null;
+        } else {
+          const equipmentCheck = await runQuery(
+            pool,
+            "SELECT EQNO, EQCODE, EQNAME FROM EQ WHERE EQNO = @equipment_id AND PUNO = @puno AND FLAGDEL = 'F'",
+            [
+              { name: "equipment_id", type: sql.Int, value: new_equipment_id },
+              { name: "puno", type: sql.Int, value: new_puno }
+            ]
+          );
+
+          if (mapRecordset(equipmentCheck).length === 0) {
+            return res.status(400).json({
+              success: false,
+              message: "Equipment not found or does not belong to the selected production unit",
+            });
+          }
+
+          validatedNewEquipmentId = new_equipment_id;
+        }
+      }
+
+      // Update critical level if provided
+      if (new_pucriticalno !== undefined) {
+        validatedNewPucriticalno = new_pucriticalno;
+      }
     }
 
     let newStatus = "accepted";
@@ -1686,28 +1749,117 @@ const acceptTicket = async (req, res) => {
       statusNotes = "Reopened ticket accepted - ready for planning";
     }
 
-    // Update ticket status and assign to acceptor with workflow tracking
-    await //.input('schedule_finish', sql.DateTime2, schedule_finish ? new Date(schedule_finish) : null)
-    pool
+    // Prepare status notes with equipment change details if applicable
+    let finalStatusNotes = notes || statusNotes;
+    let oldEquipmentData = null;
+    
+    if (equipmentChanged) {
+      // Get old equipment details BEFORE updating the ticket
+      const oldEquipmentResult = await runQuery(
+        pool,
+        `SELECT pu.PUCODE as old_pucode, pu.PUNAME as old_puname, 
+                eq.EQCODE as old_eqcode, eq.EQNAME as old_eqname,
+                t.pucriticalno as old_critical
+         FROM Tickets t
+         LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+         LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
+         WHERE t.id = @id`,
+        [{ name: "id", type: sql.Int, value: id }]
+      );
+
+      oldEquipmentData = firstRecord(oldEquipmentResult);
+    }
+
+    // Update ticket status and equipment info with workflow tracking
+    const updateRequest = pool
       .request()
       .input("id", sql.Int, id)
       .input("status", sql.VarChar(50), newStatus)
-      //.input('assigned_to', sql.Int, accepted_by)
-      .input("accepted_by", sql.Int, accepted_by).query(`
+      .input("accepted_by", sql.Int, accepted_by);
+
+    // Add equipment fields to update if they changed
+    if (equipmentChanged) {
+      updateRequest
+        .input("new_puno", sql.Int, validatedNewPuno)
+        .input("new_equipment_id", sql.Int, validatedNewEquipmentId);
+    }
+    
+    // Add critical level to update if it changed
+    if (criticalLevelChanged) {
+      updateRequest
+        .input("new_pucriticalno", sql.Int, validatedNewPucriticalno);
+    }
+
+    await updateRequest.query(`
                 UPDATE Tickets 
                 SET status = @status, 
                     accepted_at = GETDATE(),
                     accepted_by = @accepted_by,
+                    ${equipmentChanged ? 'puno = @new_puno,' : ''}
+                    ${equipmentChanged ? 'equipment_id = @new_equipment_id,' : ''}
+                    ${criticalLevelChanged ? 'pucriticalno = @new_pucriticalno,' : ''}
                     updated_at = GETDATE()
                 WHERE id = @id
             `);
+
+    // Prepare status notes with production unit/critical level change details if applicable
+    if (equipmentChanged && oldEquipmentData) {
+      // Get new equipment details for status history
+      const newEquipmentResult = await runQuery(
+        pool,
+        `SELECT pu.PUCODE as new_pucode, pu.PUNAME as new_puname,
+                eq.EQCODE as new_eqcode, eq.EQNAME as new_eqname
+         FROM PU pu
+         LEFT JOIN EQ eq ON eq.PUNO = pu.PUNO AND eq.EQNO = @equipment_id AND eq.FLAGDEL = 'F'
+         WHERE pu.PUNO = @puno AND pu.FLAGDEL != 'Y'`,
+        [
+          { name: "puno", type: sql.Int, value: validatedNewPuno },
+          { name: "equipment_id", type: sql.Int, value: validatedNewEquipmentId }
+        ]
+      );
+
+      const newEquipment = firstRecord(newEquipmentResult);
+
+      let changeDescription = "Production Unit changed from ";
+      if (oldEquipmentData?.old_pucode) {
+        changeDescription += `${oldEquipmentData.old_pucode} (${oldEquipmentData.old_puname})`;
+        if (oldEquipmentData.old_eqcode) {
+          changeDescription += ` - ${oldEquipmentData.old_eqcode} (${oldEquipmentData.old_eqname})`;
+        }
+        if (oldEquipmentData.old_critical) {
+          changeDescription += ` [Critical: ${oldEquipmentData.old_critical}]`;
+        }
+      } else {
+        changeDescription += "unspecified";
+      }
+
+      changeDescription += " to ";
+      if (newEquipment?.new_pucode) {
+        changeDescription += `${newEquipment.new_pucode} (${newEquipment.new_puname})`;
+        if (newEquipment.new_eqcode) {
+          changeDescription += ` - ${newEquipment.new_eqcode} (${newEquipment.new_eqname})`;
+        }
+        if (validatedNewPucriticalno) {
+          changeDescription += ` [Critical: ${validatedNewPucriticalno}]`;
+        }
+      } else {
+        changeDescription += "unspecified";
+      }
+
+      finalStatusNotes = `${statusNotes}. ${changeDescription}`;
+    } else if (criticalLevelChanged && !equipmentChanged) {
+      // Only critical level changed, not PU
+      const oldCriticalText = pucriticalno ? `Critical Level ${pucriticalno}` : "No Critical Level";
+      const newCriticalText = validatedNewPucriticalno ? `Critical Level ${validatedNewPucriticalno}` : "No Critical Level";
+      finalStatusNotes = `${statusNotes}. Critical Level changed from ${oldCriticalText} to ${newCriticalText}`;
+    }
 
     await insertStatusHistory(pool, {
       ticketId: id,
       oldStatus: ticket.status,
       newStatus,
       changedBy: accepted_by,
-      notes: notes || statusNotes,
+      notes: finalStatusNotes,
     });
 
     // Add status change comment
@@ -1717,7 +1869,7 @@ const acceptTicket = async (req, res) => {
       accepted_by,
       ticket.status,
       newStatus,
-      notes
+      finalStatusNotes
     );
 
     // 🆕 CEDAR INTEGRATION: CREATE Work Order in Cedar CMMS when ticket is accepted

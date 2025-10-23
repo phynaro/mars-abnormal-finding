@@ -562,12 +562,27 @@ class TicketService {
   }
 
   // Workflow actions
-  async acceptTicket(id: number, notes?: string, schedule_finish?: string): Promise<{ success: boolean; message: string }> {
+  async acceptTicket(
+    id: number, 
+    notes?: string, 
+    schedule_finish?: string,
+    new_puno?: number,
+    new_equipment_id?: number | null,
+    new_pucriticalno?: number
+  ): Promise<{ success: boolean; message: string }> {
     const headers = getAuthHeaders();
+    const body: any = { notes, schedule_finish };
+    
+    if (new_puno !== undefined) {
+      body.new_puno = new_puno;
+      body.new_equipment_id = new_equipment_id; // Can be null to clear
+      body.new_pucriticalno = new_pucriticalno;
+    }
+    
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/accept`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ notes, schedule_finish })
+      body: JSON.stringify(body)
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to accept ticket');
