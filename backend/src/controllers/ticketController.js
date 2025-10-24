@@ -106,7 +106,7 @@ const createTicket = async (req, res) => {
 
         // Create ticket record
         const ticketInsertResult = await runQuery(pool, `
-            INSERT INTO Tickets (
+            INSERT INTO IgxTickets (
                 ticket_number, title, description, puno, equipment_id, pucriticalno,
                 severity_level, priority,
                 created_by,
@@ -137,7 +137,7 @@ const createTicket = async (req, res) => {
             throw new Error('Failed to retrieve ticket identifier');
         }
 
-        // Get ticket with hierarchy information via PUExtension
+        // Get ticket with hierarchy information via IgxIgxPUExtension
         const ticketWithHierarchy = await runQuery(pool, `
             SELECT
                 t.*,
@@ -155,9 +155,9 @@ const createTicket = async (req, res) => {
                 eq.EQNO as equipment_id,
                 eq.EQCODE as equipment_code,
                 eq.EQNAME as equipment_name
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
             WHERE t.id = @ticket_id
         `, [
@@ -193,7 +193,7 @@ const createTicket = async (req, res) => {
 
                     const relativePath = `/uploads/tickets/${ticketId}/${fileName}`;
                     await runQuery(pool, `
-                        INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
+                        INSERT INTO IgxTicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
                         VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
                     `, [
                         { name: 'ticket_id', type: sql.Int, value: ticketId },
@@ -211,10 +211,10 @@ const createTicket = async (req, res) => {
                 }
 
                 try {
-                    await runQuery(pool, 'DELETE FROM TicketImages WHERE ticket_id = @ticket_id', [
+                    await runQuery(pool, 'DELETE FROM IgxTicketImages WHERE ticket_id = @ticket_id', [
                         { name: 'ticket_id', type: sql.Int, value: ticketId }
                     ]);
-                    await runQuery(pool, 'DELETE FROM Tickets WHERE id = @ticket_id', [
+                    await runQuery(pool, 'DELETE FROM IgxTickets WHERE id = @ticket_id', [
                         { name: 'ticket_id', type: sql.Int, value: ticketId }
                     ]);
                 } catch (rollbackErr) {
@@ -230,7 +230,7 @@ const createTicket = async (req, res) => {
         }
 
         // 🆕 CEDAR INTEGRATION: NO WO CREATION YET
-        // Tickets are like Work Requests (WR) - WO will be created when ticket is accepted
+        // IgxTickets are like Work Requests (WR) - WO will be created when ticket is accepted
         console.log(`✅ Ticket ${ticketId} created - WO will be created when accepted`);
         // No Cedar integration at ticket creation stage
 
@@ -254,7 +254,7 @@ const createTicket = async (req, res) => {
                     SELECT p.PERSON_NAME, p.FIRSTNAME, p.LASTNAME, p.EMAIL, p.DEPTNO, ue.LineID
                     FROM Person p
                     LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                     WHERE p.PERSONNO = @user_id
                 `, [
                     { name: 'user_id', type: sql.Int, value: created_by }
@@ -379,7 +379,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
                      // Get ticket images for FLEX message (after images for completion)
                      const imagesResult = await runQuery(pool, `
                         SELECT image_url, image_name, image_type
-                        FROM TicketImages
+                        FROM IgxTicketImages
                         WHERE ticket_id = @ticket_id
                         ORDER BY uploaded_at ASC
                     `, [
@@ -403,7 +403,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
                         actionBy: reporterName,
                         comment: description,
                         heroImageUrl: heroImageUrl,
-                        detailUrl: `${process.env.FRONTEND_URL}/tickets/${ticketId}`,
+                        detailUrl: `${process.env.LIFF_URL}/tickets/${ticketId}`,
                         extraKVs: [
                             // { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
                             // { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },
@@ -411,7 +411,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
                             { label: 'Reported by', value: reporterName }
                         ] 
                     };
-
+                    console.log('linePayload', linePayload);
                     const linePromises = lineRecipients.map(user => {
                         return abnFlexService.sendToUser(user.LineID, [
                             abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.OPEN, linePayload)
@@ -556,17 +556,17 @@ const getTickets = async (req, res) => {
     request.input("offset", sql.Int, offset);
     request.input("limit", sql.Int, parseInt(limit));
 
-    // Get total count (with PUExtension join for plant/area filters)
+    // Get total count (with IgxPUExtension join for plant/area filters)
     const countResult = await request.query(`
             SELECT COUNT(*) as total 
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             ${whereClause}
         `);
     const total = countResult.recordset[0].total;
 
-    // Get tickets with user information and hierarchy via PUExtension
+    // Get tickets with user information and hierarchy via IgxPUExtension
     // Using SQL Server 2008 compatible pagination with ROW_NUMBER()
     const ticketsResult = await request.query(`
             SELECT *
@@ -579,7 +579,7 @@ const getTickets = async (req, res) => {
                     a.PERSON_NAME as assignee_name,
                     a.EMAIL as assignee_email,
                     a.PHONE as assignee_phone,
-                    -- Hierarchy information from PUExtension
+                    -- Hierarchy information from IgxPUExtension
                     pe.pucode,
                     pe.plant as plant_code,
                     pe.area as area_code,
@@ -590,25 +590,25 @@ const getTickets = async (req, res) => {
                     pe.digit_count,
                     -- Hierarchy names based on digit patterns
                     (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
+                     FROM IgxPUExtension pe2 
                      WHERE pe2.plant = pe.plant 
                      AND pe2.area IS NULL 
                      AND pe2.line IS NULL 
                      AND pe2.machine IS NULL) as plant_name,
                     (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
+                     FROM IgxPUExtension pe2 
                      WHERE pe2.plant = pe.plant 
                      AND pe2.area = pe.area 
                      AND pe2.line IS NULL 
                      AND pe2.machine IS NULL) as area_name,
                     (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
+                     FROM IgxPUExtension pe2 
                      WHERE pe2.plant = pe.plant 
                      AND pe2.area = pe.area 
                      AND pe2.line = pe.line 
                      AND pe2.machine IS NULL) as line_name,
                     (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
+                     FROM IgxPUExtension pe2 
                      WHERE pe2.plant = pe.plant 
                      AND pe2.area = pe.area 
                      AND pe2.line = pe.line 
@@ -617,11 +617,11 @@ const getTickets = async (req, res) => {
                     pu.PUCODE as pu_pucode,
                     pu.PUNAME as pu_name,
                     ROW_NUMBER() OVER (ORDER BY t.created_at DESC) as row_num
-                FROM Tickets t
+                FROM IgxTickets t
                 LEFT JOIN Person r ON t.created_by = r.PERSONNO
                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                 ${whereClause}
             ) AS paginated_results
             WHERE row_num > @offset AND row_num <= @offset + @limit
@@ -676,7 +676,7 @@ const getTicketById = async (req, res) => {
                     approved_user.PERSON_NAME as approved_by_name,
                     reopened_user.PERSON_NAME as reopened_by_name,
                     
-                    -- Hierarchy information from PUExtension
+                    -- Hierarchy information from IgxPUExtension
                     pe.pucode,
                     pe.plant as plant_code,
                     pe.area as area_code,
@@ -687,25 +687,25 @@ const getTicketById = async (req, res) => {
                     pe.digit_count,
                     -- Hierarchy names based on digit patterns
                     (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
+                     FROM IgxPUExtension pe2 
                      WHERE pe2.plant = pe.plant 
                      AND pe2.area IS NULL 
                      AND pe2.line IS NULL 
                      AND pe2.machine IS NULL) as plant_name,
                     (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
+                     FROM IgxPUExtension pe2 
                      WHERE pe2.plant = pe.plant 
                      AND pe2.area = pe.area 
                      AND pe2.line IS NULL 
                      AND pe2.machine IS NULL) as area_name,
                     (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
+                     FROM IgxPUExtension pe2 
                      WHERE pe2.plant = pe.plant 
                      AND pe2.area = pe.area 
                      AND pe2.line = pe.line 
                      AND pe2.machine IS NULL) as line_name,
                     (SELECT TOP 1 pudescription 
-                     FROM PUExtension pe2 
+                     FROM IgxPUExtension pe2 
                      WHERE pe2.plant = pe.plant 
                      AND pe2.area = pe.area 
                      AND pe2.line = pe.line 
@@ -719,8 +719,11 @@ const getTicketById = async (req, res) => {
                     eq.EQNAME as equipment_name,
                     -- Failure mode information
                     fm.FailureModeCode as failure_mode_code,
-                    fm.FailureModeName as failure_mode_name
-                FROM Tickets t
+                    fm.FailureModeName as failure_mode_name,
+                    -- Cedar integration information
+                    wo.WFStatusCode as cedar_wf_status_code,
+                    wo.COSTCENTERNO as cedar_cost_center_no
+                FROM IgxTickets t
                 LEFT JOIN Person r ON t.created_by = r.PERSONNO
                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
                 LEFT JOIN Person accepted_user ON t.accepted_by = accepted_user.PERSONNO
@@ -731,9 +734,10 @@ const getTicketById = async (req, res) => {
                 LEFT JOIN Person reopened_user ON t.reopened_by = reopened_user.PERSONNO
               
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                 LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo AND fm.FlagDel != 'Y'
                 LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
+                LEFT JOIN WO wo ON t.cedar_wono = wo.WONO
                 WHERE t.id = @id
             `);
 
@@ -763,7 +767,7 @@ const getTicketById = async (req, res) => {
     // Get ticket images
     const imagesResult = await pool.request().input("ticket_id", sql.Int, id)
       .query(`
-                SELECT * FROM TicketImages WHERE ticket_id = @ticket_id ORDER BY uploaded_at
+                SELECT * FROM IgxTicketImages WHERE ticket_id = @ticket_id ORDER BY uploaded_at
             `);
 
     // Get ticket comments
@@ -774,10 +778,10 @@ const getTicketById = async (req, res) => {
                     u.PERSON_NAME as user_name,
                     u.EMAIL as user_email,
                     ue.AvatarUrl as user_avatar_url
-                FROM TicketComments tc
+                FROM IgxTicketComments tc
                 LEFT JOIN Person u ON tc.user_id = u.PERSONNO
                 LEFT JOIN _secUsers s ON u.PERSONNO = s.PersonNo
-                LEFT JOIN UserExtension ue ON s.UserID = ue.UserID
+                LEFT JOIN IgxUserExtension ue ON s.UserID = ue.UserID
                 WHERE tc.ticket_id = @ticket_id 
                 ORDER BY tc.created_at
             `);
@@ -790,7 +794,7 @@ const getTicketById = async (req, res) => {
                     u.PERSON_NAME as changed_by_name,
                     to_user_person.PERSON_NAME as to_user_name,
                     to_user_person.EMAIL as to_user_email
-                FROM TicketStatusHistory tsh
+                FROM IgxTicketStatusHistory tsh
                 LEFT JOIN Person u ON tsh.changed_by = u.PERSONNO
                 LEFT JOIN Person to_user_person ON tsh.to_user = to_user_person.PERSONNO
                 WHERE tsh.ticket_id = @ticket_id 
@@ -828,7 +832,7 @@ const updateTicket = async (req, res) => {
 
     const currentTicketResult = await runQuery(
       pool,
-      "SELECT status, created_by FROM Tickets WHERE id = @id",
+      "SELECT status, created_by FROM IgxTickets WHERE id = @id",
       [{ name: "id", type: sql.Int, value: id }]
     );
 
@@ -870,7 +874,7 @@ const updateTicket = async (req, res) => {
     let request = createSqlRequest(pool, params);
 
     await request.query(`
-            UPDATE Tickets 
+            UPDATE IgxTickets 
             SET ${updateFields.join(", ")}
             WHERE id = @id
         `);
@@ -896,15 +900,15 @@ const updateTicket = async (req, res) => {
                     pe.line as line_code,
                     pe.machine as machine_code,
                     pe.number as machine_number
-                FROM Tickets t
+                FROM IgxTickets t
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                 WHERE t.id = @ticket_id;
 
                 SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID 
                 FROM Person p
                 LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                 WHERE p.PERSONNO = @reporter_id;
             `,
         [
@@ -937,7 +941,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
               pool,
               `
                         SELECT image_url, image_name 
-                        FROM TicketImages 
+                        FROM IgxTicketImages 
                         WHERE ticket_id = @ticket_id 
                         ORDER BY uploaded_at ASC
                     `,
@@ -1019,7 +1023,7 @@ const addComment = async (req, res) => {
       .input("ticket_id", sql.Int, id)
       .input("user_id", sql.Int, user_id)
       .input("comment", sql.NVarChar(sql.MAX), comment).query(`
-                INSERT INTO TicketComments (ticket_id, user_id, comment)
+                INSERT INTO IgxTicketComments (ticket_id, user_id, comment)
                 VALUES (@ticket_id, @user_id, @comment);
                 SELECT SCOPE_IDENTITY() as id;
             `);
@@ -1058,8 +1062,8 @@ const assignTicket = async (req, res) => {
       .request()
       .input("id", sql.Int, id)
       .input("assigned_to", sql.Int, assigned_to).query(`
-                UPDATE Tickets SET assigned_to = @assigned_to, updated_at = GETDATE() WHERE id = @id;
-                UPDATE Tickets 
+                UPDATE IgxTickets SET assigned_to = @assigned_to, updated_at = GETDATE() WHERE id = @id;
+                UPDATE IgxTickets 
                 SET status = 'assigned', updated_at = GETDATE()
                 WHERE id = @id AND status = 'open';
             `);
@@ -1082,15 +1086,15 @@ const assignTicket = async (req, res) => {
                    pe.line as line_code,
                    pe.machine as machine_code,
                    pe.number as machine_number
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             WHERE t.id = @ticket_id;
 
             SELECT PERSON_NAME, EMAIL, DEPTNO, LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @assignee_id;
         `,
       [
@@ -1124,7 +1128,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
             pool,
             `
                     SELECT image_url, image_name 
-                    FROM TicketImages 
+                    FROM IgxTicketImages 
                     WHERE ticket_id = @ticket_id 
                     ORDER BY uploaded_at ASC
                 `,
@@ -1180,7 +1184,7 @@ const deleteTicket = async (req, res) => {
     const ticketResult = await pool
       .request()
       .input("id", sql.Int, id)
-      .query("SELECT ticket_number, created_by FROM Tickets WHERE id = @id");
+      .query("SELECT ticket_number, created_by FROM IgxTickets WHERE id = @id");
 
     if (ticketResult.recordset.length === 0) {
       return res.status(404).json({
@@ -1201,7 +1205,7 @@ const deleteTicket = async (req, res) => {
         sql.NVarChar(sql.MAX),
         `Ticket deleted: ${reason || "No reason provided"}`
       ).query(`
-                INSERT INTO TicketComments (ticket_id, user_id, comment, created_at)
+                INSERT INTO IgxTicketComments (ticket_id, user_id, comment, created_at)
                 VALUES (@ticket_id, @user_id, @comment, GETDATE())
             `);
 
@@ -1209,7 +1213,7 @@ const deleteTicket = async (req, res) => {
     const result = await pool
       .request()
       .input("id", sql.Int, id)
-      .query("DELETE FROM Tickets WHERE id = @id");
+      .query("DELETE FROM IgxTickets WHERE id = @id");
 
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({
@@ -1257,7 +1261,7 @@ const uploadTicketImage = async (req, res) => {
     const ticketResult = await pool
       .request()
       .input("id", sql.Int, id)
-      .query("SELECT id, ticket_number FROM Tickets WHERE id = @id");
+      .query("SELECT id, ticket_number FROM IgxTickets WHERE id = @id");
     if (ticketResult.recordset.length === 0) {
       return res
         .status(404)
@@ -1296,7 +1300,7 @@ const uploadTicketImage = async (req, res) => {
       .input("image_url", sql.NVarChar(500), relativePath)
       .input("image_name", sql.NVarChar(255), newFileName)
       .input("uploaded_by", sql.Int, user_id).query(`
-                INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
+                INSERT INTO IgxTicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
                 VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
                 SELECT SCOPE_IDENTITY() as id;
             `);
@@ -1346,7 +1350,7 @@ const uploadTicketImages = async (req, res) => {
     const ticketResult = await pool
       .request()
       .input("id", sql.Int, id)
-      .query("SELECT id, ticket_number FROM Tickets WHERE id = @id");
+      .query("SELECT id, ticket_number FROM IgxTickets WHERE id = @id");
     if (ticketResult.recordset.length === 0) {
       return res
         .status(404)
@@ -1387,7 +1391,7 @@ const uploadTicketImages = async (req, res) => {
         .input("image_url", sql.NVarChar(500), relativePath)
         .input("image_name", sql.NVarChar(255), newFileName)
         .input("uploaded_by", sql.Int, user_id).query(`
-                    INSERT INTO TicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
+                    INSERT INTO IgxTicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
                     VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
                     SELECT SCOPE_IDENTITY() as id;
                 `);
@@ -1412,9 +1416,9 @@ const uploadTicketImages = async (req, res) => {
           SELECT t.*, pe.pucode, pe.plant as plant_code, pe.area as area_code, 
                  pe.line as line_code, pe.machine as machine_code, pe.number as machine_number,
                  pe.pudescription as pudescription, pu.PUCODE as pu_pucode, pu.PUNAME as pu_name
-          FROM Tickets t
+          FROM IgxTickets t
           LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-          LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+          LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
           WHERE t.id = @ticket_id
         `, [
           { name: 'ticket_id', type: sql.Int, value: id }
@@ -1438,7 +1442,7 @@ const uploadTicketImages = async (req, res) => {
         // Get all images for this ticket (including the ones just uploaded)
         const imagesResult = await runQuery(pool, `
           SELECT image_url, image_name, image_type
-          FROM TicketImages 
+          FROM IgxTicketImages 
           WHERE ticket_id = @ticket_id 
           ORDER BY uploaded_at ASC
         `, [
@@ -1480,7 +1484,7 @@ const uploadTicketImages = async (req, res) => {
             actionBy: 'Ticket Creator',
             comment: ticketData.description,
             heroImageUrl: heroImageUrl,
-            detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+            detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
             extraKVs: [
               { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
               { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
@@ -1537,7 +1541,7 @@ const deleteTicketImage = async (req, res) => {
       .input("imageId", sql.Int, imageId)
       .input("ticket_id", sql.Int, id).query(`
                 SELECT id, ticket_id, image_url 
-                FROM TicketImages 
+                FROM IgxTicketImages 
                 WHERE id = @imageId AND ticket_id = @ticket_id
             `);
 
@@ -1555,7 +1559,7 @@ const deleteTicketImage = async (req, res) => {
       .input("ticket_id", sql.Int, id)
       .query(`
         SELECT created_by, assigned_to, puno
-        FROM Tickets 
+        FROM IgxTickets 
         WHERE id = @ticket_id
       `);
     
@@ -1587,7 +1591,7 @@ const deleteTicketImage = async (req, res) => {
     await pool
       .request()
       .input("imageId", sql.Int, image.id)
-      .query("DELETE FROM TicketImages WHERE id = @imageId");
+      .query("DELETE FROM IgxTicketImages WHERE id = @imageId");
 
     // Attempt to remove file from disk
     try {
@@ -1640,7 +1644,7 @@ const acceptTicket = async (req, res) => {
     // Get current ticket status and equipment info
     const currentTicketResult = await runQuery(
       pool,
-      "SELECT status, created_by, assigned_to, puno, equipment_id, pucriticalno FROM Tickets WHERE id = @id",
+      "SELECT status, created_by, assigned_to, puno, equipment_id, pucriticalno FROM IgxTickets WHERE id = @id",
       [{ name: "id", type: sql.Int, value: id }]
     );
 
@@ -1760,7 +1764,7 @@ const acceptTicket = async (req, res) => {
         `SELECT pu.PUCODE as old_pucode, pu.PUNAME as old_puname, 
                 eq.EQCODE as old_eqcode, eq.EQNAME as old_eqname,
                 t.pucriticalno as old_critical
-         FROM Tickets t
+         FROM IgxTickets t
          LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
          LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
          WHERE t.id = @id`,
@@ -1791,7 +1795,7 @@ const acceptTicket = async (req, res) => {
     }
 
     await updateRequest.query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET status = @status, 
                     accepted_at = GETDATE(),
                     accepted_by = @accepted_by,
@@ -1916,15 +1920,15 @@ const acceptTicket = async (req, res) => {
                    pe.line as line_code,
                    pe.machine as machine_code,
                    pe.number as machine_number
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             WHERE t.id = @ticket_id;
 
             SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @reporter_id;
         `,
       [
@@ -2091,7 +2095,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
               ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
             problem: ticketData.title || "No description",
             //actionBy: acceptorName,
-            detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+            detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
             comment: notes || `งานได้รับการยอมรับแล้ว โดย ${acceptorName}`,
             extraKVs: [
               // { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
@@ -2176,7 +2180,7 @@ const planTicket = async (req, res) => {
     // Get current ticket status and puno
     const currentTicketResult = await runQuery(
       pool,
-      "SELECT status, created_by, assigned_to, puno FROM Tickets WHERE id = @id",
+      "SELECT status, created_by, assigned_to, puno FROM IgxTickets WHERE id = @id",
       [{ name: "id", type: sql.Int, value: id }]
     );
 
@@ -2232,7 +2236,7 @@ const planTicket = async (req, res) => {
       .input("schedule_start", sql.DateTime2, new Date(schedule_start))
       .input("schedule_finish", sql.DateTime2, new Date(schedule_finish))
       .query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET status = @status, 
                     assigned_to = @assigned_to,
                     planed_at = GETDATE(),
@@ -2384,9 +2388,9 @@ const planTicket = async (req, res) => {
                            pe.line as line_code,
                            pe.machine as machine_code,
                            pe.number as machine_number
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id
                 `,
           [{ name: "ticket_id", type: sql.Int, value: id }]
@@ -2478,7 +2482,7 @@ const planTicket = async (req, res) => {
             pool,
             `
                         SELECT image_url, image_name 
-                        FROM TicketImages 
+                        FROM IgxTicketImages 
                         WHERE ticket_id = @ticket_id 
                         ORDER BY uploaded_at ASC
                     `,
@@ -2500,7 +2504,7 @@ const planTicket = async (req, res) => {
               actionBy: plannerName,
               comment: notes || "งานได้รับการวางแผนและกำหนดตารางเวลาแล้ว",
               //  heroImageUrl: heroImageUrl,
-              detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
               extraKVs: [
                 {
                   label: "Severity",
@@ -2601,7 +2605,7 @@ const startTicket = async (req, res) => {
     // Get current ticket status and puno
     const currentTicketResult = await runQuery(
       pool,
-      "SELECT status, created_by, assigned_to, puno FROM Tickets WHERE id = @id",
+      "SELECT status, created_by, assigned_to, puno FROM IgxTickets WHERE id = @id",
       [{ name: "id", type: sql.Int, value: id }]
     );
 
@@ -2650,7 +2654,7 @@ const startTicket = async (req, res) => {
       .input("status", sql.VarChar(50), "in_progress")
       .input("actual_start_at", sql.DateTime2, new Date(actual_start_at))
       .query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET status = @status, 
                     actual_start_at = @actual_start_at,
                     updated_at = GETDATE()
@@ -2791,9 +2795,9 @@ const startTicket = async (req, res) => {
                            pe.line as line_code,
                            pe.machine as machine_code,
                            pe.number as machine_number
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id
                 `,
           [{ name: "ticket_id", type: sql.Int, value: id }]
@@ -2884,7 +2888,7 @@ const startTicket = async (req, res) => {
             pool,
             `
                         SELECT image_url, image_name 
-                        FROM TicketImages 
+                        FROM IgxTicketImages 
                         WHERE ticket_id = @ticket_id 
                         ORDER BY uploaded_at ASC
                     `,
@@ -2906,7 +2910,7 @@ const startTicket = async (req, res) => {
               actionBy: starterName,
               comment: notes || "งานเริ่มดำเนินการแล้ว",
               // heroImageUrl: heroImageUrl,
-              detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
               extraKVs: [
                 // { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
                 // { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
@@ -2988,7 +2992,7 @@ const rejectTicket = async (req, res) => {
                 t.status, 
                 t.created_by,
                 t.puno
-            FROM Tickets t
+            FROM IgxTickets t
             WHERE t.id = @id
         `,
       [{ name: "id", type: sql.Int, value: id }]
@@ -3050,7 +3054,7 @@ const rejectTicket = async (req, res) => {
       .input("status", sql.VarChar(50), newStatus)
       .input("rejection_reason", sql.NVarChar(500), rejection_reason)
       .input("rejected_by", sql.Int, rejected_by).query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET status = @status, 
                     rejection_reason = @rejection_reason, 
                     rejected_at = GETDATE(),
@@ -3107,21 +3111,21 @@ const rejectTicket = async (req, res) => {
                    pe.line as line_code,
                    pe.machine as machine_code,
                    pe.number as machine_number
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             WHERE t.id = @ticket_id;
 
             SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @reporter_id;
 
             SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @assignee_id;
         `,
       [
@@ -3315,7 +3319,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
             problem: ticketData.title || "No description",
             actionBy: rejectorName,
             comment: rejection_reason || "งานถูกปฏิเสธ",
-            detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+            detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
             extraKVs: [
               //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
               //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
@@ -3404,7 +3408,7 @@ const finishTicket = async (req, res) => {
     // Get current ticket status
     const currentTicketResult = await runQuery(
       pool,
-      "SELECT status, created_by, assigned_to FROM Tickets WHERE id = @id",
+      "SELECT status, created_by, assigned_to FROM IgxTickets WHERE id = @id",
       [{ name: "id", type: sql.Int, value: id }]
     );
 
@@ -3437,7 +3441,7 @@ const finishTicket = async (req, res) => {
 
     // Update ticket status to finished with new fields and workflow tracking
     const updateQuery = `
-            UPDATE Tickets 
+            UPDATE IgxTickets 
             SET status = @status, 
                 downtime_avoidance_hours = @downtime_avoidance_hours,
                 cost_avoidance = @cost_avoidance,
@@ -3620,10 +3624,10 @@ const finishTicket = async (req, res) => {
                            pe.line as line_code,
                            pe.machine as machine_code,
                            pe.number as machine_number
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo AND fm.FlagDel != 'Y'
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id
                 `,
           [{ name: "ticket_id", type: sql.Int, value: id }]
@@ -3715,7 +3719,7 @@ const finishTicket = async (req, res) => {
             pool,
             `
                         SELECT image_url, image_name, image_type
-                        FROM TicketImages 
+                        FROM IgxTicketImages 
                         WHERE ticket_id = @ticket_id 
                         ORDER BY uploaded_at ASC
                     `,
@@ -3742,7 +3746,7 @@ const finishTicket = async (req, res) => {
               //actionBy: finishrName,
               comment: completion_notes || "งานเสร็จสมบูรณ์แล้ว",
               heroImageUrl: heroImageUrl,
-              detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
               extraKVs: [
                 //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
                 //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
@@ -3847,7 +3851,7 @@ const escalateTicket = async (req, res) => {
     // Get current ticket status
     const currentTicketResult = await runQuery(
       pool,
-      "SELECT status, created_by, assigned_to FROM Tickets WHERE id = @id",
+      "SELECT status, created_by, assigned_to FROM IgxTickets WHERE id = @id",
       [{ name: "id", type: sql.Int, value: id }]
     );
 
@@ -3886,7 +3890,7 @@ const escalateTicket = async (req, res) => {
       .input("escalated_to", sql.Int, escalated_to)
       .input("escalation_reason", sql.NVarChar(500), escalation_reason)
       .input("escalated_by", sql.Int, escalated_by).query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET status = @status, 
                     escalated_to = @escalated_to, 
                     escalation_reason = @escalation_reason, 
@@ -4027,9 +4031,9 @@ const escalateTicket = async (req, res) => {
                            pe.line as line_code,
                            pe.machine as machine_code,
                            pe.number as machine_number
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id
                 `,
           [{ name: "ticket_id", type: sql.Int, value: id }]
@@ -4115,7 +4119,7 @@ const escalateTicket = async (req, res) => {
             pool,
             `
                         SELECT image_name as filename, image_url as url, uploaded_at, uploaded_by
-                        FROM TicketImages 
+                        FROM IgxTicketImages 
                         WHERE ticket_id = @ticket_id
                         ORDER BY uploaded_at ASC
                     `,
@@ -4137,7 +4141,7 @@ const escalateTicket = async (req, res) => {
               actionBy: escalatorName,
               comment: escalation_reason || "งานถูกส่งต่อให้หัวหน้างานพิจารณา",
               heroImageUrl: heroImageUrl,
-              detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
               extraKVs: [
                 {
                   label: "Severity",
@@ -4217,7 +4221,7 @@ const approveReview = async (req, res) => {
     // Get current ticket status
     const currentTicketResult = await runQuery(
       pool,
-      "SELECT status, created_by, assigned_to, puno FROM Tickets WHERE id = @id",
+      "SELECT status, created_by, assigned_to, puno FROM IgxTickets WHERE id = @id",
       [{ name: "id", type: sql.Int, value: id }]
     );
 
@@ -4268,7 +4272,7 @@ const approveReview = async (req, res) => {
       .input("status", sql.VarChar(50), "reviewed")
       .input("reviewed_by", sql.Int, reviewed_by)
       .input("satisfaction_rating", sql.Int, satisfaction_rating).query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET status = @status, 
                     reviewed_at = GETDATE(),
                     reviewed_by = @reviewed_by,
@@ -4416,9 +4420,9 @@ const approveReview = async (req, res) => {
                            pe.line as line_code,
                            pe.machine as machine_code,
                            pe.number as machine_number
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id
                 `,
             [{ name: "ticket_id", type: sql.Int, value: id }]
@@ -4517,7 +4521,7 @@ const approveReview = async (req, res) => {
                 // actionBy: reviewerName,
                 comment:
                   review_reason || "งานได้รับการตรวจสอบและอนุมัติโดยผู้ร้องขอ",
-                detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+                detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
                 extraKVs: [
                   //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
                   //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
@@ -4604,7 +4608,7 @@ const approveClose = async (req, res) => {
                 t.created_by, 
                 t.assigned_to,
                 t.puno
-            FROM Tickets t
+            FROM IgxTickets t
             WHERE t.id = @id
         `,
       [{ name: "id", type: sql.Int, value: id }]
@@ -4646,7 +4650,7 @@ const approveClose = async (req, res) => {
       .input("id", sql.Int, id)
       .input("status", sql.VarChar(50), "closed")
       .input("approved_by", sql.Int, approved_by).query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET status = @status, 
                     approved_at = GETDATE(),
                     approved_by = @approved_by,
@@ -4786,9 +4790,9 @@ const approveClose = async (req, res) => {
                            pe.line as line_code,
                            pe.machine as machine_code,
                            pe.number as machine_number
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id
                 `,
           [{ name: "ticket_id", type: sql.Int, value: id }]
@@ -4880,7 +4884,7 @@ const approveClose = async (req, res) => {
                 "Unknown Asset",
               problem: ticketData.title || "No description",
               actionBy: closerName,
-              detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
               comment: close_reason || "เคสถูกปิดโดยผู้จัดการ",
               extraKVs: [
                 //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
@@ -4973,7 +4977,7 @@ const reassignTicket = async (req, res) => {
                 t.created_by,
                 t.assigned_to,
                 t.puno
-            FROM Tickets t
+            FROM IgxTickets t
             WHERE t.id = @id
         `,
       [{ name: "id", type: sql.Int, value: id }]
@@ -5033,7 +5037,7 @@ const reassignTicket = async (req, res) => {
       .input("schedule_start", sql.DateTime2, new Date(schedule_start))
       .input("schedule_finish", sql.DateTime2, new Date(schedule_finish))
       .query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET status = @status, 
                     assigned_to = @assigned_to,
                     reassigned_at = GETDATE(),
@@ -5190,9 +5194,9 @@ const reassignTicket = async (req, res) => {
                            pe.machine as machine_code,
                            pe.number as machine_number,
                            pe.puname as PUNAME
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id
                 `,
           [{ name: "ticket_id", type: sql.Int, value: id }]
@@ -5285,7 +5289,7 @@ const reassignTicket = async (req, res) => {
             pool,
             `
                         SELECT image_url, image_name 
-                        FROM TicketImages 
+                        FROM IgxTicketImages 
                         WHERE ticket_id = @ticket_id 
                         ORDER BY uploaded_at ASC
                     `,
@@ -5305,7 +5309,7 @@ const reassignTicket = async (req, res) => {
               problem: ticketData.title || "No description",
               actionBy: reassignerName,
               comment: notes || "งานได้รับการมอบหมายและกำหนดตารางเวลาใหม่",
-              detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
               extraKVs: [
                 {
                   label: "Severity",
@@ -5401,7 +5405,7 @@ const getAvailableAssignees = async (req, res) => {
       const ticketResult = await pool
         .request()
         .input("ticket_id", sql.Int, ticket_id)
-        .query("SELECT puno FROM Tickets WHERE id = @ticket_id");
+        .query("SELECT puno FROM IgxTickets WHERE id = @ticket_id");
 
       if (ticketResult.recordset.length > 0) {
         const puno = ticketResult.recordset[0].puno;
@@ -5482,7 +5486,7 @@ const getAvailableAssignees = async (req, res) => {
                      )
                      ORDER BY vpug2.USERGROUPNAME) AS USERGROUPNAME
                 FROM Person p
-                INNER JOIN TicketApproval ta ON ta.personno = p.PERSONNO
+                INNER JOIN IgxTicketApproval ta ON ta.personno = p.PERSONNO
                 WHERE p.FLAGDEL != 'Y'
                 AND ta.approval_level >= @min_approval_level
                 AND ta.is_active = 1
@@ -5529,7 +5533,7 @@ const reopenTicket = async (req, res) => {
     // Get current ticket status
     const currentTicketResult = await runQuery(
       pool,
-      "SELECT status, created_by, assigned_to, puno FROM Tickets WHERE id = @id",
+      "SELECT status, created_by, assigned_to, puno FROM IgxTickets WHERE id = @id",
       [{ name: "id", type: sql.Int, value: id }]
     );
 
@@ -5577,7 +5581,7 @@ const reopenTicket = async (req, res) => {
       .input("id", sql.Int, id)
       .input("status", sql.VarChar(50), "reopened_in_progress")
       .input("reopened_by", sql.Int, reopened_by).query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET status = @status,
                     reopened_at = GETDATE(),
                     reopened_by = @reopened_by,
@@ -5723,9 +5727,9 @@ const reopenTicket = async (req, res) => {
                            pe.machine as machine_code,
                            pe.number as machine_number,
                            pe.puname as PUNAME
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                     WHERE t.id = @ticket_id
                 `,
           [{ name: "ticket_id", type: sql.Int, value: id }]
@@ -5810,7 +5814,7 @@ const reopenTicket = async (req, res) => {
             pool,
             `
                         SELECT image_url, image_name 
-                        FROM TicketImages 
+                        FROM IgxTicketImages 
                         WHERE ticket_id = @ticket_id 
                         ORDER BY uploaded_at ASC
                     `,
@@ -5830,7 +5834,7 @@ const reopenTicket = async (req, res) => {
               problem: ticketData.title || "No description",
               // actionBy: reopenerName,
               comment: reopen_reason || "งานถูกเปิดใหม่ กรุณาดำเนินการต่อ",
-              detailUrl: `${process.env.FRONTEND_URL}/tickets/${id}`,
+              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
               extraKVs: [
                 //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
                 //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
@@ -5912,10 +5916,10 @@ const getUserPendingTickets = async (req, res) => {
     const countRequest = pool.request();
     const countQuery = `
             SELECT COUNT(DISTINCT t.id) as total
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
                 AND ta.is_active = 1
                 AND (
@@ -5929,10 +5933,10 @@ const getUserPendingTickets = async (req, res) => {
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
             WHERE (
-                -- Tickets created by the user
+                -- IgxTickets created by the user
                 t.created_by = @userId
                 OR 
-                -- Tickets where user has approval_level >= 2 for the line/area/plant
+                -- IgxTickets where user has approval_level >= 2 for the line/area/plant
                 (ta.approval_level >= 2 AND ta.is_active = 1)
             )
             AND t.status NOT IN ('closed', 'finished', 'canceled', 'rejected_final')
@@ -5961,7 +5965,7 @@ const getUserPendingTickets = async (req, res) => {
                         a.PERSON_NAME as assignee_name,
                         a.EMAIL as assignee_email,
                         a.PHONE as assignee_phone,
-                        -- Hierarchy information from PUExtension (prioritize most specific)
+                        -- Hierarchy information from IgxPUExtension (prioritize most specific)
                         pe.pucode,
                         pe.plant as plant_code,
                         pe.area as area_code,
@@ -5972,25 +5976,25 @@ const getUserPendingTickets = async (req, res) => {
                         pe.digit_count,
                         -- Hierarchy names based on digit patterns
                         (SELECT TOP 1 pudescription 
-                         FROM PUExtension pe2 
+                         FROM IgxPUExtension pe2 
                          WHERE pe2.plant = pe.plant 
                          AND pe2.area IS NULL 
                          AND pe2.line IS NULL 
                          AND pe2.machine IS NULL) as plant_name,
                         (SELECT TOP 1 pudescription 
-                         FROM PUExtension pe2 
+                         FROM IgxPUExtension pe2 
                          WHERE pe2.plant = pe.plant 
                          AND pe2.area = pe.area 
                          AND pe2.line IS NULL 
                          AND pe2.machine IS NULL) as area_name,
                         (SELECT TOP 1 pudescription 
-                         FROM PUExtension pe2 
+                         FROM IgxPUExtension pe2 
                          WHERE pe2.plant = pe.plant 
                          AND pe2.area = pe.area 
                          AND pe2.line = pe.line 
                          AND pe2.machine IS NULL) as line_name,
                         (SELECT TOP 1 pudescription 
-                         FROM PUExtension pe2 
+                         FROM IgxPUExtension pe2 
                          WHERE pe2.plant = pe.plant 
                          AND pe2.area = pe.area 
                          AND pe2.line = pe.line 
@@ -6028,12 +6032,12 @@ const getUserPendingTickets = async (req, res) => {
                                 ISNULL(ta.approval_level, 0) DESC,
                                 t.created_at DESC
                         ) as dedup_row_num
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN Person r ON t.created_by = r.PERSONNO
                     LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
                     LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                    LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+                    LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
                         AND ta.plant_code = pe.plant 
                         AND ta.is_active = 1
                         AND (
@@ -6052,10 +6056,10 @@ const getUserPendingTickets = async (req, res) => {
                     LEFT JOIN Person finished_person ON t.finished_by = finished_person.PERSONNO
                     LEFT JOIN Person rejected_person ON t.rejected_by = rejected_person.PERSONNO
                     WHERE (
-                        -- Tickets created by the user
+                        -- IgxTickets created by the user
                         t.created_by = @userId
                         OR 
-                        -- Tickets where user has approval_level >= 2 for the line/area/plant
+                        -- IgxTickets where user has approval_level >= 2 for the line/area/plant
                         (ta.approval_level >= 2 AND ta.is_active = 1)
                     )
                     AND t.status NOT IN ('closed', 'canceled', 'rejected_final')
@@ -6145,15 +6149,15 @@ const getUserTicketCountPerPeriod = async (req, res) => {
     // Note: WHERE clause logic moved into main query for better DateDim integration
 
     // Get tickets count per period (28-day periods P1-P13)
-    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/PUExtension matches
+    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/IgxPUExtension matches
     const query = `
             SELECT 
-                CONCAT('P', dd.PeriodNo) as period,
+                'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
                 COUNT(DISTINCT t.id) as tickets
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
                 AND ta.is_active = 1
                 AND (
@@ -6166,12 +6170,12 @@ const getUserTicketCountPerPeriod = async (req, res) => {
                     -- Plant-level approval (area and line are null in approval)
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
-            JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+            JOIN IgxDateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
             WHERE (
-                -- Tickets created by the user
+                -- IgxTickets created by the user
                 t.created_by = @userId
                 OR 
-                -- Tickets where user has approval_level > 2 for the line
+                -- IgxTickets where user has approval_level > 2 for the line
                 (ta.approval_level > 2 AND ta.is_active = 1)
             ) AND dd.CompanyYear = @year
             AND t.status != 'canceled'
@@ -6256,7 +6260,7 @@ const getUserFinishedTicketCountPerPeriod = async (req, res) => {
     // First, check if user has L2+ approval level in any line
     const l2CheckQuery = `
             SELECT COUNT(*) as l2_count
-            FROM TicketApproval ta
+            FROM IgxTicketApproval ta
             WHERE ta.personno = @userId 
             AND ta.approval_level >= 2 
             AND ta.is_active = 1
@@ -6277,15 +6281,15 @@ const getUserFinishedTicketCountPerPeriod = async (req, res) => {
     // Note: WHERE clause logic moved into main query for better DateDim integration
 
     // Get Finished tickets count per period (28-day periods P1-P13)
-    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/PUExtension matches
+    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/IgxPUExtension matches
     const query = `
             SELECT 
-                CONCAT('P', dd.PeriodNo) as period,
+                'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
                 COUNT(DISTINCT t.id) as tickets
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
                 AND ta.is_active = 1
                 AND (
@@ -6298,12 +6302,12 @@ const getUserFinishedTicketCountPerPeriod = async (req, res) => {
                     -- Plant-level approval (area and line are null in approval)
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
-            JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.finished_at AS DATE)
+            JOIN IgxDateDim AS dd ON dd.DateKey = CAST(t.finished_at AS DATE)
             WHERE (
-                -- Tickets Finished by the user
+                -- IgxTickets Finished by the user
                 t.finished_by = @userId
                 OR 
-                -- Tickets where user has approval_level > 2 for the line and was involved
+                -- IgxTickets where user has approval_level > 2 for the line and was involved
                 (ta.approval_level > 2 AND ta.is_active = 1)
             ) AND dd.CompanyYear = @year
             AND t.status IN ('closed', 'finished')
@@ -6389,7 +6393,7 @@ const getPersonalKPIData = async (req, res) => {
     // First, check if user has L2+ approval level in any line
     const l2CheckQuery = `
             SELECT COUNT(*) as l2_count
-            FROM TicketApproval ta
+            FROM IgxTicketApproval ta
             WHERE ta.personno = @userId 
             AND ta.approval_level >= 2 
             AND ta.is_active = 1
@@ -6403,7 +6407,7 @@ const getPersonalKPIData = async (req, res) => {
     const isL2Plus = l2Result.recordset[0].l2_count > 0;
 
     // Get current period data - REPORTER metrics (for all users)
-    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/PUExtension matches
+    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/IgxPUExtension matches
     const reporterMetricsQuery = `
             SELECT 
                 COUNT(DISTINCT t.id) as totalReportsThisPeriod,
@@ -6415,10 +6419,10 @@ const getPersonalKPIData = async (req, res) => {
                 SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsThisPeriod
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
                 AND ta.is_active = 1
                 AND (
@@ -6432,10 +6436,10 @@ const getPersonalKPIData = async (req, res) => {
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
             WHERE (
-                -- Tickets created by the user
+                -- IgxTickets created by the user
                 t.created_by = @userId
                 OR 
-                -- Tickets where user has approval_level >= 2 for the line/area/plant
+                -- IgxTickets where user has approval_level >= 2 for the line/area/plant
                 (ta.approval_level > 2 AND ta.is_active = 1)
             )
             AND t.created_at >= @startDate 
@@ -6443,7 +6447,7 @@ const getPersonalKPIData = async (req, res) => {
         `;
 
     // Get comparison period data - REPORTER metrics
-    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/PUExtension matches
+    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/IgxPUExtension matches
     const reporterComparisonQuery = `
             SELECT 
                 COUNT(DISTINCT t.id) as totalReportsLastPeriod,
@@ -6455,10 +6459,10 @@ const getPersonalKPIData = async (req, res) => {
                 SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsLastPeriod
-            FROM Tickets t
+            FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
                 AND ta.is_active = 1
                 AND (
@@ -6472,10 +6476,10 @@ const getPersonalKPIData = async (req, res) => {
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
             WHERE (
-                -- Tickets created by the user
+                -- IgxTickets created by the user
                 t.created_by = @userId
                 OR 
-                -- Tickets where user has approval_level >= 2 for the line/area/plant
+                -- IgxTickets where user has approval_level >= 2 for the line/area/plant
                 (ta.approval_level > 2 AND ta.is_active = 1)
             )
             AND t.created_at >= @compare_startDate 
@@ -6514,10 +6518,10 @@ const getPersonalKPIData = async (req, res) => {
                     SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesThisPeriod
-                FROM Tickets t
+                FROM IgxTickets t
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
                 AND ta.is_active = 1
                 AND (
@@ -6531,10 +6535,10 @@ const getPersonalKPIData = async (req, res) => {
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
                 WHERE (
-                    -- Tickets Finished by the user
+                    -- IgxTickets Finished by the user
                     t.finished_by = @userId
                     OR 
-                    -- Tickets where user has approval_level >= 2 for the line/area/plant and was involved
+                    -- IgxTickets where user has approval_level >= 2 for the line/area/plant and was involved
                     (ta.approval_level > 2 AND ta.is_active = 1)
                 )
                 AND t.finished_at >= @startDate 
@@ -6550,10 +6554,10 @@ const getPersonalKPIData = async (req, res) => {
                     SUM(DISTINCT CASE WHEN status IN ('closed', 'finished') THEN 
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesLastPeriod
-                FROM Tickets t
+                FROM IgxTickets t
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN PUExtension pe ON pu.PUNO = pe.puno
-                LEFT JOIN TicketApproval ta ON ta.personno = @userId 
+                LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
                 AND ta.plant_code = pe.plant 
                 AND ta.is_active = 1
                 AND (
@@ -6567,10 +6571,10 @@ const getPersonalKPIData = async (req, res) => {
                     (ta.area_code IS NULL AND ta.line_code IS NULL)
                 )
                 WHERE (
-                    -- Tickets Finished by the user
+                    -- IgxTickets Finished by the user
                     t.finished_by = @userId
                     OR 
-                    -- Tickets where user has approval_level >= 2 for the line/area/plant and was involved
+                    -- IgxTickets where user has approval_level >= 2 for the line/area/plant and was involved
                     (ta.approval_level > 2 AND ta.is_active = 1)
                 )
                 AND t.finished_at >= @compare_startDate 

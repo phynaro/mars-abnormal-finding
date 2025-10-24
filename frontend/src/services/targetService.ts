@@ -150,10 +150,8 @@ class TargetService {
   }
 
   // Get distinct areas from hierarchy
-  async getAreas(plantCode?: string): Promise<{ success: boolean; data: { code: string; name: string; plant: string }[] }> {
-    const url = plantCode 
-      ? `${API_BASE_URL}/hierarchy/distinct/areas?plant=${plantCode}`
-      : `${API_BASE_URL}/hierarchy/distinct/areas`;
+  async getAreas(plantCode: string): Promise<{ success: boolean; data: { code: string; name: string; puno?: number; pucriticalno?: number }[] }> {
+    const url = `${API_BASE_URL}/hierarchy/puextension/plants/${encodeURIComponent(plantCode)}/areas`;
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',

@@ -292,7 +292,7 @@ const RoleManagementPage: React.FC = () => {
 
       {/* Create Role Modal */}
       {showCreateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9850]">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <CardTitle>Create New Role</CardTitle>
@@ -377,7 +377,7 @@ const RoleManagementPage: React.FC = () => {
 
       {/* Edit Role Modal */}
       {showEditModal && editingRole && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9850]">
           <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
             <CardHeader>
               <CardTitle>Edit Role: {editingRole.name}</CardTitle>

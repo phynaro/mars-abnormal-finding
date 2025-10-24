@@ -300,6 +300,7 @@ function buildTicketFlexMessage(state, payload, options = {}) {
       ]
     }
   };
+  console.log('contents', contents.body.contents);
 
   return {
     type: "flex",

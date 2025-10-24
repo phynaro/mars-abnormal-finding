@@ -119,7 +119,7 @@ const getTicketIntegrationStatus = async (req, res) => {
                     t.cedar_sync_error,
                     wo.WOStatusNo as cedar_wo_status_no,
                     wo.WFStatusCode as cedar_wf_status_code
-                FROM Tickets t
+                FROM IgxTickets t
                 LEFT JOIN WO wo ON t.cedar_wono = wo.WONO
                 WHERE t.id = @ticketId
             `);
@@ -190,7 +190,7 @@ const getTicketIntegrationLogs = async (req, res) => {
                         created_at,
                         created_by,
                         ROW_NUMBER() OVER (ORDER BY created_at DESC) as row_num
-                    FROM CedarIntegrationLog
+                    FROM IgxCedarIntegrationLog
                     WHERE ticket_id = @ticketId
                 ) AS paginated_results
                 WHERE row_num > @offset AND row_num <= @offset + @limit
@@ -252,7 +252,7 @@ const getTicketsWithCedarStatus = async (req, res) => {
                         pu.PUCODE,
                         pu.PUNAME,
                         ROW_NUMBER() OVER (ORDER BY t.created_at DESC) as row_num
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN WO wo ON t.cedar_wono = wo.WONO
                     LEFT JOIN PU pu ON t.puno = pu.PUNO
                     WHERE 1=1 ${whereClause}
@@ -302,7 +302,7 @@ const retryFailedIntegrations = async (req, res) => {
                     t.ticket_number,
                     t.status,
                     t.cedar_sync_error
-                FROM Tickets t
+                FROM IgxTickets t
                 WHERE ${whereClause}
             `);
 
@@ -377,7 +377,7 @@ const getCedarIntegrationStatistics = async (req, res) => {
                 SUM(CASE WHEN cedar_sync_status = 'success' THEN 1 ELSE 0 END) as successful_syncs,
                 SUM(CASE WHEN cedar_sync_status = 'error' THEN 1 ELSE 0 END) as failed_syncs,
                 SUM(CASE WHEN cedar_sync_status = 'pending' THEN 1 ELSE 0 END) as pending_syncs
-            FROM Tickets
+            FROM IgxTickets
         `);
 
         const logsResult = await pool.request().query(`
@@ -385,7 +385,7 @@ const getCedarIntegrationStatistics = async (req, res) => {
                 action,
                 status,
                 COUNT(*) as count
-            FROM CedarIntegrationLog
+            FROM IgxCedarIntegrationLog
             WHERE created_at >= DATEADD(day, -30, GETDATE())
             GROUP BY action, status
             ORDER BY action, status
@@ -397,7 +397,7 @@ const getCedarIntegrationStatistics = async (req, res) => {
                 action,
                 error_message,
                 created_at
-            FROM CedarIntegrationLog
+            FROM IgxCedarIntegrationLog
             WHERE status = 'error'
             ORDER BY created_at DESC
         `);
@@ -449,7 +449,7 @@ const getCedarIntegrationHealth = async (req, res) => {
                 action,
                 status,
                 created_at
-            FROM CedarIntegrationLog
+            FROM IgxCedarIntegrationLog
             ORDER BY created_at DESC
         `);
 

@@ -69,6 +69,13 @@ const TargetManagementPage: React.FC = () => {
   const [selectedAreaId, setSelectedAreaId] = useState<string>('');
   
   const [periodValues, setPeriodValues] = useState<{ [period: string]: number }>({});
+  
+  // Validation errors
+  const [validationErrors, setValidationErrors] = useState<{
+    plant?: string;
+    area?: string;
+    periods?: string;
+  }>({});
 
   // Fetch plants
   const fetchPlants = async () => {
@@ -94,12 +101,18 @@ const TargetManagementPage: React.FC = () => {
   };
 
   // Fetch areas
-  const fetchAreas = async (plantCode?: string) => {
+  const fetchAreas = async (plantCode: string) => {
     try {
       setAreasLoading(true);
       const response = await targetService.getAreas(plantCode);
       if (response.success) {
-        setAreas(response.data);
+        // Transform the data to include the plant property
+        const areasWithPlant = response.data.map(area => ({
+          code: area.code,
+          name: area.name,
+          plant: plantCode
+        }));
+        setAreas(areasWithPlant);
       } else {
         setAreas([]);
       }
@@ -165,7 +178,7 @@ const TargetManagementPage: React.FC = () => {
   // Initialize data
   useEffect(() => {
     fetchPlants();
-    fetchAreas();
+    // Don't fetch areas on mount - wait for plant selection
     fetchAvailableYears();
   }, []);
 
@@ -178,9 +191,21 @@ const TargetManagementPage: React.FC = () => {
     if (plantFilter && plantFilter !== 'all') {
       fetchAreas(plantFilter);
     } else {
-      fetchAreas();
+      // Clear areas when no plant is selected
+      setAreas([]);
+      setAreaFilter('all'); // Reset area filter
     }
   }, [plantFilter]);
+
+  // Refetch areas when selected plant changes in create modal
+  useEffect(() => {
+    if (selectedPlantId) {
+      fetchAreas(selectedPlantId);
+    } else {
+      // Clear areas when no plant is selected
+      setAreas([]);
+    }
+  }, [selectedPlantId]);
 
   // Group targets by location for matrix display
   const targetsByLocation = useMemo(() => {
@@ -264,8 +289,12 @@ const TargetManagementPage: React.FC = () => {
         return;
       }
 
+      // Clear previous validation errors
+      setValidationErrors({});
+
       // Validate location dimension based on selection
       if (locationDimension === 'plant' && !selectedPlantId) {
+        setValidationErrors({ plant: 'Please select a plant' });
         toast({
           title: 'Validation Error',
           description: 'Please select a plant',
@@ -274,18 +303,33 @@ const TargetManagementPage: React.FC = () => {
         return;
       }
 
-      if (locationDimension === 'plant_area' && (!selectedPlantId || !selectedAreaId)) {
-        toast({
-          title: 'Validation Error',
-          description: 'Please select both plant and area',
-          variant: 'destructive',
-        });
-        return;
+      if (locationDimension === 'plant_area') {
+        const errors: { plant?: string; area?: string } = {};
+        
+        if (!selectedPlantId) {
+          errors.plant = 'Please select a plant';
+        }
+        
+        if (!selectedAreaId) {
+          errors.area = 'Please select an area';
+        }
+        
+        if (Object.keys(errors).length > 0) {
+          setValidationErrors(errors);
+          const errorMessages = Object.values(errors);
+          toast({
+            title: 'Validation Error',
+            description: errorMessages.join('. '),
+            variant: 'destructive',
+          });
+          return;
+        }
       }
 
       // Validate that all periods have values
       const missingPeriods = PERIODS.filter(period => !periodValues[period] && periodValues[period] !== 0);
       if (missingPeriods.length > 0) {
+        setValidationErrors({ periods: `Please fill in values for all periods: ${missingPeriods.join(', ')}` });
         toast({
           title: 'Validation Error',
           description: `Please fill in values for all periods: ${missingPeriods.join(', ')}`,
@@ -345,6 +389,7 @@ const TargetManagementPage: React.FC = () => {
       setSelectedPlantId('');
       setSelectedAreaId('');
       setPeriodValues({});
+      setValidationErrors({});
       fetchTargets();
     } catch (error) {
       console.error('Error creating target:', error);
@@ -394,6 +439,26 @@ const TargetManagementPage: React.FC = () => {
         newValues[period] = p1Value;
       });
       setPeriodValues(newValues);
+      clearPeriodValidationError();
+    }
+  };
+
+  // Clear validation errors when user makes selections
+  const clearPlantValidationError = () => {
+    if (validationErrors.plant) {
+      setValidationErrors(prev => ({ ...prev, plant: undefined }));
+    }
+  };
+
+  const clearAreaValidationError = () => {
+    if (validationErrors.area) {
+      setValidationErrors(prev => ({ ...prev, area: undefined }));
+    }
+  };
+
+  const clearPeriodValidationError = () => {
+    if (validationErrors.periods) {
+      setValidationErrors(prev => ({ ...prev, periods: undefined }));
     }
   };
 
@@ -408,7 +473,13 @@ const TargetManagementPage: React.FC = () => {
           </p>
         </div>
         
-        <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <Dialog open={createDialogOpen} onOpenChange={(open) => {
+          setCreateDialogOpen(open);
+          if (open) {
+            // Clear validation errors when dialog opens
+            setValidationErrors({});
+          }
+        }}>
           <DialogTrigger asChild>
             <Button>
               <Plus className="h-4 w-4 mr-2" />
@@ -473,9 +544,10 @@ const TargetManagementPage: React.FC = () => {
                         value={selectedPlantId} 
                         onValueChange={(value) => {
                           setSelectedPlantId(value);
+                          clearPlantValidationError();
                         }}
                       >
-                        <SelectTrigger className="flex-1">
+                        <SelectTrigger className={`flex-1 ${validationErrors.plant ? 'border-red-500 focus:border-red-500' : ''}`}>
                           <SelectValue placeholder={plantsLoading ? "Loading..." : "Select plant"} />
                         </SelectTrigger>
                         <SelectContent>
@@ -499,9 +571,9 @@ const TargetManagementPage: React.FC = () => {
                         </Button>
                       )}
                     </div>
-                    {selectedPlantId && (
-                      <p className="text-xs text-muted-foreground">
-                        Selected: {plants.find(p => p.code === selectedPlantId)?.name} ({plants.find(p => p.code === selectedPlantId)?.code})
+                    {validationErrors.plant && (
+                      <p className="text-xs text-red-500">
+                        {validationErrors.plant}
                       </p>
                     )}
                   </div>
@@ -517,9 +589,10 @@ const TargetManagementPage: React.FC = () => {
                           onValueChange={(value) => {
                             setSelectedPlantId(value);
                             setSelectedAreaId(''); // Reset area when plant changes
+                            clearPlantValidationError();
                           }}
                         >
-                          <SelectTrigger className="flex-1">
+                          <SelectTrigger className={`flex-1 ${validationErrors.plant ? 'border-red-500 focus:border-red-500' : ''}`}>
                             <SelectValue placeholder={plantsLoading ? "Loading..." : "Select plant"} />
                           </SelectTrigger>
                           <SelectContent>
@@ -544,6 +617,11 @@ const TargetManagementPage: React.FC = () => {
                           </Button>
                         )}
                       </div>
+                      {validationErrors.plant && (
+                        <p className="text-xs text-red-500">
+                          {validationErrors.plant}
+                        </p>
+                      )}
                     </div>
                     
                     <div className="space-y-2">
@@ -553,14 +631,15 @@ const TargetManagementPage: React.FC = () => {
                           value={selectedAreaId} 
                           onValueChange={(value) => {
                             setSelectedAreaId(value);
+                            clearAreaValidationError();
                           }}
                           disabled={!selectedPlantId}
                         >
-                          <SelectTrigger className="flex-1">
+                          <SelectTrigger className={`flex-1 ${validationErrors.area ? 'border-red-500 focus:border-red-500' : ''}`}>
                             <SelectValue placeholder={!selectedPlantId ? "Select plant first" : areasLoading ? "Loading..." : "Select area"} />
                           </SelectTrigger>
                           <SelectContent>
-                            {areas.filter(area => area.plant === selectedPlantId).map(area => (
+                            {areas.map(area => (
                               <SelectItem key={area.code} value={area.code}>
                                 {area.name} ({area.code})
                               </SelectItem>
@@ -580,9 +659,9 @@ const TargetManagementPage: React.FC = () => {
                           </Button>
                         )}
                       </div>
-                      {selectedAreaId && (
-                        <p className="text-xs text-muted-foreground">
-                          Selected: {areas.find(a => a.code === selectedAreaId)?.name} ({areas.find(a => a.code === selectedAreaId)?.code})
+                      {validationErrors.area && (
+                        <p className="text-xs text-red-500">
+                          {validationErrors.area}
                         </p>
                       )}
                     </div>
@@ -624,7 +703,7 @@ const TargetManagementPage: React.FC = () => {
               {/* Period Values */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <Label>Period Values (All periods must be filled)</Label>
+                  <Label className={validationErrors.periods ? 'text-red-500' : ''}>Period Values (All periods must be filled)</Label>
                   <Button 
                     type="button" 
                     variant="outline" 
@@ -636,6 +715,11 @@ const TargetManagementPage: React.FC = () => {
                     Copy P1 to All
                   </Button>
                 </div>
+                {validationErrors.periods && (
+                  <p className="text-xs text-red-500">
+                    {validationErrors.periods}
+                  </p>
+                )}
                 
                 <div className="grid grid-cols-4 gap-4">
                   {PERIODS.map(period => (
@@ -645,13 +729,16 @@ const TargetManagementPage: React.FC = () => {
                         id={period}
                         type="number"
                         value={periodValues[period] || ''}
-                        onChange={(e) => setPeriodValues({ 
-                          ...periodValues, 
-                          [period]: parseFloat(e.target.value) || 0 
-                        })}
+                        onChange={(e) => {
+                          setPeriodValues({ 
+                            ...periodValues, 
+                            [period]: parseFloat(e.target.value) || 0 
+                          });
+                          clearPeriodValidationError();
+                        }}
                         placeholder="0"
                         min="0"
-                        step="0.01"
+                        step="1"
                       />
                     </div>
                   ))}
@@ -705,15 +792,25 @@ const TargetManagementPage: React.FC = () => {
             
             <div className="space-y-2">
               <Label>Area</Label>
-              <Select value={areaFilter} onValueChange={(value) => {
-                setAreaFilter(value);
-              }}>
+              <Select 
+                value={areaFilter} 
+                onValueChange={(value) => {
+                  setAreaFilter(value);
+                }}
+                disabled={plantFilter === 'all'}
+              >
                 <SelectTrigger>
-                  <SelectValue placeholder={areasLoading ? "Loading..." : "Select area"} />
+                  <SelectValue placeholder={
+                    plantFilter === 'all' 
+                      ? 'Select plant first' 
+                      : areasLoading 
+                        ? "Loading..." 
+                        : "Select area"
+                  } />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Areas</SelectItem>
-                  {areas.filter(area => plantFilter === 'all' || area.plant === plantFilter).map(area => (
+                  {areas.map(area => (
                     <SelectItem key={area.code} value={area.code}>
                       {area.name} ({area.code})
                     </SelectItem>

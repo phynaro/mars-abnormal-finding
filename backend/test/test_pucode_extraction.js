@@ -40,7 +40,7 @@ async function testPUCODEExtraction() {
                     p.id as plant_id,
                     p.name as plant_name,
                     p.code as plant_code,
-                    CONCAT(p.code, '-', a.code, '-', l.code, '-', m.code, '-', m.machine_number) as full_code
+                    p.code + '-' + a.code + '-' + l.code + '-' + m.code + '-' + CAST(m.machine_number AS VARCHAR(10)) as full_code
                 FROM Machine m
                 INNER JOIN Line l ON m.line_id = l.id
                 INNER JOIN Area a ON l.area_id = a.id

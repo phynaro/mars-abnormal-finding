@@ -773,6 +773,12 @@ const TicketDetailsPage: React.FC = () => {
       setActualFinishAt("");
       setActualStartAtEdit("");
     }
+    
+    // Load critical levels for accept action
+    if (type === "accept") {
+      loadCriticalLevelsForAccept();
+    }
+    
     setActionOpen(true);
   };
 
@@ -1567,6 +1573,18 @@ const TicketDetailsPage: React.FC = () => {
                                   <span className="font-mono">{ticket.cedar_wocode}</span>
                                 </div>
                               )}
+                              {ticket.cedar_wf_status_code && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">WF Status Code:</span>
+                                  <span className="font-mono">{ticket.cedar_wf_status_code}</span>
+                                </div>
+                              )}
+                              {ticket.cedar_cost_center_no && (
+                                <div className="flex justify-between">
+                                  <span className="text-gray-500">Cost Center No:</span>
+                                  <span className="font-mono">{ticket.cedar_cost_center_no}</span>
+                                </div>
+                              )}
                               {ticket.cedar_last_sync && (
                                 <div className="flex justify-between">
                                   <span className="text-gray-500">Last Sync:</span>
@@ -2079,7 +2097,6 @@ const TicketDetailsPage: React.FC = () => {
                       } else {
                         // Change - show equipment selector
                         setShowEquipmentSelector(true);
-                        loadCriticalLevelsForAccept();
                       }
                     }}
                     className="mt-2"
@@ -2128,8 +2145,7 @@ const TicketDetailsPage: React.FC = () => {
                           if (machine.puno) {
                             loadEquipmentForAccept(machine.puno);
                           }
-                          // Load critical levels and preselect if available
-                          loadCriticalLevelsForAccept();
+                          // Preselect critical level if available from machine
                           if ((machine as any).pucriticalno) {
                             setSelectedCriticalLevel((machine as any).pucriticalno);
                           }
@@ -2226,7 +2242,9 @@ const TicketDetailsPage: React.FC = () => {
                       <div className="flex items-center gap-2">
                         <UserPlus className="h-4 w-4 text-gray-600" />
                         <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                          {user?.email || 'You'}
+                          {user?.firstName && user?.lastName 
+                            ? `${user.firstName} ${user.lastName}` 
+                            : user?.email || 'You'}
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -2621,6 +2639,18 @@ const TicketDetailsPage: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-500">WO Code:</span>
                   <span className="font-mono">{ticket.cedar_wocode}</span>
+                </div>
+              )}
+              {ticket?.cedar_wf_status_code && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">WF Status Code:</span>
+                  <span className="font-mono">{ticket.cedar_wf_status_code}</span>
+                </div>
+              )}
+              {ticket?.cedar_cost_center_no && (
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Cost Center No:</span>
+                  <span className="font-mono">{ticket.cedar_cost_center_no}</span>
                 </div>
               )}
               {ticket?.cedar_last_sync && (

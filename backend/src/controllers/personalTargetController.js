@@ -21,7 +21,7 @@ const getPersonalTargets = async (req, res) => {
         pt.updated_by,
         p.PERSON_NAME,
         p.PERSONCODE
-      FROM dbo.TicketPersonTarget pt
+      FROM dbo.IgxTicketPersonTarget pt
       LEFT JOIN dbo.Person p ON pt.PERSONNO = p.PERSONNO
       WHERE 1=1
     `;
@@ -88,7 +88,7 @@ const getPersonalTargetById = async (req, res) => {
         pt.updated_by,
         p.PERSON_NAME,
         p.PERSONCODE
-      FROM dbo.TicketPersonTarget pt
+      FROM dbo.IgxTicketPersonTarget pt
       LEFT JOIN dbo.Person p ON pt.PERSONNO = p.PERSONNO
       WHERE pt.id = @id
     `;
@@ -152,7 +152,7 @@ const createPersonalTargets = async (req, res) => {
     
     // Check if targets already exist for this combination (any period)
     const checkQuery = `
-      SELECT COUNT(*) as count FROM dbo.TicketPersonTarget 
+      SELECT COUNT(*) as count FROM dbo.IgxTicketPersonTarget 
       WHERE PERSONNO = @PERSONNO AND type = @type AND year = @year
     `;
     
@@ -176,7 +176,7 @@ const createPersonalTargets = async (req, res) => {
       const targetValue = target_values[period] || 0;
       
       const insertQuery = `
-        INSERT INTO dbo.TicketPersonTarget (PERSONNO, type, year, period, target_value, unit, created_by, updated_by)
+        INSERT INTO dbo.IgxTicketPersonTarget (PERSONNO, type, year, period, target_value, unit, created_by, updated_by)
         VALUES (@PERSONNO, @type, @year, @period, @target_value, @unit, @created_by, @updated_by)
       `;
       
@@ -221,7 +221,7 @@ const updatePersonalTarget = async (req, res) => {
     
     const pool = await sql.connect(dbConfig);
     
-    let updateQuery = 'UPDATE dbo.TicketPersonTarget SET ';
+    let updateQuery = 'UPDATE dbo.IgxTicketPersonTarget SET ';
     const updateFields = [];
     
     if (target_value !== undefined) {
@@ -287,7 +287,7 @@ const deletePersonalTargets = async (req, res) => {
     const pool = await sql.connect(dbConfig);
     
     const deleteQuery = `
-      DELETE FROM dbo.TicketPersonTarget 
+      DELETE FROM dbo.IgxTicketPersonTarget 
       WHERE PERSONNO = @PERSONNO AND type = @type AND year = @year
     `;
     
@@ -324,7 +324,7 @@ const getPersonalTargetAvailableYears = async (req, res) => {
   try {
     const query = `
       SELECT DISTINCT year 
-      FROM dbo.TicketPersonTarget 
+      FROM dbo.IgxTicketPersonTarget 
       ORDER BY year DESC
     `;
     

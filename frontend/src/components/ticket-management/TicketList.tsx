@@ -128,11 +128,9 @@ export const TicketList: React.FC = () => {
     }
   };
 
-  const fetchAreas = async (plantCode?: string) => {
+  const fetchAreas = async (plantCode: string) => {
     try {
-      const url = plantCode 
-        ? `${API_BASE_URL}/hierarchy/distinct/areas?plant=${plantCode}`
-        : `${API_BASE_URL}/hierarchy/distinct/areas`;
+      const url = `${API_BASE_URL}/hierarchy/puextension/plants/${encodeURIComponent(plantCode)}/areas`;
       const response = await fetch(url, {
         headers: authService.getAuthHeaders()
       });
@@ -165,7 +163,7 @@ export const TicketList: React.FC = () => {
 
   useEffect(() => {
     fetchPlants();
-    fetchAreas();
+    // Don't fetch areas on mount - wait for plant selection
     fetchUsers();
   }, []);
 
@@ -174,7 +172,8 @@ export const TicketList: React.FC = () => {
     if (filters.plant) {
       fetchAreas(filters.plant);
     } else {
-      fetchAreas();
+      // Clear areas when no plant is selected
+      setAreas([]);
     }
   }, [filters.plant]);
 
@@ -498,9 +497,14 @@ export const TicketList: React.FC = () => {
                     onValueChange={(v) =>
                       handleFilterChange("area", v === "all" ? undefined : v)
                     }
+                    disabled={!filters.plant}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('ticket.allAreas')} />
+                      <SelectValue placeholder={
+                        !filters.plant 
+                          ? 'Select plant first' 
+                          : t('ticket.allAreas')
+                      } />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all">{t('ticket.allAreas')}</SelectItem>

@@ -13,6 +13,7 @@ router.use(authenticateToken);
 router.get('/profile', userController.getProfile);
 router.put('/profile', userController.updateProfile);
 router.post('/profile/avatar', uploadAvatar.single('avatar'), compressAvatarMiddleware, userController.uploadAvatar);
+router.put('/profile/line-id', userController.updateLineId);
 router.post('/line/test', userController.sendLineTest);
 router.get('/stats', userController.getUserStats);
 router.get('/role', userController.getRole);

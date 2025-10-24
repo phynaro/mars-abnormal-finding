@@ -104,10 +104,11 @@ const AppContent: React.FC = () => {
         return <Navigate to={destination} replace />;
       } else {
         console.log('lastLogin', user.lastLogin);
-        // Check if this is a first-time user (no lastLogin record)
-        const isFirstTime = !user?.lastLogin;
+        console.log('lineId', user.lineId);
+        // Check if this is a first-time user (no LineID set)
+        const needsLineIdSetup = !user?.lineId;
         
-        if (isFirstTime) {
+        if (needsLineIdSetup) {
           return <Navigate to="/welcome" replace />;
         } else {
           return <Navigate to="/home" replace />;

@@ -595,7 +595,7 @@ const TicketCreateWizardPage: React.FC = () => {
     const currentStageIndex = stages.findIndex(s => s.key === stage);
     
     return (
-      <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
+      <div className="fixed inset-0 bg-black/50 z-[9850] flex items-center justify-center">
         <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4 shadow-xl">
           <div className="text-center">
             {/* Header */}

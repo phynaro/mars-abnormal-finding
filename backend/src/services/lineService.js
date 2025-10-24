@@ -210,6 +210,11 @@ class LineWebhookService {
         return { success: false, error: 'Invalid LineID format' };
       }
 
+      console.log('LINE Profile Request:', {
+        url: `https://api.line.me/v2/bot/profile/${lineUserId.substring(0, 8)}...`,
+        lineUserId: lineUserId.substring(0, 8) + '...'
+      });
+
       const response = await axios.get(
         `https://api.line.me/v2/bot/profile/${lineUserId}`,
         {

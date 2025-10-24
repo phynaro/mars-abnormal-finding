@@ -74,54 +74,6 @@ router.post('/:id/reassign', requireFormPermission('TKT', 'save'), ticketControl
 // Get available assignees (requires TKT form view permission)
 router.get('/assignees/available', requireFormPermission('TKT', 'view'), ticketController.getAvailableAssignees);
 
-// Trigger LINE notification for ticket (called after image uploads)
-// trigger-notification route removed - notifications now handled automatically
-
-// Test L2 users for an area (for testing)
-router.get('/test-l2-users/:area_code', requireFormPermission('TKT', 'view'), async (req, res) => {
-    try {
-        const { area_code } = req.params;
-        const sql = require('mssql');
-        const dbConfig = require('../config/dbConfig');
-        const pool = await sql.connect(dbConfig);
-        
-        // Use the same query as in the helper function
-        const result = await pool.request()
-            .input('area_code', sql.NVarChar, area_code)
-            .query(`
-                SELECT DISTINCT
-                    p.PERSONNO,
-                    p.PERSON_NAME,
-                    p.FIRSTNAME,
-                    p.LASTNAME,
-                    p.EMAIL,
-                    ue.LineID,
-                    ta.approval_level
-                FROM TicketApproval ta
-                INNER JOIN Person p ON ta.personno = p.PERSONNO
-                LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-                LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
-                WHERE ta.area_code = @area_code
-                AND ta.approval_level >= 2
-                AND ta.is_active = 1
-                AND p.FLAGDEL != 'Y'
-                ORDER BY ta.approval_level DESC, p.PERSON_NAME
-            `);
-        
-        res.json({
-            success: true,
-            message: `Found ${result.recordset.length} L2+ users for area ${area_code}`,
-            data: result.recordset
-        });
-    } catch (error) {
-        console.error('Error getting L2 users:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get L2 users',
-            error: error.message
-        });
-    }
-});
 
 // Delete ticket (requires TKT form delete permission)
 router.delete('/:id', requireFormPermission('TKT', 'delete'), ticketController.deleteTicket);

@@ -45,29 +45,29 @@ const userController = {
             // Update _secUsers table (security/user settings)
       // Always update LineID if it's provided in the request (even if empty)
       if (lineId !== undefined) {
-        // Check if UserExtension record exists
+        // Check if IgxUserExtension record exists
         const checkResult = await pool.request()
           .input('userID', sql.VarChar(50), userId)
-          .query('SELECT UserID FROM UserExtension WHERE UserID = @userID');
+          .query('SELECT UserID FROM IgxUserExtension WHERE UserID = @userID');
         
         if (checkResult.recordset.length === 0) {
-          // Create UserExtension record if it doesn't exist
+          // Create IgxUserExtension record if it doesn't exist
           await pool.request()
             .input('userID', sql.VarChar(50), userId)
             .input('personNo', sql.Int, req.user.id)
             .input('lineId', sql.NVarChar(500), lineId || null)
             .query(`
-              INSERT INTO UserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+              INSERT INTO IgxUserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
               VALUES (@userID, @personNo, 'Y', NULL, NULL, NULL, GETDATE(), GETDATE(), @lineId, NULL, 1)
             `);
         } else {
-          // Update existing UserExtension record
+          // Update existing IgxUserExtension record
           await pool.request()
             .input('userID', sql.VarChar(50), userId)
             .input('personNo', sql.Int, req.user.id)
             .input('lineId', sql.NVarChar(500), lineId || null)
             .query(`
-              UPDATE UserExtension
+              UPDATE IgxUserExtension
               SET PersonNo = @personNo,
                   LineID = @lineId,
                   UpdatedAt = GETDATE()
@@ -83,7 +83,52 @@ const userController = {
     }
   },
 
-  // Upload avatar for current user; stores path in UserExtension.AvatarUrl
+  // Update LINE ID only
+  updateLineId: async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const { lineId } = req.body;
+
+      const pool = await sql.connect(dbConfig);
+      
+      // Check if IgxUserExtension record exists
+      const checkResult = await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .query('SELECT UserID FROM IgxUserExtension WHERE UserID = @userID');
+      
+      if (checkResult.recordset.length === 0) {
+        // Create IgxUserExtension record if it doesn't exist
+        await pool.request()
+          .input('userID', sql.VarChar(50), userId)
+          .input('personNo', sql.Int, req.user.id)
+          .input('lineId', sql.NVarChar(500), lineId || null)
+          .query(`
+            INSERT INTO IgxUserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+            VALUES (@userID, @personNo, 'Y', NULL, NULL, NULL, GETDATE(), GETDATE(), @lineId, NULL, 1)
+          `);
+      } else {
+        // Update existing IgxUserExtension record
+        await pool.request()
+          .input('userID', sql.VarChar(50), userId)
+          .input('personNo', sql.Int, req.user.id)
+          .input('lineId', sql.NVarChar(500), lineId || null)
+          .query(`
+            UPDATE IgxUserExtension
+            SET PersonNo = @personNo,
+                LineID = @lineId,
+                UpdatedAt = GETDATE()
+            WHERE UserID = @userID
+          `);
+      }
+
+      res.json({ success: true, message: 'LINE ID updated successfully' });
+    } catch (error) {
+      console.error('Update LINE ID Error:', error);
+      res.status(500).json({ success: false, message: 'Failed to update LINE ID', error: error.message });
+    }
+  },
+
+  // Upload avatar for current user; stores path in IgxUserExtension.AvatarUrl
   uploadAvatar: async (req, res) => {
     try {
       const userId = req.user.userId; // Use userId from JWT
@@ -94,29 +139,29 @@ const userController = {
 
       const pool = await sql.connect(dbConfig);
       
-      // Check if UserExtension record exists
+      // Check if IgxUserExtension record exists
       const checkResult = await pool.request()
         .input('userID', sql.VarChar, userId)
-        .query('SELECT UserID FROM UserExtension WHERE UserID = @userID');
+        .query('SELECT UserID FROM IgxUserExtension WHERE UserID = @userID');
       
       if (checkResult.recordset.length === 0) {
-        // Create UserExtension record if it doesn't exist
+        // Create IgxUserExtension record if it doesn't exist
         await pool.request()
           .input('userID', sql.VarChar, userId)
           .input('personNo', sql.Int, req.user.id)
           .input('avatarUrl', sql.NVarChar(500), relativePath)
           .query(`
-            INSERT INTO UserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+            INSERT INTO IgxUserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
             VALUES (@userID, @personNo, 'Y', NULL, NULL, NULL, GETDATE(), GETDATE(), NULL, @avatarUrl, 1)
           `);
       } else {
-        // Update existing UserExtension record
+        // Update existing IgxUserExtension record
         await pool.request()
           .input('userID', sql.VarChar, userId)
           .input('personNo', sql.Int, req.user.id)
           .input('avatarUrl', sql.NVarChar(500), relativePath)
           .query(`
-            UPDATE UserExtension SET PersonNo = @personNo, AvatarUrl = @avatarUrl, UpdatedAt = GETDATE() WHERE UserID = @userID
+            UPDATE IgxUserExtension SET PersonNo = @personNo, AvatarUrl = @avatarUrl, UpdatedAt = GETDATE() WHERE UserID = @userID
           `);
       }
 
@@ -220,7 +265,7 @@ const userController = {
         const pool = await sql.connect(dbConfig);
         const result = await pool.request()
           .input('userID', sql.VarChar(50), req.user.userId)
-          .query('SELECT LineID FROM UserExtension WHERE UserID = @userID');
+          .query('SELECT LineID FROM IgxUserExtension WHERE UserID = @userID');
         
         if (result.recordset.length === 0) {
           return res.status(404).json({ success: false, message: 'User not found' });
@@ -245,6 +290,7 @@ const userController = {
         });
       }
       
+      
       const msg = `Test from CMMS: Hello ${req.user.firstName || req.user.username || 'User'}!`;
       const r = await lineService.sendToUser(targetLineId, msg);
       
@@ -253,14 +299,25 @@ const userController = {
           success: true, 
           message: 'Test notification sent successfully',
           lineId: targetLineId,
-          skipped: r.skipped 
+          skipped: r.skipped,
         });
+      }
+      
+      // Handle specific LINE API errors
+      let errorMessage = 'Failed to send LINE notification';
+      if (r.status === 400) {
+        errorMessage = 'LINE notification failed. Please ensure you have added the CMMS bot as a friend on LINE and try again.';
+      } else if (r.status === 403) {
+        errorMessage = 'LINE notification failed. The bot may not have permission to send messages to you.';
+      } else if (r.status === 404) {
+        errorMessage = 'LINE notification failed. Your LINE ID may not be valid or you may not have added the bot as a friend.';
       }
       
       return res.status(500).json({ 
         success: false, 
-        message: 'Failed to send LINE notification', 
-        error: r.error 
+        message: errorMessage,
+        error: r.error,
+        status: r.status
       });
     } catch (error) {
       console.error('Send LINE test error:', error);
@@ -285,7 +342,7 @@ const userController = {
             SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as openTickets,
             SUM(CASE WHEN assigned_to = @personNo AND status IN ('open', 'in_progress') THEN 1 ELSE 0 END) as assignedTickets,
             SUM(CASE WHEN created_by = @personNo AND status = 'Finished' THEN 1 ELSE 0 END) as FinishedTickets
-          FROM Tickets 
+          FROM IgxTickets 
           WHERE created_by = @personNo OR assigned_to = @personNo
         `);
 
@@ -301,7 +358,7 @@ const userController = {
             'Ticket created: ' + title as description,
             created_at as timestamp,
             status
-          FROM Tickets 
+          FROM IgxTickets 
           WHERE created_by = @personNo
           
           UNION ALL
@@ -312,7 +369,7 @@ const userController = {
             'Assigned to you: ' + title as description,
             created_at as timestamp,
             status
-          FROM Tickets 
+          FROM IgxTickets 
           WHERE assigned_to = @personNo
           
           ORDER BY timestamp DESC

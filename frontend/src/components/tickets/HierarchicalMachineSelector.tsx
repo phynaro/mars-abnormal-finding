@@ -431,7 +431,7 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
 
       {/* Help Text */}
       <p className="text-xs text-gray-500">
-        {t('ticket.hierarchyHelpText')} You can select at any level - Plant, Area, Line, or Machine.
+        {t('ticket.hierarchyHelpText')} 
       </p>
     </div>
   );

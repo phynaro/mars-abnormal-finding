@@ -15,6 +15,8 @@ export interface Ticket {
   cedar_sync_status?: string; // Cedar sync status (success, error, pending, syncing)
   cedar_last_sync?: string; // Last sync timestamp
   cedar_sync_error?: string; // Cedar sync error message
+  cedar_wf_status_code?: number; // Cedar workflow status code
+  cedar_cost_center_no?: number; // Cedar cost center number
   plant_id?: number;
   area_id?: number;
   line_id?: number;

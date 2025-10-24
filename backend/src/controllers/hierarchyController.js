@@ -421,7 +421,7 @@ const generatePUCODE = async (req, res) => {
             .input('machineId', sql.Int, machineId)
             .query(`
                 SELECT 
-                    CONCAT(p.code, '-', a.code, '-', l.code, '-', m.code, '-', m.machine_number) as pucode,
+                    p.code + '-' + a.code + '-' + l.code + '-' + m.code + '-' + CAST(m.machine_number AS VARCHAR(10)) as pucode,
                     p.name as plant_name,
                     a.name as area_name,
                     l.name as line_name,
@@ -463,7 +463,7 @@ const generatePUCODE = async (req, res) => {
     }
 };
 
-// Get distinct plants from PUExtension (for filters)
+// Get distinct plants from IgxPUExtension (for filters)
 const getDistinctPlants = async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -472,7 +472,7 @@ const getDistinctPlants = async (req, res) => {
             SELECT DISTINCT 
                 plant as code,
                 pudescription as name
-            FROM PUExtension
+            FROM IgxPUExtension
             WHERE plant IS NOT NULL 
             AND plant != ''
             AND digit_count = 1
@@ -495,7 +495,7 @@ const getDistinctPlants = async (req, res) => {
     }
 };
 
-// Get distinct areas from PUExtension (for filters)
+// Get distinct areas from IgxPUExtension (for filters)
 const getDistinctAreas = async (req, res) => {
     try {
         const { plant } = req.query;
@@ -506,7 +506,7 @@ const getDistinctAreas = async (req, res) => {
                 area as code,
                 pudescription as name,
                 plant
-            FROM PUExtension
+            FROM IgxPUExtension
             WHERE area IS NOT NULL 
             AND area != ''
             AND digit_count = 2
@@ -567,7 +567,7 @@ const getPUCriticalLevels = async (req, res) => {
     }
 };
 
-// Get machines by hierarchy from PUExtension table
+// Get machines by hierarchy from IgxPUExtension table
 const getMachinesByHierarchy = async (req, res) => {
     try {
         const { plant, area, line, machine, number } = req.query;
@@ -604,7 +604,7 @@ const getMachinesByHierarchy = async (req, res) => {
                 puname,
                 pudescription,
                 digit_count
-            FROM PUExtension
+            FROM IgxPUExtension
             WHERE plant = @plant
             AND digit_count = @expectedDigitCount
         `;
@@ -645,7 +645,7 @@ const getMachinesByHierarchy = async (req, res) => {
     }
 };
 
-// Get distinct plants from PUExtension
+// Get distinct plants from IgxPUExtension
 const getDistinctPlantsFromPUExtension = async (req, res) => {
     try {
         const pool = await sql.connect(dbConfig);
@@ -656,7 +656,7 @@ const getDistinctPlantsFromPUExtension = async (req, res) => {
                 MIN(pe.pudescription) as name,
                 MIN(pe.puno) as puno,
                 MIN(pu.PUCRITICALNO) as pucriticalno
-            FROM PUExtension pe
+            FROM IgxPUExtension pe
             LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
             WHERE pe.plant IS NOT NULL 
             AND pe.plant != ''
@@ -671,7 +671,7 @@ const getDistinctPlantsFromPUExtension = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching distinct plants from PUExtension:', error);
+        console.error('Error fetching distinct plants from IgxPUExtension:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch distinct plants',
@@ -680,7 +680,7 @@ const getDistinctPlantsFromPUExtension = async (req, res) => {
     }
 };
 
-// Get distinct areas from PUExtension for a specific plant
+// Get distinct areas from IgxPUExtension for a specific plant
 const getDistinctAreasFromPUExtension = async (req, res) => {
     try {
         const { plant } = req.params;
@@ -702,7 +702,7 @@ const getDistinctAreasFromPUExtension = async (req, res) => {
                     MIN(pe.pudescription) as name,
                     MIN(pe.puno) as puno,
                     MIN(pu.PUCRITICALNO) as pucriticalno
-                FROM PUExtension pe
+                FROM IgxPUExtension pe
                 LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
                 WHERE pe.plant = @plant
                 AND pe.area IS NOT NULL 
@@ -718,7 +718,7 @@ const getDistinctAreasFromPUExtension = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching distinct areas from PUExtension:', error);
+        console.error('Error fetching distinct areas from IgxPUExtension:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch distinct areas',
@@ -727,7 +727,7 @@ const getDistinctAreasFromPUExtension = async (req, res) => {
     }
 };
 
-// Get distinct lines from PUExtension for a specific plant and area
+// Get distinct lines from IgxPUExtension for a specific plant and area
 const getDistinctLinesFromPUExtension = async (req, res) => {
     try {
         const { plant, area } = req.params;
@@ -750,7 +750,7 @@ const getDistinctLinesFromPUExtension = async (req, res) => {
                     MIN(pe.pudescription) as name,
                     MIN(pe.puno) as puno,
                     MIN(pu.PUCRITICALNO) as pucriticalno
-                FROM PUExtension pe
+                FROM IgxPUExtension pe
                 LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
                 WHERE pe.plant = @plant
                 AND pe.area = @area
@@ -767,7 +767,7 @@ const getDistinctLinesFromPUExtension = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching distinct lines from PUExtension:', error);
+        console.error('Error fetching distinct lines from IgxPUExtension:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch distinct lines',
@@ -776,7 +776,7 @@ const getDistinctLinesFromPUExtension = async (req, res) => {
     }
 };
 
-// Get distinct machines from PUExtension for a specific plant, area, and line
+// Get distinct machines from IgxPUExtension for a specific plant, area, and line
 const getDistinctMachinesFromPUExtension = async (req, res) => {
     try {
         const { plant, area, line } = req.params;
@@ -796,7 +796,7 @@ const getDistinctMachinesFromPUExtension = async (req, res) => {
             .input('line', sql.NVarChar(50), line)
             .query(`
                 SELECT 
-                    CONCAT(pe.machine, '-', pe.number) as code,
+                    pe.machine + '-' + CAST(pe.number AS VARCHAR(10)) as code,
                     pe.pudescription as name,
                     pe.puno,
                     pe.pucode,
@@ -809,7 +809,7 @@ const getDistinctMachinesFromPUExtension = async (req, res) => {
                     pe.pudescription,
                     pe.digit_count,
                     pu.PUCRITICALNO as pucriticalno
-                FROM PUExtension pe
+                FROM IgxPUExtension pe
                 LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
                 WHERE pe.plant = @plant
                 AND pe.area = @area
@@ -825,7 +825,7 @@ const getDistinctMachinesFromPUExtension = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching distinct machines from PUExtension:', error);
+        console.error('Error fetching distinct machines from IgxPUExtension:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch distinct machines',
@@ -834,7 +834,7 @@ const getDistinctMachinesFromPUExtension = async (req, res) => {
     }
 };
 
-// Get distinct machines without lines from PUExtension for a specific plant and area
+// Get distinct machines without lines from IgxPUExtension for a specific plant and area
 const getDistinctMachinesWithoutLinesFromPUExtension = async (req, res) => {
     try {
         const { plant, area } = req.params;
@@ -853,7 +853,7 @@ const getDistinctMachinesWithoutLinesFromPUExtension = async (req, res) => {
             .input('area', sql.NVarChar(50), area)
             .query(`
                 SELECT 
-                    CONCAT(pe.machine, '-', pe.number) as code,
+                    pe.machine + '-' + CAST(pe.number AS VARCHAR(10)) as code,
                     pe.pudescription as name,
                     pe.puno,
                     pe.pucode,
@@ -866,7 +866,7 @@ const getDistinctMachinesWithoutLinesFromPUExtension = async (req, res) => {
                     pe.pudescription,
                     pe.digit_count,
                     pu.PUCRITICALNO as pucriticalno
-                FROM PUExtension pe
+                FROM IgxPUExtension pe
                 LEFT JOIN PU pu ON pe.pucode = pu.PUCODE AND pu.FLAGDEL = 'F'
                 WHERE pe.plant = @plant
                 AND pe.area = @area
@@ -882,7 +882,7 @@ const getDistinctMachinesWithoutLinesFromPUExtension = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching distinct machines without lines from PUExtension:', error);
+        console.error('Error fetching distinct machines without lines from IgxPUExtension:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch distinct machines without lines',
@@ -891,7 +891,7 @@ const getDistinctMachinesWithoutLinesFromPUExtension = async (req, res) => {
     }
 };
 
-// Get distinct numbers from PUExtension for a specific plant, area, line, and machine
+// Get distinct numbers from IgxPUExtension for a specific plant, area, line, and machine
 const getDistinctNumbersFromPUExtension = async (req, res) => {
     try {
         const { plant, area, line, machine } = req.params;
@@ -914,7 +914,7 @@ const getDistinctNumbersFromPUExtension = async (req, res) => {
                 SELECT DISTINCT 
                     number as code,
                     pudescription as name
-                FROM PUExtension
+                FROM IgxPUExtension
                 WHERE plant = @plant
                 AND area = @area
                 AND line = @line
@@ -931,7 +931,7 @@ const getDistinctNumbersFromPUExtension = async (req, res) => {
         });
 
     } catch (error) {
-        console.error('Error fetching distinct numbers from PUExtension:', error);
+        console.error('Error fetching distinct numbers from IgxPUExtension:', error);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch distinct numbers',

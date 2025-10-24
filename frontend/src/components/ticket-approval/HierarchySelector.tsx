@@ -53,7 +53,7 @@ const HierarchySelector: React.FC<HierarchySelectorProps> = ({
 }) => {
   return (
     <div>
-      <Label>Select Lines *</Label>
+      <Label>Select Production Unit *</Label>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
         {/* Plants Column */}
         <Card>
@@ -96,7 +96,7 @@ const HierarchySelector: React.FC<HierarchySelectorProps> = ({
                     }
                   />
                   <Label htmlFor={`plant-${plant.id}`} className="text-sm">
-                    {plant.name}
+                    {plant.name} ({plant.code})
                   </Label>
                 </div>
               ))}
@@ -154,7 +154,7 @@ const HierarchySelector: React.FC<HierarchySelectorProps> = ({
                         }
                       />
                       <Label htmlFor={`area-${area.id}`} className="text-sm">
-                        {plant.name} - {area.name}
+                        {plant.code} - {area.name} ({area.code})
                       </Label>
                     </div>
                   );
@@ -215,7 +215,7 @@ const HierarchySelector: React.FC<HierarchySelectorProps> = ({
                         }
                       />
                       <Label htmlFor={`line-${line.id}`} className="text-sm">
-                        {plant.name} - {area.name} - {line.name}
+                        {plant.code} - {area.code} - {line.name} ({line.code})
                       </Label>
                     </div>
                   );

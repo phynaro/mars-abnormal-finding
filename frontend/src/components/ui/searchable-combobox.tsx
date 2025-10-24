@@ -117,7 +117,7 @@ export function SearchableCombobox({
       </Button>
 
       {open && (
-        <Card className="absolute top-full left-0 right-0 z-50 mt-1 border shadow-lg">
+        <Card className="absolute top-full left-0 right-0 z-[9900] mt-1 border shadow-lg">
           <div className="p-2 border-b">
             <div className="relative">
               <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />

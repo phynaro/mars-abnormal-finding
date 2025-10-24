@@ -370,7 +370,7 @@ exports.getWorkOrderVolumeTrend = async (req, res) => {
     if (groupBy === 'weekly') {
       query = `
         SELECT 
-          CONCAT(DATEPART(YEAR, wo.WODATE), '-W', RIGHT('0' + CAST(DATEPART(WEEK, wo.WODATE) AS VARCHAR(2)), 2)) as date_group,
+          CAST(DATEPART(YEAR, wo.WODATE) AS VARCHAR(4)) + '-W' + RIGHT('0' + CAST(DATEPART(WEEK, wo.WODATE) AS VARCHAR(2)), 2) as date_group,
           DATEPART(YEAR, wo.WODATE) as year,
           DATEPART(WEEK, wo.WODATE) as week,
           COUNT(*) as work_order_count,
@@ -697,7 +697,7 @@ exports.getWorkOrderVolume = async (req, res) => {
         ROUND(SUM(F.DT_Duration),2) AS Downtime
           
       FROM F
-      JOIN dbo.DateDim AS dd
+      JOIN dbo.IgxDateDim AS dd
         ON dd.DateKey = F.LocalDate
       WHERE (@CompanyYear IS NULL OR dd.CompanyYear = @CompanyYear)
       GROUP BY dd.CompanyYear, dd.PeriodNo
@@ -883,7 +883,7 @@ exports.getPersonalWorkOrderVolume = async (req, res) => {
         CAST(100.0 * SUM(CASE WHEN f.WOSTATUSNO = 9 AND f.WRNO <> 0 AND f.ActFinishDate IS NOT NULL AND f.TargetDate IS NOT NULL AND f.ActFinishDate <= f.TargetDate THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN f.WRNO <> 0 THEN 1 ELSE 0 END),0) AS DECIMAL(5,2)) AS onTimeRatePct,
         ROUND(SUM(f.DT_Duration),2) AS downtime
       FROM F
-      JOIN dbo.DateDim AS dd
+      JOIN dbo.IgxDateDim AS dd
         ON dd.DateKey = F.LocalDate
       LEFT JOIN Person p ON f.ASSIGN = p.PERSONNO
       WHERE (@CompanyYear IS NULL OR dd.CompanyYear = @CompanyYear)
@@ -1004,7 +1004,7 @@ exports.getPersonalWorkOrderVolumeByPeriod = async (req, res) => {
         CAST(100.0 * SUM(CASE WHEN f.WOSTATUSNO = 9 AND f.WRNO <> 0 AND f.ActFinishDate IS NOT NULL AND f.TargetDate IS NOT NULL AND f.ActFinishDate <= f.TargetDate THEN 1 ELSE 0 END) / NULLIF(SUM(CASE WHEN f.WRNO <> 0 THEN 1 ELSE 0 END),0) AS DECIMAL(5,2)) AS onTimeRatePct,
         ROUND(SUM(f.DT_Duration),2) AS downtime
       FROM F
-      JOIN dbo.DateDim AS dd
+      JOIN dbo.IgxDateDim AS dd
         ON dd.DateKey = F.LocalDate
       LEFT JOIN Person p ON f.ASSIGN = p.PERSONNO
       WHERE (@CompanyYear IS NULL OR dd.CompanyYear = @CompanyYear)
@@ -1061,7 +1061,7 @@ async function getWorkOrderVolumeFilterOptions(pool, appliedFilters = {}) {
     
     if (companyYear) {
       whereClause += ` AND EXISTS (
-        SELECT 1 FROM DateDim dd 
+        SELECT 1 FROM IgxDateDim dd 
         WHERE dd.DateKey = TRY_CONVERT(date, STUFF(STUFF(wo.WODATE, 5,0,'-'), 8,0,'-'))
         AND dd.CompanyYear = ${parseInt(companyYear)}
       )`;
@@ -1087,7 +1087,7 @@ async function getWorkOrderVolumeFilterOptions(pool, appliedFilters = {}) {
     const yearsResult = await pool.request().query(`
       SELECT DISTINCT dd.CompanyYear
       FROM WO wo
-      JOIN DateDim dd ON dd.DateKey = TRY_CONVERT(date, STUFF(STUFF(wo.WODATE, 5,0,'-'), 8,0,'-'))
+      JOIN IgxDateDim dd ON dd.DateKey = TRY_CONVERT(date, STUFF(STUFF(wo.WODATE, 5,0,'-'), 8,0,'-'))
       WHERE wo.FLAGDEL = 'F'
       ORDER BY dd.CompanyYear DESC
     `);
@@ -1223,7 +1223,7 @@ async function getPeriodInfo(pool) {
 }
 
 /**
- * Get Tickets Count Per Period
+ * Get IgxTickets Count Per Period
  * Returns ticket counts grouped by period with target data for participation charts
  */
 exports.getTicketsCountPerPeriod = async (req, res) => {
@@ -1237,15 +1237,15 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
       area
     } = req.query;
 
-    // Get tickets count per period with plant/area filtering using DateDim for proper 28-day periods
+    // Get tickets count per period with plant/area filtering using IgxDateDim for proper 28-day periods
     const ticketsQuery = `
       SELECT 
-        CONCAT('P', dd.PeriodNo) as period,
+        'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
         COUNT(*) as tickets,
         COUNT(DISTINCT t.created_by) as uniqueReporters
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+      JOIN dbo.IgxDateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
       WHERE dd.CompanyYear = ${parseInt(year)}
         ${plant && plant !== 'all' ? `AND pe.plant = '${plant}'` : ''}
         ${area && area !== 'all' ? `AND pe.area = '${area}'` : ''}
@@ -1275,7 +1275,7 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
         t.period,
         t.target_value,
         t.unit
-      FROM dbo.Target t
+      FROM IgxTarget t
       ${targetsWhereClause}
       ORDER BY t.period
     `;
@@ -1325,7 +1325,7 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
       data: {
         participationData,
         summary: {
-          totalTickets: participationData.reduce((sum, item) => sum + item.tickets, 0),
+          totalIgxTickets: participationData.reduce((sum, item) => sum + item.tickets, 0),
           totalUniqueReporters: Math.max(...participationData.map(item => item.uniqueReporters)),
           averageTarget: Math.round(participationData.reduce((sum, item) => sum + item.target, 0) / participationData.length),
           appliedFilters: {
@@ -1348,10 +1348,10 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
 };
 
 /**
- * Get Total Tickets Closed Per Period Data
+ * Get Total IgxTickets Closed Per Period Data
  * Returns count of tickets Finished (closed/resolved) per period
  * Uses finished_at field to determine completion date
- * Supports plant/area filtering via PUExtension
+ * Supports plant/area filtering via IgxPUExtension
  */
 exports.getTicketsClosedPerPeriod = async (req, res) => {
   try {
@@ -1364,14 +1364,14 @@ exports.getTicketsClosedPerPeriod = async (req, res) => {
       area
     } = req.query;
 
-    // Get tickets closed count per period with plant/area filtering using DateDim for proper 28-day periods
+    // Get tickets closed count per period with plant/area filtering using IgxDateDim for proper 28-day periods
     const ticketsQuery = `
       SELECT 
-        CONCAT('P', dd.PeriodNo) as period,
+        'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
         COUNT(*) as ticketsClosed
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.finished_at AS DATE)
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+      JOIN dbo.IgxDateDim AS dd ON dd.DateKey = CAST(t.finished_at AS DATE)
       WHERE dd.CompanyYear = ${parseInt(year)} 
         AND t.status IN ('closed', 'resolved') 
         AND t.finished_at IS NOT NULL
@@ -1403,7 +1403,7 @@ exports.getTicketsClosedPerPeriod = async (req, res) => {
         t.period,
         t.target_value,
         t.unit
-      FROM dbo.Target t
+      FROM IgxTarget t
       ${targetsWhereClause}
       ORDER BY t.period
     `;
@@ -1446,9 +1446,9 @@ exports.getTicketsClosedPerPeriod = async (req, res) => {
         ticketsClosedData,
         summary: {
           totalPeriods: ticketsClosedData.length,
-          totalTicketsClosed: ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0),
+          totalIgxTicketsClosed: ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0),
           totalTarget: ticketsClosedData.reduce((sum, item) => sum + item.target, 0),
-          averageTicketsClosedPerPeriod: Math.round(ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0) / ticketsClosedData.length),
+          averageIgxTicketsClosedPerPeriod: Math.round(ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0) / ticketsClosedData.length),
           averageTargetPerPeriod: Math.round(ticketsClosedData.reduce((sum, item) => sum + item.target, 0) / ticketsClosedData.length),
           appliedFilters: {
             year: parseInt(year),
@@ -1504,8 +1504,8 @@ exports.getAreaActivityData = async (req, res) => {
           pe.plant as display_name,
           pe.plant,
           COUNT(t.id) as ticket_count
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE YEAR(t.created_at) = ${parseInt(year)}
           AND pe.plant IS NOT NULL
         GROUP BY pe.plant
@@ -1524,8 +1524,8 @@ exports.getAreaActivityData = async (req, res) => {
           pe.plant,
           pe.area,
           COUNT(t.id) as ticket_count
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE YEAR(t.created_at) = ${parseInt(year)}
           AND pe.plant = '${plant}'
           AND pe.area IS NOT NULL
@@ -1551,8 +1551,8 @@ exports.getAreaActivityData = async (req, res) => {
           pe.machine,
           pe.line,
           COUNT(t.id) as ticket_count
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE YEAR(t.created_at) = ${parseInt(year)}
           AND pe.plant = '${plant}'
           AND pe.area = '${area}'
@@ -1584,8 +1584,8 @@ exports.getAreaActivityData = async (req, res) => {
         areaActivityData,
         summary: {
           totalItems: areaActivityData.length,
-          totalTickets: areaActivityData.reduce((sum, item) => sum + item.tickets, 0),
-          averageTicketsPerItem: areaActivityData.length > 0 
+          totalIgxTickets: areaActivityData.reduce((sum, item) => sum + item.tickets, 0),
+          averageIgxTicketsPerItem: areaActivityData.length > 0 
             ? Math.round(areaActivityData.reduce((sum, item) => sum + item.tickets, 0) / areaActivityData.length)
             : 0,
           groupBy: summaryLabel,
@@ -1641,7 +1641,7 @@ exports.getUserActivityData = async (req, res) => {
     const startDateFormatted = formatDateForSQL(startDate);
     const endDateFormatted = formatDateForSQL(endDate);
 
-    // Build WHERE clause for tickets with plant/area filtering via PUExtension
+    // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
     let whereClause = `WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'`;
     
     if (plant && plant !== 'all') {
@@ -1659,11 +1659,11 @@ exports.getUserActivityData = async (req, res) => {
         p.PERSON_NAME as user_name,
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
       GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
@@ -1702,8 +1702,8 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
         userActivityData,
         summary: {
           totalUsers: userActivityData.length,
-          totalTickets: userActivityData.reduce((sum, item) => sum + item.tickets, 0),
-          averageTicketsPerUser: userActivityData.length > 0 
+          totalIgxTickets: userActivityData.reduce((sum, item) => sum + item.tickets, 0),
+          averageIgxTicketsPerUser: userActivityData.length > 0 
             ? Math.round(userActivityData.reduce((sum, item) => sum + item.tickets, 0) / userActivityData.length)
             : 0,
           appliedFilters: {
@@ -1758,13 +1758,13 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
       
       downtimeQuery = `
         SELECT 
-          CONCAT('P', dd.PeriodNo) as period,
+          'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
           pe.plant as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
-        JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        JOIN dbo.IgxDateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
         WHERE dd.CompanyYear = ${parseInt(year)}
           AND t.status IN ('closed', 'resolved')
           AND pe.plant IS NOT NULL
@@ -1779,13 +1779,13 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
       
       downtimeQuery = `
         SELECT 
-          CONCAT('P', dd.PeriodNo) as period,
+          'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
           pe.area as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
-        JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        JOIN dbo.IgxDateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
         WHERE dd.CompanyYear = ${parseInt(year)}
           AND t.status IN ('closed', 'resolved')
           AND pe.plant = '${plant}'
@@ -1801,7 +1801,7 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
       
       downtimeQuery = `
         SELECT 
-          CONCAT('P', dd.PeriodNo) as period,
+          'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
           CASE 
             WHEN pe.machine IS NOT NULL THEN pe.machine
             WHEN pe.line IS NOT NULL THEN pe.line
@@ -1809,9 +1809,9 @@ exports.getDowntimeAvoidanceTrend = async (req, res) => {
           END as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
-        JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        JOIN dbo.IgxDateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
         WHERE dd.CompanyYear = ${parseInt(year)}
           AND t.status IN ('closed', 'resolved')
           AND pe.plant = '${plant}'
@@ -1910,16 +1910,16 @@ exports.getCostAvoidanceData = async (req, res) => {
       area
     } = req.query;
 
-    // Get cost avoidance data by period for the specified year and plant/area using DateDim for proper 28-day periods
+    // Get cost avoidance data by period for the specified year and plant/area using IgxDateDim for proper 28-day periods
     const costAvoidanceQuery = `
       SELECT 
-        CONCAT('P', dd.PeriodNo) as period,
+        'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance,
         AVG(ISNULL(t.cost_avoidance, 0)) as avg_cost_per_case
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
-      JOIN dbo.DateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+      JOIN dbo.IgxDateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
       WHERE dd.CompanyYear = ${parseInt(year)} 
         AND t.status IN ('closed', 'resolved')
         ${plant && plant !== 'all' ? `AND pe.plant = '${plant}'` : ''}
@@ -1959,7 +1959,7 @@ exports.getCostAvoidanceData = async (req, res) => {
         summary: {
           totalPeriods: costAvoidanceData.length,
           totalCostAvoidance: costAvoidanceData.reduce((sum, item) => sum + item.costAvoidance, 0),
-          totalTickets: costAvoidanceData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalIgxTickets: costAvoidanceData.reduce((sum, item) => sum + item.ticketCount, 0),
           appliedFilters: {
             year: parseInt(year),
             plant: plant || null,
@@ -2007,8 +2007,8 @@ exports.debugPlantAreaData = async (req, res) => {
         pe.plant as name,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       WHERE pe.plant = '${plant}'
         AND t.status IN ('closed', 'resolved')
         ${startDate ? `AND t.created_at >= '${startDate}'` : ''}
@@ -2025,8 +2025,8 @@ exports.debugPlantAreaData = async (req, res) => {
         END as name,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       WHERE pe.plant = '${plant}'
         AND t.status IN ('closed', 'resolved')
         ${startDate ? `AND t.created_at >= '${startDate}'` : ''}
@@ -2044,8 +2044,8 @@ exports.debugPlantAreaData = async (req, res) => {
         END as name,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       WHERE pe.plant = '${plant}'
         AND pe.area = '${area}'
         AND t.status IN ('closed', 'resolved')
@@ -2118,8 +2118,8 @@ exports.getDowntimeImpactLeaderboard = async (req, res) => {
           pe.plant as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}'
           AND t.status IN ('closed', 'resolved')
@@ -2142,8 +2142,8 @@ exports.getDowntimeImpactLeaderboard = async (req, res) => {
           END as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}'
           AND t.status IN ('closed', 'resolved')
@@ -2167,8 +2167,8 @@ exports.getDowntimeImpactLeaderboard = async (req, res) => {
           END as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}'
           AND t.status IN ('closed', 'resolved')
@@ -2201,7 +2201,7 @@ exports.getDowntimeImpactLeaderboard = async (req, res) => {
         summary: {
           totalItems: downtimeImpactData.length,
           totalDowntimeHours: downtimeImpactData.reduce((sum, item) => sum + item.hours, 0),
-          totalTickets: downtimeImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalIgxTickets: downtimeImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
           groupBy: summaryLabel,
           appliedFilters: {
             startDate,
@@ -2266,8 +2266,8 @@ exports.getCostImpactLeaderboard = async (req, res) => {
           pe.plant as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}'
           AND t.status IN ('closed', 'resolved')
@@ -2290,8 +2290,8 @@ exports.getCostImpactLeaderboard = async (req, res) => {
           END as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}'
           AND t.status IN ('closed', 'resolved')
@@ -2315,8 +2315,8 @@ exports.getCostImpactLeaderboard = async (req, res) => {
           END as display_name,
           COUNT(t.id) as ticket_count,
           SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}'
           AND t.status IN ('closed', 'resolved')
@@ -2349,7 +2349,7 @@ exports.getCostImpactLeaderboard = async (req, res) => {
         summary: {
           totalItems: costImpactData.length,
           totalCostAvoidance: costImpactData.reduce((sum, item) => sum + item.cost, 0),
-          totalTickets: costImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalIgxTickets: costImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
           groupBy: summaryLabel,
           appliedFilters: {
             startDate,
@@ -2420,8 +2420,8 @@ exports.getOntimeRateByArea = async (req, res) => {
               ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
@@ -2451,8 +2451,8 @@ exports.getOntimeRateByArea = async (req, res) => {
               ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
@@ -2483,8 +2483,8 @@ exports.getOntimeRateByArea = async (req, res) => {
               ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
@@ -2572,7 +2572,7 @@ exports.getOntimeRateByUser = async (req, res) => {
       });
     }
 
-    // Build WHERE clause for tickets with plant/area filtering via PUExtension
+    // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' 
         AND t.created_at <= '${endDate}' 
         AND t.status = 'closed' 
@@ -2601,11 +2601,11 @@ exports.getOntimeRateByUser = async (req, res) => {
             ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
           ELSE 0 
         END as ontime_rate_percentage
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.finished_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
       GROUP BY t.finished_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
@@ -2692,7 +2692,7 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
       });
     }
 
-    // Build WHERE clause for tickets with plant/area filtering via PUExtension
+    // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' 
         AND t.created_at <= '${endDate}' 
         AND t.status = 'closed' 
@@ -2715,11 +2715,11 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.finished_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
       GROUP BY t.finished_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
@@ -2759,7 +2759,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
         resolveDurationByUserData,
         summary: {
           totalUsers: resolveDurationByUserData.length,
-          totalTickets: resolveDurationByUserData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalIgxTickets: resolveDurationByUserData.reduce((sum, item) => sum + item.ticketCount, 0),
           overallAvgResolveHours: resolveDurationByUserData.length > 0 
             ? Math.round((resolveDurationByUserData.reduce((sum, item) => sum + (item.avgResolveHours * item.ticketCount), 0) / resolveDurationByUserData.reduce((sum, item) => sum + item.ticketCount, 0)) * 100) / 100
             : 0
@@ -2821,8 +2821,8 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
           pe.plant as display_name,
           COUNT(t.id) as ticket_count,
           AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
@@ -2846,8 +2846,8 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
           END as display_name,
           COUNT(t.id) as ticket_count,
           AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
@@ -2872,8 +2872,8 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
           END as display_name,
           COUNT(t.id) as ticket_count,
           AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
           AND t.created_at <= '${endDate}' 
           AND t.status = 'closed' 
@@ -2906,7 +2906,7 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
         resolveDurationByAreaData,
         summary: {
           totalItems: resolveDurationByAreaData.length,
-          totalTickets: resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalIgxTickets: resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0),
           overallAvgResolveHours: resolveDurationByAreaData.length > 0 
             ? Math.round((resolveDurationByAreaData.reduce((sum, item) => sum + (item.avgResolveHours * item.ticketCount), 0) / resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0)) * 100) / 100
             : 0,
@@ -2957,7 +2957,7 @@ exports.getCostImpactByFailureMode = async (req, res) => {
       });
     }
 
-    // Build WHERE clause for tickets with plant/area filtering via PUExtension
+    // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
     
     if (plant && plant !== 'all') {
@@ -2975,8 +2975,8 @@ exports.getCostImpactByFailureMode = async (req, res) => {
         fm.FailureModeName as failure_mode_name,
         COUNT(t.id) as case_count,
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo
       ${whereClause}
       GROUP BY fm.FailureModeCode, fm.FailureModeName
@@ -3045,7 +3045,7 @@ exports.getDowntimeImpactByFailureMode = async (req, res) => {
       });
     }
 
-    // Build WHERE clause for tickets with plant/area filtering via PUExtension
+    // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
     
     if (plant && plant !== 'all') {
@@ -3063,8 +3063,8 @@ exports.getDowntimeImpactByFailureMode = async (req, res) => {
         fm.FailureModeName as failure_mode_name,
         COUNT(t.id) as case_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo
       ${whereClause}
       GROUP BY fm.FailureModeCode, fm.FailureModeName
@@ -3132,7 +3132,7 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
       });
     }
 
-    // Build WHERE clause for tickets with plant/area filtering via PUExtension
+    // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
     
     if (plant && plant !== 'all') {
@@ -3151,11 +3151,11 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
       GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
@@ -3237,7 +3237,7 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
       });
     }
 
-    // Build WHERE clause based on filters with plant/area filtering via PUExtension
+    // Build WHERE clause based on filters with plant/area filtering via IgxPUExtension
     let whereClause = `WHERE t.created_at >= '${startDate}' AND t.created_at <= '${endDate}' AND t.status IN ('closed', 'resolved')`;
     
     if (plant && plant !== 'all') {
@@ -3256,11 +3256,11 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
       GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
@@ -3301,7 +3301,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
         summary: {
           totalUsers: downtimeImpactReporterData.length,
           totalDowntimeHours: downtimeImpactReporterData.reduce((sum, item) => sum + item.hours, 0),
-          totalTickets: downtimeImpactReporterData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalIgxTickets: downtimeImpactReporterData.reduce((sum, item) => sum + item.ticketCount, 0),
           appliedFilters: {
             startDate,
             endDate,
@@ -3338,7 +3338,7 @@ exports.getCalendarHeatmapData = async (req, res) => {
       area
     } = req.query;
 
-    // Build WHERE clause for tickets with plant/area filtering via PUExtension
+    // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
     let whereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)}`;
     
     if (plant && plant !== 'all') {
@@ -3354,8 +3354,8 @@ exports.getCalendarHeatmapData = async (req, res) => {
       SELECT 
         CAST(t.created_at AS DATE) as date,
         COUNT(t.id) as count
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       ${whereClause}
       GROUP BY CAST(t.created_at AS DATE)
       ORDER BY date
@@ -3401,9 +3401,9 @@ exports.getCalendarHeatmapData = async (req, res) => {
         calendarData,
         summary: {
           totalDays: calendarData.length,
-          daysWithTickets: calendarData.filter(item => item.count > 0).length,
-          totalTickets: calendarData.reduce((sum, item) => sum + item.count, 0),
-          maxTicketsPerDay: calendarData.length > 0 ? Math.max(...calendarData.map(item => item.count)) : 0,
+          daysWithIgxTickets: calendarData.filter(item => item.count > 0).length,
+          totalIgxTickets: calendarData.reduce((sum, item) => sum + item.count, 0),
+          maxIgxTicketsPerDay: calendarData.length > 0 ? Math.max(...calendarData.map(item => item.count)) : 0,
           appliedFilters: {
             year: parseInt(year),
             plant: plant || null,
@@ -3459,7 +3459,7 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     const compareStartDateFormatted = compare_startDate ? formatDateForSQL(compare_startDate) : null;
     const compareEndDateFormatted = compare_endDate ? formatDateForSQL(compare_endDate) : null;
 
-    // Build WHERE clause for current period - use proper date comparison with plant/area filtering via PUExtension
+    // Build WHERE clause for current period - use proper date comparison with plant/area filtering via IgxPUExtension
     let currentWhereClause = `WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'`;
     
     if (plant && plant !== 'all') {
@@ -3487,14 +3487,14 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     // Get current period KPIs
     const currentKPIsQuery = `
       SELECT 
-        COUNT(*) as totalTickets,
-        SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedTickets,
-        SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
-        SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
+        COUNT(*) as totalIgxTickets,
+        SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedIgxTickets,
+        SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingIgxTickets,
+        SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingIgxTickets,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
         ISNULL(SUM(t.cost_avoidance), 0) as totalCostAvoidance
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       ${currentWhereClause}
     `;
 
@@ -3503,14 +3503,14 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     if (compareWhereClause) {
       compareKPIsQuery = `
         SELECT 
-          COUNT(*) as totalTickets,
-          SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedTickets,
-          SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
-          SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
+          COUNT(*) as totalIgxTickets,
+          SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedIgxTickets,
+          SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingIgxTickets,
+          SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingIgxTickets,
           ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
           ISNULL(SUM(t.cost_avoidance), 0) as totalCostAvoidance
-        FROM Tickets t
-        LEFT JOIN PUExtension pe ON t.puno = pe.puno
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         ${compareWhereClause}
       `;
     }
@@ -3522,11 +3522,11 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
         p.PERSON_NAME as personName,
         ue.AvatarUrl as avatarUrl,
         COUNT(*) as ticketCount
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
       GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       ORDER BY COUNT(*) DESC
@@ -3538,11 +3538,11 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
         p.PERSON_NAME as personName,
         ue.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.cost_avoidance), 0) as totalSavings
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
       GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       ORDER BY totalSavings DESC
@@ -3554,11 +3554,11 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
         p.PERSON_NAME as personName,
         ue.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeSaved
-      FROM Tickets t
-      LEFT JOIN PUExtension pe ON t.puno = pe.puno
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
       GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
       ORDER BY totalDowntimeSaved DESC
@@ -3567,7 +3567,7 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
     // Execute all queries
     const [currentKPIsResult, compareKPIsResult, topReporterResult, topCostSaverResult, topDowntimeSaverResult] = await Promise.all([
       pool.request().query(currentKPIsQuery),
-      compareKPIsQuery ? pool.request().query(compareKPIsQuery) : Promise.resolve({ recordset: [{ totalTickets: 0, closedTickets: 0, pendingTickets: 0, totalDowntimeAvoidance: 0, totalCostAvoidance: 0 }] }),
+      compareKPIsQuery ? pool.request().query(compareKPIsQuery) : Promise.resolve({ recordset: [{ totalIgxTickets: 0, closedIgxTickets: 0, pendingIgxTickets: 0, totalDowntimeAvoidance: 0, totalCostAvoidance: 0 }] }),
       pool.request().query(topPerformersQuery),
       pool.request().query(topCostSaverQuery),
       pool.request().query(topDowntimeSaverQuery)
@@ -3626,9 +3626,9 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
     };
 
     const comparisonMetrics = {
-      ticketGrowthRate: calculateGrowthRate(currentKPIs.totalTickets, compareKPIs.totalTickets),
-      closureRateImprovement: calculateGrowthRate(currentKPIs.closedTickets, compareKPIs.closedTickets),
-      waitingTicketsChange: calculateGrowthRate(currentKPIs.waitingTickets, compareKPIs.waitingTickets),
+      ticketGrowthRate: calculateGrowthRate(currentKPIs.totalIgxTickets, compareKPIs.totalIgxTickets),
+      closureRateImprovement: calculateGrowthRate(currentKPIs.closedIgxTickets, compareKPIs.closedIgxTickets),
+      waitingIgxTicketsChange: calculateGrowthRate(currentKPIs.waitingIgxTickets, compareKPIs.waitingIgxTickets),
       costAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalCostAvoidance, compareKPIs.totalCostAvoidance),
       downtimeAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalDowntimeAvoidance, compareKPIs.totalDowntimeAvoidance)
     };
@@ -3638,14 +3638,14 @@ LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
       success: true,
       data: {
         kpis: {
-          totalTicketsThisPeriod: currentKPIs.totalTickets || 0,
-          totalTicketsLastPeriod: compareKPIs.totalTickets || 0,
-          closedTicketsThisPeriod: currentKPIs.closedTickets || 0,
-          closedTicketsLastPeriod: compareKPIs.closedTickets || 0,
-          waitingTicketsThisPeriod: currentKPIs.waitingTickets || 0,
-          waitingTicketsLastPeriod: compareKPIs.waitingTickets || 0,
-          pendingTicketsThisPeriod: currentKPIs.pendingTickets || 0,
-          pendingTicketsLastPeriod: compareKPIs.pendingTickets || 0,
+          totalIgxTicketsThisPeriod: currentKPIs.totalIgxTickets || 0,
+          totalIgxTicketsLastPeriod: compareKPIs.totalIgxTickets || 0,
+          closedIgxTicketsThisPeriod: currentKPIs.closedIgxTickets || 0,
+          closedIgxTicketsLastPeriod: compareKPIs.closedIgxTickets || 0,
+          waitingIgxTicketsThisPeriod: currentKPIs.waitingIgxTickets || 0,
+          waitingIgxTicketsLastPeriod: compareKPIs.waitingIgxTickets || 0,
+          pendingIgxTicketsThisPeriod: currentKPIs.pendingIgxTickets || 0,
+          pendingIgxTicketsLastPeriod: compareKPIs.pendingIgxTickets || 0,
           totalDowntimeAvoidanceThisPeriod: currentKPIs.totalDowntimeAvoidance || 0,
           totalDowntimeAvoidanceLastPeriod: compareKPIs.totalDowntimeAvoidance || 0,
           totalCostAvoidanceThisPeriod: currentKPIs.totalCostAvoidance || 0,
@@ -3770,9 +3770,9 @@ const getPersonalKPIComparison = async (req, res) => {
           END as avgResolutionHours
           
         FROM Person p
-        LEFT JOIN UserExtension ue ON p.PERSONNO = ue.PersonNo
+        LEFT JOIN IgxUserExtension ue ON p.PERSONNO = ue.PersonNo
         LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
-        LEFT JOIN Tickets t ON (t.created_by = p.PERSONNO OR t.assigned_to = p.PERSONNO)
+        LEFT JOIN IgxTickets t ON (t.created_by = p.PERSONNO OR t.assigned_to = p.PERSONNO)
           AND t.created_at >= @startDate 
           AND t.created_at <= @endDate
         WHERE p.FLAGDEL != 'Y'
@@ -3808,7 +3808,7 @@ const getPersonalKPIComparison = async (req, res) => {
       SELECT DISTINCT d.DEPTNO, d.DEPTCODE, d.DEPTNAME
       FROM Person p
       INNER JOIN Dept d ON p.DEPTNO = d.DEPTNO
-      INNER JOIN Tickets t ON (t.created_by = p.PERSONNO OR t.assigned_to = p.PERSONNO)
+      INNER JOIN IgxTickets t ON (t.created_by = p.PERSONNO OR t.assigned_to = p.PERSONNO)
       WHERE p.FLAGDEL != 'Y' 
         AND t.created_at >= @startDate 
         AND t.created_at <= @endDate
@@ -3884,7 +3884,7 @@ const getPersonalKPIComparison = async (req, res) => {
 };
 
 /**
- * Get Department User KPI - Tickets Created
+ * Get Department User KPI - IgxTickets Created
  * Returns ticket count for each user as reporter (created_by) by period
  */
 const getDepartmentUserKPITicketsCreated = async (req, res) => {
@@ -3901,9 +3901,9 @@ const getDepartmentUserKPITicketsCreated = async (req, res) => {
 
     const pool = await sql.connect(dbConfig);
 
-    // Get users in department with ticket counts per period using DateDim
+    // Get users in department with ticket counts per period using IgxDateDim
     const query = `
-      WITH UserPeriodTickets AS (
+      WITH UserPeriodIgxTickets AS (
         SELECT 
           p.PERSONNO,
           p.PERSON_NAME,
@@ -3913,9 +3913,9 @@ const getDepartmentUserKPITicketsCreated = async (req, res) => {
           COUNT(DISTINCT t.id) as ticket_count
         FROM Person p
         INNER JOIN Dept d ON p.DEPTNO = d.DEPTNO
-        LEFT JOIN Tickets t ON t.created_by = p.PERSONNO
+        LEFT JOIN IgxTickets t ON t.created_by = p.PERSONNO
           AND t.status NOT IN ('rejected_final', 'canceled')
-        LEFT JOIN dbo.DateDim dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        LEFT JOIN dbo.IgxDateDim dd ON dd.DateKey = CAST(t.created_at AS DATE)
         WHERE p.DEPTNO = @deptNo 
           AND p.FLAGDEL != 'Y'
           AND (dd.CompanyYear = @year OR dd.CompanyYear IS NULL)
@@ -3944,15 +3944,15 @@ const getDepartmentUserKPITicketsCreated = async (req, res) => {
           aup.PERSON_NAME,
           aup.DEPTNO,
           aup.DEPTNAME,
-          CONCAT('P', aup.PeriodNo) as period,
+          'P' + CAST(aup.PeriodNo AS VARCHAR(10)) as period,
           ISNULL(upt.ticket_count, 0) as tickets,
           ISNULL(tpt.target_value, 0) as target
         FROM AllUserPeriods aup
-        LEFT JOIN UserPeriodTickets upt 
+        LEFT JOIN UserPeriodIgxTickets upt 
           ON aup.PERSONNO = upt.PERSONNO AND aup.PeriodNo = upt.PeriodNo
-        LEFT JOIN TicketPersonTarget tpt 
+        LEFT JOIN IgxTicketPersonTarget tpt 
           ON tpt.PERSONNO = aup.PERSONNO 
-          AND tpt.period = CONCAT('P', aup.PeriodNo)
+          AND tpt.period = 'P' + CAST(aup.PeriodNo AS VARCHAR(10))
           AND tpt.year = @year 
           AND tpt.type = 'report'
       )
@@ -4011,7 +4011,7 @@ const getDepartmentUserKPITicketsCreated = async (req, res) => {
 };
 
 /**
- * Get Department User KPI - Tickets Assigned
+ * Get Department User KPI - IgxTickets Assigned
  * Returns ticket count for each user as assignee (assigned_to) by period
  */
 const getDepartmentUserKPITicketsAssigned = async (req, res) => {
@@ -4028,9 +4028,9 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
 
     const pool = await sql.connect(dbConfig);
 
-    // Get users in department with ticket counts per period using DateDim
+    // Get users in department with ticket counts per period using IgxDateDim
     const query = `
-      WITH UserPeriodTickets AS (
+      WITH UserPeriodIgxTickets AS (
         SELECT 
           p.PERSONNO,
           p.PERSON_NAME,
@@ -4040,9 +4040,9 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
           COUNT(DISTINCT t.id) as ticket_count
         FROM Person p
         INNER JOIN Dept d ON p.DEPTNO = d.DEPTNO
-        LEFT JOIN Tickets t ON t.assigned_to = p.PERSONNO
+        LEFT JOIN IgxTickets t ON t.assigned_to = p.PERSONNO
           AND t.status NOT IN ('rejected_final', 'canceled')
-        LEFT JOIN dbo.DateDim dd ON dd.DateKey = CAST(t.created_at AS DATE)
+        LEFT JOIN dbo.IgxDateDim dd ON dd.DateKey = CAST(t.created_at AS DATE)
         WHERE p.DEPTNO = @deptNo 
           AND p.FLAGDEL != 'Y'
           AND (dd.CompanyYear = @year OR dd.CompanyYear IS NULL)
@@ -4071,15 +4071,15 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
           aup.PERSON_NAME,
           aup.DEPTNO,
           aup.DEPTNAME,
-          CONCAT('P', aup.PeriodNo) as period,
+          'P' + CAST(aup.PeriodNo AS VARCHAR(10)) as period,
           ISNULL(upt.ticket_count, 0) as tickets,
           ISNULL(tpt.target_value, 0) as target
         FROM AllUserPeriods aup
-        LEFT JOIN UserPeriodTickets upt 
+        LEFT JOIN UserPeriodIgxTickets upt 
           ON aup.PERSONNO = upt.PERSONNO AND aup.PeriodNo = upt.PeriodNo
-        LEFT JOIN TicketPersonTarget tpt 
+        LEFT JOIN IgxTicketPersonTarget tpt 
           ON tpt.PERSONNO = aup.PERSONNO 
-          AND tpt.period = CONCAT('P', aup.PeriodNo)
+          AND tpt.period = 'P' + CAST(aup.PeriodNo AS VARCHAR(10))
           AND tpt.year = @year 
           AND tpt.type = 'fix'
       )

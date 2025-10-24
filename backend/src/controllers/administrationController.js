@@ -64,7 +64,7 @@ const getTicketApprovals = async (req, res) => {
                ELSE 'Unknown Level'
              END as approval_level_name,
              COUNT(*) as total_approvals
-      FROM TicketApproval ta
+      FROM IgxTicketApproval ta
       LEFT JOIN Person per ON ta.personno = per.PERSONNO
       ${whereClause}
       GROUP BY ta.personno, ta.approval_level, per.PERSON_NAME, per.FIRSTNAME, per.LASTNAME, per.PERSONCODE
@@ -112,7 +112,7 @@ const getTicketApprovalsByPersonAndLevel = async (req, res) => {
                  WHEN ta.approval_level = 4 THEN 'L4 - Approve Close'
                  ELSE 'Unknown Level'
                END as approval_level_name
-        FROM TicketApproval ta
+        FROM IgxTicketApproval ta
         LEFT JOIN Person per ON ta.personno = per.PERSONNO
         WHERE ta.personno = @personno AND ta.approval_level = @approval_level
         ORDER BY ta.plant_code, ta.area_code, ta.line_code, ta.machine_code
@@ -165,7 +165,7 @@ const getTicketApprovalById = async (req, res) => {
                  WHEN ta.approval_level = 4 THEN 'L4 - Approve Close'
                  ELSE 'Unknown Level'
                END as approval_level_name
-        FROM TicketApproval ta
+        FROM IgxTicketApproval ta
         LEFT JOIN Person per ON ta.personno = per.PERSONNO
         WHERE ta.id = @id
       `);
@@ -225,10 +225,10 @@ const createTicketApproval = async (req, res) => {
       });
     }
     
-    // Check if plant exists in PUExtension
+    // Check if plant exists in IgxPUExtension
     const plantCheck = await pool.request()
       .input('plant_code', sql.NVarChar, plant_code)
-      .query('SELECT DISTINCT plant FROM PUExtension WHERE plant = @plant_code AND digit_count = 1');
+      .query('SELECT DISTINCT plant FROM IgxPUExtension WHERE plant = @plant_code AND digit_count = 1');
     
     if (plantCheck.recordset.length === 0) {
       return res.status(400).json({
@@ -246,7 +246,7 @@ const createTicketApproval = async (req, res) => {
       .input('machine_code', sql.NVarChar, machine_code)
       .input('approval_level', sql.Int, approval_level)
       .query(`
-        SELECT id FROM TicketApproval 
+        SELECT id FROM IgxTicketApproval 
         WHERE personno = @personno 
         AND plant_code = @plant_code 
         AND ISNULL(area_code, '') = ISNULL(@area_code, '')
@@ -271,7 +271,7 @@ const createTicketApproval = async (req, res) => {
       .input('approval_level', sql.Int, approval_level)
       .input('is_active', sql.Bit, is_active)
       .query(`
-        INSERT INTO TicketApproval 
+        INSERT INTO IgxTicketApproval 
         (personno, plant_code, area_code, line_code, machine_code, approval_level, is_active, created_at, updated_at)
         OUTPUT INSERTED.id
         VALUES (@personno, @plant_code, @area_code, @line_code, @machine_code, @approval_level, @is_active, GETDATE(), GETDATE())
@@ -335,11 +335,11 @@ const createMultipleTicketApprovals = async (req, res) => {
       }
     }
 
-    // Check if all plants exist in PUExtension
+    // Check if all plants exist in IgxPUExtension
     if (plantCodes.length > 0) {
       const plantCodesStr = plantCodes.map(code => `'${code}'`).join(',');
       const plantCheck = await transaction.request()
-        .query(`SELECT DISTINCT plant FROM PUExtension WHERE plant IN (${plantCodesStr}) AND digit_count = 1`);
+        .query(`SELECT DISTINCT plant FROM IgxPUExtension WHERE plant IN (${plantCodesStr}) AND digit_count = 1`);
       
       const existingPlantCodes = plantCheck.recordset.map(r => r.plant);
       const missingPlantCodes = plantCodes.filter(p => !existingPlantCodes.includes(p));
@@ -364,7 +364,7 @@ const createMultipleTicketApprovals = async (req, res) => {
     
     const existingApprovalsQuery = `
       SELECT personno, plant_code, area_code, line_code, machine_code, approval_level
-      FROM TicketApproval
+      FROM IgxTicketApproval
       WHERE ${existingApprovalsConditions}
     `;
     
@@ -417,7 +417,7 @@ const createMultipleTicketApprovals = async (req, res) => {
         console.log('Creating approval:', JSON.stringify(approval, null, 2));
         
         const insertQuery = `
-          INSERT INTO TicketApproval 
+          INSERT INTO IgxTicketApproval 
           (personno, plant_code, area_code, line_code, machine_code, approval_level, is_active, created_at, updated_at)
           OUTPUT INSERTED.id
           VALUES (@personno, @plant_code, @area_code, @line_code, @machine_code, @approval_level, @is_active, GETDATE(), GETDATE())
@@ -565,7 +565,7 @@ const updateTicketApproval = async (req, res) => {
     // Check if ticket approval exists
     const existingApproval = await pool.request()
       .input('id', sql.Int, id)
-      .query('SELECT id FROM TicketApproval WHERE id = @id');
+      .query('SELECT id FROM IgxTicketApproval WHERE id = @id');
     
     if (existingApproval.recordset.length === 0) {
       return res.status(404).json({
@@ -574,10 +574,10 @@ const updateTicketApproval = async (req, res) => {
       });
     }
 
-    // Check if plant exists in PUExtension
+    // Check if plant exists in IgxPUExtension
     const plantCheck = await pool.request()
       .input('plant_code', sql.NVarChar, plant_code)
-      .query('SELECT DISTINCT plant FROM PUExtension WHERE plant = @plant_code AND digit_count = 1');
+      .query('SELECT DISTINCT plant FROM IgxPUExtension WHERE plant = @plant_code AND digit_count = 1');
     
     if (plantCheck.recordset.length === 0) {
       return res.status(400).json({
@@ -596,7 +596,7 @@ const updateTicketApproval = async (req, res) => {
       .input('approval_level', sql.Int, approval_level)
       .input('id', sql.Int, id)
       .query(`
-        SELECT id FROM TicketApproval 
+        SELECT id FROM IgxTicketApproval 
         WHERE personno = @personno AND plant_code = @plant_code 
         AND ISNULL(area_code, '') = ISNULL(@area_code, '')
         AND ISNULL(line_code, '') = ISNULL(@line_code, '')
@@ -621,7 +621,7 @@ const updateTicketApproval = async (req, res) => {
       .input('approval_level', sql.Int, approval_level)
       .input('is_active', sql.Bit, is_active)
       .query(`
-        UPDATE TicketApproval 
+        UPDATE IgxTicketApproval 
         SET personno = @personno, plant_code = @plant_code, area_code = @area_code, 
             line_code = @line_code, machine_code = @machine_code, approval_level = @approval_level, 
             is_active = @is_active, updated_at = GETDATE()
@@ -650,7 +650,7 @@ const deleteTicketApproval = async (req, res) => {
 
     const result = await pool.request()
       .input('id', sql.Int, id)
-      .query('DELETE FROM TicketApproval WHERE id = @id');
+      .query('DELETE FROM IgxTicketApproval WHERE id = @id');
 
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({
@@ -691,7 +691,7 @@ const deleteTicketApprovalsByPersonAndLevel = async (req, res) => {
     const result = await pool.request()
       .input('personno', sql.Int, personno)
       .input('approval_level', sql.Int, approval_level)
-      .query('DELETE FROM TicketApproval WHERE personno = @personno AND approval_level = @approval_level');
+      .query('DELETE FROM IgxTicketApproval WHERE personno = @personno AND approval_level = @approval_level');
 
     res.json({
       success: true,
@@ -733,17 +733,19 @@ const getHierarchyView = async (req, res) => {
           WHEN digit_count = 1 THEN 'Plant'
           WHEN digit_count = 2 THEN 'Area'
           WHEN digit_count = 3 THEN 'Line'
-          WHEN digit_count = 4 THEN 'Machine'
+          WHEN digit_count = 4 AND machine IS NOT NULL THEN 'Machine'
+          WHEN digit_count = 5 AND machine IS NOT NULL THEN 'Machine'
           ELSE 'Unknown'
         END as hierarchy_level,
         CASE
           WHEN digit_count = 1 THEN puname
           WHEN digit_count = 2 THEN plant + ' - ' + puname
           WHEN digit_count = 3 THEN plant + ' - ' + area + ' - ' + puname
-          WHEN digit_count = 4 THEN plant + ' - ' + area + ' - ' + line + ' - ' + puname
+          WHEN digit_count = 4 AND machine IS NOT NULL THEN plant + ' - ' + area + ' - ' + line + ' - ' + puname
+          WHEN digit_count = 5 AND machine IS NOT NULL THEN plant + ' - ' + area + ' - ' + line + ' - ' + puname
           ELSE puname
         END as full_path
-      FROM PUExtension
+      FROM IgxPUExtension
       ORDER BY plant, area, line, machine, digit_count, puname
     `);
 
@@ -803,26 +805,45 @@ const getHierarchyView = async (req, res) => {
             machines: {}
           };
         }
-      } else if (digit_count === 4) {
+      } else if (digit_count === 4 || digit_count === 5) {
         // Machine level
         if (!hierarchy.plants[plant]) {
           hierarchy.plants[plant] = { areas: {} };
         }
         if (!hierarchy.plants[plant].areas[area]) {
-          hierarchy.plants[plant].areas[area] = { lines: {} };
+          hierarchy.plants[plant].areas[area] = { lines: {}, machines: {} };
         }
-        if (!hierarchy.plants[plant].areas[area].lines[line]) {
-          hierarchy.plants[plant].areas[area].lines[line] = { machines: {} };
-        }
-        if (!hierarchy.plants[plant].areas[area].lines[line].machines[machine]) {
-          hierarchy.plants[plant].areas[area].lines[line].machines[machine] = {
-            code: machine,
-            name: item.puname,
-            description: item.pudescription,
-            machine_number: item.number,
-            puno: item.puno,
-            pucode: item.pucode
-          };
+        
+        if (line && line !== null) {
+          // Machine belongs to a line
+          if (!hierarchy.plants[plant].areas[area].lines[line]) {
+            hierarchy.plants[plant].areas[area].lines[line] = { machines: {} };
+          }
+          if (!hierarchy.plants[plant].areas[area].lines[line].machines[machine]) {
+            hierarchy.plants[plant].areas[area].lines[line].machines[machine] = {
+              code: machine,
+              name: item.puname,
+              description: item.pudescription,
+              machine_number: item.number,
+              puno: item.puno,
+              pucode: item.pucode
+            };
+          }
+        } else {
+          // Machine doesn't belong to a line (line is NULL), place directly under area
+          if (!hierarchy.plants[plant].areas[area].machines) {
+            hierarchy.plants[plant].areas[area].machines = {};
+          }
+          if (!hierarchy.plants[plant].areas[area].machines[machine]) {
+            hierarchy.plants[plant].areas[area].machines[machine] = {
+              code: machine,
+              name: item.puname,
+              description: item.pudescription,
+              machine_number: item.number,
+              puno: item.puno,
+              pucode: item.pucode
+            };
+          }
         }
       }
     });
@@ -839,8 +860,11 @@ const getHierarchyView = async (req, res) => {
           totalLines: Object.values(hierarchy.plants).reduce((sum, plant) => 
             sum + Object.values(plant.areas).reduce((sumArea, area) => sumArea + Object.keys(area.lines).length, 0), 0),
           totalMachines: Object.values(hierarchy.plants).reduce((sum, plant) => 
-            sum + Object.values(plant.areas).reduce((sumArea, area) => 
-              sumArea + Object.values(area.lines).reduce((sumLine, line) => sumLine + Object.keys(line.machines).length, 0), 0), 0)
+            sum + Object.values(plant.areas).reduce((sumArea, area) => {
+              const lineMachines = Object.values(area.lines || {}).reduce((sumLine, line) => sumLine + Object.keys(line.machines || {}).length, 0);
+              const areaMachines = Object.keys(area.machines || {}).length;
+              return sumArea + lineMachines + areaMachines;
+            }, 0), 0)
         }
       },
       count: result.recordset.length
@@ -862,7 +886,7 @@ const getLookupData = async (req, res) => {
   try {
     const pool = await getConnection();
 
-    // Query hierarchy from PUExtension table
+    // Query hierarchy from IgxPUExtension table
     const [plantsResult, areasResult, linesResult] = await Promise.all([
       // Get distinct plants (digit_count = 1)
       pool.request().query(`
@@ -870,7 +894,7 @@ const getLookupData = async (req, res) => {
           puno as id,
           puname as name,
           plant as code
-        FROM PUExtension 
+        FROM IgxPUExtension 
         WHERE digit_count = 1 AND plant IS NOT NULL
         ORDER BY plant
       `),
@@ -878,16 +902,16 @@ const getLookupData = async (req, res) => {
       pool.request().query(`
         WITH UniqueAreas AS (
           SELECT DISTINCT plant, area, COUNT(*) as puno_count
-          FROM PUExtension 
+          FROM IgxPUExtension 
           WHERE digit_count >= 2 AND area IS NOT NULL
           GROUP BY plant, area
         )
         SELECT 
           ROW_NUMBER() OVER (ORDER BY u.plant, u.area) as id,
-          u.area as name,
+          COALESCE((SELECT TOP 1 pudescription FROM IgxPUExtension p WHERE p.plant = u.plant AND p.area = u.area AND p.digit_count = 2), u.area) as name,
           u.area as code,
           u.plant as plant_code,
-          (SELECT TOP 1 puno FROM PUExtension p WHERE p.plant = u.plant AND p.digit_count = 1) as plant_id,
+          (SELECT TOP 1 puno FROM IgxPUExtension p WHERE p.plant = u.plant AND p.digit_count = 1) as plant_id,
           u.plant as plant_name
         FROM UniqueAreas u
         ORDER BY u.plant, u.area
@@ -896,23 +920,23 @@ const getLookupData = async (req, res) => {
       pool.request().query(`
         WITH UniqueAreas AS (
           SELECT DISTINCT plant, area, ROW_NUMBER() OVER (ORDER BY plant, area) as area_id
-          FROM PUExtension 
+          FROM IgxPUExtension 
           WHERE digit_count >= 2 AND area IS NOT NULL
           GROUP BY plant, area
         ),
         UniqueLines AS (
           SELECT DISTINCT plant, area, line, COUNT(*) as puno_count
-          FROM PUExtension 
+          FROM IgxPUExtension 
           WHERE digit_count >= 3 AND line IS NOT NULL
           GROUP BY plant, area, line
         )
         SELECT 
           ROW_NUMBER() OVER (ORDER BY ul.plant, ul.area, ul.line) as id,
-          ul.line as name,
+          COALESCE((SELECT TOP 1 pudescription FROM IgxPUExtension p WHERE p.plant = ul.plant AND p.area = ul.area AND p.line = ul.line AND p.digit_count = 3), ul.line) as name,
           ul.line as code,
           ul.plant as plant_code,
           ul.area as area_code,
-          (SELECT TOP 1 puno FROM PUExtension p WHERE p.plant = ul.plant AND p.digit_count = 1) as plant_id,
+          (SELECT TOP 1 puno FROM IgxPUExtension p WHERE p.plant = ul.plant AND p.digit_count = 1) as plant_id,
           ua.area_id as area_id,
           ul.plant as plant_name,
           ul.area as area_name

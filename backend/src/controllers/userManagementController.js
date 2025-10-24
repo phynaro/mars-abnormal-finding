@@ -70,7 +70,7 @@ const userManagementController = {
               s.SiteCode,
               s.SiteName
             FROM _secUsers u
-            LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+            LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
             LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
             LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
@@ -191,7 +191,7 @@ const userManagementController = {
             s.SiteCode,
             s.SiteName
           FROM _secUsers u
-          LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+          LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
           LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
           LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
           LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
@@ -368,7 +368,7 @@ const userManagementController = {
             INSERT INTO _secUsers (PersonNo, UserID, Passwd, GroupNo, LevelReport, StoreRoom, DBNo, NeverExpireFlag, CreateUser)
             VALUES (@personNo, @userID, @passwd, @groupNo, @levelReport, @storeRoom, @dbNo, @neverExpireFlag, @createUser);
             
-            INSERT INTO UserExtension (UserID, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+            INSERT INTO IgxUserExtension (UserID, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
             VALUES (@userID, @emailVerified, NULL, NULL, NULL, GETDATE(), GETDATE(), @lineId, NULL, @isActive);
             
             SELECT @personNo as PersonNo, @userID as UserID, GETDATE() as CreatedAt
@@ -442,7 +442,7 @@ const userManagementController = {
       // Check if user exists
       const userResult = await pool.request()
         .input('userID', sql.VarChar(50), userId)
-        .query('SELECT u.PersonNo, u.UserID FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
+        .query('SELECT u.PersonNo, u.UserID FROM _secUsers u LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
       if (userResult.recordset.length === 0) {
         return res.status(404).json({
@@ -519,7 +519,7 @@ const userManagementController = {
                   UpdateUser = @updateUser
               WHERE UserID = @userID;
               
-              UPDATE UserExtension
+              UPDATE IgxUserExtension
               SET LineID = COALESCE(@lineId, LineID),
                   IsActive = COALESCE(@isActive, IsActive),
                   UpdatedAt = GETDATE()
@@ -567,7 +567,7 @@ const userManagementController = {
       // Check if user exists
       const userResult = await pool.request()
         .input('userID', sql.VarChar(50), userId)
-        .query('SELECT u.UserID FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
+        .query('SELECT u.UserID FROM _secUsers u LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
       if (userResult.recordset.length === 0) {
         return res.status(404).json({
@@ -585,7 +585,7 @@ const userManagementController = {
           SET UpdateUser = @updateUser
           WHERE UserID = @userID;
           
-          UPDATE UserExtension 
+          UPDATE IgxUserExtension 
           SET IsActive = 0, UpdatedAt = GETDATE() 
           WHERE UserID = @userID
         `);
@@ -668,7 +668,7 @@ const userManagementController = {
       // Check if user exists
       const userResult = await pool.request()
         .input('userID', sql.VarChar(50), userId)
-        .query('SELECT u.UserID FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
+        .query('SELECT u.UserID FROM _secUsers u LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
       if (userResult.recordset.length === 0) {
         return res.status(404).json({
@@ -690,7 +690,7 @@ const userManagementController = {
           SET Passwd = @newPassword, UpdateUser = @updateUser
           WHERE UserID = @userID;
           
-          UPDATE UserExtension 
+          UPDATE IgxUserExtension 
           SET UpdatedAt = GETDATE() 
           WHERE UserID = @userID
         `);

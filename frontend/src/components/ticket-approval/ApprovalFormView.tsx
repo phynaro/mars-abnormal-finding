@@ -107,7 +107,7 @@ const ApprovalFormView: React.FC<ApprovalFormViewProps> = ({
 
   return (
     <div className="container mx-auto p-6">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-8xl mx-auto">
         <Card>
           <CardHeader>
             <CardTitle>
@@ -163,29 +163,29 @@ const ApprovalFormView: React.FC<ApprovalFormViewProps> = ({
                     <SelectValue placeholder="Select approval level" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem 
+                    {/* <SelectItem 
                       value="1" 
                       disabled={isApprovalLevelDisabled(1)}
                     >
                       Level 1 {isApprovalLevelDisabled(1) && '(Already exists)'}
-                    </SelectItem>
+                    </SelectItem> */}
                     <SelectItem 
                       value="2" 
                       disabled={isApprovalLevelDisabled(2)}
                     >
-                      Level 2 {isApprovalLevelDisabled(2) && '(Already exists)'}
+                      Level 2 (Assignee) {isApprovalLevelDisabled(2) && '(Already exists)'}
                     </SelectItem>
                     <SelectItem 
                       value="3" 
                       disabled={isApprovalLevelDisabled(3)}
                     >
-                      Level 3 {isApprovalLevelDisabled(3) && '(Already exists)'}
+                      Level 3 (Planner) {isApprovalLevelDisabled(3) && '(Already exists)'}
                     </SelectItem>
                     <SelectItem 
                       value="4" 
                       disabled={isApprovalLevelDisabled(4)}
                     >
-                      Level 4 {isApprovalLevelDisabled(4) && '(Already exists)'}
+                      Level 4 (Line Manager) {isApprovalLevelDisabled(4) && '(Already exists)'}
                     </SelectItem>
                   </SelectContent>
                 </Select>

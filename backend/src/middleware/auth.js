@@ -81,7 +81,7 @@ const authenticateToken = async (req, res, next) => {
             s.SiteCode,
             s.SiteName
           FROM _secUsers u
-          LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+          LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
           LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
           LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
           LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO

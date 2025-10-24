@@ -29,7 +29,7 @@ const getUserPersonMapping = async (pool, userId) => {
         p.SiteNo,
         dept.DEPTNAME
       FROM _secUsers u
-      LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
       LEFT JOIN Dept dept ON p.DEPTNO = dept.DEPTNO
       WHERE u.UserID = @userId AND (ue.IsActive = 1 OR ue.IsActive IS NULL)

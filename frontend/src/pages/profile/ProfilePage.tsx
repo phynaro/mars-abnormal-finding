@@ -28,6 +28,7 @@ const ProfilePage: React.FC = () => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [lineId, setLineId] = useState(user?.lineId || '');
+  const [lineIdLoading, setLineIdLoading] = useState(false);
   // Cropper state
   const [showCropper, setShowCropper] = useState(false);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -59,6 +60,28 @@ const ProfilePage: React.FC = () => {
       alert(e instanceof Error ? e.message : t('profile.failedToUpdateProfile'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const updateLineId = async () => {
+    setLineIdLoading(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/users/profile/line-id`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+        },
+        body: JSON.stringify({ lineId })
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || t('profile.failedToUpdateLineId'));
+      await refreshUser();
+      alert(t('profile.lineIdUpdated'));
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t('profile.failedToUpdateLineId'));
+    } finally {
+      setLineIdLoading(false);
     }
   };
 
@@ -240,7 +263,7 @@ const ProfilePage: React.FC = () => {
 
 
   return (
-    <div className="container mx-auto px-4 py-8">
+    <div className="container mx-auto px-4 py-4">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Section 1: Profile Information */}
         <Card className="lg:col-span-2">
@@ -330,29 +353,28 @@ const ProfilePage: React.FC = () => {
                   variant="outline"
                   onClick={async () => {
                     try {
-                      // Use the current form value for testing, not the saved value
-                      const testLineId = lineId.trim();
-                      if (!testLineId) {
-                        alert(t('profile.pleaseEnterLineId'));
-                        return;
-                      }
-                      
+                      // Don't send lineId in body - let backend use saved value
                       const res = await fetch(`${getApiBaseUrl()}/users/line/test`, {
                         method: 'POST',
                         headers: { 
                           'Authorization': `Bearer ${localStorage.getItem('token')}` || '',
                           'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ lineId: testLineId })
+                        body: JSON.stringify({}) // Empty body to use saved LINE ID
                       });
                       const result = await res.json();
                       if (!res.ok) throw new Error(result.message || t('profile.failedToSendTestNotification'));
-                      alert(t('profile.testNotificationSent'));
+                      
+                      let message = t('profile.testNotificationSent');
+                      if (result.warning) {
+                        message += '\n\n' + result.warning;
+                      }
+                      alert(message);
                     } catch (e) {
                       alert(e instanceof Error ? e.message : t('profile.failedToSendTestNotification'));
                     }
                   }}
-                  disabled={!lineId.trim()}
+                  disabled={!user?.lineId?.trim()}
                 >
                   {t('profile.sendTestLineNotification')}
                 </Button>
@@ -367,11 +389,31 @@ const ProfilePage: React.FC = () => {
                 )}
                 
                 <p className="text-sm text-muted-foreground">
-                  {lineId.trim() ? 
-                    t('profile.testWillUseCurrentInput') : 
+                  {user?.lineId?.trim() ? 
+                    t('profile.testWillUseSavedLineId') : 
                     t('profile.ensureLineIdSet')
                   }
                 </p>
+              </div>
+              
+              {/* LINE ID Save Button - moved to last component */}
+              <div className="flex gap-2 pt-2 border-t">
+                <Button 
+                  onClick={updateLineId} 
+                  disabled={lineIdLoading || lineId === (user?.lineId || '')}
+                  size="sm"
+                >
+                  {lineIdLoading ? t('profile.saving') : t('profile.saveLineId')}
+                </Button>
+                {lineId !== (user?.lineId || '') && (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setLineId(user?.lineId || '')}
+                    size="sm"
+                  >
+                    {t('profile.cancel')}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -421,7 +463,7 @@ const ProfilePage: React.FC = () => {
                   />
                 </div>
                 <div>
-                  <Button type="submit" variant="outline" disabled={loading || !currentPassword || !newPassword}>
+                  <Button type="submit" disabled={loading || !currentPassword || !newPassword}>
                     {t('profile.changePassword')}
                   </Button>
                 </div>

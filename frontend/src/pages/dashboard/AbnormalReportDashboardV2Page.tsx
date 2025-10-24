@@ -424,16 +424,14 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   };
 
   // Fetch areas data
-  const fetchAreas = async (plantCode?: string) => {
+  const fetchAreas = async (plantCode: string) => {
     try {
       setAreasLoading(true);
       
       // Record start time for minimum loading duration
       const startTime = Date.now();
       
-      const url = plantCode 
-        ? `${API_BASE_URL}/hierarchy/distinct/areas?plant=${plantCode}`
-        : `${API_BASE_URL}/hierarchy/distinct/areas`;
+      const url = `${API_BASE_URL}/hierarchy/puextension/plants/${encodeURIComponent(plantCode)}/areas`;
       const response = await fetch(url, {
         headers: authService.getAuthHeaders()
       });
@@ -999,7 +997,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   // Fetch areas on component mount
   useEffect(() => {
     fetchPlants();
-    fetchAreas();
+    // Don't fetch areas on mount - wait for plant selection
     fetchParticipationData();
     fetchAreaActivityData();
     fetchUserActivityData();
@@ -1121,7 +1119,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     if (plantFilter !== 'all') {
       fetchAreas(plantFilter);
     } else {
-      fetchAreas();
+      // Clear areas when plant filter is 'all'
+      setAreas([]);
+      setAreaFilter('all'); // Reset area filter
     }
   }, [plantFilter]);
 
@@ -1130,7 +1130,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     if (isFilterModalOpen && pendingPlantFilter !== 'all') {
       fetchAreas(pendingPlantFilter);
     } else if (isFilterModalOpen && pendingPlantFilter === 'all') {
-      fetchAreas();
+      // Clear areas when pending plant filter is 'all'
+      setAreas([]);
     }
   }, [pendingPlantFilter, isFilterModalOpen]);
 
@@ -1606,9 +1607,19 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">{t('dashboard.area')}</label>
-                <Select value={pendingAreaFilter} onValueChange={setPendingAreaFilter}>
+                <Select 
+                  value={pendingAreaFilter} 
+                  onValueChange={setPendingAreaFilter}
+                  disabled={pendingPlantFilter === 'all'}
+                >
                   <SelectTrigger>
-                    <SelectValue placeholder={areasLoading ? t('dashboard.loadingAreas') : t('dashboard.area')} />
+                    <SelectValue placeholder={
+                      pendingPlantFilter === 'all' 
+                        ? 'Select plant first' 
+                        : areasLoading 
+                          ? t('dashboard.loadingAreas') 
+                          : t('dashboard.area')
+                    } />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">{t('dashboard.allAreas')}</SelectItem>

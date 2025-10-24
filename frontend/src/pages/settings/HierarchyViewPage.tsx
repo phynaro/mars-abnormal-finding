@@ -41,6 +41,7 @@ interface HierarchyData {
         pucode: string;
         machines: Record<string, HierarchyItem>;
       }>;
+      machines?: Record<string, HierarchyItem>; // Machines directly under area (when line is NULL)
     }>;
   }>;
 }
@@ -89,6 +90,7 @@ const HierarchyViewPage: React.FC = () => {
       setLoading(true);
       const data = await administrationService.hierarchy.getHierarchyView();
       setHierarchyData(data);
+   
       // Auto-expand plants for better UX
       const plantCodes = Object.keys(data.hierarchy.plants);
       setExpandedItems(new Set(plantCodes.map(code => `plant-${code}`)));
@@ -140,7 +142,16 @@ const HierarchyViewPage: React.FC = () => {
     }
     
     // Check if any line matches
-    return Object.values(area.lines).some((line: any) => lineMatchesSearch(line, term));
+    const lineMatches = Object.values(area.lines).some((line: any) => lineMatchesSearch(line, term));
+    
+    // Check if any area-level machine matches
+    const areaMachineMatches = area.machines ? 
+      Object.values(area.machines).some((machine: any) => 
+        (machine.name?.toLowerCase().includes(term) ?? false) ||
+        (machine.code?.toLowerCase().includes(term) ?? false)
+      ) : false;
+    
+    return lineMatches || areaMachineMatches;
   };
 
   // Function to check if a line matches the search term
@@ -170,37 +181,36 @@ const HierarchyViewPage: React.FC = () => {
     );
 
     return (
-      <Card className="mb-4">
+      <Card className="mb-2">
         <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(`plant-${plantCode}`)}>
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Factory className="h-5 w-5 text-blue-600" />
+                <div className="flex items-center gap-2">
+                  <Factory className="h-4 w-4 text-blue-600" />
                   <div>
-                    <CardTitle className="text-lg">{plant.name}</CardTitle>
-                    <p className="text-sm text-muted-foreground">
-                      Code: {plant.code} • PU Code: {plant.pucode}
-                    </p>
-                    {plant.description && (
-                      <p className="text-sm text-muted-foreground mt-1">{plant.description}</p>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-base">{plant.name}</CardTitle>
+                      <span className="text-xs text-muted-foreground bg-muted px-1 rounded">
+                        {plant.pucode}
+                      </span>
+                    </div>
                     {searchTerm && (
-                      <p className="text-xs text-blue-600 font-medium mt-1">
-                        🔍 Showing {filteredAreas.length} matching areas
+                      <p className="text-xs text-blue-600 font-medium">
+                        🔍 {filteredAreas.length} areas
                       </p>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{filteredAreas.length} Areas</Badge>
-                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  <Badge variant="secondary" className="text-xs">{filteredAreas.length}</Badge>
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </div>
               </div>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="pl-6">
+            <CardContent className="pl-4 py-2">
               {filteredAreas.map(([areaCode, area]) => (
                 <AreaCard key={areaCode} areaCode={areaCode} area={area} plantCode={plantCode} />
               ))}
@@ -220,44 +230,70 @@ const HierarchyViewPage: React.FC = () => {
     const filteredLines = Object.entries(area.lines).filter(([, line]) => 
       !searchTerm || lineMatchesSearch(line, searchTerm.toLowerCase())
     );
+    
+    // Filter area-level machines based on search term
+    const filteredAreaMachines = area.machines ? 
+      Object.entries(area.machines).filter(([, machine]: [string, HierarchyItem]) => 
+        !searchTerm || 
+        (machine.name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+        (machine.code?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
+      ) : [];
+
+    const totalItems = filteredLines.length + filteredAreaMachines.length;
 
     return (
-      <Card className="mb-3 ml-4">
+      <Card className="mb-2 ml-3">
         <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(`area-${plantCode}-${areaCode}`)}>
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-3">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-2">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Building2 className="h-4 w-4 text-green-600" />
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-3 w-3 text-green-600" />
                   <div>
-                    <div className="font-medium">{area.name}</div>
-                    <p className="text-sm text-muted-foreground">
-                      Code: {area.code} • PU Code: {area.pucode}
-                    </p>
-                    {area.description && (
-                      <p className="text-sm text-muted-foreground mt-1">{area.description}</p>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="font-medium text-sm">{area.name}</div>
+                      <span className="text-xs text-muted-foreground bg-muted px-1 rounded">
+                        {area.pucode}
+                      </span>
+                    </div>
+        
                     {searchTerm && (
-                      <p className="text-xs text-blue-600 font-medium mt-1">
-                        🔍 Showing {filteredLines.length} matching lines
+                      <p className="text-xs text-blue-600 font-medium">
+                        🔍 {totalItems} items ({filteredLines.length}L, {filteredAreaMachines.length}M)
                       </p>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{filteredLines.length} Lines</Badge>
-                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  <Badge variant="outline" className="text-xs">{totalItems}</Badge>
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </div>
               </div>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="pl-6 py-3">
+            <CardContent className="pl-4 py-2">
+              {/* Area-level machines (machines without lines) */}
+              {filteredAreaMachines.length > 0 && (
+                <div className="mb-2">
+                  <div className="flex items-center gap-1 mb-1">
+                    <Wrench className="h-3 w-3 text-red-600" />
+                    <span className="text-xs font-medium text-muted-foreground">Direct</span>
+                    <Badge variant="secondary" className="text-xs px-1 py-0">{filteredAreaMachines.length}</Badge>
+                  </div>
+                  {filteredAreaMachines.map(([machineCode, machine]) => (
+                    <MachineCard key={`area-machine-${machineCode}`} machineCode={machineCode} machine={machine} />
+                  ))}
+                </div>
+              )}
+              
+              {/* Lines */}
               {filteredLines.map(([lineCode, line]) => (
                 <LineCard key={lineCode} lineCode={lineCode} line={line} areaCode={areaCode} plantCode={plantCode} />
               ))}
-              {searchTerm && filteredLines.length === 0 && (
-                <p className="text-sm text-muted-foreground italic">No lines match your search</p>
+              
+              {searchTerm && totalItems === 0 && (
+                <p className="text-sm text-muted-foreground italic">No items match your search</p>
               )}
             </CardContent>
           </CollapsibleContent>
@@ -269,44 +305,43 @@ const HierarchyViewPage: React.FC = () => {
   const LineCard: React.FC<{ lineCode: string; line: any; areaCode: string; plantCode: string }> = ({ lineCode, line, areaCode, plantCode }) => {
     const isExpanded = expandedItems.has(`line-${plantCode}-${areaCode}-${lineCode}`);
     // Filter machines based on search term
-    const filteredMachines = Object.entries(line.machines).filter(([, machine]) => 
+    const filteredMachines = Object.entries(line.machines).filter(([, machine]: [string, HierarchyItem]) => 
       !searchTerm || 
       (machine.name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
       (machine.code?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
     );
 
     return (
-      <Card className="mb-2 ml-4">
+      <Card className="mb-1 ml-3">
         <Collapsible open={isExpanded} onOpenChange={() => toggleExpanded(`line-${plantCode}-${areaCode}-${lineCode}`)}>
           <CollapsibleTrigger asChild>
-            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-2">
+            <CardHeader className="cursor-pointer hover:bg-muted/50 transition-colors py-1">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Cog className="h-4 w-4 text-orange-600" />
+                <div className="flex items-center gap-2">
+                  <Cog className="h-3 w-3 text-orange-600" />
                   <div>
-                    <div className="font-medium">{line.name}</div>
-                    <p className="text-sm text-muted-foreground">
-                      Code: {line.code} • PU Code : {line.pucode}
-                    </p>
-                    {line.description && (
-                      <p className="text-sm text-muted-foreground mt-1">{line.description}</p>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <div className="font-medium text-sm">{line.name}</div>
+                      <span className="text-xs text-muted-foreground bg-muted px-1 rounded">
+                        {line.pucode}
+                      </span>
+                    </div>
                     {searchTerm && (
-                      <p className="text-xs text-blue-600 font-medium mt-1">
-                        🔍 Showing {filteredMachines.length} matching machines
+                      <p className="text-xs text-blue-600 font-medium">
+                        🔍 {filteredMachines.length} machines
                       </p>
                     )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{filteredMachines.length} Machines</Badge>
-                  {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                  <Badge variant="outline" className="text-xs">{filteredMachines.length}</Badge>
+                  {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
                 </div>
               </div>
             </CardHeader>
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="pl-6 py-2">
+            <CardContent className="pl-4 py-1">
               {filteredMachines.map(([machineCode, machine]) => (
                 <MachineCard key={machineCode} machineCode={machineCode} machine={machine} />
               ))}
@@ -321,23 +356,19 @@ const HierarchyViewPage: React.FC = () => {
   };
 
   const MachineCard: React.FC<{ machineCode: string; machine: any }> = ({ machineCode, machine }) => (
-    <Card className="mb-1 ml-4">
-      <CardHeader className="py-2">
+    <Card className="mb-1 ml-3">
+      <CardHeader className="py-1">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Wrench className="h-4 w-4 text-red-600" />
-            <div>
-              <div className="font-medium">{machine.name}</div>
-              <p className="text-sm text-muted-foreground">
-                Code: {machine.code} • PU Code: {machine.pucode}
-                {machine.machine_number && ` • Machine #${machine.machine_number}`}
-              </p>
-              {machine.description && (
-                <p className="text-sm text-muted-foreground mt-1">{machine.description}</p>
-              )}
+          <div className="flex items-center gap-2">
+            <Wrench className="h-3 w-3 text-red-600" />
+            <div className="flex items-center gap-2">
+              <div className="font-medium text-sm">{machine.name}</div>
+              <span className="text-xs text-muted-foreground bg-muted px-1 rounded">
+                {machine.pucode}
+              </span>
             </div>
           </div>
-          <Badge variant="secondary">Machine</Badge>
+          <Badge variant="secondary" className="text-xs">M</Badge>
         </div>
       </CardHeader>
     </Card>
@@ -437,7 +468,7 @@ const HierarchyViewPage: React.FC = () => {
       </div>
 
       {/* Hierarchy Tree */}
-      <ScrollArea className="h-[600px]">
+      <ScrollArea className="h-[69vh]">
         <div className="space-y-4">
           {hierarchyData ? (
             <>

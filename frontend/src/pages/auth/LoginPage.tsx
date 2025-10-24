@@ -261,9 +261,9 @@ const LoginPage: React.FC = () => {
 
             {/* Additional Links */}
             <div className="flex items-center justify-between text-sm">
-              <Button type="button" variant="link" className="p-0 h-auto text-sm" onClick={() => navigate('/verify-email')}>
+              {/* <Button type="button" variant="link" className="p-0 h-auto text-sm" onClick={() => navigate('/verify-email')}>
                 {t('auth.forgotPassword')}
-              </Button>
+              </Button> */}
               {/* <div>
                 <span className="text-muted-foreground">
                   Don't have an account?{' '}

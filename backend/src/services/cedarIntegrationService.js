@@ -158,7 +158,7 @@ class CedarIntegrationService {
                            t.schedule_start, t.planed_at, t.planed_by,
                            t.actual_start_at, t.actual_finish_at,
                            t.created_by, t.title, t.description
-                    FROM Tickets t
+                    FROM IgxTickets t
                     WHERE t.id = @ticketId
                 `);
 
@@ -290,7 +290,7 @@ class CedarIntegrationService {
                            created_person.DEPTNO as CREATED_DEPTNO,
                            created_person.FIRSTNAME as CREATED_FIRSTNAME,
                            created_person.LASTNAME as CREATED_LASTNAME
-                    FROM Tickets t
+                    FROM IgxTickets t
                     LEFT JOIN PU pu ON t.puno = pu.PUNO
                     LEFT JOIN Person accepted_person ON t.accepted_by = accepted_person.PERSONNO
                     LEFT JOIN Person created_person ON t.created_by = created_person.PERSONNO
@@ -914,7 +914,7 @@ class CedarIntegrationService {
         .input("cedarSyncError", sql.NVarChar(500), errorMessage);
 
       await updateRequest.query(`
-                UPDATE Tickets 
+                UPDATE IgxTickets 
                 SET cedar_wono = @cedarWono,
                     cedar_wocode = @cedarWocode,
                     cedar_sync_status = @cedarSyncStatus,
@@ -961,7 +961,7 @@ class CedarIntegrationService {
         .input("createdBy", sql.Int, 1); // System user
 
       await logRequest.query(`
-                INSERT INTO CedarIntegrationLog 
+                INSERT INTO IgxCedarIntegrationLog 
                 (ticket_id, wono, action, status, request_data, response_data, error_message, created_at, created_by)
                 VALUES (@ticketId, @wono, @action, @status, @requestData, @responseData, @errorMessage, @createdAt, @createdBy)
             `);

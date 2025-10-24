@@ -273,7 +273,7 @@ const TicketCreatePage: React.FC = () => {
       console.error('Error searching machines:', error);
       toast({
         title: t('common.error'),
-        description: t('ticket.failedToSearchMachines'),
+        description: t('ticket.failedToSearchPU'),
         variant: 'destructive'
       });
     } finally {
@@ -682,7 +682,7 @@ const TicketCreatePage: React.FC = () => {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <p className="text-sm font-medium text-green-800 dark:text-green-200">{t('ticket.selectedMachine')}</p>
+                          <p className="text-sm font-medium text-green-800 dark:text-green-200">{t('ticket.selectedPU')}</p>
                         </div>
                         <p className="text-lg font-mono text-green-900 dark:text-green-100 mb-1">{selectedMachine.PUCODE}</p>
                         <p className="text-sm text-green-700 dark:text-green-300 mb-2">{selectedMachine.PUDESC}</p>

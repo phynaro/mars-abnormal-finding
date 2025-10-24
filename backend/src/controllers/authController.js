@@ -122,7 +122,7 @@ const login = async (req, res) => {
           u.LastDate,
           u.ExpireDate,
           u.NeverExpireFlag,
-          ue.PersonNo as UserExtensionPersonNo,
+          ue.PersonNo as IgxUserExtensionPersonNo,
           ue.EmailVerified,
           ue.EmailVerificationToken,
           ue.EmailVerificationExpires,
@@ -151,7 +151,7 @@ const login = async (req, res) => {
           s.SiteCode,
           s.SiteName
         FROM _secUsers u
-        LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+        LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
         LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
         LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
         LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
@@ -219,23 +219,23 @@ const login = async (req, res) => {
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    // Check if UserExtension record exists, create if not
+    // Check if IgxUserExtension record exists, create if not
     if (!user.CreatedAt) {
-      // Create UserExtension record if it doesn't exist (first login)
+      // Create IgxUserExtension record if it doesn't exist (first login)
       await pool.request()
         .input('userID', sql.VarChar, user.UserID)
         .input('personNo', sql.Int, user.PersonNo)
         .query(`
-          INSERT INTO UserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+          INSERT INTO IgxUserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
           VALUES (@userID, @personNo, 'Y', NULL, NULL, GETDATE(), GETDATE(), GETDATE(), NULL, NULL, 1)
         `);
     } else {
-      // Update last login for existing UserExtension record
+      // Update last login for existing IgxUserExtension record
       await pool.request()
         .input('userID', sql.VarChar, user.UserID)
         .input('personNo', sql.Int, user.PersonNo)
         .query(`
-          UPDATE UserExtension 
+          UPDATE IgxUserExtension 
           SET LastLogin = GETDATE(), 
               PersonNo = @personNo,
               UpdatedAt = GETDATE() 
@@ -367,7 +367,7 @@ const changePassword = async (req, res) => {
     // Get current user
     const userResult = await pool.request()
       .input('userID', sql.VarChar, userId)
-      .query('SELECT u.Passwd FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
+      .query('SELECT u.Passwd FROM _secUsers u LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
     if (userResult.recordset.length === 0) {
       return res.status(404).json({ 
@@ -394,7 +394,7 @@ const changePassword = async (req, res) => {
     await pool.request()
       .input('userID', sql.VarChar, userId)
       .input('newPassword', sql.NVarChar, newHashedPassword)
-      .query('UPDATE _secUsers SET Passwd = @newPassword WHERE UserID = @userID; UPDATE UserExtension SET UpdatedAt = GETDATE() WHERE UserID = @userID');
+      .query('UPDATE _secUsers SET Passwd = @newPassword WHERE UserID = @userID; UPDATE IgxUserExtension SET UpdatedAt = GETDATE() WHERE UserID = @userID');
 
     res.json({
       success: true,
@@ -459,7 +459,7 @@ const getProfile = async (req, res) => {
           s.SiteCode,
           s.SiteName
         FROM _secUsers u
-        LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+        LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
         LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
         LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
         LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
@@ -534,7 +534,7 @@ const validateToken = async (token) => {
     const pool = await getConnection();
     const userResult = await pool.request()
       .input('userID', sql.VarChar, decoded.userId)
-      .query('SELECT u.UserID, ue.IsActive FROM _secUsers u LEFT JOIN UserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
+      .query('SELECT u.UserID, ue.IsActive FROM _secUsers u LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
     if (userResult.recordset.length === 0 || (userResult.recordset[0].IsActive !== null && !userResult.recordset[0].IsActive)) {
       return null;

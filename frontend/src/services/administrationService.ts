@@ -166,6 +166,7 @@ export interface HierarchyData {
         pucode: string;
         machines: Record<string, HierarchyItem>;
       }>;
+      machines?: Record<string, HierarchyItem>; // Machines directly under area (when line is NULL)
     }>;
   }>;
 }

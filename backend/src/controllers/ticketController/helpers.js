@@ -110,7 +110,7 @@ const checkUserActionPermission = async (userId, puno, action) => {
             .input('personno', sql.Int, userId)
             .input('puno', sql.Int, puno)
             .input('action', sql.NVarChar, action)
-            .execute('sp_CheckUserActionPermission');
+            .execute('sp_Igx_CheckUserActionPermission');
        
         return {
            
@@ -131,7 +131,7 @@ const getUserMaxApprovalLevelForPU = async (userId, puno) => {
         const result = await pool.request()
             .input('user_id', sql.Int, userId)
             .input('puno', sql.Int, puno)
-            .execute('sp_GetUserMaxApprovalLevelForPU');
+            .execute('sp_Igx_GetUserMaxApprovalLevelForPU');
 
         return result.recordset[0]?.max_approval_level || 0;
     } catch (error) {
@@ -148,7 +148,7 @@ const getAvailableAssigneesForPU = async (puno, approvalLevel, excludeUserId = n
             .input('puno', sql.Int, puno)
             .input('min_approval_level', sql.Int, approvalLevel);
             
-        const result = await request.execute('sp_GetPUApprovers');
+        const result = await request.execute('sp_Igx_GetPUApprovers');
         
         // Deduplicate by PERSONNO and get the most specific location_scope for each user
         const userMap = new Map();
@@ -183,17 +183,17 @@ const getAvailableAssigneesForPU = async (puno, approvalLevel, excludeUserId = n
     }
 };
 
-// Get notification approvers with LineID using existing sp_GetUsersForNotification + LineID enhancement  
+// Get notification approvers with LineID using existing sp_Igx_GetUsersForNotification + LineID enhancement  
 const getNotificationApproversWithLineId = async (pool, puno, approvalLevel, excludeUserId = null) => {
     try {
-        console.log(`🔍 Finding L${approvalLevel} notification approvers for puno: ${puno} using updated sp_GetUsersForNotification`);
+        console.log(`🔍 Finding L${approvalLevel} notification approvers for puno: ${puno} using updated sp_Igx_GetUsersForNotification`);
         
         // Use updated SP that implements most specific wins + returns LineID
         const result = await pool.request()
             .input('puno', sql.Int, puno)
             .input('approval_level', sql.Int, approvalLevel)
             .input('exclude_user_id', sql.Int, excludeUserId)
-            .execute('sp_GetUsersForNotification');
+            .execute('sp_Igx_GetUsersForNotification');
 
         const approvers = result.recordset;
         console.log(`🏆 Found ${approvers.length} most specific approvers for L${approvalLevel} (post-most-wins logic)`);
@@ -221,7 +221,7 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
             .input('ticket_id', sql.Int, ticketId)
             .query(`
                 SELECT puno, created_by, assigned_to
-                FROM Tickets 
+                FROM IgxTickets 
                 WHERE id = @ticket_id
             `);
         
@@ -460,7 +460,7 @@ const getUserById = async (pool, userId) => {
                    ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-            LEFT JOIN UserExtension ue ON u.UserID = ue.UserID
+            LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @user_id
               AND p.FLAGDEL != 'Y'
         `);
@@ -474,7 +474,7 @@ const generateTicketNumber = async (pool) => {
         const result = await pool.request()
             .query(`
                 SELECT TOP 1 ticket_number 
-                FROM Tickets 
+                FROM IgxTickets 
                 WHERE ticket_number LIKE 'AB25-%'
                 ORDER BY CAST(SUBSTRING(ticket_number, 6, 5) AS INT) DESC
             `);
@@ -516,7 +516,7 @@ const addStatusChangeComment = async (pool, ticketId, userId, oldStatus, newStat
             .input('user_id', sql.Int, userId)
             .input('comment', sql.NVarChar(500), statusChangeMessage)
             .query(`
-                INSERT INTO TicketComments (ticket_id, user_id, comment, created_at)
+                INSERT INTO IgxTicketComments (ticket_id, user_id, comment, created_at)
                 VALUES (@ticket_id, @user_id, @comment, GETDATE())
             `);
     } catch (error) {
@@ -545,7 +545,7 @@ const insertStatusHistory = async (pool, { ticketId, oldStatus, newStatus, chang
 
     await runQuery(
         pool,
-        `INSERT INTO TicketStatusHistory (${columns.join(', ')}) VALUES (${values.join(', ')})`,
+        `INSERT INTO IgxTicketStatusHistory (${columns.join(', ')}) VALUES (${values.join(', ')})`,
         inputs
     );
 };

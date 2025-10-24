@@ -22,11 +22,11 @@ const getTargets = async (req, res) => {
         t.updated_by,
         pe_plant.pudescription as plant_name,
         pe_area.pudescription as area_name
-      FROM dbo.Target t
-      LEFT JOIN PUExtension pe_plant ON t.plant = pe_plant.plant 
+      FROM dbo.IgxTarget t
+      LEFT JOIN IgxPUExtension pe_plant ON t.plant = pe_plant.plant 
         AND pe_plant.digit_count = 1 
         AND pe_plant.area IS NULL
-      LEFT JOIN PUExtension pe_area ON t.area = pe_area.area 
+      LEFT JOIN IgxPUExtension pe_area ON t.area = pe_area.area 
         AND pe_area.digit_count = 2 
         AND pe_area.line IS NULL 
         AND pe_area.machine IS NULL
@@ -100,7 +100,7 @@ const getTargetById = async (req, res) => {
         t.created_by,
         t.updated_by,
         a.name as area_name
-      FROM dbo.Target t
+      FROM dbo.IgxTarget t
       LEFT JOIN dbo.Area a ON t.area = a.code
       WHERE t.id = @id
     `;
@@ -113,7 +113,7 @@ const getTargetById = async (req, res) => {
     if (result.recordset.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Target not found'
+        message: 'IgxTarget not found'
       });
     }
     
@@ -172,23 +172,23 @@ const createTarget = async (req, res) => {
     
     // Check if targets already exist for this combination (any period)
     const checkQuery = `
-      SELECT COUNT(*) as count FROM dbo.Target 
+      SELECT COUNT(*) as count FROM dbo.IgxTarget 
       WHERE type = @type AND year = @year 
       AND (plant = @plant OR (plant IS NULL AND @plant IS NULL))
       AND (area = @area OR (area IS NULL AND @area IS NULL))
     `;
     
-    const existingTargets = await pool.request()
+    const existingIgxTargets = await pool.request()
       .input('type', sql.NVarChar, type)
       .input('year', sql.Int, year)
       .input('plant', sql.NVarChar, plant || null)
       .input('area', sql.NVarChar, area || null)
       .query(checkQuery);
     
-    if (existingTargets.recordset[0].count > 0) {
+    if (existingIgxTargets.recordset[0].count > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Targets already exist for this type, year, and location combination. Please delete existing targets first or choose a different combination.'
+        message: 'IgxTargets already exist for this type, year, and location combination. Please delete existing targets first or choose a different combination.'
       });
     }
     
@@ -197,7 +197,7 @@ const createTarget = async (req, res) => {
     
     for (const period of periods) {
       const insertQuery = `
-        INSERT INTO dbo.Target (type, period, year, target_value, unit, plant, area, created_by)
+        INSERT INTO dbo.IgxTarget (type, period, year, target_value, unit, plant, area, created_by)
         VALUES (@type, @period, @year, @target_value, @unit, @plant, @area, @created_by)
       `;
       
@@ -215,7 +215,7 @@ const createTarget = async (req, res) => {
     
     res.status(201).json({
       success: true,
-      message: 'Target created successfully for all periods'
+      message: 'IgxTarget created successfully for all periods'
     });
   } catch (error) {
     console.error('Error creating target:', error);
@@ -235,7 +235,7 @@ const createTargetsBulk = async (req, res) => {
     if (!targets || !Array.isArray(targets) || targets.length === 0) {
       return res.status(400).json({
         success: false,
-        message: 'Targets array is required and must not be empty'
+        message: 'IgxTargets array is required and must not be empty'
       });
     }
 
@@ -280,32 +280,32 @@ const createTargetsBulk = async (req, res) => {
     const pool = await sql.connect(dbConfig);
     
     // Check if any targets already exist for this combination
-    const firstTarget = targets[0];
+    const firstIgxTarget = targets[0];
     const checkQuery = `
-      SELECT COUNT(*) as count FROM dbo.Target 
+      SELECT COUNT(*) as count FROM dbo.IgxTarget 
       WHERE type = @type AND year = @year 
       AND (plant = @plant OR (plant IS NULL AND @plant IS NULL))
       AND (area = @area OR (area IS NULL AND @area IS NULL))
     `;
     
-    const existingTargets = await pool.request()
-      .input('type', sql.NVarChar, firstTarget.type)
-      .input('year', sql.Int, firstTarget.year)
-      .input('plant', sql.NVarChar, firstTarget.plant || null)
-      .input('area', sql.NVarChar, firstTarget.area || null)
+    const existingIgxTargets = await pool.request()
+      .input('type', sql.NVarChar, firstIgxTarget.type)
+      .input('year', sql.Int, firstIgxTarget.year)
+      .input('plant', sql.NVarChar, firstIgxTarget.plant || null)
+      .input('area', sql.NVarChar, firstIgxTarget.area || null)
       .query(checkQuery);
     
-    if (existingTargets.recordset[0].count > 0) {
+    if (existingIgxTargets.recordset[0].count > 0) {
       return res.status(400).json({
         success: false,
-        message: 'Targets already exist for this type, year, and location combination. Please delete existing targets first or choose a different combination.'
+        message: 'IgxTargets already exist for this type, year, and location combination. Please delete existing targets first or choose a different combination.'
       });
     }
     
     // Insert all targets
     for (const target of targets) {
       const insertQuery = `
-        INSERT INTO dbo.Target (type, period, year, target_value, unit, plant, area, created_by)
+        INSERT INTO dbo.IgxTarget (type, period, year, target_value, unit, plant, area, created_by)
         VALUES (@type, @period, @year, @target_value, @unit, @plant, @area, @created_by)
       `;
       
@@ -323,7 +323,7 @@ const createTargetsBulk = async (req, res) => {
     
     res.status(201).json({
       success: true,
-      message: `Targets created successfully for ${targets.length} periods`
+      message: `IgxTargets created successfully for ${targets.length} periods`
     });
   } catch (error) {
     console.error('Error creating targets bulk:', error);
@@ -350,7 +350,7 @@ const updateTarget = async (req, res) => {
     
     const pool = await sql.connect(dbConfig);
     
-    let updateQuery = 'UPDATE dbo.Target SET updated_at = GETDATE()';
+    let updateQuery = 'UPDATE dbo.IgxTarget SET updated_at = GETDATE()';
     const request = pool.request();
     
     if (target_value !== undefined) {
@@ -376,13 +376,13 @@ const updateTarget = async (req, res) => {
     if (result.rowsAffected[0] === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Target not found'
+        message: 'IgxTarget not found'
       });
     }
     
     res.json({
       success: true,
-      message: 'Target updated successfully'
+      message: 'IgxTarget updated successfully'
     });
   } catch (error) {
     console.error('Error updating target:', error);
@@ -403,7 +403,7 @@ const deleteTarget = async (req, res) => {
     
     // First get the target details to delete all related records
     const getQuery = `
-      SELECT type, year, plant, area FROM dbo.Target WHERE id = @id
+      SELECT type, year, plant, area FROM dbo.IgxTarget WHERE id = @id
     `;
     
     const targetDetails = await pool.request()
@@ -413,7 +413,7 @@ const deleteTarget = async (req, res) => {
     if (targetDetails.recordset.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Target not found'
+        message: 'IgxTarget not found'
       });
     }
     
@@ -421,7 +421,7 @@ const deleteTarget = async (req, res) => {
     
     // Delete all periods for this type/year/area combination
     const deleteQuery = `
-      DELETE FROM dbo.Target 
+      DELETE FROM dbo.IgxTarget 
       WHERE type = @type AND year = @year AND (plant = @plant OR (plant IS NULL AND @plant IS NULL)) AND (area = @area OR (area IS NULL AND @area IS NULL))
     `;
    
@@ -434,7 +434,7 @@ const deleteTarget = async (req, res) => {
     
     res.json({
       success: true,
-      message: 'Target deleted successfully'
+      message: 'IgxTarget deleted successfully'
     });
   } catch (error) {
     console.error('Error deleting target:', error);
@@ -462,31 +462,31 @@ const copyP1ToAllPeriods = async (req, res) => {
     
     // Get P1 target value
     const getP1Query = `
-      SELECT target_value, unit FROM dbo.Target 
+      SELECT target_value, unit FROM dbo.IgxTarget 
       WHERE type = @type AND year = @year AND area = @area AND period = 'P1'
     `;
     
-    const p1Target = await pool.request()
+    const p1IgxTarget = await pool.request()
       .input('type', sql.NVarChar, type)
       .input('year', sql.Int, year)
       .input('area', sql.NVarChar, area)
       .query(getP1Query);
     
-    if (p1Target.recordset.length === 0) {
+    if (p1IgxTarget.recordset.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'P1 target not found for this combination'
       });
     }
     
-    const { target_value, unit } = p1Target.recordset[0];
+    const { target_value, unit } = p1IgxTarget.recordset[0];
     
     // Update all periods with P1 value
     const periods = ['P2','P3','P4','P5','P6','P7','P8','P9','P10','P11','P12','P13'];
     
     for (const period of periods) {
       const updateQuery = `
-        UPDATE dbo.Target 
+        UPDATE dbo.IgxTarget 
         SET target_value = @target_value, 
             unit = @unit, 
             updated_at = GETDATE(),
@@ -524,7 +524,7 @@ const getAvailableYears = async (req, res) => {
   try {
     const query = `
       SELECT DISTINCT year 
-      FROM dbo.Target 
+      FROM dbo.IgxTarget 
       ORDER BY year DESC
     `;
     

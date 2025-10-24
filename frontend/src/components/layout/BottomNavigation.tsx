@@ -6,7 +6,8 @@ import {
   Home, 
   LayoutDashboard, 
   Ticket, 
-  User
+  User,
+  Plus
 } from 'lucide-react';
 
 interface BottomNavItem {
@@ -67,6 +68,11 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
     if (path === '/home') {
       return location.pathname === '/home';
     }
+    if (path === '/tickets') {
+      // Don't highlight Tickets button when creating tickets
+      return location.pathname.startsWith('/tickets') && 
+             !location.pathname.includes('/create');
+    }
     return location.pathname.startsWith(path);
   };
 
@@ -88,7 +94,8 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
       aria-label="Bottom navigation"
     >
       <div className="flex items-center justify-around px-2 py-2 safe-area-inset-bottom">
-        {bottomNavItems.map((item) => {
+        {/* First two items: Home and Dashboard */}
+        {bottomNavItems.slice(0, 2).map((item) => {
           if (!canAccess(item.permissionLevel)) {
             return null;
           }
@@ -129,11 +136,75 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
               )}>
                 {item.label}
               </span>
+            </button>
+          );
+        })}
+        
+        {/* Floating Plus Button - Center */}
+        <div className="relative flex items-center justify-center">
+          <button
+            onClick={() => handleNavigation('/tickets/create/wizard')}
+            className={cn(
+              "relative flex items-center justify-center",
+              "w-14 h-14 rounded-full",
+              "bg-red-600 hover:bg-red-700 text-white",
+              "shadow-lg hover:shadow-xl",
+              "transition-all duration-200 ease-in-out",
+              "focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2",
+              "transform hover:scale-105 active:scale-95",
+
+            )}
+            aria-label="Create new ticket"
+          >
+            <Plus className="h-6 w-6" />
+            
+            {/* Pulse animation for attention */}
+            <div className="absolute inset-0 rounded-full bg-red-600 animate-ping opacity-20" />
+          </button>
+        </div>
+        
+        {/* Last two items: Tickets and Profile */}
+        {bottomNavItems.slice(2).map((item) => {
+          if (!canAccess(item.permissionLevel)) {
+            return null;
+          }
+
+          const active = isActive(item.path);
+          
+          return (
+            <button
+              key={item.id}
+              onClick={() => handleNavigation(item.path)}
+              className={cn(
+                "relative flex flex-col items-center justify-center min-w-0 flex-1 py-2 px-1",
+                "transition-all duration-200 ease-in-out",
+                "focus:outline-none",
+                active 
+                  ? "text-primary" 
+                  : "text-muted-foreground"
+              )}
+              aria-label={`Navigate to ${item.label}`}
+              aria-current={active ? 'page' : undefined}
+            >
+              <div className={cn(
+                "mb-1 transition-all duration-200 relative",
+                active ? "scale-110" : "scale-100"
+              )}>
+                {item.icon}
+                
+                {/* Active indicator dot */}
+                {active && (
+                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-primary rounded-full animate-pulse" />
+                )}
+              </div>
               
-              {/* Active background indicator */}
-              {/* {active && (
-                <div className="absolute inset-0 bg-primary/10 rounded-lg -z-10" />
-              )} */}
+              <span className={cn(
+                "text-xs font-medium truncate max-w-full",
+                "transition-all duration-200",
+                active ? "text-primary font-semibold" : "text-muted-foreground"
+              )}>
+                {item.label}
+              </span>
             </button>
           );
         })}

@@ -15,15 +15,11 @@ const TicketManagementPage: React.FC = () => {
         //description="Report and manage abnormal findings in machines, areas, and equipment"
         rightContent={
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-            <Button className="md:hidden w-full bg-red-600 hover:bg-red-700 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              <Link to="/tickets/create/wizard">{t('ticketManagement.createTicket')}</Link>
-            </Button>
+            {/* Hide Create Ticket button on mobile - using floating Plus button in BottomNavigation instead */}
             <Button className="hidden md:inline-flex bg-red-600 hover:bg-red-700 text-white">
-            <Plus className="h-4 w-4 mr-2" />
+              <Plus className="h-4 w-4 mr-2" />
               <Link to="/tickets/create">{t('ticketManagement.createTicket')}</Link>
             </Button>
-     
           </div>
         }
       />
