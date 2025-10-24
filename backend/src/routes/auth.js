@@ -6,12 +6,16 @@ const {
   changePassword, 
   getProfile,
   getUserPermissionsAPI,
-  checkSpecificPermission
+  checkSpecificPermission,
+  verifyLiffToken,
+  getLineProfile
 } = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/auth');
 
 // Public routes (no authentication required)
 router.post('/login', login);
+router.post('/verify-liff-token', verifyLiffToken);
+router.post('/get-line-profile', getLineProfile);
 
 // Protected routes (authentication required)
 router.post('/logout', authenticateToken, logout);

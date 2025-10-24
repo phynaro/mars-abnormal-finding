@@ -58,7 +58,7 @@ import WorkflowTypesPage from './pages/works/WorkflowTypesPage';
 const AppContent: React.FC = () => {
   // Protected Route Component (moved inside to access auth context)
   const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { isAuthenticated, isLoading, storeRedirectUrl } = useAuth();
+    const { isAuthenticated, isLoading, liffLoading, liffError, storeRedirectUrl } = useAuth();
     const location = useLocation();
     const hasStoredRedirect = useRef(false);
     
@@ -76,11 +76,21 @@ const AppContent: React.FC = () => {
       }
     }, [isAuthenticated, isLoading, location.pathname, location.search, storeRedirectUrl]);
 
-    // Show loading state while checking authentication
-    if (isLoading) {
+    // Show loading state while checking authentication or initializing LIFF
+    if (isLoading || liffLoading) {
       return (
         <div className="min-h-screen flex items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
+            <p className="text-gray-600">
+              {liffLoading ? 'Initializing LINE LIFF...' : 'Checking authentication...'}
+            </p>
+            {liffError && (
+              <p className="text-red-500 text-sm mt-2">
+                LIFF Error: {liffError}
+              </p>
+            )}
+          </div>
         </div>
       );
     }

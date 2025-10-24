@@ -3,6 +3,7 @@ const jwt = require('jsonwebtoken');
 const sql = require('mssql');
 const crypto = require('crypto');
 const CryptoJS = require('crypto-js');
+const axios = require('axios');
 const dbConfig = require('../config/dbConfig');
 const emailService = require('../services/emailService');
 
@@ -629,6 +630,122 @@ const checkSpecificPermission = async (req, res) => {
   }
 };
 
+// Verify LIFF Access Token with LINE Server
+const verifyLiffToken = async (req, res) => {
+  try {
+    const { accessToken } = req.body;
+
+    if (!accessToken) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Access token is required' 
+      });
+    }
+
+    console.log('Received LIFF access token for verification:', accessToken);
+
+    // Verify token with LINE's OAuth2 API
+    const verifyUrl = `https://api.line.me/oauth2/v2.1/verify?access_token=${accessToken}`;
+    
+    try {
+      const response = await axios.get(verifyUrl);
+      
+      console.log('LINE token verification result:', response.data);
+      
+      // Check if token is valid
+      if (response.data && response.data.client_id) {
+        res.json({
+          success: true,
+          message: 'LIFF token verified successfully',
+          verificationResult: response.data
+        });
+      } else {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid LIFF token',
+          verificationResult: response.data
+        });
+      }
+      
+    } catch (lineError) {
+      console.error('LINE API verification error:', lineError.response?.data || lineError.message);
+      
+      res.status(401).json({
+        success: false,
+        message: 'Failed to verify LIFF token with LINE server',
+        error: lineError.response?.data || lineError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('LIFF token verification error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
+    });
+  }
+};
+
+// Get LINE Profile using Access Token
+const getLineProfile = async (req, res) => {
+  try {
+    const { accessToken } = req.body;
+
+    if (!accessToken) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Access token is required' 
+      });
+    }
+
+    console.log('Getting LINE profile with access token:', accessToken);
+
+    // Get profile from LINE's Profile API
+    const profileUrl = 'https://api.line.me/v2/profile';
+    
+    try {
+      const response = await axios.get(profileUrl, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`
+        }
+      });
+      
+      console.log('LINE profile result:', response.data);
+      
+      // Check if profile data is valid
+      if (response.data && response.data.userId) {
+        res.json({
+          success: true,
+          message: 'LINE profile retrieved successfully',
+          profile: response.data
+        });
+      } else {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid profile data received',
+          profile: response.data
+        });
+      }
+      
+    } catch (lineError) {
+      console.error('LINE Profile API error:', lineError.response?.data || lineError.message);
+      
+      res.status(401).json({
+        success: false,
+        message: 'Failed to get LINE profile',
+        error: lineError.response?.data || lineError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('LINE profile error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error' 
+    });
+  }
+};
+
 module.exports = {
   login,
   logout,
@@ -639,5 +756,7 @@ module.exports = {
   getUserPermissionsAPI,
   checkSpecificPermission,
   hasPermission,
-  getUserPermissions
+  getUserPermissions,
+  verifyLiffToken,
+  getLineProfile
 }; 

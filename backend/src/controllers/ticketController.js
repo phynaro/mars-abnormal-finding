@@ -403,7 +403,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                         actionBy: reporterName,
                         comment: description,
                         heroImageUrl: heroImageUrl,
-                        detailUrl: `${process.env.LIFF_URL}/?redirect=/tickets/${ticketId}`,  
+                        detailUrl: `${process.env.LIFF_URL}/tickets/${ticketId}`,  
                         extraKVs: [
                             // { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
                             // { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },

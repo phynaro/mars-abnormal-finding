@@ -111,7 +111,7 @@ function getCurrentPeriodAndWeek(date = new Date()) {
   const dayOfWeek = firstDayOfYear.getDay();
   const daysToAdd = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
   firstSunday.setDate(firstDayOfYear.getDate() - daysToAdd);
-  console.log('firstSunday:', firstSunday.toLocaleString('en-US', { timeZone: 'Asia/Bangkok' }));
+ 
   // Calculate days since first Sunday
   const daysSinceFirstSunday = Math.floor((date - firstSunday) / (1000 * 60 * 60 * 24));
   

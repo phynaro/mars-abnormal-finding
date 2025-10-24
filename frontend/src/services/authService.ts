@@ -38,6 +38,29 @@ export interface ChangePasswordData {
   newPassword: string;
 }
 
+export interface LiffTokenVerificationResponse {
+  success: boolean;
+  message: string;
+  verificationResult?: {
+    scope: string;
+    client_id: string;
+    expires_in: number;
+  };
+  error?: any;
+}
+
+export interface LineProfileResponse {
+  success: boolean;
+  message: string;
+  profile?: {
+    userId: string;
+    displayName: string;
+    pictureUrl: string;
+    statusMessage: string;
+  };
+  error?: any;
+}
+
 export interface AuthResponse {
   success: boolean;
   message: string;
@@ -282,6 +305,52 @@ class AuthService {
       // Clear auth data if profile fetch fails (token expired/invalid)
       this.clearAuth();
       throw error; // Re-throw to let the caller handle it
+    }
+  }
+
+  // Verify LIFF access token with backend
+  async verifyLiffToken(accessToken: string): Promise<LiffTokenVerificationResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/verify-liff-token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ accessToken }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'LIFF token verification failed');
+      }
+
+      return result;
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'LIFF token verification failed');
+    }
+  }
+
+  // Get LINE profile using access token
+  async getLineProfile(accessToken: string): Promise<LineProfileResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/get-line-profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ accessToken }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to get LINE profile');
+      }
+
+      return result;
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to get LINE profile');
     }
   }
 
