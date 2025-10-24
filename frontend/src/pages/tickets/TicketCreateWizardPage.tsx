@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
-import { X, Search, Building2 } from 'lucide-react';
+import { X, Search, Building2, Trash2 } from 'lucide-react';
 import authService from '@/services/authService';
 import { compressTicketImage, formatFileSize, compressImage } from '@/utils/imageCompression';
 import HierarchicalMachineSelector from '@/components/tickets/HierarchicalMachineSelector';
@@ -51,9 +51,8 @@ const TicketCreateWizardPage: React.FC = () => {
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
-  const [imagesUploading, setImagesUploading] = useState(false);
   const [submitProgress, setSubmitProgress] = useState<{
-    stage: 'creating' | 'compressing' | 'uploading' | 'complete' | null;
+    stage: 'creating' | 'compressing' | 'complete' | null;
     currentImage?: number;
     totalImages?: number;
     message: string;
@@ -405,76 +404,46 @@ const TicketCreateWizardPage: React.FC = () => {
         priority,
       };
       
-      // Stage 1: Creating ticket
-      setSubmitProgress({ stage: 'creating', message: 'Creating ticket...' });
-      const created = await ticketService.createTicket(payload);
-      const ticketId = created.data.id;
-      
+      // Stage 1: Compressing images (if any)
+      let filesToUpload = beforeFiles;
       if (beforeFiles.length > 0) {
-        setImagesUploading(true);
-        try { 
-          // Stage 2: Compressing images
-          setSubmitProgress({ 
-            stage: 'compressing', 
-            currentImage: 0, 
-            totalImages: beforeFiles.length,
-            message: `Compressing image 0/${beforeFiles.length}...` 
-          });
-          
-          console.log(`Compressing ${beforeFiles.length} images before upload...`);
-          const compressedFiles = await Promise.all(
-            beforeFiles.map(async (file, index) => {
-              console.log(`Compressing image ${index + 1}/${beforeFiles.length}: ${formatFileSize(file.size)}`);
-              const compressed = await compressTicketImage(file, { 
-                maxWidth: 1920, 
-                maxHeight: 1920, 
-                quality: 0.9 
-              });
-              console.log(`Compressed to: ${formatFileSize(compressed.size)}`);
-              
-              // Update progress after each image compression
-              setSubmitProgress({ 
-                stage: 'compressing', 
-                currentImage: index + 1, 
-                totalImages: beforeFiles.length,
-                message: `Compressing image ${index + 1}/${beforeFiles.length}...` 
-              });
-              
-              return compressed;
-            })
-          );
-          
-          // Stage 3: Uploading images
-          setSubmitProgress({ 
-            stage: 'uploading', 
-            currentImage: 0,
-            totalImages: beforeFiles.length,
-            message: `Uploading ${beforeFiles.length} image(s)...` 
-          });
-          
-          await ticketService.uploadTicketImages(ticketId, compressedFiles, 'before'); 
-          
-          // Trigger LINE notification after images are uploaded
-          try {
-            console.log('Ticket created with images - notifications handled automatically');
-          } catch (notificationError) {
-            console.error('Failed to send LINE notification:', notificationError);
-            // Don't fail the ticket creation if notification fails
-          }
-        } finally { 
-          setImagesUploading(false); 
-        }
-      } else {
-        // If no images, trigger notification immediately
-        try {
-            console.log('Ticket created without images - notifications handled automatically');
-        } catch (notificationError) {
-          console.error('Failed to send LINE notification:', notificationError);
-          // Don't fail the ticket creation if notification fails
-        }
+        setSubmitProgress({ 
+          stage: 'compressing', 
+          currentImage: 0, 
+          totalImages: beforeFiles.length,
+          message: `Compressing image 0/${beforeFiles.length}...` 
+        });
+        
+        console.log(`Compressing ${beforeFiles.length} images before upload...`);
+        filesToUpload = await Promise.all(
+          beforeFiles.map(async (file, index) => {
+            console.log(`Compressing image ${index + 1}/${beforeFiles.length}: ${formatFileSize(file.size)}`);
+            const compressed = await compressTicketImage(file, { 
+              maxWidth: 1920, 
+              maxHeight: 1920, 
+              quality: 0.9 
+            });
+            console.log(`Compressed to: ${formatFileSize(compressed.size)}`);
+            
+            // Update progress after each image compression
+            setSubmitProgress({ 
+              stage: 'compressing', 
+              currentImage: index + 1, 
+              totalImages: beforeFiles.length,
+              message: `Compressing image ${index + 1}/${beforeFiles.length}...` 
+            });
+            
+            return compressed;
+          })
+        );
       }
       
-      // Stage 4: Complete
+      // Stage 2: Creating ticket with images
+      setSubmitProgress({ stage: 'creating', message: 'Creating ticket...' });
+      const created = await ticketService.createTicket(payload, filesToUpload, 'before');
+      const ticketId = created.data.id;
+      
+      // Stage 3: Complete
       setSubmitProgress({ stage: 'complete', message: 'Ticket created successfully!' });
       
       // Brief delay before redirect to show completion
@@ -578,7 +547,7 @@ const TicketCreateWizardPage: React.FC = () => {
   };
 
   const SubmitProgressOverlay: React.FC<{
-    stage: 'creating' | 'compressing' | 'uploading' | 'complete' | null;
+    stage: 'creating' | 'compressing' | 'complete' | null;
     currentImage?: number;
     totalImages?: number;
     message: string;
@@ -586,9 +555,8 @@ const TicketCreateWizardPage: React.FC = () => {
     if (!stage) return null;
     
     const stages = [
-      { key: 'creating', label: 'Creating ticket', icon: '📝' },
       { key: 'compressing', label: 'Compressing images', icon: '🗜️' },
-      { key: 'uploading', label: 'Uploading images', icon: '📤' },
+      { key: 'creating', label: 'Creating ticket', icon: '📝' },
       { key: 'complete', label: 'Complete!', icon: '✅' }
     ];
     
@@ -644,8 +612,8 @@ const TicketCreateWizardPage: React.FC = () => {
                 {message}
               </p>
               
-              {/* Image Progress for compression/upload stages */}
-              {(stage === 'compressing' || stage === 'uploading') && currentImage !== undefined && totalImages !== undefined && (
+              {/* Image Progress for compression stage */}
+              {stage === 'compressing' && currentImage !== undefined && totalImages !== undefined && (
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                   <div 
                     className="bg-brand h-2 rounded-full transition-all duration-300"
@@ -945,10 +913,10 @@ const TicketCreateWizardPage: React.FC = () => {
                       )}
                       <button 
                         type="button" 
-                        className="absolute top-1 right-1 bg-white/80 border rounded px-1 text-xs" 
+                        className="absolute top-1 right-1 bg-white rounded-full p-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50" 
                         onClick={() => setBeforeFiles(prev => prev.filter((_, i) => i !== idx))}
                       >
-                        <X className="w-3 h-3" />
+                        <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
                   ))}
@@ -1135,8 +1103,8 @@ const TicketCreateWizardPage: React.FC = () => {
         {step !== 'review' ? (
           <Button onClick={next} disabled={!canNext()}>{t('ticket.wizardNext')}</Button>
         ) : (
-          <Button onClick={submit} disabled={submitting || imagesUploading}>
-            {submitting ? t('common.loading') : imagesUploading ? t('common.loading') : t('ticket.wizardFinish')}
+          <Button onClick={submit} disabled={submitting}>
+            {submitting ? t('common.loading') : t('ticket.wizardFinish')}
           </Button>
         )}
       </div>
