@@ -230,7 +230,7 @@ const createTicket = async (req, res) => {
         }
 
         // 🆕 CEDAR INTEGRATION: NO WO CREATION YET
-        // IgxTickets are like Work Requests (WR) - WO will be created when ticket is accepted
+        // Tickets are like Work Requests (WR) - WO will be created when ticket is accepted
         console.log(`✅ Ticket ${ticketId} created - WO will be created when accepted`);
         // No Cedar integration at ticket creation stage
 
@@ -403,7 +403,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                         actionBy: reporterName,
                         comment: description,
                         heroImageUrl: heroImageUrl,
-                        detailUrl: `${process.env.LIFF_URL}/tickets/${ticketId}`,
+                        detailUrl: `${process.env.LIFF_URL}/?redirect=/tickets/${ticketId}`,  
                         extraKVs: [
                             // { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
                             // { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },

@@ -1223,7 +1223,7 @@ async function getPeriodInfo(pool) {
 }
 
 /**
- * Get IgxTickets Count Per Period
+ * Get Tickets Count Per Period
  * Returns ticket counts grouped by period with target data for participation charts
  */
 exports.getTicketsCountPerPeriod = async (req, res) => {
@@ -1306,7 +1306,7 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
     // Build the response data
     const participationData = allPeriods.map(period => {
       const ticketsData = ticketsMap[period] || { tickets: 0, uniqueReporters: 0 };
-      const targetValue = targetsMap[period] || 30; // Default fallback target
+      const targetValue = targetsMap[period] || 0; // Default fallback target
       
       // Calculate coverage rate (unique reporters / target * 100, capped at 100%)
       const coverageRate = targetValue > 0 ? Math.min(100, Math.round((ticketsData.uniqueReporters / targetValue) * 100)) : 0;
@@ -1325,7 +1325,7 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
       data: {
         participationData,
         summary: {
-          totalIgxTickets: participationData.reduce((sum, item) => sum + item.tickets, 0),
+          totalTickets: participationData.reduce((sum, item) => sum + item.tickets, 0),
           totalUniqueReporters: Math.max(...participationData.map(item => item.uniqueReporters)),
           averageTarget: Math.round(participationData.reduce((sum, item) => sum + item.target, 0) / participationData.length),
           appliedFilters: {
@@ -1348,7 +1348,7 @@ exports.getTicketsCountPerPeriod = async (req, res) => {
 };
 
 /**
- * Get Total IgxTickets Closed Per Period Data
+ * Get Total Tickets Closed Per Period Data
  * Returns count of tickets Finished (closed/resolved) per period
  * Uses finished_at field to determine completion date
  * Supports plant/area filtering via IgxPUExtension
@@ -1446,9 +1446,9 @@ exports.getTicketsClosedPerPeriod = async (req, res) => {
         ticketsClosedData,
         summary: {
           totalPeriods: ticketsClosedData.length,
-          totalIgxTicketsClosed: ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0),
+          totalTicketsClosed: ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0),
           totalTarget: ticketsClosedData.reduce((sum, item) => sum + item.target, 0),
-          averageIgxTicketsClosedPerPeriod: Math.round(ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0) / ticketsClosedData.length),
+          averageTicketsClosedPerPeriod: Math.round(ticketsClosedData.reduce((sum, item) => sum + item.ticketsClosed, 0) / ticketsClosedData.length),
           averageTargetPerPeriod: Math.round(ticketsClosedData.reduce((sum, item) => sum + item.target, 0) / ticketsClosedData.length),
           appliedFilters: {
             year: parseInt(year),
@@ -1584,8 +1584,8 @@ exports.getAreaActivityData = async (req, res) => {
         areaActivityData,
         summary: {
           totalItems: areaActivityData.length,
-          totalIgxTickets: areaActivityData.reduce((sum, item) => sum + item.tickets, 0),
-          averageIgxTicketsPerItem: areaActivityData.length > 0 
+          totalTickets: areaActivityData.reduce((sum, item) => sum + item.tickets, 0),
+          averageTicketsPerItem: areaActivityData.length > 0 
             ? Math.round(areaActivityData.reduce((sum, item) => sum + item.tickets, 0) / areaActivityData.length)
             : 0,
           groupBy: summaryLabel,
@@ -1702,8 +1702,8 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
         userActivityData,
         summary: {
           totalUsers: userActivityData.length,
-          totalIgxTickets: userActivityData.reduce((sum, item) => sum + item.tickets, 0),
-          averageIgxTicketsPerUser: userActivityData.length > 0 
+          totalTickets: userActivityData.reduce((sum, item) => sum + item.tickets, 0),
+          averageTicketsPerUser: userActivityData.length > 0 
             ? Math.round(userActivityData.reduce((sum, item) => sum + item.tickets, 0) / userActivityData.length)
             : 0,
           appliedFilters: {
@@ -1959,7 +1959,7 @@ exports.getCostAvoidanceData = async (req, res) => {
         summary: {
           totalPeriods: costAvoidanceData.length,
           totalCostAvoidance: costAvoidanceData.reduce((sum, item) => sum + item.costAvoidance, 0),
-          totalIgxTickets: costAvoidanceData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalTickets: costAvoidanceData.reduce((sum, item) => sum + item.ticketCount, 0),
           appliedFilters: {
             year: parseInt(year),
             plant: plant || null,
@@ -2201,7 +2201,7 @@ exports.getDowntimeImpactLeaderboard = async (req, res) => {
         summary: {
           totalItems: downtimeImpactData.length,
           totalDowntimeHours: downtimeImpactData.reduce((sum, item) => sum + item.hours, 0),
-          totalIgxTickets: downtimeImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalTickets: downtimeImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
           groupBy: summaryLabel,
           appliedFilters: {
             startDate,
@@ -2349,7 +2349,7 @@ exports.getCostImpactLeaderboard = async (req, res) => {
         summary: {
           totalItems: costImpactData.length,
           totalCostAvoidance: costImpactData.reduce((sum, item) => sum + item.cost, 0),
-          totalIgxTickets: costImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalTickets: costImpactData.reduce((sum, item) => sum + item.ticketCount, 0),
           groupBy: summaryLabel,
           appliedFilters: {
             startDate,
@@ -2413,11 +2413,11 @@ exports.getOntimeRateByArea = async (req, res) => {
       ontimeRateQuery = `
         SELECT 
           pe.plant as display_name,
-          COUNT(t.id) as total_Finished,
-          COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) as ontime_Finished,
+          COUNT(t.id) as total_finished,
+          COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
-              ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
+              ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
         FROM IgxTickets t
@@ -2444,11 +2444,11 @@ exports.getOntimeRateByArea = async (req, res) => {
             WHEN pe.area IS NULL THEN 'Unknown Area'
             ELSE pe.area
           END as display_name,
-          COUNT(t.id) as total_Finished,
-          COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) as ontime_Finished,
+          COUNT(t.id) as total_finished,
+          COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
-              ROUND((COUNT(CASE WHEN t.finished_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
+              ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
         FROM IgxTickets t
@@ -2476,8 +2476,8 @@ exports.getOntimeRateByArea = async (req, res) => {
             WHEN pe.line IS NOT NULL THEN pe.line
             ELSE 'Unknown Equipment'
           END as display_name,
-          COUNT(t.id) as total_Finished,
-          COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_Finished,
+          COUNT(t.id) as total_finished,
+          COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
               ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
@@ -2509,8 +2509,8 @@ exports.getOntimeRateByArea = async (req, res) => {
     const ontimeRateByAreaData = result.recordset.map(row => ({
       display_name: row.display_name,
       ontimeRate: row.ontime_rate_percentage,
-      totalFinished: row.total_Finished,
-      ontimeFinished: row.ontime_Finished
+      totalFinished: row.total_finished,
+      ontimeFinished: row.ontime_finished
     }));
 
     res.json({
@@ -2576,7 +2576,7 @@ exports.getOntimeRateByUser = async (req, res) => {
     let whereClause = `WHERE t.created_at >= '${startDate}' 
         AND t.created_at <= '${endDate}' 
         AND t.status = 'closed' 
-        AND t.finished_at IS NOT NULL
+        AND t.actual_finish_at IS NOT NULL
         AND t.schedule_finish IS NOT NULL
         AND t.finished_by IS NOT NULL`;
     
@@ -2594,8 +2594,8 @@ exports.getOntimeRateByUser = async (req, res) => {
         t.finished_by as user_id,
         p.PERSON_NAME as user_name,
         ue.AvatarUrl as avatar_url,
-        COUNT(t.id) as total_Finished,
-        COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_Finished,
+        COUNT(t.id) as total_finished,
+        COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_finished,
         CASE 
           WHEN COUNT(t.id) > 0 THEN 
             ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
@@ -2635,8 +2635,8 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
         bgColor: bgColor,
         avatar: row.avatar_url,
         ontimeRate: row.ontime_rate_percentage,
-        totalFinished: row.total_Finished,
-        ontimeFinished: row.ontime_Finished
+        totalFinished: row.total_finished,
+        ontimeFinished: row.ontime_finished
       };
     });
 
@@ -2759,7 +2759,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
         resolveDurationByUserData,
         summary: {
           totalUsers: resolveDurationByUserData.length,
-          totalIgxTickets: resolveDurationByUserData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalTickets: resolveDurationByUserData.reduce((sum, item) => sum + item.ticketCount, 0),
           overallAvgResolveHours: resolveDurationByUserData.length > 0 
             ? Math.round((resolveDurationByUserData.reduce((sum, item) => sum + (item.avgResolveHours * item.ticketCount), 0) / resolveDurationByUserData.reduce((sum, item) => sum + item.ticketCount, 0)) * 100) / 100
             : 0
@@ -2820,7 +2820,7 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
         SELECT 
           pe.plant as display_name,
           COUNT(t.id) as ticket_count,
-          AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
+          AVG(DATEDIFF(MINUTE, t.actual_start_at, t.actual_finish_at)) as avg_resolve_minutes
         FROM IgxTickets t
         LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
@@ -2830,7 +2830,7 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
           AND pe.plant IS NOT NULL
         GROUP BY pe.plant
         HAVING COUNT(t.id) > 0
-        ORDER BY avg_resolve_hours ASC
+        ORDER BY avg_resolve_minutes ASC
       `;
     } else if (!area || area === 'all') {
       // Condition 2: Show group by area if any plant selected but no area selected
@@ -2845,7 +2845,7 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
             ELSE pe.area
           END as display_name,
           COUNT(t.id) as ticket_count,
-          AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
+          AVG(DATEDIFF(MINUTE, t.actual_start_at, t.actual_finish_at)) as avg_resolve_minutes
         FROM IgxTickets t
         LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
@@ -2855,7 +2855,7 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
           AND pe.plant = '${plant}'
         GROUP BY pe.area
         HAVING COUNT(t.id) > 0
-        ORDER BY avg_resolve_hours ASC
+        ORDER BY avg_resolve_minutes ASC
       `;
     } else {
       // Condition 3: Show group by equipment (machine/line) if any area filter is selected
@@ -2871,7 +2871,7 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
             ELSE 'Unknown Equipment'
           END as display_name,
           COUNT(t.id) as ticket_count,
-          AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
+          AVG(DATEDIFF(MINUTE, t.actual_start_at, t.actual_finish_at)) as avg_resolve_minutes
         FROM IgxTickets t
         LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         WHERE t.created_at >= '${startDate}' 
@@ -2887,16 +2887,16 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
             ELSE 'Unknown Equipment'
           END
         HAVING COUNT(t.id) > 0
-        ORDER BY avg_resolve_hours ASC
+        ORDER BY avg_resolve_minutes ASC
       `;
     }
 
     const result = await pool.request().query(resolveDurationQuery);
-    
+    console.log(result.recordset);
     // Transform data for the chart
     const resolveDurationByAreaData = result.recordset.map(row => ({
       display_name: row.display_name,
-      avgResolveHours: Math.round(row.avg_resolve_hours * 100) / 100, // Round to 2 decimal places
+      avgResolveMinutes: Math.round(row.avg_resolve_minutes * 100) / 100, // Round to 2 decimal places
       ticketCount: row.ticket_count
     }));
 
@@ -2906,9 +2906,9 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
         resolveDurationByAreaData,
         summary: {
           totalItems: resolveDurationByAreaData.length,
-          totalIgxTickets: resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0),
-          overallAvgResolveHours: resolveDurationByAreaData.length > 0 
-            ? Math.round((resolveDurationByAreaData.reduce((sum, item) => sum + (item.avgResolveHours * item.ticketCount), 0) / resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0)) * 100) / 100
+          totalTickets: resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0),
+          overallAvgResolveMinutes: resolveDurationByAreaData.length > 0 
+            ? Math.round((resolveDurationByAreaData.reduce((sum, item) => sum + (item.avgResolveMinutes * item.ticketCount), 0) / resolveDurationByAreaData.reduce((sum, item) => sum + item.ticketCount, 0)) * 100) / 100
             : 0,
           groupBy: summaryLabel,
           appliedFilters: {
@@ -3301,7 +3301,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
         summary: {
           totalUsers: downtimeImpactReporterData.length,
           totalDowntimeHours: downtimeImpactReporterData.reduce((sum, item) => sum + item.hours, 0),
-          totalIgxTickets: downtimeImpactReporterData.reduce((sum, item) => sum + item.ticketCount, 0),
+          totalTickets: downtimeImpactReporterData.reduce((sum, item) => sum + item.ticketCount, 0),
           appliedFilters: {
             startDate,
             endDate,
@@ -3401,9 +3401,9 @@ exports.getCalendarHeatmapData = async (req, res) => {
         calendarData,
         summary: {
           totalDays: calendarData.length,
-          daysWithIgxTickets: calendarData.filter(item => item.count > 0).length,
-          totalIgxTickets: calendarData.reduce((sum, item) => sum + item.count, 0),
-          maxIgxTicketsPerDay: calendarData.length > 0 ? Math.max(...calendarData.map(item => item.count)) : 0,
+          daysWithTickets: calendarData.filter(item => item.count > 0).length,
+          totalTickets: calendarData.reduce((sum, item) => sum + item.count, 0),
+          maxTicketsPerDay: calendarData.length > 0 ? Math.max(...calendarData.map(item => item.count)) : 0,
           appliedFilters: {
             year: parseInt(year),
             plant: plant || null,
@@ -3487,10 +3487,10 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     // Get current period KPIs
     const currentKPIsQuery = `
       SELECT 
-        COUNT(*) as totalIgxTickets,
-        SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedIgxTickets,
-        SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingIgxTickets,
-        SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingIgxTickets,
+        COUNT(*) as totalTickets,
+        SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedTickets,
+        SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
+        SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
         ISNULL(SUM(t.cost_avoidance), 0) as totalCostAvoidance
       FROM IgxTickets t
@@ -3503,10 +3503,10 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     if (compareWhereClause) {
       compareKPIsQuery = `
         SELECT 
-          COUNT(*) as totalIgxTickets,
-          SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedIgxTickets,
-          SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingIgxTickets,
-          SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingIgxTickets,
+          COUNT(*) as totalTickets,
+          SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedTickets,
+          SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
+          SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
           ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
           ISNULL(SUM(t.cost_avoidance), 0) as totalCostAvoidance
         FROM IgxTickets t
@@ -3567,7 +3567,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     // Execute all queries
     const [currentKPIsResult, compareKPIsResult, topReporterResult, topCostSaverResult, topDowntimeSaverResult] = await Promise.all([
       pool.request().query(currentKPIsQuery),
-      compareKPIsQuery ? pool.request().query(compareKPIsQuery) : Promise.resolve({ recordset: [{ totalIgxTickets: 0, closedIgxTickets: 0, pendingIgxTickets: 0, totalDowntimeAvoidance: 0, totalCostAvoidance: 0 }] }),
+      compareKPIsQuery ? pool.request().query(compareKPIsQuery) : Promise.resolve({ recordset: [{ totalTickets: 0, closedTickets: 0, pendingTickets: 0, totalDowntimeAvoidance: 0, totalCostAvoidance: 0 }] }),
       pool.request().query(topPerformersQuery),
       pool.request().query(topCostSaverQuery),
       pool.request().query(topDowntimeSaverQuery)
@@ -3626,9 +3626,9 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     };
 
     const comparisonMetrics = {
-      ticketGrowthRate: calculateGrowthRate(currentKPIs.totalIgxTickets, compareKPIs.totalIgxTickets),
-      closureRateImprovement: calculateGrowthRate(currentKPIs.closedIgxTickets, compareKPIs.closedIgxTickets),
-      waitingIgxTicketsChange: calculateGrowthRate(currentKPIs.waitingIgxTickets, compareKPIs.waitingIgxTickets),
+      ticketGrowthRate: calculateGrowthRate(currentKPIs.totalTickets, compareKPIs.totalTickets),
+      closureRateImprovement: calculateGrowthRate(currentKPIs.closedTickets, compareKPIs.closedTickets),
+      waitingTicketsChange: calculateGrowthRate(currentKPIs.waitingTickets, compareKPIs.waitingTickets),
       costAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalCostAvoidance, compareKPIs.totalCostAvoidance),
       downtimeAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalDowntimeAvoidance, compareKPIs.totalDowntimeAvoidance)
     };
@@ -3638,14 +3638,14 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       success: true,
       data: {
         kpis: {
-          totalIgxTicketsThisPeriod: currentKPIs.totalIgxTickets || 0,
-          totalIgxTicketsLastPeriod: compareKPIs.totalIgxTickets || 0,
-          closedIgxTicketsThisPeriod: currentKPIs.closedIgxTickets || 0,
-          closedIgxTicketsLastPeriod: compareKPIs.closedIgxTickets || 0,
-          waitingIgxTicketsThisPeriod: currentKPIs.waitingIgxTickets || 0,
-          waitingIgxTicketsLastPeriod: compareKPIs.waitingIgxTickets || 0,
-          pendingIgxTicketsThisPeriod: currentKPIs.pendingIgxTickets || 0,
-          pendingIgxTicketsLastPeriod: compareKPIs.pendingIgxTickets || 0,
+          totalTicketsThisPeriod: currentKPIs.totalTickets || 0,
+          totalTicketsLastPeriod: compareKPIs.totalTickets || 0,
+          closedTicketsThisPeriod: currentKPIs.closedTickets || 0,
+          closedTicketsLastPeriod: compareKPIs.closedTickets || 0,
+          waitingTicketsThisPeriod: currentKPIs.waitingTickets || 0,
+          waitingTicketsLastPeriod: compareKPIs.waitingTickets || 0,
+          pendingTicketsThisPeriod: currentKPIs.pendingTickets || 0,
+          pendingTicketsLastPeriod: compareKPIs.pendingTickets || 0,
           totalDowntimeAvoidanceThisPeriod: currentKPIs.totalDowntimeAvoidance || 0,
           totalDowntimeAvoidanceLastPeriod: compareKPIs.totalDowntimeAvoidance || 0,
           totalCostAvoidanceThisPeriod: currentKPIs.totalCostAvoidance || 0,
@@ -3884,7 +3884,7 @@ const getPersonalKPIComparison = async (req, res) => {
 };
 
 /**
- * Get Department User KPI - IgxTickets Created
+ * Get Department User KPI - Tickets Created
  * Returns ticket count for each user as reporter (created_by) by period
  */
 const getDepartmentUserKPITicketsCreated = async (req, res) => {
@@ -3903,7 +3903,7 @@ const getDepartmentUserKPITicketsCreated = async (req, res) => {
 
     // Get users in department with ticket counts per period using IgxDateDim
     const query = `
-      WITH UserPeriodIgxTickets AS (
+      WITH UserPeriodTickets AS (
         SELECT 
           p.PERSONNO,
           p.PERSON_NAME,
@@ -3948,7 +3948,7 @@ const getDepartmentUserKPITicketsCreated = async (req, res) => {
           ISNULL(upt.ticket_count, 0) as tickets,
           ISNULL(tpt.target_value, 0) as target
         FROM AllUserPeriods aup
-        LEFT JOIN UserPeriodIgxTickets upt 
+        LEFT JOIN UserPeriodTickets upt 
           ON aup.PERSONNO = upt.PERSONNO AND aup.PeriodNo = upt.PeriodNo
         LEFT JOIN IgxTicketPersonTarget tpt 
           ON tpt.PERSONNO = aup.PERSONNO 
@@ -4011,7 +4011,7 @@ const getDepartmentUserKPITicketsCreated = async (req, res) => {
 };
 
 /**
- * Get Department User KPI - IgxTickets Assigned
+ * Get Department User KPI - Tickets Assigned
  * Returns ticket count for each user as assignee (assigned_to) by period
  */
 const getDepartmentUserKPITicketsAssigned = async (req, res) => {
@@ -4030,7 +4030,7 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
 
     // Get users in department with ticket counts per period using IgxDateDim
     const query = `
-      WITH UserPeriodIgxTickets AS (
+      WITH UserPeriodTickets AS (
         SELECT 
           p.PERSONNO,
           p.PERSON_NAME,
@@ -4075,7 +4075,7 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
           ISNULL(upt.ticket_count, 0) as tickets,
           ISNULL(tpt.target_value, 0) as target
         FROM AllUserPeriods aup
-        LEFT JOIN UserPeriodIgxTickets upt 
+        LEFT JOIN UserPeriodTickets upt 
           ON aup.PERSONNO = upt.PERSONNO AND aup.PeriodNo = upt.PeriodNo
         LEFT JOIN IgxTicketPersonTarget tpt 
           ON tpt.PERSONNO = aup.PERSONNO 

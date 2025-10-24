@@ -75,7 +75,7 @@ const AppContent: React.FC = () => {
         hasStoredRedirect.current = false;
       }
     }, [isAuthenticated, isLoading, location.pathname, location.search, storeRedirectUrl]);
-    
+
     // Show loading state while checking authentication
     if (isLoading) {
       return (

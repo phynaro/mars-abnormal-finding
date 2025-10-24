@@ -163,7 +163,7 @@ class PersonnelController {
 
       const offset = (parseInt(page) - 1) * parseInt(limit);
       
-      let whereClause = includeDeleted ? '' : "WHERE (d.FLAGDEL IS NULL OR d.FLAGDEL != 'Y')";
+      let whereClause = includeDeleted ? '' : "WHERE (d.FLAGDEL IS NULL OR d.FLAGDEL != 'Y' AND NOT d.DEPTNAME LIKE '%>%' AND NOT d.DEPTNAME LIKE '%DELETE%')";
       const params = [];
       
       // Add search functionality
@@ -213,7 +213,7 @@ class PersonnelController {
         ) AS paginated_results
         WHERE row_num > @offset AND row_num <= @offset + @limit
       `;
-
+      console.log(dataQuery);
       const dataRequest = pool.request();
       params.forEach(param => dataRequest.input(param.name, param.type, param.value));
       dataRequest.input('offset', sql.Int, offset);

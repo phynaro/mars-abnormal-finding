@@ -2561,8 +2561,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: t('dashboard.hours'), position: 'insideBottom', offset: -10 }}
-                        tickFormatter={(value) => `${value}h`}
+                        label={{ value: t('dashboard.minutes'), position: 'insideBottom', offset: -10 }}
+                        tickFormatter={(value) => {
+                          const numValue = Number(value);
+                          const hours = Math.floor(numValue / 60);
+                          const minutes = Math.round(numValue % 60);
+                          return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                        }}
                         tick={{ dy: 5 }}
                       />
                       <YAxis 
@@ -2572,8 +2577,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       />
                       <RechartsTooltip 
                         formatter={(value, name) => {
-                          if (name === 'avgResolveHours') {
-                            return [`${value} ${t('dashboard.hours')}`, t('dashboard.averageResolveTime')];
+                          if (name === 'avgResolveMinutes') {
+                            const numValue = Number(value);
+                            const hours = Math.floor(numValue / 60);
+                            const minutes = Math.round(numValue % 60);
+                            const formattedTime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                            return [formattedTime, t('dashboard.averageResolveTime')];
                           } else if (name === 'ticketCount') {
                             return [`${value} ${t('dashboard.tickets')}`, t('dashboard.ticketCount')];
                           }
@@ -2583,7 +2592,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       />
                       <Legend wrapperStyle={{ paddingTop: '20px' }} />
                       <Bar 
-                        dataKey="avgResolveHours" 
+                        dataKey="avgResolveMinutes" 
                         fill="hsl(var(--primary))" 
                         name={t('dashboard.averageResolveTime')}
                       />
@@ -2626,8 +2635,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: 'Hours', position: 'insideBottom', offset: -10 }}
-                        tickFormatter={(value) => `${value}h`}
+                        label={{ value: 'Minutes', position: 'insideBottom', offset: -10 }}
+                        tickFormatter={(value) => {
+                          const numValue = Number(value);
+                          const hours = Math.floor(numValue / 60);
+                          const minutes = Math.round(numValue % 60);
+                          return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                        }}
                         tick={{ dy: 5 }}
                       />
                       <YAxis 
@@ -2637,8 +2651,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       />
                       <RechartsTooltip 
                         formatter={(value, name) => {
-                          if (name === 'avgResolveHours') {
-                            return [`${value} hours`, 'Average Resolve Time'];
+                          if (name === 'avgResolveMinutes') {
+                            const numValue = Number(value);
+                            const hours = Math.floor(numValue / 60);
+                            const minutes = Math.round(numValue % 60);
+                            const formattedTime = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+                            return [formattedTime, 'Average Resolve Time'];
                           } else if (name === 'ticketCount') {
                             return [`${value} tickets`, 'Ticket Count'];
                           }
@@ -2648,7 +2666,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       />
                       <Legend wrapperStyle={{ paddingTop: '20px' }} />
                       <Bar 
-                        dataKey="avgResolveHours" 
+                        dataKey="avgResolveMinutes" 
                         fill="hsl(var(--accent))" 
                         name="Average Resolve Time"
                       >

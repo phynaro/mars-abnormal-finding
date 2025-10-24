@@ -421,7 +421,7 @@ export interface TicketResolveDurationByUserResponse {
 
 export interface TicketResolveDurationByAreaDataPoint {
   display_name: string;
-  avgResolveHours: number;
+  avgResolveMinutes: number;
   ticketCount: number;
 }
 
@@ -432,7 +432,7 @@ export interface TicketResolveDurationByAreaResponse {
     summary: {
       totalItems: number;
       totalTickets: number;
-      overallAvgResolveHours: number;
+      overallAvgResolveMinutes: number;
       groupBy: string;
       appliedFilters: {
         startDate: string;
