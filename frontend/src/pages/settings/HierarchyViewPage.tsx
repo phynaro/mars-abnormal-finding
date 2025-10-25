@@ -91,9 +91,8 @@ const HierarchyViewPage: React.FC = () => {
       const data = await administrationService.hierarchy.getHierarchyView();
       setHierarchyData(data);
    
-      // Auto-expand plants for better UX
-      const plantCodes = Object.keys(data.hierarchy.plants);
-      setExpandedItems(new Set(plantCodes.map(code => `plant-${code}`)));
+      // Start with everything collapsed by default
+      setExpandedItems(new Set());
     } catch (error) {
       console.error('Error loading hierarchy data:', error);
       toast({

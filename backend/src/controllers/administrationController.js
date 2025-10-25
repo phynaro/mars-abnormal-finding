@@ -819,8 +819,10 @@ const getHierarchyView = async (req, res) => {
           if (!hierarchy.plants[plant].areas[area].lines[line]) {
             hierarchy.plants[plant].areas[area].lines[line] = { machines: {} };
           }
-          if (!hierarchy.plants[plant].areas[area].lines[line].machines[machine]) {
-            hierarchy.plants[plant].areas[area].lines[line].machines[machine] = {
+          // Use machine + number as unique key
+          const machineKey = `${machine}-${item.number || '00'}`;
+          if (!hierarchy.plants[plant].areas[area].lines[line].machines[machineKey]) {
+            hierarchy.plants[plant].areas[area].lines[line].machines[machineKey] = {
               code: machine,
               name: item.puname,
               description: item.pudescription,
@@ -834,8 +836,10 @@ const getHierarchyView = async (req, res) => {
           if (!hierarchy.plants[plant].areas[area].machines) {
             hierarchy.plants[plant].areas[area].machines = {};
           }
-          if (!hierarchy.plants[plant].areas[area].machines[machine]) {
-            hierarchy.plants[plant].areas[area].machines[machine] = {
+          // Use machine + number as unique key
+          const machineKey = `${machine}-${item.number || '00'}`;
+          if (!hierarchy.plants[plant].areas[area].machines[machineKey]) {
+            hierarchy.plants[plant].areas[area].machines[machineKey] = {
               code: machine,
               name: item.puname,
               description: item.pudescription,
@@ -847,6 +851,21 @@ const getHierarchyView = async (req, res) => {
         }
       }
     });
+    // Debug: Count machines from hierarchy
+    const hierarchyMachineCount = Object.values(hierarchy.plants).reduce((sum, plant) => 
+      sum + Object.values(plant.areas).reduce((sumArea, area) => {
+        const lineMachines = Object.values(area.lines || {}).reduce((sumLine, line) => sumLine + Object.keys(line.machines || {}).length, 0);
+        const areaMachines = Object.keys(area.machines || {}).length;
+        return sumArea + lineMachines + areaMachines;
+      }, 0), 0);
+    
+    // Debug: Count machines from flat data
+    const flatMachineCount = result.recordset.filter(item => (item.digit_count === 4 || item.digit_count === 5) && item.machine).length;
+    
+    console.log(`🔍 Machine Count Debug:`);
+    console.log(`   Flat data count: ${flatMachineCount}`);
+    console.log(`   Hierarchy count: ${hierarchyMachineCount}`);
+    console.log(`   Difference: ${flatMachineCount - hierarchyMachineCount}`);
 
     res.json({
       success: true,
@@ -859,12 +878,23 @@ const getHierarchyView = async (req, res) => {
           totalAreas: Object.values(hierarchy.plants).reduce((sum, plant) => sum + Object.keys(plant.areas).length, 0),
           totalLines: Object.values(hierarchy.plants).reduce((sum, plant) => 
             sum + Object.values(plant.areas).reduce((sumArea, area) => sumArea + Object.keys(area.lines).length, 0), 0),
-          totalMachines: Object.values(hierarchy.plants).reduce((sum, plant) => 
-            sum + Object.values(plant.areas).reduce((sumArea, area) => {
-              const lineMachines = Object.values(area.lines || {}).reduce((sumLine, line) => sumLine + Object.keys(line.machines || {}).length, 0);
-              const areaMachines = Object.keys(area.machines || {}).length;
-              return sumArea + lineMachines + areaMachines;
-            }, 0), 0)
+          totalMachines: hierarchyMachineCount
+        },
+        debug: {
+          flatDataCounts: {
+            totalRecords: result.recordset.length,
+            plants: result.recordset.filter(item => item.digit_count === 1).length,
+            areas: result.recordset.filter(item => item.digit_count === 2).length,
+            lines: result.recordset.filter(item => item.digit_count === 3).length,
+            machines: flatMachineCount
+          },
+          hierarchyCounts: {
+            plants: Object.keys(hierarchy.plants).length,
+            areas: Object.values(hierarchy.plants).reduce((sum, plant) => sum + Object.keys(plant.areas).length, 0),
+            lines: Object.values(hierarchy.plants).reduce((sum, plant) => 
+              sum + Object.values(plant.areas).reduce((sumArea, area) => sumArea + Object.keys(area.lines).length, 0), 0),
+            machines: hierarchyMachineCount
+          }
         }
       },
       count: result.recordset.length

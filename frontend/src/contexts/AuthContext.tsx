@@ -74,97 +74,96 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             message: 'Not in LINE client - using normal login'
           });
           setLiffLoading(false);
-          setIsLoading(false);
-          return; // Exit early, fall back to normal login
-        }
-        
-        // Check if user is logged in to LINE (only when in LINE client)
-        if (!liff.isLoggedIn()) {
-          console.log("User not logged in to LINE, initiating login...");
-          liff.login(); // Note: login() doesn't return a Promise, it redirects
-          return; // Exit early as login() will redirect the page
-        }
-        
-        // User is logged in to LINE, log LIFF information
-        console.log("LIFF is logged in:", liff.isLoggedIn());
-        console.log("LIFF context:", liff.getContext());
-        console.log("LIFF OS:", liff.getOS());
-        console.log("LIFF version:", liff.getVersion());
-        console.log("LIFF language:", liff.getLanguage());
-        
-        // Get profile information (this is async)
-        try {
-          const profile = await liff.getProfile();
-          console.log("LIFF profile:", profile);
-        } catch (profileError) {
-          console.warn("Could not get LIFF profile:", profileError);
-        }
-        
-        console.log("LIFF access token:", liff.getAccessToken());
-        console.log("LIFF ID token:", liff.getIDToken());
-        
-        // Step 2: Verify LIFF access token with backend
-        const accessToken = liff.getAccessToken();
-        if (accessToken) {
-          console.log("Verifying LIFF access token with backend...");
-          try {
-            const verificationResult = await authService.verifyLiffToken(accessToken);
-            console.log("LIFF token verification result:", verificationResult);
-            setLiffTokenVerificationResult(verificationResult);
-            setLiffTokenVerified(verificationResult.success);
-
-            // Step 2.1: Get LINE profile if token is verified
-            if (verificationResult.success) {
-              console.log("Getting LINE profile...");
-              try {
-                const profileResult = await authService.getLineProfile(accessToken);
-                console.log("LINE profile result:", profileResult);
-                setLineProfile(profileResult);
-
-                // Step 2.2: Attempt LINE login if profile is successfully retrieved
-                if (profileResult.success && profileResult.profile) {
-                  console.log("Attempting LINE login with profile:", profileResult.profile);
-                  try {
-                    const lineLoginData: LineLoginData = {
-                      userId: profileResult.profile.userId,
-                      displayName: profileResult.profile.displayName,
-                      pictureUrl: profileResult.profile.pictureUrl
-                    };
-                    
-                    await authService.lineLogin(lineLoginData);
-                    console.log("LINE login successful!");
-                    
-                    // Get the user from authService to ensure consistency
-                    const currentUser = authService.getCurrentUser();
-                    setUser(currentUser);
-                  } catch (lineLoginError) {
-                    console.log("LINE login failed:", lineLoginError);
-                    // LINE login failed - user might not have LINE account linked
-                    // This is not necessarily an error, just means they need to use normal login
-                  }
-                }
-              } catch (profileError) {
-                console.error("Failed to get LINE profile:", profileError);
-                setLineProfile({
-                  success: false,
-                  message: profileError instanceof Error ? profileError.message : 'Failed to get LINE profile'
-                });
-              }
-            }
-          } catch (verificationError) {
-            console.error("LIFF token verification failed:", verificationError);
-            setLiffTokenVerified(false);
-            setLiffTokenVerificationResult({
-              success: false,
-              message: verificationError instanceof Error ? verificationError.message : 'Token verification failed'
-            });
-          }
+          // Don't return early - continue to check authentication
         } else {
-          console.warn("No LIFF access token available for verification");
-          setLiffTokenVerified(false);
+          // Check if user is logged in to LINE (only when in LINE client)
+          if (!liff.isLoggedIn()) {
+            console.log("User not logged in to LINE, initiating login...");
+            liff.login(); // Note: login() doesn't return a Promise, it redirects
+            return; // Exit early as login() will redirect the page
+          }
+          
+          // User is logged in to LINE, log LIFF information
+          console.log("LIFF is logged in:", liff.isLoggedIn());
+          console.log("LIFF context:", liff.getContext());
+          console.log("LIFF OS:", liff.getOS());
+          console.log("LIFF version:", liff.getVersion());
+          console.log("LIFF language:", liff.getLanguage());
+          
+          // Get profile information (this is async)
+          try {
+            const profile = await liff.getProfile();
+            console.log("LIFF profile:", profile);
+          } catch (profileError) {
+            console.warn("Could not get LIFF profile:", profileError);
+          }
+          
+          console.log("LIFF access token:", liff.getAccessToken());
+          console.log("LIFF ID token:", liff.getIDToken());
+          
+          // Step 2: Verify LIFF access token with backend
+          const accessToken = liff.getAccessToken();
+          if (accessToken) {
+            console.log("Verifying LIFF access token with backend...");
+            try {
+              const verificationResult = await authService.verifyLiffToken(accessToken);
+              console.log("LIFF token verification result:", verificationResult);
+              setLiffTokenVerificationResult(verificationResult);
+              setLiffTokenVerified(verificationResult.success);
+
+              // Step 2.1: Get LINE profile if token is verified
+              if (verificationResult.success) {
+                console.log("Getting LINE profile...");
+                try {
+                  const profileResult = await authService.getLineProfile(accessToken);
+                  console.log("LINE profile result:", profileResult);
+                  setLineProfile(profileResult);
+
+                  // Step 2.2: Attempt LINE login if profile is successfully retrieved
+                  if (profileResult.success && profileResult.profile) {
+                    console.log("Attempting LINE login with profile:", profileResult.profile);
+                    try {
+                      const lineLoginData: LineLoginData = {
+                        userId: profileResult.profile.userId,
+                        displayName: profileResult.profile.displayName,
+                        pictureUrl: profileResult.profile.pictureUrl
+                      };
+                      
+                      await authService.lineLogin(lineLoginData);
+                      console.log("LINE login successful!");
+                      
+                      // Get the user from authService to ensure consistency
+                      const currentUser = authService.getCurrentUser();
+                      setUser(currentUser);
+                    } catch (lineLoginError) {
+                      console.log("LINE login failed:", lineLoginError);
+                      // LINE login failed - user might not have LINE account linked
+                      // This is not necessarily an error, just means they need to use normal login
+                    }
+                  }
+                } catch (profileError) {
+                  console.error("Failed to get LINE profile:", profileError);
+                  setLineProfile({
+                    success: false,
+                    message: profileError instanceof Error ? profileError.message : 'Failed to get LINE profile'
+                  });
+                }
+              }
+            } catch (verificationError) {
+              console.error("LIFF token verification failed:", verificationError);
+              setLiffTokenVerified(false);
+              setLiffTokenVerificationResult({
+                success: false,
+                message: verificationError instanceof Error ? verificationError.message : 'Token verification failed'
+              });
+            }
+          } else {
+            console.warn("No LIFF access token available for verification");
+            setLiffTokenVerified(false);
+          }
         }
         
-        // Step 3: Check authentication after LIFF is ready
+        // Step 3: Check authentication (runs for both LINE client and external browser)
         console.log("Checking authentication...");
         const currentUser = authService.getCurrentUser();
         if (currentUser && authService.isAuthenticated()) {
