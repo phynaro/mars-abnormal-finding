@@ -259,6 +259,18 @@ const LoginPage: React.FC = () => {
               )}
             </Button>
 
+            {/* Request Access Link */}
+            <div className="text-center mt-4">
+              <Button 
+                type="button" 
+                variant="link" 
+                onClick={() => navigate('/request-access')}
+                className="text-sm"
+              >
+                Request Access
+              </Button>
+            </div>
+
             {/* Additional Links */}
             <div className="flex items-center justify-between text-sm">
               {/* <Button type="button" variant="link" className="p-0 h-auto text-sm" onClick={() => navigate('/verify-email')}>

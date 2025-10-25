@@ -4,27 +4,31 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { CheckCircle, ArrowRight, User, Settings, BarChart3, Smartphone, AlertCircle } from 'lucide-react';
+import { CheckCircle, ArrowRight, User, Settings, BarChart3, Smartphone, AlertCircle, Link, X } from 'lucide-react';
 import { getApiBaseUrl } from '@/utils/url';
+import LineProfileDisplay from '@/components/LineProfileDisplay';
 
 const WelcomePage: React.FC = () => {
-  const { user, refreshUser } = useAuth();
+  const { user, refreshUser, lineProfile, liffTokenVerified, liffObject, lineLogin } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
-  const [lineId, setLineId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [showLineLinking, setShowLineLinking] = useState(false);
+  const [isLineLoginLoading, setIsLineLoginLoading] = useState(false);
+  const [externalLineProfile, setExternalLineProfile] = useState<{
+    userId: string;
+    displayName: string;
+    pictureUrl: string;
+  } | null>(null);
 
   const handleGetStarted = () => {
     navigate('/home');
   };
 
-  const handleLineIdSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!lineId.trim()) {
-      setError('Please enter your Line ID');
+  const handleLinkLineAccount = async () => {
+    if (!lineProfile?.profile) {
+      setError('LINE profile information not available');
       return;
     }
 
@@ -32,30 +36,130 @@ const WelcomePage: React.FC = () => {
     setError('');
 
     try {
-      const response = await fetch(`${getApiBaseUrl()}/users/profile`, {
-        method: 'PUT',
+      // Use the new link-line-account endpoint that downloads and saves the avatar
+      const response = await fetch(`${getApiBaseUrl()}/auth/link-line-account`, {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ lineId: lineId.trim() })
+        body: JSON.stringify({ 
+          lineProfile: lineProfile.profile
+        })
       });
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to update Line ID');
+        throw new Error(errorData.message || 'Failed to link LINE account');
       }
 
-      // Refresh user data to get updated Line ID
+      const result = await response.json();
+      console.log('LINE account linked successfully:', result);
+
+      // Refresh user data to get updated Line ID and avatar
       await refreshUser();
       
       // Navigate to home page
       navigate('/home');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to update Line ID');
+      setError(err instanceof Error ? err.message : 'Failed to link LINE account');
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleExternalLineLink = async () => {
+    setIsLineLoginLoading(true);
+    setError('');
+
+    try {
+      // Check if LIFF is available and user is logged in to LINE
+      if (!liffObject) {
+        throw new Error('LINE integration not available');
+      }
+
+      if (!liffObject.isLoggedIn()) {
+        // Redirect to LINE login
+        liffObject.login();
+        return;
+      }
+
+      // Get LINE profile
+      const accessToken = liffObject.getAccessToken();
+      if (!accessToken) {
+        throw new Error('No LINE access token available');
+      }
+
+      // Get LINE profile from backend
+      const profileResponse = await fetch(`${getApiBaseUrl()}/auth/get-line-profile`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ accessToken }),
+      });
+
+      const profileResult = await profileResponse.json();
+      if (!profileResult.success || !profileResult.profile) {
+        throw new Error('Failed to get LINE profile');
+      }
+
+      // Store LINE profile for manual confirmation
+      setExternalLineProfile({
+        userId: profileResult.profile.userId,
+        displayName: profileResult.profile.displayName,
+        pictureUrl: profileResult.profile.pictureUrl
+      });
+
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to get LINE profile');
+    } finally {
+      setIsLineLoginLoading(false);
+    }
+  };
+
+  const handleConfirmLineBinding = async () => {
+    if (!externalLineProfile) return;
+
+    setIsSubmitting(true);
+    setError('');
+
+    try {
+      // Use the new link-line-account endpoint that downloads and saves the avatar
+      const updateResponse = await fetch(`${getApiBaseUrl()}/auth/link-line-account`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ 
+          lineProfile: externalLineProfile
+        })
+      });
+
+      if (!updateResponse.ok) {
+        const errorData = await updateResponse.json();
+        throw new Error(errorData.message || 'Failed to link LINE account');
+      }
+
+      const result = await updateResponse.json();
+      console.log('LINE account linked successfully:', result);
+
+      // Refresh user data to get updated Line ID and avatar
+      await refreshUser();
+      
+      // Navigate to home page
+      navigate('/home');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to link LINE account');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSkipLineBinding = () => {
+    setExternalLineProfile(null);
+    navigate('/home');
   };
 
   const features = [
@@ -93,37 +197,46 @@ const WelcomePage: React.FC = () => {
         
         <CardContent className="space-y-6">
 
-          {/* Line ID Registration Section */}
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
-            <div className="flex items-center mb-4">
-              <Smartphone className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" />
-              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Complete Your Setup</h3>
-            </div>
-            <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
-              To receive notifications and complete your account setup, please enter your Line ID below.
-            </p>
-            
-            <form onSubmit={handleLineIdSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="lineId" className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  Line ID
-                </Label>
-                <Input
-                  id="lineId"
-                  type="text"
-                  placeholder="Enter your Line ID (e.g., U1234567890abcdef)"
-                  value={lineId}
-                  onChange={(e) => setLineId(e.target.value)}
-                  className="w-full"
-                  disabled={isSubmitting}
-                />
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  You can find your Line ID from the Line Official Account Menu.
-                </p>
+          {/* LINE Account Linking Section */}
+          {liffObject?.isInClient() && liffTokenVerified && lineProfile?.success && lineProfile.profile && !user?.lineId && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+              <div className="flex items-center mb-4">
+                <Smartphone className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" />
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100">Link Your LINE Account</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                We found your LINE account. Would you like to link it to your MARS account for notifications and easier access?
+              </p>
+              
+              {/* LINE Profile Display */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 mb-4">
+                <div className="flex items-center space-x-3">
+                  <div className="flex-shrink-0">
+                    {lineProfile.profile.pictureUrl ? (
+                      <img
+                        src={lineProfile.profile.pictureUrl}
+                        alt="LINE Profile"
+                        className="h-12 w-12 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-800 flex items-center justify-center">
+                        <User className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {lineProfile.profile.displayName}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                      LINE ID: {lineProfile.profile.userId}
+                    </p>
+                  </div>
+                </div>
               </div>
               
               {error && (
-                <div className="flex items-center p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
+                <div className="flex items-center p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md mb-4">
                   <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mr-2" />
                   <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
                 </div>
@@ -131,11 +244,16 @@ const WelcomePage: React.FC = () => {
               
               <div className="flex gap-3">
                 <Button
-                  type="submit"
-                  disabled={isSubmitting || !lineId.trim()}
+                  onClick={handleLinkLineAccount}
+                  disabled={isSubmitting}
                   className="flex-1"
                 >
-                  {isSubmitting ? 'Saving...' : 'Save Line ID & Continue'}
+                  {isSubmitting ? 'Linking...' : (
+                    <>
+                      <Link className="h-4 w-4 mr-2" />
+                      Link LINE Account
+                    </>
+                  )}
                 </Button>
                 <Button
                   type="button"
@@ -146,9 +264,93 @@ const WelcomePage: React.FC = () => {
                   Skip for Now
                 </Button>
               </div>
-            </form>
-          </div>
+            </div>
+          )}
 
+          {/* External Browser LINE Profile Display */}
+          {!liffObject?.isInClient() && !user?.lineId && externalLineProfile && (
+            <LineProfileDisplay
+              profile={externalLineProfile}
+              onConfirm={handleConfirmLineBinding}
+              onSkip={handleSkipLineBinding}
+              isLoading={isSubmitting}
+              error={error}
+            />
+          )}
+
+          {/* External Browser LINE Login Button */}
+          {!liffObject?.isInClient() && !user?.lineId && !externalLineProfile && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+              <div className="flex items-center mb-4">
+                <Smartphone className="h-5 w-5 text-green-600 dark:text-green-400 mr-2" />
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100">Connect with LINE</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                Link your LINE account to receive notifications and enjoy seamless access across devices.
+              </p>
+              
+              {error && (
+                <div className="flex items-center p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md mb-4">
+                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mr-2" />
+                  <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+                </div>
+              )}
+              
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleExternalLineLink}
+                  disabled={isLineLoginLoading}
+                  className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {isLineLoginLoading ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Connecting...
+                    </>
+                  ) : (
+                    <>
+                      <Smartphone className="h-4 w-4 mr-2" />
+                      Connect LINE Account
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGetStarted}
+                  disabled={isLineLoginLoading}
+                >
+                  Skip for Now
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Features Section */}
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+            <h3 className="font-semibold text-gray-900 dark:text-gray-100 mb-4">What you can do:</h3>
+            <div className="grid gap-4">
+              {features.map((feature, index) => (
+                <div key={index} className="flex items-start space-x-3">
+                  <div className="flex-shrink-0 mt-1">
+                    <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center">
+                      <div className="text-blue-600 dark:text-blue-400">
+                        {feature.icon}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {feature.title}
+                    </h4>
+                    <p className="text-xs text-gray-600 dark:text-gray-300">
+                      {feature.description}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
         </CardContent>
       </Card>

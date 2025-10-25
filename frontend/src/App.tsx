@@ -8,6 +8,7 @@ import Layout from './components/layout/Layout';
 import LoginPage from './pages/auth/LoginPage';
 import RegisterPage from './pages/auth/RegisterPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
+import RequestAccessPage from './pages/auth/RequestAccessPage';
 import WelcomePage from './pages/home/WelcomePage';
 import HomePage from './pages/home/HomePage';
 
@@ -146,6 +147,11 @@ const AppContent: React.FC = () => {
         <Route path="/verify-email" element={
           <PublicRoute>
             <VerifyEmailPage />
+          </PublicRoute>
+        } />
+        <Route path="/request-access" element={
+          <PublicRoute>
+            <RequestAccessPage />
           </PublicRoute>
         } />
         <Route path="/welcome" element={

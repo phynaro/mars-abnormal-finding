@@ -115,8 +115,10 @@ const hierarchyRoutes = require('./routes/hierarchy');
 const administrationRoutes = require('./routes/administration');
 const targetRoutes = require('./routes/target');
 const personalTargetRoutes = require('./routes/personalTarget');
+const accessRequestRoutes = require('./routes/accessRequest');
 
 app.use('/api/auth', authRoutes);
+app.use('/api/access-request', accessRequestRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/machines', machineRoutes);
 app.use('/api/tickets', ticketRoutes);

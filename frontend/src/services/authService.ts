@@ -61,6 +61,12 @@ export interface LineProfileResponse {
   error?: any;
 }
 
+export interface LineLoginData {
+  userId: string;
+  displayName: string;
+  pictureUrl: string;
+}
+
 export interface AuthResponse {
   success: boolean;
   message: string;
@@ -351,6 +357,51 @@ class AuthService {
       return result;
     } catch (error) {
       throw new Error(error instanceof Error ? error.message : 'Failed to get LINE profile');
+    }
+  }
+
+  // LINE login using LINE profile data
+  async lineLogin(lineProfile: LineLoginData): Promise<AuthResponse> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/line-login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ lineProfile }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        // Use the server-provided message if available, otherwise provide a fallback
+        const errorMessage = result.message || this.getDefaultErrorMessage(response.status);
+        throw new Error(errorMessage);
+      }
+
+      if (result.success && result.token && result.user) {
+        this.setAuth(result.token, result.user);
+      }
+
+      return result;
+    } catch (error) {
+      // Handle network errors and other fetch failures
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        throw new Error('Unable to connect to the server. Please check your internet connection and try again.');
+      }
+      
+      // Handle other network-related errors
+      if (error instanceof Error && (
+        error.message.includes('Failed to fetch') ||
+        error.message.includes('NetworkError') ||
+        error.message.includes('ERR_NETWORK') ||
+        error.message.includes('ERR_INTERNET_DISCONNECTED')
+      )) {
+        throw new Error('Connection failed. Please check your internet connection and try again.');
+      }
+
+      // Re-throw the original error if it's already user-friendly
+      throw new Error(error instanceof Error ? error.message : 'LINE login failed. Please try again.');
     }
   }
 

@@ -4,8 +4,11 @@ const sql = require('mssql');
 const crypto = require('crypto');
 const CryptoJS = require('crypto-js');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 const dbConfig = require('../config/dbConfig');
 const emailService = require('../services/emailService');
+const { compressAvatar, getSizeReductionInfo } = require('../utils/imageCompression');
 
 // JWT secret key (in production, use environment variable)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
@@ -25,6 +28,67 @@ async function getConnection() {
 // Helper function to hash password using MD5
 function hashPasswordMD5(password) {
   return CryptoJS.MD5(password).toString();
+}
+
+// Helper function to download and save LINE profile picture
+async function downloadAndSaveLineAvatar(pictureUrl, userId, personNo) {
+  try {
+    if (!pictureUrl) {
+      return null;
+    }
+
+    console.log(`Downloading LINE profile picture for user ${userId}: ${pictureUrl}`);
+
+    // Download the image
+    const response = await axios.get(pictureUrl, {
+      responseType: 'arraybuffer',
+      timeout: 10000, // 10 second timeout
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+
+    if (!response.data) {
+      console.warn('No image data received from LINE profile picture URL');
+      return null;
+    }
+
+    console.log(`Downloaded LINE profile picture: ${Math.round(response.data.length / 1024)}KB`);
+
+    // Compress the image
+    const compressedBuffer = await compressAvatar(Buffer.from(response.data), {
+      maxWidth: 512,
+      maxHeight: 512,
+      quality: 85
+    });
+
+    // Get compression info
+    const reductionInfo = getSizeReductionInfo(Buffer.from(response.data), compressedBuffer);
+    console.log(`LINE avatar compressed: ${reductionInfo.originalSizeKB}KB → ${reductionInfo.compressedSizeKB}KB (${reductionInfo.reductionPercentage}% reduction)`);
+
+    // Create destination directory
+    const baseDir = path.join(__dirname, '..', '..', 'uploads', 'avatars', String(personNo));
+    if (!fs.existsSync(baseDir)) {
+      fs.mkdirSync(baseDir, { recursive: true });
+    }
+
+    // Generate filename
+    const timestamp = Date.now();
+    const filename = `line_avatar_${timestamp}.jpg`;
+    const fullPath = path.join(baseDir, filename);
+
+    // Write compressed image to disk
+    await fs.promises.writeFile(fullPath, compressedBuffer);
+
+    // Return relative path for database storage
+    const relativePath = `/uploads/avatars/${personNo}/${filename}`;
+    console.log(`LINE profile picture saved: ${relativePath}`);
+
+    return relativePath;
+  } catch (error) {
+    console.error('Error downloading LINE profile picture:', error.message);
+    return null;
+  }
 }
 
 // Helper function to get user permissions
@@ -123,7 +187,7 @@ const login = async (req, res) => {
           u.LastDate,
           u.ExpireDate,
           u.NeverExpireFlag,
-          ue.PersonNo as IgxUserExtensionPersonNo,
+          ue.PersonNo as UserExtensionPersonNo,
           ue.EmailVerified,
           ue.EmailVerificationToken,
           ue.EmailVerificationExpires,
@@ -168,7 +232,7 @@ const login = async (req, res) => {
     }
 
     const user = userResult.recordset[0];
-    console.log(user);
+    //console.log(user);
     // Check if account is expired
     if (user.NeverExpireFlag !== 'Y' && user.ExpireDate) {
       const expireDate = new Date(
@@ -222,6 +286,8 @@ const login = async (req, res) => {
 
     // Check if IgxUserExtension record exists, create if not
     if (!user.CreatedAt) {
+      console.log('Creating IgxUserExtension record for user:', user);
+      console.log('PersonNo:', user.PersonNo);
       // Create IgxUserExtension record if it doesn't exist (first login)
       await pool.request()
         .input('userID', sql.VarChar, user.UserID)
@@ -746,6 +812,283 @@ const getLineProfile = async (req, res) => {
   }
 };
 
+// LINE Login using LINE profile data
+const lineLogin = async (req, res) => {
+  try {
+    const { lineProfile } = req.body;
+
+    if (!lineProfile || !lineProfile.userId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'LINE profile data is required' 
+      });
+    }
+
+    console.log('LINE login attempt with profile:', lineProfile);
+
+    const pool = await getConnection();
+
+    // Find user by LINE ID in UserExtension table
+    const userResult = await pool.request()
+      .input('lineId', sql.VarChar, lineProfile.userId)
+      .query(`
+        SELECT 
+          u.PersonNo,
+          u.UserID,
+          u.GroupNo,
+          u.LevelReport,
+          u.StoreRoom,
+          u.DBNo,
+          u.StartDate,
+          u.LastDate,
+          u.ExpireDate,
+          u.NeverExpireFlag,
+          ue.PersonNo as UserExtensionPersonNo,
+          ue.EmailVerified,
+          ue.EmailVerificationToken,
+          ue.EmailVerificationExpires,
+          ue.LastLogin,
+          ue.CreatedAt,
+          ue.UpdatedAt,
+          ue.LineID,
+          ue.AvatarUrl,
+          ue.IsActive,
+          g.UserGCode,
+          g.UserGName,
+          p.PERSONCODE,
+          p.FIRSTNAME,
+          p.LASTNAME,
+          p.EMAIL,
+          p.PHONE,
+          p.TITLE,
+          p.DEPTNO,
+          p.CRAFTNO,
+          p.CREWNO,
+          p.PERSON_NAME,
+          p.SiteNo,
+          p.PINCODE,
+          d.DEPTCODE,
+          d.DEPTNAME,
+          s.SiteCode,
+          s.SiteName
+        FROM _secUsers u
+        LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+        LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
+        LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
+        LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
+        WHERE ue.LineID = @lineId AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
+      `);
+
+    if (userResult.recordset.length === 0) {
+      return res.status(401).json({ 
+        success: false, 
+        message: 'No account found linked to this LINE account. Please contact your administrator to link your LINE account.' 
+      });
+    }
+
+    const user = userResult.recordset[0];
+    console.log('Found user for LINE login:', user.UserID);
+
+    // Check if account is expired
+    if (user.NeverExpireFlag !== 'Y' && user.ExpireDate) {
+      const expireDate = new Date(
+        user.ExpireDate.substring(0, 4) + '-' + 
+        user.ExpireDate.substring(4, 6) + '-' + 
+        user.ExpireDate.substring(6, 8)
+      );
+      if (expireDate < new Date()) {
+        return res.status(403).json({ 
+          success: false, 
+          message: 'Account has expired' 
+        });
+      }
+    }
+
+    // Check if email is verified (if email verification is required)
+    if (user.EmailVerified === 'N') {
+      return res.status(403).json({ 
+        success: false, 
+        message: 'Please verify your email address before logging in.',
+        requiresEmailVerification: true
+      });
+    }
+
+    // Get user permissions
+    const permissions = await getUserPermissions(user.UserID, user.GroupNo);
+
+    // Generate JWT token (same as normal login)
+    const token = jwt.sign(
+      { 
+        userId: user.UserID, 
+        personNo: user.PersonNo,
+        username: user.UserID, 
+        groupNo: user.GroupNo,
+        groupCode: user.UserGCode,
+        groupName: user.UserGName
+      },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES_IN }
+    );
+
+    // Update last login and LINE profile info
+    await pool.request()
+      .input('userID', sql.VarChar, user.UserID)
+      .input('personNo', sql.Int, user.PersonNo)
+      .input('lineDisplayName', sql.NVarChar, lineProfile.displayName || null)
+      .input('linePictureUrl', sql.NVarChar, lineProfile.pictureUrl || null)
+      .query(`
+        UPDATE IgxUserExtension 
+        SET LastLogin = GETDATE(), 
+            PersonNo = @personNo,
+            UpdatedAt = GETDATE(),
+            AvatarUrl = CASE WHEN AvatarUrl IS NULL THEN @linePictureUrl ELSE AvatarUrl END
+        WHERE UserID = @userID
+      `);
+
+    // Remove sensitive data
+    delete user.Passwd;
+
+    res.json({
+      success: true,
+      message: 'LINE login successful',
+      token,
+      user: {
+        id: user.PersonNo,
+        userId: user.UserID,
+        username: user.UserID,
+        personCode: user.PERSONCODE,
+        firstName: user.FIRSTNAME,
+        lastName: user.LASTNAME,
+        fullName: user.PERSON_NAME,
+        email: user.EMAIL,
+        phone: user.PHONE,
+        title: user.TITLE,
+        department: user.DEPTNO,
+        departmentCode: user.DEPTCODE,
+        departmentName: user.DEPTNAME,
+        craft: user.CRAFTNO,
+        crew: user.CREWNO,
+        siteNo: user.SiteNo,
+        siteCode: user.SiteCode,
+        siteName: user.SiteName,
+        groupNo: user.GroupNo,
+        groupCode: user.UserGCode,
+        groupName: user.UserGName,
+        levelReport: user.LevelReport,
+        permissionLevel: user.LevelReport,
+        storeRoom: user.StoreRoom,
+        dbNo: user.DBNo,
+        lineId: user.LineID,
+        avatarUrl: user.AvatarUrl,
+        lastLogin: user.LastLogin,
+        createdAt: user.CreatedAt
+      }
+    });
+
+  } catch (error) {
+    console.error('LINE login error:', error);
+    
+    // Check if it's a database connection error
+    if (error.message === 'Database connection failed' || 
+        error.message.includes('ECONNREFUSED') ||
+        error.message.includes('ETIMEDOUT') ||
+        error.message.includes('ConnectionError') ||
+        error.message.includes('Connection is closed')) {
+      res.status(503).json({ 
+        success: false, 
+        message: 'Service temporarily unavailable. Please try again in a few moments.',
+        errorType: 'database_connection'
+      });
+    } else if (error.message.includes('timeout')) {
+      res.status(504).json({ 
+        success: false, 
+        message: 'Request timeout. Please check your connection and try again.',
+        errorType: 'timeout'
+      });
+    } else {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Unable to process LINE login request. Please try again later.',
+        errorType: 'server_error'
+      });
+    }
+  }
+};
+
+// Link LINE Account with Avatar Download
+const linkLineAccount = async (req, res) => {
+  try {
+    const { lineProfile } = req.body;
+    const userId = req.user.userId; // From JWT middleware
+    const personNo = req.user.id; // From JWT middleware
+
+    if (!lineProfile || !lineProfile.userId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'LINE profile data is required' 
+      });
+    }
+
+    console.log(`Linking LINE account for user ${userId}:`, lineProfile);
+
+    const pool = await getConnection();
+
+    // Download and save LINE profile picture
+    let avatarPath = null;
+    if (lineProfile.pictureUrl) {
+      avatarPath = await downloadAndSaveLineAvatar(lineProfile.pictureUrl, userId, personNo);
+    }
+
+    // Check if IgxUserExtension record exists
+    const checkResult = await pool.request()
+      .input('userID', sql.VarChar, userId)
+      .query('SELECT UserID FROM IgxUserExtension WHERE UserID = @userID');
+    
+    if (checkResult.recordset.length === 0) {
+      // Create IgxUserExtension record if it doesn't exist
+      await pool.request()
+        .input('userID', sql.VarChar, userId)
+        .input('personNo', sql.Int, personNo)
+        .input('lineId', sql.NVarChar(500), lineProfile.userId)
+        .input('avatarUrl', sql.NVarChar(500), avatarPath)
+        .query(`
+          INSERT INTO IgxUserExtension (UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
+          VALUES (@userID, @personNo, 'Y', NULL, NULL, GETDATE(), GETDATE(), GETDATE(), @lineId, @avatarUrl, 1)
+        `);
+    } else {
+      // Update existing IgxUserExtension record
+      await pool.request()
+        .input('userID', sql.VarChar, userId)
+        .input('personNo', sql.Int, personNo)
+        .input('lineId', sql.NVarChar(500), lineProfile.userId)
+        .input('avatarUrl', sql.NVarChar(500), avatarPath)
+        .query(`
+          UPDATE IgxUserExtension 
+          SET PersonNo = @personNo,
+              LineID = @lineId,
+              AvatarUrl = @avatarUrl,
+              UpdatedAt = GETDATE()
+          WHERE UserID = @userID
+        `);
+    }
+
+    res.json({
+      success: true,
+      message: 'LINE account linked successfully',
+      avatarPath: avatarPath
+    });
+
+  } catch (error) {
+    console.error('Link LINE account error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to link LINE account',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   login,
   logout,
@@ -758,5 +1101,7 @@ module.exports = {
   hasPermission,
   getUserPermissions,
   verifyLiffToken,
-  getLineProfile
+  getLineProfile,
+  lineLogin,
+  linkLineAccount
 }; 

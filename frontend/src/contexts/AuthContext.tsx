@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import authService, { type User, type LiffTokenVerificationResponse, type LineProfileResponse } from '../services/authService';
+import authService, { type User, type LiffTokenVerificationResponse, type LineProfileResponse, type LineLoginData } from '../services/authService';
 import liff from "@line/liff";
 
 interface AuthContextType {
@@ -16,6 +16,7 @@ interface AuthContextType {
   storeRedirectUrl: (url: string) => void;
   clearRedirectUrl: () => void;
   login: (username: string, password: string) => Promise<void>;
+  lineLogin: (lineProfile: LineLoginData) => Promise<void>;
   register: (userData: any) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
@@ -62,8 +63,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log("LIFF initialization completed successfully");
         setLiffObject(liff);
         setLiffError(null);
-
-        // Check if user is logged in to LINE
+        console.log("in app? ", liff.isInClient());
+        
+        // Check if we're in LINE client
+        if (!liff.isInClient()) {
+          console.log("Not in LINE client (external browser), skipping LINE login flow");
+          setLiffTokenVerified(false);
+          setLiffTokenVerificationResult({
+            success: false,
+            message: 'Not in LINE client - using normal login'
+          });
+          setLiffLoading(false);
+          setIsLoading(false);
+          return; // Exit early, fall back to normal login
+        }
+        
+        // Check if user is logged in to LINE (only when in LINE client)
         if (!liff.isLoggedIn()) {
           console.log("User not logged in to LINE, initiating login...");
           liff.login(); // Note: login() doesn't return a Promise, it redirects
@@ -105,6 +120,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 const profileResult = await authService.getLineProfile(accessToken);
                 console.log("LINE profile result:", profileResult);
                 setLineProfile(profileResult);
+
+                // Step 2.2: Attempt LINE login if profile is successfully retrieved
+                if (profileResult.success && profileResult.profile) {
+                  console.log("Attempting LINE login with profile:", profileResult.profile);
+                  try {
+                    const lineLoginData: LineLoginData = {
+                      userId: profileResult.profile.userId,
+                      displayName: profileResult.profile.displayName,
+                      pictureUrl: profileResult.profile.pictureUrl
+                    };
+                    
+                    await authService.lineLogin(lineLoginData);
+                    console.log("LINE login successful!");
+                    
+                    // Get the user from authService to ensure consistency
+                    const currentUser = authService.getCurrentUser();
+                    setUser(currentUser);
+                  } catch (lineLoginError) {
+                    console.log("LINE login failed:", lineLoginError);
+                    // LINE login failed - user might not have LINE account linked
+                    // This is not necessarily an error, just means they need to use normal login
+                  }
+                }
               } catch (profileError) {
                 console.error("Failed to get LINE profile:", profileError);
                 setLineProfile({
@@ -185,6 +223,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(currentUser);
       } else {
         throw new Error(response.message || 'Login failed');
+      }
+    } catch (error) {
+      throw error;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const lineLogin = async (lineProfile: LineLoginData) => {
+    try {
+      setIsLoading(true);
+      const response = await authService.lineLogin(lineProfile);
+      if (response.success && response.user) {
+        // Get the user from authService to ensure consistency
+        const currentUser = authService.getCurrentUser();
+        setUser(currentUser);
+      } else {
+        throw new Error(response.message || 'LINE login failed');
       }
     } catch (error) {
       throw error;
@@ -295,6 +351,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     storeRedirectUrl,
     clearRedirectUrl,
     login,
+    lineLogin,
     register,
     logout,
     changePassword,
