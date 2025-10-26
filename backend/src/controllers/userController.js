@@ -325,6 +325,82 @@ const userController = {
     }
   },
 
+  // Unlink LINE account
+  unlinkLineAccount: async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const pool = await sql.connect(dbConfig);
+      
+      // Update IgxUserExtension to remove LineID
+      await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .query(`
+          UPDATE IgxUserExtension
+          SET LineID = NULL,
+              UpdatedAt = GETDATE()
+          WHERE UserID = @userID
+        `);
+
+      res.json({ 
+        success: true, 
+        message: 'LINE account unlinked successfully' 
+      });
+    } catch (error) {
+      console.error('Unlink LINE account error:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to unlink LINE account', 
+        error: error.message 
+      });
+    }
+  },
+
+  // Get LINE profile information
+  getLineProfile: async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const pool = await sql.connect(dbConfig);
+      
+      // Get user's LineID
+      const result = await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .query('SELECT LineID FROM IgxUserExtension WHERE UserID = @userID');
+      
+      if (result.recordset.length === 0 || !result.recordset[0].LineID) {
+        return res.status(404).json({ 
+          success: false, 
+          message: 'No LINE account linked' 
+        });
+      }
+      
+      const lineId = result.recordset[0].LineID;
+      
+      // Get LINE profile from LINE API
+      const lineService = require('../services/lineService');
+      const profileResult = await lineService.getUserProfile(lineId);
+      
+      if (!profileResult.success) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Failed to get LINE profile information',
+          error: profileResult.error 
+        });
+      }
+      
+      res.json({ 
+        success: true, 
+        profile: profileResult.profile 
+      });
+    } catch (error) {
+      console.error('Get LINE profile error:', error);
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to get LINE profile', 
+        error: error.message 
+      });
+    }
+  },
+
   // Get user statistics and recent activity
   getUserStats: async (req, res) => {
     try {

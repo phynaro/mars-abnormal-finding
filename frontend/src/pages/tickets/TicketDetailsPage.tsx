@@ -53,18 +53,22 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/useToast";
 import authService from "@/services/authService";
-import { formatTimelineTime, formatCommentTime } from "@/utils/timezone";
+import { formatTimelineTime, formatUITime } from "@/utils/timezone";
 import {
   getTicketPriorityClass,
   getTicketSeverityClass,
   getTicketStatusClass,
+  getTicketStatusClassModern,
   getCriticalLevelText,
   getCriticalLevelClass,
+  getCriticalLevelClassModern,
+  getCriticalLevelIconClass,
   getCedarSyncStatusClass,
   getCedarSyncStatusText,
 } from "@/utils/ticketBadgeStyles";
 import HierarchicalMachineSelector from "@/components/tickets/HierarchicalMachineSelector";
 import { compressTicketImage, formatFileSize, compressImage } from "@/utils/imageCompression";
+import { StarRating, StarRatingDisplay } from "@/components/ui/star-rating";
 
 type TicketCacheEntry = { data: Ticket; timestamp: number };
 
@@ -221,7 +225,7 @@ const TicketDetailsPage: React.FC = () => {
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [cedarInfoOpen, setCedarInfoOpen] = useState(false);
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { toast } = useToast();
   // Action modal hooks must be declared before any early returns
   type ActionType =
@@ -1462,7 +1466,7 @@ const TicketDetailsPage: React.FC = () => {
                               {comment.user_name || `User ${comment.user_id}`}
                             </span>
                             <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                              {formatCommentTime(comment.created_at)}
+                              {formatUITime(comment.created_at, language)}
                             </span>
                           </div>
                         </div>
@@ -1588,7 +1592,7 @@ const TicketDetailsPage: React.FC = () => {
                               {ticket.cedar_last_sync && (
                                 <div className="flex justify-between">
                                   <span className="text-gray-500">Last Sync:</span>
-                                  <span className="text-xs">{formatCommentTime(ticket.cedar_last_sync)}</span>
+                                  <span className="text-xs">{formatUITime(ticket.cedar_last_sync, language)}</span>
                                 </div>
                               )}
                               {ticket.cedar_sync_error && (
@@ -1619,11 +1623,11 @@ const TicketDetailsPage: React.FC = () => {
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     {t('ticket.status')}
                   </p>
-                  <Badge
-                    className={`mt-1 ${getTicketStatusClass(ticket.status)}`}
+                  <div
+                    className={`mt-1 ${getTicketStatusClassModern(ticket.status)}`}
                   >
-                    {ticket.status?.replace("_", " ").toUpperCase()}
-                  </Badge>
+                    <span>{ticket.status?.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                  </div>
                 </div>
                 {/* <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
@@ -1649,11 +1653,12 @@ const TicketDetailsPage: React.FC = () => {
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     {t('ticket.critical')}
                   </p>
-                  <Badge
-                    className={`mt-1 whitespace-nowrap ${getCriticalLevelClass(ticket.pucriticalno)}`}
+                  <div
+                    className={`mt-1 whitespace-nowrap ${getCriticalLevelClassModern(ticket.pucriticalno)}`}
                   >
-                    {getCriticalLevelText(ticket.pucriticalno, t)}
-                  </Badge>
+                    <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+                    <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -1693,16 +1698,7 @@ const TicketDetailsPage: React.FC = () => {
                       )}
                     </dd>
                   </div>
-                )}
-                {/* <div>
-                  <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                    {t('ticket.created')}
-                  </dt>
-                  <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                    {formatCommentTime(ticket.created_at)}
-                  </dd>
-                </div> */}
-               
+                )}          
 
                 {ticket.schedule_start && (
                   <div>
@@ -1710,7 +1706,7 @@ const TicketDetailsPage: React.FC = () => {
                       {t('ticket.scheduledStartdate')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                    {formatCommentTime(ticket.schedule_start)}
+                    {formatUITime(ticket.schedule_start, language)}
                     </dd>
                   </div>
                 )}
@@ -1720,7 +1716,7 @@ const TicketDetailsPage: React.FC = () => {
                       {t('ticket.scheduledFinishedate')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                    {formatCommentTime(ticket.schedule_finish)}
+                    {formatUITime(ticket.schedule_finish, language)}
                     </dd>
                   </div>
                 )}
@@ -1730,7 +1726,7 @@ const TicketDetailsPage: React.FC = () => {
                       {t('ticket.actualFinishdate')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                    {formatCommentTime(ticket.actual_finish_at)}
+                    {formatUITime(ticket.actual_finish_at, language)}
                     </dd>
                   </div>
                 )}
@@ -1740,7 +1736,7 @@ const TicketDetailsPage: React.FC = () => {
                       {t('ticket.actualStartdate')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
-                    {formatCommentTime(ticket.actual_start_at)}
+                    {formatUITime(ticket.actual_start_at, language)}
                     </dd>
                   </div>
                 )}
@@ -1767,11 +1763,26 @@ const TicketDetailsPage: React.FC = () => {
                 {ticket.failure_mode_name && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                      Failure Mode
+                      {t('ticket.failureMode')}
                     </dt>
                     <dd className="mt-1 font-medium text-gray-900 dark:text-gray-100">
                       {ticket.failure_mode_code && `[${ticket.failure_mode_code}] `}
                       {ticket.failure_mode_name}
+                    </dd>
+                  </div>
+                )}
+                {ticket.satisfaction_rating && (
+                  <div>
+                    <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                      {t('ticket.satisfactionRating')}
+                    </dt>
+                    <dd className="mt-1">
+                      <StarRatingDisplay
+                        value={ticket.satisfaction_rating}
+                        max={5}
+                        size="md"
+                        showValue={true}
+                      />
                     </dd>
                   </div>
                 )}
@@ -1834,6 +1845,7 @@ const TicketDetailsPage: React.FC = () => {
                       | "finished"
                       | "escalated"
                       | "closed"
+                      | "reviewed"
                       | "reopened"
                       | "l3_override";
                     timestamp: string;
@@ -1942,7 +1954,7 @@ const TicketDetailsPage: React.FC = () => {
                         title = t('ticket.ticketAssigned');
                         description = `${t('ticket.to')} ${statusChange.to_user_name} ${t('ticket.by')} ${statusChange.changed_by_name}`;
                       } else {
-                        title = `${t('ticket.statusChangedTo')} ${statusChange.new_status.replace("_", " ").toUpperCase()}`;
+                        title = `${t('ticket.statusChangedTo')} ${statusChange.new_status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}`;
                         description = `${t('ticket.by')} ${statusChange.changed_by_name}`;
                       }
 
@@ -1981,7 +1993,7 @@ const TicketDetailsPage: React.FC = () => {
                           {event.title}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatTimelineTime(event.timestamp)} -{" "}
+                          {formatUITime(event.timestamp, language)} -{" "}
                           {event.description}
                         </p>
                       </div>
@@ -2397,13 +2409,15 @@ const TicketDetailsPage: React.FC = () => {
             {actionType === "approve-review" && (
               <div className="space-y-2">
                 <Label>{t('ticket.satisfactionRating')}</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  max="5"
-                  value={actionNumber}
-                  onChange={(e) => setActionNumber(e.target.value)}
-                />
+                <div className="flex items-center gap-4">
+                  <StarRating
+                    value={actionNumber ? parseInt(actionNumber) : 0}
+                    onChange={(value) => setActionNumber(value.toString())}
+                    max={5}
+                    size="lg"
+                  />
+
+                </div>
               </div>
             )}
             {actionType === "reassign" && (
@@ -2656,7 +2670,7 @@ const TicketDetailsPage: React.FC = () => {
               {ticket?.cedar_last_sync && (
                 <div className="flex justify-between">
                   <span className="text-gray-500">Last Sync:</span>
-                  <span className="text-xs">{formatCommentTime(ticket.cedar_last_sync)}</span>
+                  <span className="text-xs">{formatUITime(ticket.cedar_last_sync)}</span>
                 </div>
               )}
               {ticket?.cedar_sync_error && (

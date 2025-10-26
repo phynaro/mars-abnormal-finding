@@ -1,15 +1,48 @@
+// Modern badge styles with circular icons and rounded rectangles
+const STATUS_CLASSES_MODERN: Record<string, string> = {
+  open: "bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  accepted: "bg-white dark:bg-gray-900/20 border border-blue-200 dark:border-blue-600 text-blue-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  planed: "bg-white dark:bg-gray-900/20 border border-indigo-200 dark:border-indigo-600 text-indigo-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  assigned: "bg-white dark:bg-gray-900/20 border border-amber-200 dark:border-amber-600 text-amber-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  in_progress: "bg-white dark:bg-gray-900/20 border border-amber-200 dark:border-amber-600 text-amber-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  resolved: "bg-white dark:bg-gray-900/20 border border-emerald-200 dark:border-emerald-600 text-emerald-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  closed: "bg-white dark:bg-gray-900/20 border border-gray-600 dark:border-gray-500 text-gray-800 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  rejected_pending_l3_review: "bg-white dark:bg-gray-900/20 border border-orange-200 dark:border-orange-600 text-orange-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  rejected_final: "bg-white dark:bg-gray-900/20 border border-red-200 dark:border-red-600 text-red-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  finished: "bg-white dark:bg-gray-900/20 border border-green-200 dark:border-green-600 text-green-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  reviewed: "bg-white dark:bg-gray-900/20 border border-purple-200 dark:border-purple-600 text-purple-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  escalated: "bg-white dark:bg-gray-900/20 border border-red-200 dark:border-red-600 text-red-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  reopened_in_progress: "bg-white dark:bg-gray-900/20 border border-amber-200 dark:border-amber-600 text-amber-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+};
+
+// Circular icon styles for each status
+const STATUS_ICON_CLASSES: Record<string, string> = {
+  open: "w-2 h-2 rounded-full bg-blue-500 shadow-sm text-xs",
+  assigned: "w-2 h-2 rounded-full bg-yellow-500 shadow-sm text-xs",
+  in_progress: "w-2 h-2 rounded-full bg-yellow-500 shadow-sm text-xs",
+  resolved: "w-2 h-2 rounded-full bg-green-500 shadow-sm text-xs",
+  closed: "w-2 h-2 rounded-full bg-gray-500 shadow-sm text-xs",
+  rejected_pending_l3_review: "w-2 h-2 rounded-full bg-orange-500 shadow-sm text-xs",
+  rejected_final: "w-2 h-2 rounded-full bg-red-500 shadow-sm text-xs",
+  Finished: "w-2 h-2 rounded-full bg-green-500 shadow-sm text-xs",
+  reviewed: "w-2 h-2 rounded-full bg-purple-500 shadow-sm text-xs",
+  escalated: "w-2 h-2 rounded-full bg-red-500 shadow-sm text-xs",
+  reopened_in_progress: "w-2 h-2 rounded-full bg-blue-500 shadow-sm text-xs",
+};
+
+// Original backup classes
 const STATUS_CLASSES: Record<string, string> = {
-  open: "border-blue-200 bg-blue-50 text-blue-700",
-  assigned: "border-amber-200 bg-amber-50 text-amber-700",
-  in_progress: "border-yellow-200 bg-yellow-50 text-yellow-700",
-  resolved: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  closed: "border-slate-200 bg-slate-50 text-slate-700",
-  rejected_pending_l3_review: "border-orange-200 bg-orange-50 text-orange-700",
-  rejected_final: "border-red-200 bg-red-50 text-red-700",
-  Finished: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  reviewed: "border-purple-200 bg-purple-50 text-purple-700",
-  escalated: "border-red-200 bg-red-50 text-red-700",
-  reopened_in_progress: "border-blue-200 bg-blue-50 text-blue-700",
+  open: "border-blue-200 bg-white text-blue-700",
+  assigned: "border-amber-200 bg-white text-amber-700",
+  in_progress: "border-yellow-200 bg-white text-yellow-700",
+  resolved: "border-emerald-200 bg-white text-emerald-700",
+  closed: "border-slate-200 bg-white text-slate-700",
+  rejected_pending_l3_review: "border-orange-200 bg-white text-orange-700",
+  rejected_final: "border-red-200 bg-white text-red-700",
+  Finished: "border-emerald-200 bg-white text-emerald-700",
+  reviewed: "border-purple-200 bg-white text-purple-700",
+  escalated: "border-red-200 bg-white text-red-700",
+  reopened_in_progress: "border-blue-200 bg-white text-blue-700",
 };
 
 const PRIORITY_CLASSES: Record<string, string> = {
@@ -26,6 +59,29 @@ const SEVERITY_CLASSES: Record<string, string> = {
   low: "bg-blue-600 text-white border-blue-700",
 };
 
+// Modern critical level badge styles with circular icons and rounded rectangles
+const CRITICAL_LEVEL_CLASSES_MODERN: Record<number, string> = {
+  1: "bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  2: "bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  3: "bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  4: "bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  5: "bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  6: "bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  7: "bg-white dark:bg-gray-900/20 border border-gray-200 dark:border-gray-600 text-gray-800 dark:text-gray-200 rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+};
+
+// Circular icon styles for each critical level
+const CRITICAL_LEVEL_ICON_CLASSES: Record<number, string> = {
+  1: "w-2 h-2 rounded-full bg-gray-500",
+  2: "w-2 h-2 rounded-full bg-gray-500",
+  3: "w-2 h-2 rounded-full bg-gray-500",
+  4: "w-2 h-2 rounded-full bg-gray-500",
+  5: "w-2 h-2 rounded-full bg-red-500",
+  6: "w-2 h-2 rounded-full bg-orange-500",
+  7: "w-2 h-2 rounded-full bg-green-500",
+};
+
+// Original backup classes
 const CRITICAL_LEVEL_CLASSES: Record<number, string> = {
   1: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
   2: "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200",
@@ -43,6 +99,25 @@ const CEDAR_SYNC_STATUS_CLASSES: Record<string, string> = {
   syncing: 'bg-blue-100 text-blue-800 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-700',
 };
 
+// Modern badge helper function
+export const getTicketStatusClassModern = (status?: string) => {
+  if (!status) return "bg-gray-100 text-gray-800 rounded-full px-3 py-1.5 text-sm font-medium shadow-sm flex items-center gap-2";
+  return (
+    STATUS_CLASSES_MODERN[status.toLowerCase()] ??
+    "bg-gray-100 text-gray-800 rounded-full px-3 py-1.5 text-sm font-medium shadow-sm flex items-center gap-2"
+  );
+};
+
+// Modern icon helper function
+export const getTicketStatusIconClass = (status?: string) => {
+  if (!status) return "w-2 h-2 rounded-full bg-gray-500";
+  return (
+    STATUS_ICON_CLASSES[status.toLowerCase()] ??
+    "w-2 h-2 rounded-full bg-gray-500"
+  );
+};
+
+// Original backup helper function
 export const getTicketStatusClass = (status?: string) => {
   if (!status) return "border-slate-200 bg-slate-50 text-slate-700";
   return (
@@ -91,7 +166,27 @@ export const getCriticalLevelText = (level: number | null | undefined, t: (key: 
   }
 };
 
-// Helper function to get critical level CSS classes
+// Modern critical level badge helper function
+export const getCriticalLevelClassModern = (level: number | null | undefined): string => {
+  if (!level) return "bg-gray-100 text-gray-800 rounded-full px-3 py-1.5 text-sm font-medium shadow-sm flex items-center gap-2";
+  
+  return (
+    CRITICAL_LEVEL_CLASSES_MODERN[level] ??
+    "bg-gray-100 text-gray-800 rounded-full px-3 py-1.5 text-sm font-medium shadow-sm flex items-center gap-2"
+  );
+};
+
+// Modern critical level icon helper function
+export const getCriticalLevelIconClass = (level: number | null | undefined): string => {
+  if (!level) return "w-2 h-2 rounded-full bg-gray-500";
+  
+  return (
+    CRITICAL_LEVEL_ICON_CLASSES[level] ??
+    "w-2 h-2 rounded-full bg-gray-500"
+  );
+};
+
+// Original backup helper function
 export const getCriticalLevelClass = (level: number | null | undefined): string => {
   if (!level) return "bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200";
   

@@ -8,7 +8,10 @@ import {
   getTicketPriorityClass,
   getTicketSeverityClass,
   getTicketStatusClass,
+  getTicketStatusClassModern,
   getCriticalLevelClass,
+  getCriticalLevelClassModern,
+  getCriticalLevelIconClass,
   getCriticalLevelText,
 } from "@/utils/ticketBadgeStyles";
 import {
@@ -399,9 +402,9 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
       );
     case "status":
       return (
-        <Badge className={getTicketStatusClass(ticket.status)}>
-          {ticket.status.replace("_", " ").toUpperCase()}
-        </Badge>
+        <div className={getTicketStatusClassModern(ticket.status)}>
+          <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+        </div>
       );
     case "priority":
       return (
@@ -417,9 +420,10 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
       );
     case "critical":
       return (
-        <Badge className={getCriticalLevelClass(ticket.pucriticalno)}>
-          {getCriticalLevelText(ticket.pucriticalno,t)}
-        </Badge>
+        <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
+          <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+          <span>{getCriticalLevelText(ticket.pucriticalno,t)}</span>
+        </div>
       );
     case "pu_name":
       return (
@@ -649,12 +653,13 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
                   <div className="text-lg font-semibold">{ticket.title}</div>
                 </div>
                 <div className="flex gap-2 items-center">
-                  <Badge className={getCriticalLevelClass(ticket.pucriticalno)}>
-                    {getCriticalLevelText(ticket.pucriticalno, t)}
-                  </Badge>
-                  <Badge className={getTicketStatusClass(ticket.status)}>
-                    {ticket.status.replace("_", " ").toUpperCase()}
-                  </Badge>
+                  <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
+                    <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+                    <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+                  </div>
+                  <div className={getTicketStatusClassModern(ticket.status)}>
+                    <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                  </div>
                 </div>
               </div>
               <div className="mt-2 text-sm text-muted-foreground line-clamp-2">

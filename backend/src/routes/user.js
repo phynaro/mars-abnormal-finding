@@ -15,6 +15,8 @@ router.put('/profile', userController.updateProfile);
 router.post('/profile/avatar', uploadAvatar.single('avatar'), compressAvatarMiddleware, userController.uploadAvatar);
 router.put('/profile/line-id', userController.updateLineId);
 router.post('/line/test', userController.sendLineTest);
+router.delete('/profile/line-account', userController.unlinkLineAccount);
+router.get('/profile/line-profile', userController.getLineProfile);
 router.get('/stats', userController.getUserStats);
 router.get('/role', userController.getRole);
 router.get('/all-basic', userController.getAllUsers); // Get all users for filtering (basic info only)

@@ -12,7 +12,7 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import Cropper from 'react-easy-crop';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { HelpCircle, Key, MessageSquare, User } from 'lucide-react';
+import { HelpCircle, Key, MessageSquare, User, Unlink, LogOut } from 'lucide-react';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
 import { compressImage, formatFileSize, isFileSizeValid } from '@/utils/imageCompression';
 
@@ -27,8 +27,14 @@ const ProfilePage: React.FC = () => {
   const [newPassword, setNewPassword] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
-  const [lineId, setLineId] = useState(user?.lineId || '');
-  const [lineIdLoading, setLineIdLoading] = useState(false);
+  
+  // Original values for change detection
+  const [originalValues, setOriginalValues] = useState({
+    firstName: user?.firstName || '',
+    lastName: user?.lastName || '',
+    email: user?.email || '',
+    phone: (user as any)?.phone || ''
+  });
   // Cropper state
   const [showCropper, setShowCropper] = useState(false);
   const [imageSrc, setImageSrc] = useState<string | null>(null);
@@ -37,8 +43,25 @@ const ProfilePage: React.FC = () => {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [showLineHelp, setShowLineHelp] = useState(false);
   const fileInputRef = useRef<FileUploadRef>(null);
+  
+  // LINE profile and unlink state
+  const [lineProfile, setLineProfile] = useState<any>(null);
+  const [lineProfileLoading, setLineProfileLoading] = useState(false);
+  const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
+  const [showLogoutInstruction, setShowLogoutInstruction] = useState(false);
+  const [unlinkLoading, setUnlinkLoading] = useState(false);
 
   const uploadsBase = getApiBaseUrl().replace(/\/$/, '').replace(/\/api$/, '');
+
+  // Check if profile fields have changed
+  const hasProfileChanges = () => {
+    return (
+      firstName !== originalValues.firstName ||
+      lastName !== originalValues.lastName ||
+      email !== originalValues.email ||
+      phone !== originalValues.phone
+    );
+  };
 
   const updateProfile = async () => {
     if (!user) return;
@@ -50,38 +73,25 @@ const ProfilePage: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
         },
-        body: JSON.stringify({ firstName, lastName, email, phone, lineId })
+        body: JSON.stringify({ firstName, lastName, email, phone })
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.message || t('profile.failedToUpdateProfile'));
       await refreshUser();
+      
+      // Update original values to current values after successful save
+      setOriginalValues({
+        firstName,
+        lastName,
+        email,
+        phone
+      });
+      
       alert(t('profile.profileUpdated'));
     } catch (e) {
       alert(e instanceof Error ? e.message : t('profile.failedToUpdateProfile'));
     } finally {
       setLoading(false);
-    }
-  };
-
-  const updateLineId = async () => {
-    setLineIdLoading(true);
-    try {
-      const res = await fetch(`${getApiBaseUrl()}/users/profile/line-id`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
-        },
-        body: JSON.stringify({ lineId })
-      });
-      const result = await res.json();
-      if (!res.ok) throw new Error(result.message || t('profile.failedToUpdateLineId'));
-      await refreshUser();
-      alert(t('profile.lineIdUpdated'));
-    } catch (e) {
-      alert(e instanceof Error ? e.message : t('profile.failedToUpdateLineId'));
-    } finally {
-      setLineIdLoading(false);
     }
   };
 
@@ -105,6 +115,74 @@ const ProfilePage: React.FC = () => {
       alert(e instanceof Error ? e.message : t('profile.failedToChangePassword'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Fetch LINE profile information
+  const fetchLineProfile = async () => {
+    if (!user?.lineId) return;
+    
+    setLineProfileLoading(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/users/profile/line-profile`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+        }
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        setLineProfile(result.profile);
+      } else {
+        console.error('Failed to fetch LINE profile:', result.message);
+        setLineProfile(null);
+      }
+    } catch (e) {
+      console.error('Error fetching LINE profile:', e);
+      setLineProfile(null);
+    } finally {
+      setLineProfileLoading(false);
+    }
+  };
+
+  // Unlink LINE account
+  const unlinkLineAccount = async () => {
+    setUnlinkLoading(true);
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/users/profile/line-account`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+        }
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.message || t('profile.unlinkFailed'));
+      
+      setShowUnlinkConfirm(false);
+      setShowLogoutInstruction(true);
+      setLineProfile(null);
+      await refreshUser();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : t('profile.unlinkFailed'));
+    } finally {
+      setUnlinkLoading(false);
+    }
+  };
+
+  // Handle logout
+  const handleLogout = async () => {
+    try {
+      await fetch(`${getApiBaseUrl()}/auth/logout`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+        }
+      });
+    } catch (e) {
+      console.error('Logout error:', e);
+    } finally {
+      localStorage.removeItem('token');
+      window.location.href = '/login';
     }
   };
 
@@ -261,6 +339,27 @@ const ProfilePage: React.FC = () => {
     };
   }, [imageSrc]);
 
+  // Fetch LINE profile when user changes
+  useEffect(() => {
+    if (user?.lineId) {
+      fetchLineProfile();
+    } else {
+      setLineProfile(null);
+    }
+  }, [user?.lineId]);
+
+  // Update original values when user data changes
+  useEffect(() => {
+    if (user) {
+      setOriginalValues({
+        firstName: user.firstName || '',
+        lastName: user.lastName || '',
+        email: user.email || '',
+        phone: (user as any)?.phone || ''
+      });
+    }
+  }, [user]);
+
 
   return (
     <div className="container mx-auto px-4 py-4">
@@ -316,105 +415,123 @@ const ProfilePage: React.FC = () => {
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
             </div>
-            <div>
-              <Button onClick={updateProfile} disabled={loading}>{t('profile.saveChanges')}</Button>
+            <div className="flex items-center gap-2">
+              <Button 
+                onClick={updateProfile} 
+                disabled={loading || !hasProfileChanges()}
+              >
+                {t('profile.saveChanges')}
+              </Button>
+              {hasProfileChanges() && (
+                <span className="text-xs text-muted-foreground">
+                  {t('profile.unsavedChanges')}
+                </span>
+              )}
             </div>
           </CardContent>
         </Card>
 
-        {/* Right column: LINE notification + Change password */}
+        {/* Right column: LINE Account + Change password */}
         <div className="space-y-6 lg:col-span-1">
-          {/* Section 2: LINE Notification */}
+          {/* Section 2: LINE Account */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="h-5 w-5" />
-                {t('profile.lineNotifications')}
+                {t('profile.lineAccount')}
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Label>{t('profile.lineUserId')}</Label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowLineHelp(true)}
-                    className="h-6 w-6 p-0"
-                  >
-                    <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                  </Button>
-                </div>
-                <Input value={lineId} onChange={(e) => setLineId(e.target.value)} placeholder={t('profile.enterLineId')} />
-              </div>
-              
-              <div className="space-y-3">
-                <Button
-                  variant="outline"
-                  onClick={async () => {
-                    try {
-                      // Don't send lineId in body - let backend use saved value
-                      const res = await fetch(`${getApiBaseUrl()}/users/line/test`, {
-                        method: 'POST',
-                        headers: { 
-                          'Authorization': `Bearer ${localStorage.getItem('token')}` || '',
-                          'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({}) // Empty body to use saved LINE ID
-                      });
-                      const result = await res.json();
-                      if (!res.ok) throw new Error(result.message || t('profile.failedToSendTestNotification'));
+              {user?.lineId ? (
+                <div className="space-y-4">
+                  {lineProfileLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <div className="text-sm text-muted-foreground">{t('common.loading')}</div>
+                    </div>
+                  ) : lineProfile ? (
+                    <div className="space-y-3">
+                      <div className="flex items-center gap-3 p-3 bg-muted/50 rounded-lg">
+                        <Avatar className="h-12 w-12">
+                          {lineProfile.pictureUrl ? (
+                            <AvatarImage src={lineProfile.pictureUrl} alt="LINE profile" />
+                          ) : null}
+                          <AvatarFallback>
+                            {lineProfile.displayName?.[0] || 'L'}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">
+                            {lineProfile.displayName || t('profile.lineDisplayName')}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {t('profile.linkedLineAccount')}
+                          </p>
+                        </div>
+                      </div>
                       
-                      let message = t('profile.testNotificationSent');
-                      if (result.warning) {
-                        message += '\n\n' + result.warning;
-                      }
-                      alert(message);
-                    } catch (e) {
-                      alert(e instanceof Error ? e.message : t('profile.failedToSendTestNotification'));
-                    }
-                  }}
-                  disabled={!user?.lineId?.trim()}
-                >
-                  {t('profile.sendTestLineNotification')}
-                </Button>
-                
-                {/* Show warning if LINE ID has been changed but not saved */}
-                {lineId !== (user?.lineId || '') && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-md">
-                    <p className="text-sm text-amber-800">
-                      <strong>{t('profile.note')}:</strong> {t('profile.lineIdChangedNotSaved')}
-                    </p>
-                  </div>
-                )}
-                
-                <p className="text-sm text-muted-foreground">
-                  {user?.lineId?.trim() ? 
-                    t('profile.testWillUseSavedLineId') : 
-                    t('profile.ensureLineIdSet')
-                  }
-                </p>
-              </div>
-              
-              {/* LINE ID Save Button - moved to last component */}
-              <div className="flex gap-2 pt-2 border-t">
-                <Button 
-                  onClick={updateLineId} 
-                  disabled={lineIdLoading || lineId === (user?.lineId || '')}
-                  size="sm"
-                >
-                  {lineIdLoading ? t('profile.saving') : t('profile.saveLineId')}
-                </Button>
-                {lineId !== (user?.lineId || '') && (
-                  <Button 
-                    variant="outline" 
-                    onClick={() => setLineId(user?.lineId || '')}
-                    size="sm"
-                  >
-                    {t('profile.cancel')}
-                  </Button>
-                )}
-              </div>
+                      <div className="space-y-2">
+                        <Button
+                          variant="outline"
+                          onClick={async () => {
+                            try {
+                              const res = await fetch(`${getApiBaseUrl()}/users/line/test`, {
+                                method: 'POST',
+                                headers: { 
+                                  'Authorization': `Bearer ${localStorage.getItem('token')}` || '',
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({})
+                              });
+                              const result = await res.json();
+                              if (!res.ok) throw new Error(result.message || t('profile.failedToSendTestNotification'));
+                              
+                              let message = t('profile.testNotificationSent');
+                              if (result.warning) {
+                                message += '\n\n' + result.warning;
+                              }
+                              alert(message);
+                            } catch (e) {
+                              alert(e instanceof Error ? e.message : t('profile.failedToSendTestNotification'));
+                            }
+                          }}
+                          className="w-full"
+                        >
+                          {t('profile.sendTestLineNotification')}
+                        </Button>
+                        
+                        <Button
+                          variant="destructive"
+                          onClick={() => setShowUnlinkConfirm(true)}
+                          className="w-full"
+                        >
+                          <Unlink className="h-4 w-4 mr-2" />
+                          {t('profile.unlinkLineAccount')}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4">
+                      <p className="text-sm text-muted-foreground">
+                        {t('profile.failedToGetLineProfile')}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={fetchLineProfile}
+                        className="mt-2"
+                      >
+                        {t('common.retry')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-4">
+                  <p className="text-sm text-muted-foreground">
+                    {t('profile.lineAccountNotLinked')}
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -473,75 +590,68 @@ const ProfilePage: React.FC = () => {
         </div>
       </div>
 
-      {/* LINE Help Modal */}
-      <Dialog open={showLineHelp} onOpenChange={setShowLineHelp}>
+      {/* Unlink Confirmation Modal */}
+      <Dialog open={showUnlinkConfirm} onOpenChange={setShowUnlinkConfirm}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{t('profile.lineHelpTitle')}</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Unlink className="h-5 w-5 text-destructive" />
+              {t('profile.unlinkConfirmationTitle')}
+            </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="text-sm text-muted-foreground">
-              {t('profile.lineHelpDescription')}
-            </div>
-            
-            <div className="space-y-3">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
-                  1
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">{t('profile.step1Title')}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {t('profile.step1Description')}
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => window.open('https://lin.ee/y3TiTtU', '_blank')}
-                      className="w-fit"
-                    >
-                      {t('profile.addLineFriend')}
-                    </Button>
-                    <div className="text-xs text-muted-foreground">
-                      Link: <span className="font-mono">https://lin.ee/y3TiTtU</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
-                  2
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">{t('profile.step2Title')}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {t('profile.step2Description')} <span className="font-mono bg-muted px-1 rounded">Line ID</span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-6 h-6 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-medium">
-                  3
-                </div>
-                <div className="space-y-2">
-                  <p className="text-sm font-medium">{t('profile.step3Title')}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {t('profile.step3Description')}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2 border-t">
+            <p className="text-sm text-muted-foreground">
+              {t('profile.unlinkConfirmationMessage')}
+            </p>
+            <div className="flex gap-2 pt-2">
               <Button 
                 variant="outline" 
-                onClick={() => setShowLineHelp(false)}
-                className="w-full"
+                onClick={() => setShowUnlinkConfirm(false)}
+                className="flex-1"
+                disabled={unlinkLoading}
               >
-                {t('profile.gotIt')}
+                {t('common.cancel')}
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={unlinkLineAccount}
+                className="flex-1"
+                disabled={unlinkLoading}
+              >
+                {unlinkLoading ? t('common.loading') : t('profile.unlinkLineAccount')}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Logout Instruction Modal */}
+      <Dialog open={showLogoutInstruction} onOpenChange={setShowLogoutInstruction}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <LogOut className="h-5 w-5 text-primary" />
+              {t('profile.logoutInstructionTitle')}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              {t('profile.logoutInstructionMessage')}
+            </p>
+            <div className="flex gap-2 pt-2">
+              <Button 
+                variant="outline" 
+                onClick={() => setShowLogoutInstruction(false)}
+                className="flex-1"
+              >
+                {t('common.close')}
+              </Button>
+              <Button 
+                onClick={handleLogout}
+                className="flex-1"
+              >
+                <LogOut className="h-4 w-4 mr-2" />
+                {t('profile.logoutNow')}
               </Button>
             </div>
           </div>

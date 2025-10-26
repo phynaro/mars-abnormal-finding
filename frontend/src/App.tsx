@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
@@ -54,6 +54,7 @@ import ProfilePage from './pages/profile/ProfilePage';
 import HierarchyViewPage from './pages/settings/HierarchyViewPage';
 import TicketApprovalManagementPage from './pages/settings/TicketApprovalManagementPage';
 import WorkflowTypesPage from './pages/works/WorkflowTypesPage';
+import Loading from './components/common/Loading';
 
 // Main App Component with Routing
 const AppContent: React.FC = () => {
@@ -62,7 +63,35 @@ const AppContent: React.FC = () => {
     const { isAuthenticated, isLoading, liffLoading, liffError, storeRedirectUrl } = useAuth();
     const location = useLocation();
     const hasStoredRedirect = useRef(false);
+    const [showCatLoading, setShowCatLoading] = useState(false);
+    const [catStartTime, setCatStartTime] = useState<number | null>(null);
     
+    // Handle cat loading timing
+    useEffect(() => {
+      if (isLoading || liffLoading) {
+        if (!showCatLoading) {
+          setShowCatLoading(true);
+          setCatStartTime(Date.now());
+        }
+      } else if (showCatLoading && catStartTime) {
+        const elapsed = Date.now() - catStartTime;
+        const minDisplayTime = 3000; // 3 seconds
+        const remaining = Math.max(0, minDisplayTime - elapsed);
+        
+        if (remaining > 0) {
+          const timer = setTimeout(() => {
+            setShowCatLoading(false);
+            setCatStartTime(null);
+          }, remaining);
+          
+          return () => clearTimeout(timer);
+        } else {
+          setShowCatLoading(false);
+          setCatStartTime(null);
+        }
+      }
+    }, [isLoading, liffLoading, showCatLoading, catStartTime]);
+
     // Store redirect URL when user is not authenticated (in useEffect to avoid render-time updates)
     useEffect(() => {
       if (!isAuthenticated && !isLoading && !hasStoredRedirect.current) {
@@ -77,22 +106,14 @@ const AppContent: React.FC = () => {
       }
     }, [isAuthenticated, isLoading, location.pathname, location.search, storeRedirectUrl]);
 
-    // Show loading state while checking authentication or initializing LIFF
-    if (isLoading || liffLoading) {
+    // Show loading state while checking authentication or initializing LIFF OR during minimum display time
+    if (isLoading || liffLoading || showCatLoading) {
       return (
-        <div className="min-h-screen flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
-            <p className="text-gray-600">
-              {liffLoading ? 'Initializing LINE LIFF...' : 'Checking authentication...'}
-            </p>
-            {liffError && (
-              <p className="text-red-500 text-sm mt-2">
-                LIFF Error: {liffError}
-              </p>
-            )}
-          </div>
-        </div>
+        <Loading 
+          message={liffLoading ? 'Initializing LINE LIFF...' : 'Checking authentication...'}
+          size="sm"
+          showCat={true}
+        />
       );
     }
     

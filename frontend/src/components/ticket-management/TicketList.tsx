@@ -44,7 +44,10 @@ import {
   getTicketPriorityClass,
   getTicketSeverityClass,
   getTicketStatusClass,
+  getTicketStatusClassModern,
   getCriticalLevelClass,
+  getCriticalLevelClassModern,
+  getCriticalLevelIconClass,
   getCriticalLevelText,
 } from "@/utils/ticketBadgeStyles";
 
@@ -581,7 +584,7 @@ export const TicketList: React.FC = () => {
           </span>
           {filters.status && (
             <Badge variant="secondary" className="gap-1">
-              Status: {filters.status.replace("_", " ").toUpperCase()}
+              Status: {filters.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("status")}
@@ -700,9 +703,15 @@ export const TicketList: React.FC = () => {
                         {ticket.title}
                       </div>
                     </div>
-                    <Badge className={getTicketStatusClass(ticket.status)}>
-                      {ticket.status.replace("_", " ").toUpperCase()}
-                    </Badge>
+                    <div className="flex items-center gap-2">
+                      <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
+                        <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+                        <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+                      </div>
+                      <div className={getTicketStatusClassModern(ticket.status)}>
+                        <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                      </div>
+                    </div>
                   </div>
                   <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
                     {ticket.description}
@@ -716,9 +725,6 @@ export const TicketList: React.FC = () => {
                     >
                       {ticket.severity_level?.toUpperCase()}
                     </Badge> */}
-                    <Badge className={getCriticalLevelClass(ticket.pucriticalno)}>
-                      {getCriticalLevelText(ticket.pucriticalno, t)}
-                    </Badge>
                     <Badge variant="outline" className="text-xs">
                       {ticket.pu_name || ticket.pucode || 'N/A'}
                     </Badge>
@@ -756,9 +762,9 @@ export const TicketList: React.FC = () => {
                     <th className="px-4 py-2">{t('ticket.ticketNumber')}</th>
                     <th className="px-4 py-2">{t('ticket.title')}</th>
                     <th className="px-4 py-2">{t('ticket.status')}</th>
+                    <th className="px-4 py-2">{t('ticket.critical')}</th>
                     {/* <th className="px-4 py-2">{t('ticket.priority')}</th>
                     <th className="px-4 py-2">{t('ticket.severity')}</th> */}
-                    <th className="px-4 py-2">{t('ticket.critical')}</th>
                     <th className="px-4 py-2">PU Name</th>
                     <th className="px-4 py-2">{t('ticket.createdBy')}</th>
                     <th className="px-4 py-2">{t('ticket.assignedTo')}</th>
@@ -784,16 +790,18 @@ export const TicketList: React.FC = () => {
                         </div>
                       </td>
                       <td className="px-4 py-2">
-                        <Badge className={getTicketStatusClass(ticket.status)}>
-                          {ticket.status.replace("_", " ").toUpperCase()}
-                        </Badge>
+                        <div className={getTicketStatusClassModern(ticket.status)}>
+                          <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                        </div>
                       </td>
                       <td className="px-4 py-2">
-                        <Badge
-                          className= {`whitespace-nowrap ${getCriticalLevelClass(ticket.pucriticalno)}`}
-                        >
-                          {getCriticalLevelText(ticket.pucriticalno, t)}
-                        </Badge>
+                        <div className="flex items-center gap-2">
+                          <div className={`whitespace-nowrap ${getCriticalLevelClassModern(ticket.pucriticalno)}`}>
+                            <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+                            <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+                          </div>
+         
+                        </div>
                       </td>
                       {/* <td className="px-4 py-2">
                         <Badge

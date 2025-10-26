@@ -92,6 +92,8 @@ export interface Ticket {
   // User relationship and approval level for current user
   user_relationship?: 'creator' | 'approver' | 'viewer';
   user_approval_level?: number;
+  // Satisfaction rating from review
+  satisfaction_rating?: number;
 }
 
 export interface TicketImage {
