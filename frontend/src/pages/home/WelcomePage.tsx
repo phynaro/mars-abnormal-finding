@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -12,6 +12,7 @@ const WelcomePage: React.FC = () => {
   const { user, refreshUser, lineProfile, liffTokenVerified, liffObject, lineLogin } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
+  
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [showLineLinking, setShowLineLinking] = useState(false);
@@ -22,20 +23,56 @@ const WelcomePage: React.FC = () => {
     pictureUrl: string;
   } | null>(null);
 
+  // Detect when user returns from LINE login in external browser
+  useEffect(() => {
+    // If we're in external browser, user is logged in to LINE, and profile is available but not yet confirmed
+    if (!liffObject?.isInClient() && liffObject?.isLoggedIn() && lineProfile?.success && lineProfile.profile && !user?.lineId && !externalLineProfile) {
+      setExternalLineProfile({
+        userId: lineProfile.profile.userId,
+        displayName: lineProfile.profile.displayName,
+        pictureUrl: lineProfile.profile.pictureUrl
+      });
+    }
+  }, [liffObject, lineProfile, user, externalLineProfile]);
+
   const handleGetStarted = () => {
     navigate('/home');
   };
 
   const handleLinkLineAccount = async () => {
-    if (!lineProfile?.profile) {
-      setError('LINE profile information not available');
-      return;
-    }
-
     setIsSubmitting(true);
     setError('');
 
     try {
+      let profileToLink = lineProfile?.profile;
+
+      // If profile is not available, try to get it from LIFF
+      if (!profileToLink && liffObject && liffObject.isInClient()) {
+        const accessToken = liffObject.getAccessToken();
+        if (accessToken) {
+          try {
+            const profileResult = await fetch(`${getApiBaseUrl()}/auth/get-line-profile`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({ accessToken }),
+            });
+
+            const result = await profileResult.json();
+            if (result.success && result.profile) {
+              profileToLink = result.profile;
+            }
+          } catch (profileError) {
+            console.error('Failed to get LINE profile:', profileError);
+          }
+        }
+      }
+
+      if (!profileToLink) {
+        throw new Error('LINE profile information not available. Please ensure you are logged in to LINE.');
+      }
+
       // Use the new link-line-account endpoint that downloads and saves the avatar
       const response = await fetch(`${getApiBaseUrl()}/auth/link-line-account`, {
         method: 'POST',
@@ -44,7 +81,7 @@ const WelcomePage: React.FC = () => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({ 
-          lineProfile: lineProfile.profile
+          lineProfile: profileToLink
         })
       });
 
@@ -73,9 +110,15 @@ const WelcomePage: React.FC = () => {
     setError('');
 
     try {
-      // Check if LIFF is available and user is logged in to LINE
+      // For external browsers, we need to redirect to LINE login
+      // This should only be called when NOT in LINE client
       if (!liffObject) {
-        throw new Error('LINE integration not available');
+        throw new Error('LINE integration not available. Please open this page from LINE app.');
+      }
+
+      // Check if already in LINE client (this shouldn't happen with current UI logic)
+      if (liffObject.isInClient()) {
+        throw new Error('You are already in LINE app. Please use the LINE linking option above.');
       }
 
       if (!liffObject.isLoggedIn()) {
@@ -234,6 +277,49 @@ const WelcomePage: React.FC = () => {
                   </div>
                 </div>
               </div>
+              
+              {error && (
+                <div className="flex items-center p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md mb-4">
+                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mr-2" />
+                  <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+                </div>
+              )}
+              
+              <div className="flex gap-3">
+                <Button
+                  onClick={handleLinkLineAccount}
+                  disabled={isSubmitting}
+                  className="flex-1"
+                >
+                  {isSubmitting ? 'Linking...' : (
+                    <>
+                      <Link className="h-4 w-4 mr-2" />
+                      Link LINE Account
+                    </>
+                  )}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleGetStarted}
+                  disabled={isSubmitting}
+                >
+                  Skip for Now
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Alternative LINE Linking - In app but conditions not met */}
+          {liffObject?.isInClient() && !liffTokenVerified && !user?.lineId && !externalLineProfile && (
+            <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+              <div className="flex items-center mb-4">
+                <Smartphone className="h-5 w-5 text-blue-600 dark:text-blue-400 mr-2" />
+                <h3 className="font-semibold text-gray-900 dark:text-gray-100">Link Your LINE Account</h3>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
+                We couldn't automatically verify your LINE account. Click below to link it manually.
+              </p>
               
               {error && (
                 <div className="flex items-center p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md mb-4">

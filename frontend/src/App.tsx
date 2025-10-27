@@ -60,8 +60,12 @@ import Loading from './components/common/Loading';
 const AppContent: React.FC = () => {
   // Protected Route Component (moved inside to access auth context)
   const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { isAuthenticated, isLoading, liffLoading, liffError, storeRedirectUrl } = useAuth();
+    const { isAuthenticated, isLoading, liffLoading, liffError, storeRedirectUrl, user } = useAuth();
     const location = useLocation();
+    
+    // Check if we have LINE login callback params and user needs lineId setup
+    const lineLoginParams = location.search.includes('code=') && location.search.includes('liffClientId=');
+    const needsLineIdSetup = !user?.lineId;
     const hasStoredRedirect = useRef(false);
     const [showCatLoading, setShowCatLoading] = useState(false);
     const [catStartTime, setCatStartTime] = useState<number | null>(null);
@@ -121,30 +125,37 @@ const AppContent: React.FC = () => {
       return <Navigate to="/login" replace />;
     }
     
+    // If user came back from LINE login and needs lineId setup, redirect to welcome
+    if (lineLoginParams && needsLineIdSetup && location.pathname !== '/welcome') {
+      return <Navigate to="/welcome" replace />;
+    }
+    
     return <>{children}</>;
   };
 
   // Public Route Component (moved inside to access auth context)
   const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { isAuthenticated, redirectUrl, clearRedirectUrl, user } = useAuth();
+    const location = useLocation();
   
     if (isAuthenticated) {
-      // Handle redirect URL if present, otherwise go to dashboard
+      const needsLineIdSetup = !user?.lineId;
+      
+      // Redirect users without lineId to welcome page to optionally link LINE
+      if (needsLineIdSetup && location.pathname !== '/welcome') {
+        return <Navigate to="/welcome" replace />;
+      }
+      
+      // Handle stored redirect URL if present
       if (redirectUrl) {
         const destination = redirectUrl;
-        clearRedirectUrl(); // Clear immediately to prevent loops
+        clearRedirectUrl();
         return <Navigate to={destination} replace />;
-      } else {
-        console.log('lastLogin', user.lastLogin);
-        console.log('lineId', user.lineId);
-        // Check if this is a first-time user (no LineID set)
-        const needsLineIdSetup = !user?.lineId;
-        
-        if (needsLineIdSetup) {
-          return <Navigate to="/welcome" replace />;
-        } else {
-          return <Navigate to="/home" replace />;
-        }
+      }
+      
+      // Redirect authenticated users away from public pages to home
+      if (!needsLineIdSetup && location.pathname !== '/home' && location.pathname !== '/welcome') {
+        return <Navigate to="/home" replace />;
       }
     }
     

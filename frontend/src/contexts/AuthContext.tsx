@@ -65,22 +65,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setLiffError(null);
         console.log("in app? ", liff.isInClient());
         
-        // Check if we're in LINE client
-        if (!liff.isInClient()) {
-          console.log("Not in LINE client (external browser), skipping LINE login flow");
-          setLiffTokenVerified(false);
-          setLiffTokenVerificationResult({
-            success: false,
-            message: 'Not in LINE client - using normal login'
-          });
-          setLiffLoading(false);
-          // Don't return early - continue to check authentication
-        } else {
-          // Check if user is logged in to LINE (only when in LINE client)
-          if (!liff.isLoggedIn()) {
-            console.log("User not logged in to LINE, initiating login...");
+        // Check if user is logged in to LINE (for both in-app and external browser)
+        if (!liff.isLoggedIn()) {
+          console.log("User not logged in to LINE");
+          if (liff.isInClient()) {
+            console.log("In LINE client, initiating login...");
             liff.login(); // Note: login() doesn't return a Promise, it redirects
             return; // Exit early as login() will redirect the page
+          } else {
+            console.log("External browser, skipping LINE login flow - user can login manually");
+            setLiffTokenVerified(false);
+            setLiffTokenVerificationResult({
+              success: false,
+              message: 'Not in LINE client - using normal login'
+            });
+            setLiffLoading(false);
+            // Don't return early - continue to check authentication
+          }
+        } else {
+          // User is logged in to LINE (either in-app or external browser after manual login)
+          console.log("User is logged in to LINE");
+          if (liff.isInClient()) {
+            console.log("In LINE client");
+          } else {
+            console.log("In external browser (after LINE login)");
           }
           
           // User is logged in to LINE, log LIFF information
