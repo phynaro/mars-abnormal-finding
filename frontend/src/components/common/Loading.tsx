@@ -15,12 +15,12 @@ const getRandomAnimationSet = () => {
       dark: '/animations/cat-licking-dark2.gif'
     },
     {
-      light: '/animations/dancing-cat-light.gif',
-      dark: '/animations/dancing-cat-dark.gif'
+      light: '/animations/dancing-cat-light2.gif',
+      dark: '/animations/dancing-cat-dark2.gif'
     },
     {
-      light: '/animations/running-dog-light.gif',
-      dark: '/animations/running-dog-dark.gif'
+      light: '/animations/running-dog-light2.gif',
+      dark: '/animations/running-dog-dark2.gif'
     }
   ];
 

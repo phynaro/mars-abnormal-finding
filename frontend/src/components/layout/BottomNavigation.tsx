@@ -2,13 +2,15 @@ import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { useAuth } from '../../contexts/AuthContext';
+import { useLanguage } from '../../contexts/LanguageContext';
 import { 
   Home, 
   LayoutDashboard, 
-  Ticket, 
-  User,
+  Ticket,
   Plus
 } from 'lucide-react';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { getAvatarUrl } from '../../utils/url';
 
 interface BottomNavItem {
   id: string;
@@ -26,34 +28,42 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const { t, language } = useLanguage();
 
   // Define bottom navigation items (main sections only)
   const bottomNavItems: BottomNavItem[] = [
     {
       id: 'home',
-      label: 'Home',
+      label: t('nav.home'),
       icon: <Home className="h-5 w-5" />,
       path: '/home',
       permissionLevel: 0,
     },
     {
       id: 'dashboard',
-      label: 'Dashboard',
+      label: t('nav.dashboard'),
       icon: <LayoutDashboard className="h-5 w-5" />,
       path: '/dashboard',
       permissionLevel: 0,
     },
     {
       id: 'tickets',
-      label: 'Tickets',
+      label: t('nav.tickets'),
       icon: <Ticket className="h-5 w-5" />,
       path: '/tickets',
       permissionLevel: 0,
     },
     {
       id: 'profile',
-      label: 'Profile',
-      icon: <User className="h-5 w-5" />,
+      label: language === 'th' ? 'คุณ' : 'You',
+      icon: <Avatar className="h-5 w-5">
+        {user?.avatarUrl && (
+          <AvatarImage src={getAvatarUrl(user.avatarUrl)} />
+        )}
+        <AvatarFallback className="text-xs">
+          {user?.firstName?.[0]}{user?.lastName?.[0]}
+        </AvatarFallback>
+      </Avatar>,
       path: '/profile',
       permissionLevel: 0,
     },
@@ -141,12 +151,12 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
         })}
         
         {/* Floating Plus Button - Center */}
-        <div className="relative flex items-center justify-center">
+        <div className="relative flex items-center justify-center ml-4 mr-4">
           <button
             onClick={() => handleNavigation('/tickets/create/wizard')}
             className={cn(
               "relative flex items-center justify-center",
-              "w-14 h-14 rounded-full",
+              "w-12 h-12 rounded-full",
               "bg-red-600 hover:bg-red-700 text-white",
               "shadow-lg hover:shadow-xl",
               "transition-all duration-200 ease-in-out",
@@ -170,6 +180,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
           }
 
           const active = isActive(item.path);
+          const isProfile = item.id === 'profile';
           
           return (
             <button
@@ -188,7 +199,8 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
             >
               <div className={cn(
                 "mb-1 transition-all duration-200 relative",
-                active ? "scale-110" : "scale-100"
+                active ? "scale-110" : "scale-100",
+                isProfile && "w-5 h-5"
               )}>
                 {item.icon}
                 

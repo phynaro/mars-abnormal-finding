@@ -29,6 +29,10 @@ import {
   UserPlus,
   Phone,
   Info,
+  Zap,
+  RotateCw,
+  AlertCircle,
+  Star,
 } from "lucide-react";
 import { getApiBaseUrl, getFileUrl } from "@/utils/url";
 import { Input } from "@/components/ui/input";
@@ -69,6 +73,7 @@ import {
 import HierarchicalMachineSelector from "@/components/tickets/HierarchicalMachineSelector";
 import { compressTicketImage, formatFileSize, compressImage } from "@/utils/imageCompression";
 import { StarRating, StarRatingDisplay } from "@/components/ui/star-rating";
+import { cn } from "@/lib/utils";
 
 type TicketCacheEntry = { data: Ticket; timestamp: number };
 
@@ -299,6 +304,10 @@ const TicketDetailsPage: React.FC = () => {
   // Ref for assignee dropdown to handle click outside
   const assigneeDropdownRef = useRef<HTMLDivElement>(null);
   const isMountedRef = useRef(false);
+  const actionPaneRef = useRef<HTMLDivElement>(null);
+  
+  // State for mobile action pane expansion
+  const [isActionPaneExpanded, setIsActionPaneExpanded] = useState(false);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -469,6 +478,31 @@ const TicketDetailsPage: React.FC = () => {
       document.removeEventListener('keydown', handleEscapeKey);
     };
   }, [assigneeDropdownOpen]);
+
+  // Handle click outside action pane
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (actionPaneRef.current && !actionPaneRef.current.contains(event.target as Node)) {
+        setIsActionPaneExpanded(false);
+      }
+    };
+
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && isActionPaneExpanded) {
+        setIsActionPaneExpanded(false);
+      }
+    };
+
+    if (isActionPaneExpanded) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleEscapeKey);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEscapeKey);
+    };
+  }, [isActionPaneExpanded]);
 
   // Upload with per-file progress using XMLHttpRequest
   const handleImageUpload = async (imageType: "before" | "after") => {
@@ -724,6 +758,7 @@ const TicketDetailsPage: React.FC = () => {
     setActionComment("");
     setActionNumber("");
     setActionExtraId("");
+    setIsActionPaneExpanded(false);
     // Reset equipment selector state
     setShowEquipmentSelector(false);
     setSelectedNewMachine(null);
@@ -974,7 +1009,7 @@ const TicketDetailsPage: React.FC = () => {
           showBackButton={true}
           onBack={() => navigate(getBackNavigation())}
           rightContent={
-          <div className="flex flex-wrap gap-2 justify-end">
+          <div className="hidden sm:flex flex-wrap gap-2 justify-end">
             {/* Accept button - Only assigned L2 user can accept open tickets */}
             {isL2Plus &&
               (isAssignedUser || ticket.assigned_to == null) &&
@@ -1384,8 +1419,83 @@ const TicketDetailsPage: React.FC = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {!isClosed && (
-                <div className="mb-6 space-y-3">
+              
+
+              {ticket.comments && ticket.comments.length > 0 ? (
+                <div className="space-y-4">
+                  {ticket.comments.map((comment, index) => {
+                    const isStatusChange = comment.comment?.startsWith(
+                      "Status changed from",
+                    );
+                    const userInitials = comment.user_name
+                      ? `${comment.user_name.split(" ")[0]?.[0] || ""}${comment.user_name.split(" ")[1]?.[0] || ""}`
+                      : `U${comment.user_id}`;
+
+                    const avatarSrc = getFileUrl(comment.user_avatar_url);
+
+                    return (
+                      <div key={index} className="flex items-start gap-3">
+                        {/* Avatar */}
+                        <Avatar className="h-10 w-10 flex-shrink-0">
+                          {avatarSrc ? (
+                            <AvatarImage src={avatarSrc} alt="avatar" />
+                          ) : null}
+                          <AvatarFallback className="text-xs font-medium text-gray-600 dark:text-gray-300">
+                            {userInitials}
+                          </AvatarFallback>
+                        </Avatar>
+                        
+                        {/* Message bubble with tail */}
+                        <div className="flex-1 space-y-1">
+                          {/* Name and timestamp */}
+                          <div className="flex items-baseline gap-2">
+                            <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                              {comment.user_name || `User ${comment.user_id}`}
+                            </span>
+                            <span className="text-xs text-gray-500 dark:text-gray-400">
+                              {formatUITime(comment.created_at, language)}
+                            </span>
+                          </div>
+                          
+                          {/* Chat bubble with tail */}
+                          <div className="relative inline-block max-w-[85%]">
+                            <div
+                              className={`px-4 py-2 rounded-2xl ${
+                                isStatusChange
+                                  ? "bg-green-100 dark:bg-green-900/30 text-green-900 dark:text-green-100"
+                                  : "bg-gray-100 dark:bg-gray-900/30 text-gray-900 dark:text-gray-100"
+                              }`}
+                            >
+                              <p className="text-sm whitespace-pre-wrap break-words">
+                                {comment.comment}
+                              </p>
+                            </div>
+                            {/* Bubble tail */}
+                            <div 
+                              className={`absolute -left-3 top-3 w-3 h-3 ${
+                                isStatusChange
+                                  ? "bg-green-100 dark:bg-green-900/30"
+                                  : "bg-gray-100 dark:bg-gray-900/30"
+                              }`}
+                              style={{
+                                clipPath: 'polygon(0 0, 100% 0, 0 100%)',
+                                rotate: '90deg'
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-gray-600 dark:text-gray-400">
+                  {t('ticket.noComments')}
+                </p>
+              )}
+
+{!isClosed && (
+                <div className="mt-6 space-y-3">
                   <Label htmlFor="new-comment">{t('ticket.addComment')}</Label>
                   <Textarea
                     id="new-comment"
@@ -1429,64 +1539,6 @@ const TicketDetailsPage: React.FC = () => {
                     </Button>
                   </div>
                 </div>
-              )}
-
-              {ticket.comments && ticket.comments.length > 0 ? (
-                <div className="space-y-4">
-                  {ticket.comments.map((comment, index) => {
-                    const isStatusChange = comment.comment?.startsWith(
-                      "Status changed from",
-                    );
-                    const userInitials = comment.user_name
-                      ? `${comment.user_name.split(" ")[0]?.[0] || ""}${comment.user_name.split(" ")[1]?.[0] || ""}`
-                      : `U${comment.user_id}`;
-
-                    const avatarSrc = getFileUrl(comment.user_avatar_url);
-
-                    return (
-                      <div
-                        key={index}
-                        className={`rounded-md border p-4 ${
-                          isStatusChange
-                            ? "border-green-200/60 bg-green-50/40 dark:border-green-500/30 dark:bg-green-950/20"
-                            : "border-blue-200/60 bg-blue-50/40 dark:border-blue-500/30 dark:bg-blue-950/20"
-                        }`}
-                      >
-                        <div className="mb-2 flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            {avatarSrc ? (
-                              <AvatarImage src={avatarSrc} alt="avatar" />
-                            ) : null}
-                            <AvatarFallback className="text-xs font-medium text-gray-600 dark:text-gray-300">
-                              {userInitials}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1">
-                            <span className="font-medium text-gray-900 dark:text-gray-100">
-                              {comment.user_name || `User ${comment.user_id}`}
-                            </span>
-                            <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">
-                              {formatUITime(comment.created_at, language)}
-                            </span>
-                          </div>
-                        </div>
-                        <p
-                          className={`text-sm ${
-                            isStatusChange
-                              ? "text-green-700 dark:text-green-300 font-medium"
-                              : "text-gray-700 dark:text-gray-300"
-                          }`}
-                        >
-                          {comment.comment}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('ticket.noComments')}
-                </p>
               )}
             </CardContent>
           </Card>
@@ -2691,6 +2743,150 @@ const TicketDetailsPage: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Mobile Floating Action Buttons */}
+      <div className="fixed bottom-20 right-4 sm:hidden z-50" ref={actionPaneRef}>
+        <div className="flex flex-col items-end gap-2">
+          {/* Expanded Action Pane */}
+          <div
+            className={cn(
+              "flex flex-col-reverse gap-2 items-end transition-all duration-300 ease-in-out",
+              isActionPaneExpanded
+                ? "opacity-100 translate-y-0"
+                : "opacity-0 translate-y-4 pointer-events-none"
+            )}
+            style={{ maxHeight: isActionPaneExpanded ? '400px' : '0', overflow: 'hidden' }}
+          >
+            {/* Accept button - Only assigned L2 user can accept open tickets */}
+            {isL2Plus &&
+              (isAssignedUser || ticket.assigned_to == null) &&
+              ticket.status === "open" && (
+                <Button onClick={() => openAction("accept")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
+                  <CheckCircle2 className="mr-2 h-4 w-4" /> {t('ticket.accept')}
+                </Button>
+              )}
+            {/* L3 Accept button - Only L3 can override L2 rejections */}
+            {isL3Plus && ticket.status === "rejected_pending_l3_review" && (
+              <Button onClick={() => openAction("accept")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
+                <CheckCircle2 className="mr-2 h-4 w-4" /> {t('ticket.overrideAccept')}
+              </Button>
+            )}
+            {/* Plan button - L2+ can plan accepted tickets */}
+            {isL2Plus && ticket.status === "accepted" && (
+              <Button onClick={() => openAction("plan")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
+                <Clock className="mr-2 h-4 w-4" /> {t('ticket.plan')}
+              </Button>
+            )}
+            {/* Start button - Only assigned L2+ user can start planed tickets */}
+            {isL2Plus && isAssignedUser && ticket.status === "planed" && (
+              <Button onClick={() => openAction("start")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
+                <Play className="mr-2 h-4 w-4" /> {t('ticket.start')}
+              </Button>
+            )}
+            {/* Reject button - L2 can only reject open tickets */}
+            {isL2Plus && !isL3Plus && ticket.status === "open" && (
+              <Button
+                variant="destructive"
+                onClick={() => openAction("reject")}
+                size="sm"
+                className="shadow-lg w-auto whitespace-nowrap"
+              >
+                <XCircle className="mr-2 h-4 w-4" /> {t('ticket.reject')}
+              </Button>
+            )}
+            {/* L3 Reject button - Only L3 can reject open tickets and tickets pending L3 review */}
+            {isL3Plus &&
+              (ticket.status === "open" || ticket.status === "rejected_pending_l3_review") && (
+                <Button
+                  variant="destructive"
+                  onClick={() => openAction("reject")}
+                  size="sm"
+                  className="shadow-lg w-auto whitespace-nowrap"
+                >
+                  <XCircle className="mr-2 h-4 w-4" />
+                  {ticket.status === "rejected_pending_l3_review"
+                    ? t('ticket.finalReject')
+                    : t('ticket.reject')}
+                </Button>
+              )}
+            {/* Finish and Escalate buttons - Only assigned L2 user can finish/escalate when ticket is in-progress or reopened_in_progress */}
+            {isL2Plus &&
+              isAssignedUser &&
+              (ticket.status === "in_progress" ||
+                ticket.status === "reopened_in_progress") && (
+                <>
+                  <Button onClick={() => openAction("finish")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
+                    <CheckCircle2 className="mr-2 h-4 w-4" /> {t('ticket.finish')}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => openAction("escalate")}
+                    size="sm"
+                    className="shadow-lg w-auto whitespace-nowrap"
+                  >
+                    <AlertCircle className="mr-2 h-4 w-4" /> {t('ticket.escalate')}
+                  </Button>
+                </>
+              )}
+            {/* Approve Review button - Creator can approve review when ticket is finished */}
+            {isCreator && ticket.status === "finished" && (
+              <>
+                <Button onClick={() => openAction("approve-review")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
+                  <Star className="mr-2 h-4 w-4" /> {t('ticket.approveReview')}
+                </Button>
+                <Button variant="outline" onClick={() => openAction("reopen")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
+                  <RefreshCw className="mr-2 h-4 w-4" /> {t('ticket.reopen')}
+                </Button>
+              </>
+            )}
+            
+            {/* Approve Close button - L4+ managers can approve close when ticket is reviewed */}
+            {isL4Plus && ticket.status === "reviewed" && (
+              <Button onClick={() => openAction("approve-close")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
+                <CheckCircle className="mr-2 h-4 w-4" /> {t('ticket.approveClose')}
+              </Button>
+            )}
+            {/* L3 Reassign button - L3 can reassign tickets in any status except rejected_final and closed */}
+            {isL3Plus &&
+              ticket.status !== "rejected_final" &&
+              ticket.status !== "closed" && (
+                <Button
+                  variant="outline"
+                  onClick={() => openAction("reassign")}
+                  size="sm"
+                  className="shadow-lg w-auto whitespace-nowrap"
+                >
+                  <RotateCw className="mr-2 h-4 w-4" /> {t('ticket.reassign')}
+                </Button>
+              )}
+            {/* Delete button - L3+ users can delete tickets */}
+            {isL3Plus && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setDeleteComment("");
+                  setDeleteOpen(true);
+                }}
+                size="sm"
+                className="shadow-lg w-auto"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
+          
+          {/* Toggle Button - Always Visible */}
+          <button
+            onClick={() => setIsActionPaneExpanded(!isActionPaneExpanded)}
+            className="w-14 h-14 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground shadow-lg transition-all duration-200 flex items-center justify-center shrink-0"
+          >
+            <Zap className={cn(
+              "h-6 w-6 transition-transform duration-200",
+              isActionPaneExpanded && "rotate-12"
+            )} />
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

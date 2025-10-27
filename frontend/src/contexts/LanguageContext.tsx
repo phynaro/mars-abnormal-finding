@@ -43,6 +43,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.close': 'Close',
     'common.retry': 'Retry',
     // Navigation
+    'nav.home': 'Home',
     'nav.dashboard': 'Dashboard',
     'nav.tickets': 'Tickets',
     'nav.machines': 'Machines',
@@ -792,6 +793,7 @@ const translations: Record<Language, Record<string, string>> = {
     'common.showFilters': 'แสดงตัวกรอง',
     'common.retry': 'ลองใหม่',
     // Navigation
+    'nav.home': 'หน้าหลัก',
     'nav.dashboard': 'แดชบอร์ด',
     'nav.tickets': 'งาน',
     'nav.machines': 'เครื่องจักร',
@@ -1159,7 +1161,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.reject': 'ปฏิเสธ',
     'ticket.assign': 'มอบหมาย',
     'ticket.unassign': 'ยกเลิกการมอบหมาย',
-    'ticket.approveReview': 'อนุมัติการตรวจสอบ',
+    'ticket.approveReview': 'อนุมัติ',
     'ticket.reviewReason': 'เหตุผลการตรวจสอบ',
     'ticket.approveClose': 'อนุมัติการปิด',
     'ticket.close': 'ปิด',

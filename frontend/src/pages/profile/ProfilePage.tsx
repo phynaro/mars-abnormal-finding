@@ -590,6 +590,23 @@ const ProfilePage: React.FC = () => {
         </div>
       </div>
 
+      {/* Mobile-only Logout Button */}
+      <div className="lg:hidden mt-6">
+        <Card className="border-destructive">
+          <CardContent className="pt-6">
+            <Button
+              variant="destructive"
+              onClick={handleLogout}
+              className="w-full"
+              size="lg"
+            >
+              <LogOut className="h-4 w-4 mr-2" />
+              {t('auth.logout')}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Unlink Confirmation Modal */}
       <Dialog open={showUnlinkConfirm} onOpenChange={setShowUnlinkConfirm}>
         <DialogContent className="max-w-md">
