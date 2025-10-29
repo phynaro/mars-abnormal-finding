@@ -4,14 +4,19 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { CheckSquare, Square } from 'lucide-react';
-import { type Area, type Line, type Plant } from '@/services/administrationService';
+import { type LookupData } from '@/services/administrationService';
+
+// Types for simplified lookup data
+type SimplifiedPlant = LookupData['plants'][number];
+type SimplifiedArea = LookupData['areas'][number];
+type SimplifiedLine = LookupData['lines'][number];
 
 interface HierarchySelectorProps {
-  plants: Plant[];
-  areas: Area[];
-  lines: Line[];
-  filteredAreas: Area[];
-  filteredLines: Line[];
+  plants: SimplifiedPlant[];
+  areas: SimplifiedArea[];
+  lines: SimplifiedLine[];
+  filteredAreas: SimplifiedArea[];
+  filteredLines: SimplifiedLine[];
   selectedHierarchies: Array<{
     plant_code: string;
     area_code?: string;

@@ -6,34 +6,19 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Search, Edit, Trash2 } from 'lucide-react';
-import { type TicketApproval, getApprovalLevelName } from '@/services/administrationService';
+import { type TicketApprovalSummary, getApprovalLevelName } from '@/services/administrationService';
 
 interface ApprovalListViewProps {
-  approvals: TicketApproval[];
+  approvals: TicketApprovalSummary[];
   loading: boolean;
   searchTerm: string;
   filterActive: string;
   onSearchChange: (search: string) => void;
   onFilterChange: (filter: string) => void;
   onCreate: () => void;
-  onEdit: (approval: TicketApproval) => void;
-  onDelete: (approval: TicketApproval) => void;
+  onEdit: (approval: TicketApprovalSummary) => void;
+  onDelete: (approval: TicketApprovalSummary) => void;
 }
-
-const getLocationSummary = (approval: TicketApproval) => {
-  const parts = [
-    approval.plant_name || approval.plant_code,
-    approval.area_name || approval.area_code,
-    approval.line_name || approval.line_code,
-    approval.machine_name || approval.machine_code
-  ].filter(Boolean);
-
-  if (parts.length === 0) {
-    return approval.location_scope || 'All Locations';
-  }
-
-  return parts.join(' → ');
-};
 
 const ApprovalListView: React.FC<ApprovalListViewProps> = ({
   approvals,
@@ -130,12 +115,12 @@ const ApprovalListView: React.FC<ApprovalListViewProps> = ({
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <div className="max-w-xs truncate" title={getLocationSummary(approval)}>
-                        {getLocationSummary(approval)}
+                      <div className="text-sm text-muted-foreground">
+                        {approval.total_approvals === 1 ? '1 Location' : `${approval.total_approvals} Locations`}
                       </div>
                     </td>
                     <td className="px-3 py-3">
-                      <Badge variant="secondary">{approval.total_approvals ?? '-'}</Badge>
+                      <Badge variant="secondary">{approval.total_approvals}</Badge>
                     </td>
                     <td className="px-3 py-3">
                       <Badge variant={approval.is_active ? 'default' : 'secondary'}>

@@ -4,9 +4,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { type Area, type Line, type Plant, type Person, type TicketApproval } from '@/services/administrationService';
+import { type Person, type TicketApprovalSummary, type LookupData } from '@/services/administrationService';
 import HierarchySelector from './HierarchySelector';
 import CopyPermissionsDialog from './CopyPermissionsDialog';
+
+// Types for simplified lookup data
+type SimplifiedPlant = LookupData['plants'][number];
+type SimplifiedArea = LookupData['areas'][number];
+type SimplifiedLine = LookupData['lines'][number];
 
 interface ApprovalFormViewProps {
   viewMode: 'create' | 'edit';
@@ -23,18 +28,18 @@ interface ApprovalFormViewProps {
     }>;
   };
   persons: Person[];
-  plants: Plant[];
-  areas: Area[];
-  lines: Line[];
-  filteredAreas: Area[];
-  filteredLines: Line[];
+  plants: SimplifiedPlant[];
+  areas: SimplifiedArea[];
+  lines: SimplifiedLine[];
+  filteredAreas: SimplifiedArea[];
+  filteredLines: SimplifiedLine[];
   existingApprovalLevels: number[];
   personSearch: string;
   showPersonSearch: boolean;
   showCopyDialog: boolean;
   copyFromPersonno: number | null;
   copyFromApprovalLevel: number | null;
-  approvals: TicketApproval[];
+  approvals: TicketApprovalSummary[];
   onSubmit: (e: React.FormEvent) => void;
   onCancel: () => void;
   onPersonSearchChange: (search: string) => void;
@@ -133,18 +138,19 @@ const ApprovalFormView: React.FC<ApprovalFormViewProps> = ({
                     <p className="text-sm text-red-500 mt-1">Please select a person</p>
                   )}
                   {showPersonSearch && persons.length > 0 && (
-                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-auto">
+                    <div className="absolute z-10 w-full mt-1 max-h-64 overflow-auto rounded-md border bg-popover text-popover-foreground shadow-md">
                       {persons.map((person) => (
-                        <div
+                        <button
+                          type="button"
                           key={person.PERSONNO}
-                          className="px-4 py-2 hover:bg-gray-100 cursor-pointer border-b last:border-b-0"
+                          className="w-full text-left px-3 py-3 text-sm hover:bg-hover hover:text-hover-foreground border-b last:border-b-0 cursor-pointer"
                           onClick={() => onPersonSelect(person)}
                         >
-                          <div className="font-medium">{person.PERSON_NAME}</div>
-                          <div className="text-sm text-gray-500">
-                            {person.PERSONCODE} • {person.FIRSTNAME} {person.LASTNAME}
+                          <div className="font-medium text-base">{person.PERSON_NAME}</div>
+                          <div className="text-sm opacity-80 mt-1">
+                            {person.PERSONCODE}
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   )}

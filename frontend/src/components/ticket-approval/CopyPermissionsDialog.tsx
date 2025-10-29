@@ -3,13 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { type TicketApproval } from '@/services/administrationService';
+import { type TicketApprovalSummary } from '@/services/administrationService';
 
 interface CopyPermissionsDialogProps {
   show: boolean;
   onClose: () => void;
   onCopy: () => void;
-  approvals: TicketApproval[];
+  approvals: TicketApprovalSummary[];
   currentPersonno: number;
   loading: boolean;
   copyFromPersonno: number | null;
@@ -57,7 +57,7 @@ const CopyPermissionsDialog: React.FC<CopyPermissionsDialogProps> = ({
                       unique.push(approval);
                     }
                     return unique;
-                  }, [] as TicketApproval[])
+                  }, [] as TicketApprovalSummary[])
                   .map((approval) => (
                     <SelectItem key={approval.personno} value={approval.personno.toString()}>
                       {approval.person_name || `Person #${approval.personno}`}
@@ -86,7 +86,7 @@ const CopyPermissionsDialog: React.FC<CopyPermissionsDialogProps> = ({
                         unique.push(approval);
                       }
                       return unique;
-                    }, [] as TicketApproval[])
+                    }, [] as TicketApprovalSummary[])
                     .map((approval) => (
                       <SelectItem key={approval.approval_level} value={approval.approval_level.toString()}>
                         Level {approval.approval_level}

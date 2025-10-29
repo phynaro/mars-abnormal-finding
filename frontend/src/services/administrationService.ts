@@ -342,8 +342,20 @@ export const ticketApprovalService = {
       method: 'DELETE',
       headers: getAuthHeadersUtil()
     });
-    const result: ApiResponse<{ count: number }> = await handleApiResponse(response);
-    return { count: result.data.count };
+    const result = await handleApiResponse(response);
+    
+    // Handle different response structures
+    if (result && result.data && typeof result.data.count !== 'undefined') {
+      return { count: result.data.count };
+    } else if (result && typeof result.count !== 'undefined') {
+      return { count: result.count };
+    } else if (result && result.success) {
+      // If success but no count, assume at least 1 was deleted
+      return { count: 1 };
+    }
+    
+    // Default to 0 if we can't determine count
+    return { count: 0 };
   },
 
   async getUsersForNotification(puno: number, approvalLevel: number, excludeUserId?: number): Promise<Person[]> {

@@ -1,25 +1,32 @@
 import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/useToast';
 import administrationService, { 
-  type TicketApproval, 
+  type TicketApproval,
+  type TicketApprovalSummary,
   type CreateTicketApprovalRequest,
   type Area, 
   type Line, 
   type Plant, 
-  type Person
+  type Person,
+  type LookupData
 } from '@/services/administrationService';
 import { ApprovalFormView, ApprovalListView } from '@/components/ticket-approval';
 
 type ViewMode = 'list' | 'create' | 'edit';
 
+// Types for simplified lookup data
+type SimplifiedPlant = LookupData['plants'][number];
+type SimplifiedArea = LookupData['areas'][number];
+type SimplifiedLine = LookupData['lines'][number];
+
 const TicketApprovalManagementPage: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('list');
-  const [approvals, setApprovals] = useState<TicketApproval[]>([]);
-  const [plants, setPlants] = useState<Plant[]>([]);
-  const [areas, setAreas] = useState<Area[]>([]);
-  const [lines, setLines] = useState<Line[]>([]);
+  const [approvals, setApprovals] = useState<TicketApprovalSummary[]>([]);
+  const [plants, setPlants] = useState<SimplifiedPlant[]>([]);
+  const [areas, setAreas] = useState<SimplifiedArea[]>([]);
+  const [lines, setLines] = useState<SimplifiedLine[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
-  const [selectedApproval, setSelectedApproval] = useState<TicketApproval | null>(null);
+  const [selectedApproval, setSelectedApproval] = useState<TicketApprovalSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterActive, setFilterActive] = useState<string>('all');
@@ -40,14 +47,14 @@ const TicketApprovalManagementPage: React.FC = () => {
     }>;
   }>({
     personno: 0,
-    approval_level: 1,
+    approval_level: 2,
     is_active: true,
     hierarchies: []
   });
 
   // Filtered data for UI
-  const [filteredAreas, setFilteredAreas] = useState<Area[]>([]);
-  const [filteredLines, setFilteredLines] = useState<Line[]>([]);
+  const [filteredAreas, setFilteredAreas] = useState<SimplifiedArea[]>([]);
+  const [filteredLines, setFilteredLines] = useState<SimplifiedLine[]>([]);
   
   // Track existing approval levels for selected user
   const [existingApprovalLevels, setExistingApprovalLevels] = useState<number[]>([]);
@@ -526,7 +533,7 @@ const TicketApprovalManagementPage: React.FC = () => {
     setSelectedApproval(null);
     setFormData({
       personno: 0,
-      approval_level: 1,
+      approval_level: 2,
       is_active: true,
       hierarchies: []
     });
@@ -537,7 +544,7 @@ const TicketApprovalManagementPage: React.FC = () => {
     setViewMode('create');
   }
 
-  const handleEdit = async (approval: TicketApproval) => {
+  const handleEdit = async (approval: TicketApprovalSummary) => {
     try {
       setLoading(true);
       
@@ -664,18 +671,30 @@ const TicketApprovalManagementPage: React.FC = () => {
         console.log('Approvals to create:', approvalsToCreate);
         
         // Check for duplicates against existing approvals
-        const existingApprovals = approvals.filter(a => a.personno === formData.personno && a.approval_level === formData.approval_level);
-        const filteredApprovalsToCreate = approvalsToCreate.filter(newApproval => {
-          return !existingApprovals.some(existing => 
-            existing.plant_code === newApproval.plant_code &&
-            (existing.area_code || '') === (newApproval.area_code || '') &&
-            (existing.line_code || '') === (newApproval.line_code || '') &&
-            (existing.machine_code || '') === (newApproval.machine_code || '')
+        // Load the detailed approvals for this person and level to check for duplicates
+        let filteredApprovalsToCreate = approvalsToCreate;
+        let existingApprovalsCount = 0;
+        try {
+          const existingApprovals = await administrationService.ticketApproval.getByPersonAndLevel(
+            formData.personno,
+            formData.approval_level
           );
-        });
+          existingApprovalsCount = existingApprovals.length;
+          
+          filteredApprovalsToCreate = approvalsToCreate.filter(newApproval => {
+            return !existingApprovals.some(existing => 
+              existing.plant_code === newApproval.plant_code &&
+              (existing.area_code || '') === (newApproval.area_code || '') &&
+              (existing.line_code || '') === (newApproval.line_code || '') &&
+              (existing.machine_code || '') === (newApproval.machine_code || '')
+            );
+          });
+        } catch (error) {
+          console.log('No existing approvals found, creating all');
+        }
         
         console.log('=== FRONTEND: Filtered approvals ===');
-        console.log('Existing approvals for this person/level:', existingApprovals.length);
+        console.log('Existing approvals for this person/level:', existingApprovalsCount);
         console.log('Filtered approvals to create:', filteredApprovalsToCreate.length);
         console.log('Skipped duplicates:', approvalsToCreate.length - filteredApprovalsToCreate.length);
         
@@ -705,12 +724,30 @@ const TicketApprovalManagementPage: React.FC = () => {
         // Update existing approval - Delete all and recreate
         console.log('=== FRONTEND: Starting approval update ===');
         console.log('Form data:', formData);
+        console.log('Form data hierarchies:', formData.hierarchies);
+        console.log('Form data hierarchies length:', formData.hierarchies.length);
+        
+        if (formData.hierarchies.length === 0) {
+          toast({
+            title: 'Error',
+            description: 'Please select at least one location',
+            variant: 'destructive'
+          });
+          return;
+        }
         
         // Delete all existing approvals for this person/level using personno and approval_level
-        await administrationService.ticketApproval.deleteByPersonAndLevel(
-          selectedApproval.personno, 
-          selectedApproval.approval_level
-        );
+        console.log('Deleting existing approvals for person:', selectedApproval.personno, 'level:', selectedApproval.approval_level);
+        try {
+          const deleteResult = await administrationService.ticketApproval.deleteByPersonAndLevel(
+            selectedApproval.personno, 
+            selectedApproval.approval_level
+          );
+          console.log('Deletion complete. Deleted count:', deleteResult.count);
+        } catch (deleteError: any) {
+          console.log('Delete error (may be expected if no existing approvals):', deleteError.message);
+          // Continue anyway - it's ok if there are no existing approvals to delete
+        }
 
         // Create new approvals directly from formData hierarchies
         const approvalsToCreate: CreateTicketApprovalRequest[] = formData.hierarchies.map(hierarchy => ({
@@ -723,9 +760,14 @@ const TicketApprovalManagementPage: React.FC = () => {
           is_active: formData.is_active
         }));
         
-        console.log('Approvals to create:', approvalsToCreate);
+        console.log('=== FRONTEND: Creating new approvals ===');
+        console.log('Approvals to create:', JSON.stringify(approvalsToCreate, null, 2));
+        console.log('Approvals count:', approvalsToCreate.length);
+        
         // Use bulk create to insert all new approvals
         const result = await administrationService.ticketApproval.createMultiple(approvalsToCreate);
+        console.log('=== FRONTEND: Bulk approval response ===');
+        console.log('Result:', result);
         
         toast({
           title: 'Success',
@@ -752,34 +794,7 @@ const TicketApprovalManagementPage: React.FC = () => {
     }
   }
 
-  const handleDelete = async (approval: TicketApproval) => {
-    if (!confirm(`Are you sure you want to delete this approval for person ${approval.personno}?`)) {
-      return;
-    }
-
-    // Use setTimeout to prevent blocking the UI thread
-    setTimeout(async () => {
-      try {
-        setLoading(true);
-        await administrationService.ticketApproval.delete(approval.id);
-        toast({
-          title: 'Success',
-          description: 'Ticket approval deleted successfully'
-        });
-        await loadData();
-      } catch (error: any) {
-        toast({
-          title: 'Error',
-          description: error.message || 'Failed to delete ticket approval',
-          variant: 'destructive'
-        });
-      } finally {
-        setLoading(false);
-      }
-    }, 0);
-  }
-
-  const handleEditApproval = async (approval: TicketApproval) => {
+  const handleEditApproval = async (approval: TicketApprovalSummary) => {
     try {
       setLoading(true);
       
@@ -842,9 +857,9 @@ const TicketApprovalManagementPage: React.FC = () => {
     }
   }
 
-  const handleDeleteApproval = async (approval: TicketApproval) => {
+  const handleDeleteApproval = async (approval: TicketApprovalSummary) => {
     const personName = approval.person_name || `Person #${approval.personno}`;
-    if (!confirm(`Are you sure you want to delete all ${approval.total_approvals || 0} approval(s) for ${personName} at Level ${approval.approval_level}?`)) {
+    if (!confirm(`Are you sure you want to delete all ${approval.total_approvals} approval(s) for ${personName} at Level ${approval.approval_level}?`)) {
       return;
     }
 
