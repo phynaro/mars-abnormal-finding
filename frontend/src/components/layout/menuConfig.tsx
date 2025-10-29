@@ -15,7 +15,8 @@ import {
   Target,
   Settings,
   TrendingUp,
-  Users
+  Users,
+  Bell
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -109,6 +110,7 @@ export const menuItems: MenuItem[] = [
       { id: 'settings-hierarchy', label: 'Hierarchy View', icon: <TrendingUp className="h-4 w-4" />, path: '/settings/hierarchy', permissionLevel: 1 },
       { id: 'settings-ticket-approvals', label: 'Ticket Approvals', icon: <UserCheck className="h-4 w-4" />, path: '/settings/ticket-approvals', permissionLevel: 1 },
       { id: 'settings-targets', label: 'Target Management', icon: <Target className="h-4 w-4" />, path: '/settings/targets', permissionLevel: 1 },
+      { id: 'settings-notification-schedules', label: 'Notification Schedules', icon: <Bell className="h-4 w-4" />, path: '/settings/notification-schedules', permissionLevel: 1 },
     ]
   },
   

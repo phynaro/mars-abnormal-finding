@@ -6788,6 +6788,78 @@ const getPersonalKPIData = async (req, res) => {
   }
 };
 
+// Send pending ticket notification to specific user
+const sendPendingTicketNotification = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const pendingNotificationService = require('../services/pendingTicketNotificationService');
+
+    const result = await pendingNotificationService.sendToSpecificUser(parseInt(userId));
+
+    if (result.skipped) {
+      return res.status(200).json({
+        success: true,
+        skipped: true,
+        reason: result.reason,
+        message: result.reason === 'no_line_id' 
+          ? 'User does not have LINE ID configured' 
+          : 'No pending tickets for this user'
+      });
+    }
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send notification',
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Notification sent successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error('Error sending pending ticket notification:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send notification',
+      error: error.message
+    });
+  }
+};
+
+// Send pending ticket notifications to all users
+const sendPendingTicketNotificationsToAll = async (req, res) => {
+  try {
+    const pendingNotificationService = require('../services/pendingTicketNotificationService');
+
+    const result = await pendingNotificationService.sendToAllUsers();
+
+    if (!result.success) {
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to send notifications',
+        error: result.error
+      });
+    }
+
+    res.json({
+      success: true,
+      message: `Notifications sent to ${result.sent} out of ${result.totalUsers} users`,
+      data: result
+    });
+  } catch (error) {
+    console.error('Error sending batch pending ticket notifications:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send notifications',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createTicket,
   getTickets,
@@ -6816,4 +6888,7 @@ module.exports = {
   getUserTicketCountPerPeriod,
   getUserFinishedTicketCountPerPeriod,
   getPersonalKPIData,
+  
+  sendPendingTicketNotification,
+  sendPendingTicketNotificationsToAll,
 };

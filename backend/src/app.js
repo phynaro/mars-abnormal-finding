@@ -116,6 +116,7 @@ const administrationRoutes = require('./routes/administration');
 const targetRoutes = require('./routes/target');
 const personalTargetRoutes = require('./routes/personalTarget');
 const accessRequestRoutes = require('./routes/accessRequest');
+const notificationScheduleRoutes = require('./routes/notificationSchedule');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/access-request', accessRequestRoutes);
@@ -136,6 +137,7 @@ app.use('/api/hierarchy', hierarchyRoutes);
 app.use('/api/administration', administrationRoutes);
 app.use('/api/targets', targetRoutes);
 app.use('/api/personal-targets', personalTargetRoutes);
+app.use('/api/notification-schedules', notificationScheduleRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -217,13 +219,23 @@ app.use('*', (req, res) => {
   });
 });
 
+// Initialize scheduled jobs
+const pendingTicketNotificationJob = require('./jobs/pendingTicketNotificationJob');
+
 // Start server
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
   console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth`);
   console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
   console.log(`📄 OpenAPI Spec: http://localhost:${PORT}/api-docs.json`);
+  
+  // Initialize scheduled jobs
+  if (process.env.ENABLE_PENDING_TICKET_NOTIFICATIONS !== 'false') {
+    await pendingTicketNotificationJob.initialize();
+  } else {
+    console.log('⚠️  Pending ticket notifications are disabled via environment variable');
+  }
 });
 
 module.exports = app; 

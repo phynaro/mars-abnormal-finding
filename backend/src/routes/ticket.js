@@ -28,6 +28,12 @@ router.get('/user/personal-kpi', requireFormPermission('TKT', 'view'), ticketCon
 // Get failure modes (requires TKT form view permission)
 router.get('/failure-modes', requireFormPermission('TKT', 'view'), ticketController.getFailureModes);
 
+// Send pending ticket notification to specific user (requires TKT form view permission)
+router.post('/notifications/pending/:userId', requireFormPermission('TKT', 'view'), ticketController.sendPendingTicketNotification);
+
+// Send pending ticket notifications to all users (requires TKT form save permission)
+router.post('/notifications/pending', requireFormPermission('TKT', 'save'), ticketController.sendPendingTicketNotificationsToAll);
+
 // Get ticket by ID (requires TKT form view permission)
 router.get('/:id', requireFormPermission('TKT', 'view'), ticketController.getTicketById);
 

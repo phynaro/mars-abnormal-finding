@@ -53,6 +53,7 @@ import TicketCreateWizardPage from './pages/tickets/TicketCreateWizardPage';
 import ProfilePage from './pages/profile/ProfilePage';
 import HierarchyViewPage from './pages/settings/HierarchyViewPage';
 import TicketApprovalManagementPage from './pages/settings/TicketApprovalManagementPage';
+import NotificationScheduleManagementPage from './pages/settings/NotificationScheduleManagementPage';
 import WorkflowTypesPage from './pages/works/WorkflowTypesPage';
 import Loading from './components/common/Loading';
 
@@ -256,6 +257,7 @@ const AppContent: React.FC = () => {
           <Route path="settings/hierarchy" element={<HierarchyViewPage />} />
           <Route path="settings/ticket-approvals" element={<TicketApprovalManagementPage />} />
           <Route path="settings/targets" element={<TargetManagementPage />} />
+          <Route path="settings/notification-schedules" element={<NotificationScheduleManagementPage />} />
           {/* Spare Part (Inventory) */}
           <Route path="spare" element={<InventoryOverviewPage />} />
           <Route path="spare/overview" element={<InventoryOverviewPage />} />
