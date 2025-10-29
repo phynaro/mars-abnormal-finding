@@ -260,7 +260,7 @@ const LoginPage: React.FC = () => {
             </Button>
 
             {/* Request Access Link */}
-            <div className="text-center mt-4">
+            {/* <div className="text-center mt-4">
               <Button 
                 type="button" 
                 variant="link" 
@@ -269,7 +269,7 @@ const LoginPage: React.FC = () => {
               >
                 Request Access
               </Button>
-            </div>
+            </div> */}
 
             {/* Additional Links */}
             <div className="flex items-center justify-between text-sm">

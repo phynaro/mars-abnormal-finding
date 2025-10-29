@@ -4,6 +4,7 @@ const dbConfig = require('../config/dbConfig');
 // Simple user controller for testing - uses the auth controller's getProfile method
 const { getProfile } = require('./authController');
 const path = require('path');
+const fs = require('fs').promises;
 
 const userController = {
   // Get user profile (redirects to auth controller)
@@ -35,10 +36,14 @@ const userController = {
               EMAIL = COALESCE(@email, EMAIL),
               PHONE = COALESCE(@phone, PHONE),
               TITLE = COALESCE(@title, TITLE),
-              PERSON_NAME = COALESCE(@firstName, FIRSTNAME) + ' ' + COALESCE(@lastName, LASTNAME),
               UPDATEDATE = CONVERT(NVARCHAR(8), GETDATE(), 112),
               UPDATEUSER = @personNo
-          WHERE PERSONNO = @personNo
+          WHERE PERSONNO = @personNo;
+          
+          -- Always recalculate PERSON_NAME from FIRSTNAME + LASTNAME after update
+          UPDATE Person
+          SET PERSON_NAME = LTRIM(RTRIM(ISNULL(FIRSTNAME, '') + ' ' + ISNULL(LASTNAME, '')))
+          WHERE PERSONNO = @personNo;
         `);
       }
 
@@ -139,10 +144,24 @@ const userController = {
 
       const pool = await sql.connect(dbConfig);
       
-      // Check if IgxUserExtension record exists
+      // Check if IgxUserExtension record exists and get old avatar
       const checkResult = await pool.request()
         .input('userID', sql.VarChar, userId)
-        .query('SELECT UserID FROM IgxUserExtension WHERE UserID = @userID');
+        .query('SELECT UserID, AvatarUrl FROM IgxUserExtension WHERE UserID = @userID');
+      
+      // Delete old avatar file if it exists
+      if (checkResult.recordset.length > 0 && checkResult.recordset[0].AvatarUrl) {
+        try {
+          const oldAvatarPath = checkResult.recordset[0].AvatarUrl;
+          // Convert relative path to absolute path
+          const oldAbsolutePath = path.join(__dirname, '..', '..', oldAvatarPath);
+          await fs.unlink(oldAbsolutePath);
+          console.log(`Deleted old avatar: ${oldAbsolutePath}`);
+        } catch (deleteError) {
+          // If file doesn't exist or deletion fails, just log it but don't fail the upload
+          console.warn('Could not delete old avatar (this is okay if file does not exist):', deleteError.message);
+        }
+      }
       
       if (checkResult.recordset.length === 0) {
         // Create IgxUserExtension record if it doesn't exist

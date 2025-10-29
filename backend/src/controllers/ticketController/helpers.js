@@ -73,7 +73,7 @@ const sendEmailsSequentially = async (emailPromises, delayMs = 600) => {
     return results;
 };
 
-const mapImagesToLinePayload = (records = [], baseUrl = getBackendBaseUrl()) =>
+const mapImagesToLinePayload = (records = [], baseUrl = getFrontendBaseUrl()) =>
     records.map((img) => ({
         url: `${baseUrl}${img.image_url}`,
         filename: img.image_name,
@@ -550,9 +550,9 @@ const insertStatusHistory = async (pool, { ticketId, oldStatus, newStatus, chang
     );
 };
 
-const safeSendEmail = async (description, sendFn) => {
+const safeSendNotifications = async (description, sendFn) => {
     if (typeof sendFn !== 'function') {
-        console.warn(`safeSendEmail: provided handler for ${description} is not a function.`);
+        console.warn(`safeSendNotifications: provided handler for ${description} is not a function.`);
         return;
     }
 
@@ -596,7 +596,7 @@ module.exports = {
     insertStatusHistory,
     mapImagesToLinePayload,
     mapRecordset,
-    safeSendEmail,
+    safeSendNotifications,
     safeSendLineNotification,
     sendEmailsSequentially,
     runQuery,

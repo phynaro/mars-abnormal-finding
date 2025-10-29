@@ -130,6 +130,8 @@ const TicketApprovalManagementPage: React.FC = () => {
         ).filter(Boolean) as number[];
         
         setFilteredAreas(areas.filter(area => selectedPlantIds.includes(area.plant_id)));
+        
+        // Filter lines based on selected plants - but if areas are selected, we'll filter further in handleAreaSelection
         setFilteredLines(lines.filter(line => selectedPlantIds.includes(line.plant_id)));
       }
       
@@ -366,21 +368,32 @@ const TicketApprovalManagementPage: React.FC = () => {
       }));
     }
     
-    // Update filtered lines based on selected areas
+    // Update filtered lines based on selected areas - must match BOTH plant and area
     const selectedAreaCodes = formData.hierarchies
       .filter(h => h.area_code)
-      .map(h => h.area_code!);
+      .map(h => ({ areaCode: h.area_code!, plantCode: h.plant_code }));
     
     if (checked) {
-      selectedAreaCodes.push(areaCode);
+      selectedAreaCodes.push({ areaCode, plantCode });
     }
     
     if (selectedAreaCodes.length > 0) {
-      const selectedAreaIds = selectedAreaCodes.map(code => 
-        areas.find(a => a.code === code)?.id
-      ).filter(Boolean) as number[];
+      // Get area IDs with their associated plant IDs
+      const selectedAreaPlantPairs = selectedAreaCodes
+        .map(({ areaCode, plantCode }) => {
+          const area = areas.find(a => a.code === areaCode);
+          const plant = plants.find(p => p.code === plantCode);
+          if (!area || !plant) return null;
+          return { areaId: area.id, plantId: plant.id };
+        })
+        .filter(Boolean) as { areaId: number; plantId: number }[];
       
-      setFilteredLines(lines.filter(line => selectedAreaIds.includes(line.area_id)));
+      // Filter lines that match BOTH area_id and plant_id
+      setFilteredLines(lines.filter(line => 
+        selectedAreaPlantPairs.some(pair => 
+          line.area_id === pair.areaId && line.plant_id === pair.plantId
+        )
+      ));
     } else {
       setFilteredLines([]);
     }
@@ -452,8 +465,11 @@ const TicketApprovalManagementPage: React.FC = () => {
       hierarchies: newHierarchies
     }));
     
+    // Filter lines that match BOTH area_id and plant_id
     setFilteredLines(lines.filter(line => 
-      filteredAreas.some(area => area.id === line.area_id)
+      filteredAreas.some(area => 
+        area.id === line.area_id && area.plant_id === line.plant_id
+      )
     ));
   }
 

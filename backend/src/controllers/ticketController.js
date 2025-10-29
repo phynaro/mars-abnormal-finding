@@ -23,7 +23,7 @@ const {
   insertStatusHistory,
   mapImagesToLinePayload,
   mapRecordset,
-  safeSendEmail,
+  safeSendNotifications,
   safeSendLineNotification,
   sendEmailsSequentially,
   runQuery,
@@ -239,7 +239,7 @@ const createTicket = async (req, res) => {
         // Only send notifications if images were included in the initial request (single-step process)
         if (files.length > 0) {
             console.log(`📧 Sending notifications immediately (single-step process with ${files.length} images)`);
-            await safeSendEmail('send new ticket notifications', async () => {
+            await safeSendNotifications('send new ticket notifications', async () => {
             try {
                 // Small delay to ensure database transaction is fully committed
                 await new Promise(resolve => setTimeout(resolve, 100));
@@ -921,7 +921,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       const reporter = detailResult.recordsets[1]?.[0];
       const changedByName = getUserDisplayNameFromRequest(req);
 
-      await safeSendEmail("send ticket status update email", async () => {
+      await safeSendNotifications("send ticket status update email", async () => {
         if (reporter?.EMAIL) {
           await emailService.sendTicketStatusUpdateNotification(
             ticketData,
@@ -1107,7 +1107,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     const assignee = detailResult.recordsets[1]?.[0];
     const assigneeDisplayName = formatPersonName(assignee, "Assignee");
 
-    await safeSendEmail(
+    await safeSendNotifications(
       "send ticket assignment email notification",
       async () => {
         if (assignee?.EMAIL) {
@@ -1407,7 +1407,7 @@ const uploadTicketImages = async (req, res) => {
     }
 
     // Send notifications after images are uploaded (for two-step process only)
-    await safeSendEmail('send ticket creation notifications after image upload', async () => {
+    await safeSendNotifications('send ticket creation notifications after image upload', async () => {
       try {
         console.log(`📧 Sending notifications after ${files.length} images uploaded for ticket ${id} (two-step process)...`);
         
@@ -1942,7 +1942,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     const acceptorName = getUserDisplayNameFromRequest(req);
 
     // Send notifications according to new workflow logic: requester + actor (acceptor)
-    await safeSendEmail("send ticket acceptance notifications", async () => {
+    await safeSendNotifications("send ticket acceptance notifications", async () => {
       try {
         // Get notification users using the new workflow system (single call)
         const notificationUsers = await getTicketNotificationRecipients(
@@ -2294,7 +2294,7 @@ const planTicket = async (req, res) => {
     }
 
     // Send notifications according to new workflow logic: requester + assignee + actor (planner)
-    await safeSendEmail("send ticket planning notifications", async () => {
+    await safeSendNotifications("send ticket planning notifications", async () => {
       try {
         // Get notification users using the new workflow system (single call)
         const notificationUsers = await getTicketNotificationRecipients(
@@ -2506,15 +2506,8 @@ const planTicket = async (req, res) => {
               //  heroImageUrl: heroImageUrl,
               detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
               extraKVs: [
-                {
-                  label: "Severity",
-                  value: (ticketData.severity_level || "medium").toUpperCase(),
-                },
-                {
-                  label: "Priority",
-                  value: (ticketData.priority || "normal").toUpperCase(),
-                },
                 { label: "Assigned to", value: validAssignee.PERSON_NAME },
+                { label: "Critical Level", value: (getCriticalLevelText(ticketData.pucriticalno)).toUpperCase() },
                 {
                   label: "Schedule Start",
                   value: new Date(schedule_start).toLocaleDateString("th-TH"),
@@ -2704,7 +2697,7 @@ const startTicket = async (req, res) => {
     }
 
     // Send notifications according to new workflow logic: requester + assignee + actor (starter)
-    await safeSendEmail("send ticket start notifications", async () => {
+    await safeSendNotifications("send ticket start notifications", async () => {
       try {
         // Get notification users using the new workflow system (single call)
         const notificationUsers = await getTicketNotificationRecipients(
@@ -3150,7 +3143,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     }
 
     // Send notifications according to new workflow logic: requester + L3ForPU + actor (rejector)
-    await safeSendEmail("send ticket rejection notifications", async () => {
+    await safeSendNotifications("send ticket rejection notifications", async () => {
       try {
         // Get notification users using the new workflow system (single call)
         const notificationUsers = await getTicketNotificationRecipients(
@@ -3533,7 +3526,7 @@ const finishTicket = async (req, res) => {
     }
 
     // Send notifications according to new workflow logic: requester + actor (finishr)
-    await safeSendEmail("send job completion notifications", async () => {
+    await safeSendNotifications("send job completion notifications", async () => {
       try {
         // Get notification users using the new workflow system (single call)
         const notificationUsers = await getTicketNotificationRecipients(
@@ -3937,7 +3930,7 @@ const escalateTicket = async (req, res) => {
     }
 
     // Send notifications according to new workflow logic: requester + L3ForPU + L4ForPU + actor (escalator)
-    await safeSendEmail("send ticket escalation notifications", async () => {
+    await safeSendNotifications("send ticket escalation notifications", async () => {
       try {
         // Get notification users using the new workflow system (single call)
         const notificationUsers = await getTicketNotificationRecipients(
@@ -4236,26 +4229,15 @@ const approveReview = async (req, res) => {
     console.log("reviewed_by", reviewed_by);
     console.log("ticket.created_by", ticket.created_by);
 
-    // Check if user has permission to approve review
-    const permissionCheck = await checkUserActionPermission(
-      reviewed_by,
-      ticket.puno,
-      "approve_review"
-    );
-    if (!permissionCheck.hasPermission) {
-      return res.status(403).json({
-        success: false,
-        message: "You do not have permission to approve review tickets",
-      });
-    }
-
-    // Separate check for requester
+    // Check if user is the requester - if yes, they automatically have permission to review
     if (ticket.created_by !== reviewed_by) {
       return res.status(403).json({
         success: false,
         message: "Only the requestor can approve review this ticket",
       });
     }
+
+    // Requester automatically has permission (implicit L1), no need to check approval table
 
     // Check if ticket is in Finished status
     if (ticket.status !== "finished") {
@@ -4317,7 +4299,7 @@ const approveReview = async (req, res) => {
     }
 
     // Send notifications according to new workflow logic: assignee + L4ForPU + actor (reviewer)
-    await safeSendEmail(
+    await safeSendNotifications(
       "send ticket review approval notifications",
       async () => {
         try {
@@ -4693,7 +4675,7 @@ const approveClose = async (req, res) => {
     }
 
     // Send notifications according to new workflow logic: requester + assignee + actor (closer)
-    await safeSendEmail("send ticket closure notifications", async () => {
+    await safeSendNotifications("send ticket closure notifications", async () => {
       try {
         // Get notification users using the new workflow system (single call)
         const notificationUsers = await getTicketNotificationRecipients(
@@ -5096,7 +5078,7 @@ const reassignTicket = async (req, res) => {
     }
 
     // Send notifications according to new workflow logic: requester + assignee + actor (reassigner)
-    await safeSendEmail("send ticket reassignment notifications", async () => {
+    await safeSendNotifications("send ticket reassignment notifications", async () => {
       try {
         // Get notification users using the new workflow system (single call)
         const notificationUsers = await getTicketNotificationRecipients(
@@ -5634,7 +5616,7 @@ const reopenTicket = async (req, res) => {
     }
 
     // Send notifications according to new workflow logic: assignee + actor (reopener)
-    await safeSendEmail("send ticket reopen notifications", async () => {
+    await safeSendNotifications("send ticket reopen notifications", async () => {
       try {
         // Get notification users using the new workflow system (single call)
         const notificationUsers = await getTicketNotificationRecipients(
