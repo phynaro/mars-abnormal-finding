@@ -54,6 +54,7 @@ import ProfilePage from './pages/profile/ProfilePage';
 import HierarchyViewPage from './pages/settings/HierarchyViewPage';
 import TicketApprovalManagementPage from './pages/settings/TicketApprovalManagementPage';
 import NotificationScheduleManagementPage from './pages/settings/NotificationScheduleManagementPage';
+import NotificationTestingPage from './pages/settings/NotificationTestingPage';
 import WorkflowTypesPage from './pages/works/WorkflowTypesPage';
 import Loading from './components/common/Loading';
 import PermissionRoute from './components/common/PermissionRoute';
@@ -277,6 +278,11 @@ const AppContent: React.FC = () => {
           <Route path="settings/notification-schedules" element={
             <PermissionRoute requiredPermission="settings_access">
               <NotificationScheduleManagementPage />
+            </PermissionRoute>
+          } />
+          <Route path="settings/notification-testing" element={
+            <PermissionRoute requiredPermission="admin">
+              <NotificationTestingPage />
             </PermissionRoute>
           } />
           <Route path="settings/user-management" element={

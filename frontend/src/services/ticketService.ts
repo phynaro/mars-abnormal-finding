@@ -889,6 +889,28 @@ class TicketService {
 
     return response.json();
   }
+
+  async testNotificationRecipients(puno: number, actionType: string, params?: { created_by?: number; assigned_to?: number }) {
+    const headers = getAuthHeaders();
+    
+    const response = await fetch(`${API_BASE_URL}/tickets/test-notification-recipients`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        puno,
+        actionType,
+        created_by: params?.created_by,
+        assigned_to: params?.assigned_to
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to get notification recipients');
+    }
+
+    return response.json();
+  }
 }
 
 export const ticketService = new TicketService();

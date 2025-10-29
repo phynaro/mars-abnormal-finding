@@ -468,6 +468,282 @@ const getUserById = async (pool, userId) => {
     return result.recordset[0] || null;
 };
 
+// Helper function to get user by ID with LineID and Avatar URL
+const getUserByIdWithAvatar = async (pool, userId) => {
+    if (!userId) return null;
+    
+    const result = await pool.request()
+        .input('user_id', sql.Int, userId)
+        .query(`
+            SELECT p.PERSONNO, p.PERSON_NAME, p.EMAIL,
+                   ue.LineID, ue.AvatarUrl
+            FROM Person p
+            LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+            LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+            WHERE p.PERSONNO = @user_id
+              AND p.FLAGDEL != 'Y'
+        `);
+    
+    return result.recordset[0] || null;
+};
+
+// Get notification recipients for PU without ticket ID (for testing)
+const getNotificationRecipientsForPU = async (puno, actionType, createdBy = null, assignedTo = null) => {
+    try {
+        const pool = await sql.connect(dbConfig);
+        const allUsers = [];
+        
+        // 1. Get approvers based on action type using optimized query with LineID
+        let approvers = [];
+        switch (actionType) {
+            case 'create':
+                approvers = await getNotificationApproversWithLineId(pool, puno, 2, null);
+                break;
+            case 'reject':
+                approvers = await getNotificationApproversWithLineId(pool, puno, 3, null);
+                break;
+            case 'escalate':
+                // Get both L3 and L4 approvers
+                const l3Approvers = await getNotificationApproversWithLineId(pool, puno, 3, null);
+                const l4Approvers = await getNotificationApproversWithLineId(pool, puno, 4, null);
+                approvers = [...l3Approvers, ...l4Approvers];
+                break;
+        }
+        
+        // 2. Add notifications context to approvers with avatar URLs
+        for (const user of approvers) {
+            const userWithAvatar = await getUserByIdWithAvatar(pool, user.PERSONNO);
+            const reason = actionType === 'create' ? 'L2 Approval Required' :
+                         actionType === 'reject' ? 'L3 Approval Required' :
+                         'L3/L4 Approval Required';
+            allUsers.push({
+                PERSONNO: user.PERSONNO,
+                PERSON_NAME: user.PERSON_NAME,
+                EMAIL: user.EMAIL,
+                LineID: user.LineID,
+                AvatarUrl: userWithAvatar?.AvatarUrl || null,
+                notification_reason: reason,
+                recipient_type: actionType === 'create' ? 'L2ForPU' : 
+                               actionType === 'reject' ? 'L3ForPU' : 'L3ForPU'
+            });
+        }
+        
+        // 3. Get specific users based on action type
+        let specificUsers = [];
+        switch (actionType) {
+            case 'create':
+                // For testing: Optionally include creator if provided
+                if (createdBy) {
+                    const creator = await getUserByIdWithAvatar(pool, createdBy);
+                    if (creator) {
+                        specificUsers.push({
+                            PERSONNO: creator.PERSONNO,
+                            PERSON_NAME: creator.PERSON_NAME,
+                            EMAIL: creator.EMAIL,
+                            LineID: creator.LineID || null,
+                            AvatarUrl: creator.AvatarUrl || null,
+                            notification_reason: 'Creator Notification (Testing Only)',
+                            recipient_type: 'creator'
+                        });
+                    }
+                }
+                break;
+            case 'accept':
+            case 'start':
+            case 'finish':
+            case 'reject':
+            case 'escalate':
+                // Get requester
+                if (createdBy) {
+                    const requester = await getUserByIdWithAvatar(pool, createdBy);
+                    if (requester) {
+                        specificUsers.push({
+                            PERSONNO: requester.PERSONNO,
+                            PERSON_NAME: requester.PERSON_NAME,
+                            EMAIL: requester.EMAIL,
+                            LineID: requester.LineID || null,
+                            AvatarUrl: requester.AvatarUrl || null,
+                            notification_reason: 'Requester Notification',
+                            recipient_type: 'requester'
+                        });
+                    }
+                }
+                break;
+                
+            case 'plan':
+                // Get creator (requester) and assignee for planning notifications
+                if (createdBy) {
+                    const creator_plan = await getUserByIdWithAvatar(pool, createdBy);
+                    if (creator_plan) {
+                        specificUsers.push({
+                            PERSONNO: creator_plan.PERSONNO,
+                            PERSON_NAME: creator_plan.PERSON_NAME,
+                            EMAIL: creator_plan.EMAIL,
+                            LineID: creator_plan.LineID || null,
+                            AvatarUrl: creator_plan.AvatarUrl || null,
+                            notification_reason: 'Creator Notification',
+                            recipient_type: 'creator'
+                        });
+                    }
+                }
+                
+                if (assignedTo) {
+                    const assignee_plan = await getUserByIdWithAvatar(pool, assignedTo);
+                    if (assignee_plan) {
+                        specificUsers.push({
+                            PERSONNO: assignee_plan.PERSONNO,
+                            PERSON_NAME: assignee_plan.PERSON_NAME,
+                            EMAIL: assignee_plan.EMAIL,
+                            LineID: assignee_plan.LineID || null,
+                            AvatarUrl: assignee_plan.AvatarUrl || null,
+                            notification_reason: 'Assignee Notification',
+                            recipient_type: 'assignee'
+                        });
+                    }
+                }
+                break;
+                
+            case 'reassign':
+                // Get requester and assignee
+                if (createdBy) {
+                    const requester_rs = await getUserByIdWithAvatar(pool, createdBy);
+                    if (requester_rs) {
+                        specificUsers.push({
+                            PERSONNO: requester_rs.PERSONNO,
+                            PERSON_NAME: requester_rs.PERSON_NAME,
+                            EMAIL: requester_rs.EMAIL,
+                            LineID: requester_rs.LineID || null,
+                            AvatarUrl: requester_rs.AvatarUrl || null,
+                            notification_reason: 'Requester Notification',
+                            recipient_type: 'requester'
+                        });
+                    }
+                }
+                if (assignedTo) {
+                    const assignee_rs = await getUserByIdWithAvatar(pool, assignedTo);
+                    if (assignee_rs) {
+                        specificUsers.push({
+                            PERSONNO: assignee_rs.PERSONNO,
+                            PERSON_NAME: assignee_rs.PERSON_NAME,
+                            EMAIL: assignee_rs.EMAIL,
+                            LineID: assignee_rs.LineID || null,
+                            AvatarUrl: assignee_rs.AvatarUrl || null,
+                            notification_reason: 'Assignee Notification',
+                            recipient_type: 'assignee'
+                        });
+                    }
+                }
+                break;
+                
+            case 'reopen':
+                // Get assignee
+                if (assignedTo) {
+                    const assignee_reopen = await getUserByIdWithAvatar(pool, assignedTo);
+                    if (assignee_reopen) {
+                        specificUsers.push({
+                            PERSONNO: assignee_reopen.PERSONNO,
+                            PERSON_NAME: assignee_reopen.PERSON_NAME,
+                            EMAIL: assignee_reopen.EMAIL,
+                            LineID: assignee_reopen.LineID || null,
+                            AvatarUrl: assignee_reopen.AvatarUrl || null,
+                            notification_reason: 'Assignee Notification',
+                            recipient_type: 'assignee'
+                        });
+                    }
+                }
+                break;
+                
+            case 'approve_review':
+                // Get assignee
+                if (assignedTo) {
+                    const assignee_review = await getUserByIdWithAvatar(pool, assignedTo);
+                    if (assignee_review) {
+                        specificUsers.push({
+                            PERSONNO: assignee_review.PERSONNO,
+                            PERSON_NAME: assignee_review.PERSON_NAME,
+                            EMAIL: assignee_review.EMAIL,
+                            LineID: assignee_review.LineID || null,
+                            AvatarUrl: assignee_review.AvatarUrl || null,
+                            notification_reason: 'Assignee Notification - Ticket Reviewed',
+                            recipient_type: 'assignee'
+                        });
+                    }
+                }
+                
+                // Get L4ForPU approvers with avatar URLs
+                const l4Approvers_review = await getNotificationApproversWithLineId(pool, puno, 4, null);
+                for (const user of l4Approvers_review) {
+                    const userWithAvatar = await getUserByIdWithAvatar(pool, user.PERSONNO);
+                    specificUsers.push({
+                        PERSONNO: user.PERSONNO,
+                        PERSON_NAME: user.PERSON_NAME,
+                        EMAIL: user.EMAIL,
+                        LineID: user.LineID,
+                        AvatarUrl: userWithAvatar?.AvatarUrl || null,
+                        notification_reason: 'L4 Approval Required - Final Close Authorization',
+                        recipient_type: 'L4ForPU'
+                    });
+                }
+                break;
+                
+            case 'approve_close':
+                // Get requester
+                if (createdBy) {
+                    const requester_close = await getUserByIdWithAvatar(pool, createdBy);
+                    if (requester_close) {
+                        specificUsers.push({
+                            PERSONNO: requester_close.PERSONNO,
+                            PERSON_NAME: requester_close.PERSON_NAME,
+                            EMAIL: requester_close.EMAIL,
+                            LineID: requester_close.LineID || null,
+                            AvatarUrl: requester_close.AvatarUrl || null,
+                            notification_reason: 'Requester Notification - Ticket Closed',
+                            recipient_type: 'requester'
+                        });
+                    }
+                }
+                
+                // Get assignee
+                if (assignedTo) {
+                    const assignee_close = await getUserByIdWithAvatar(pool, assignedTo);
+                    if (assignee_close) {
+                        specificUsers.push({
+                            PERSONNO: assignee_close.PERSONNO,
+                            PERSON_NAME: assignee_close.PERSON_NAME,
+                            EMAIL: assignee_close.EMAIL,
+                            LineID: assignee_close.LineID || null,
+                            AvatarUrl: assignee_close.AvatarUrl || null,
+                            notification_reason: 'Assignee Notification - Ticket Closed',
+                            recipient_type: 'assignee'
+                        });
+                    }
+                }
+                break;
+        }
+        
+        allUsers.push(...specificUsers);
+        
+        // 4. Remove duplicates based on PERSONNO (most wins strategy)
+        const uniqueUsers = [];
+        const seenUserIds = new Set();
+        
+        allUsers.forEach(user => {
+            if (!seenUserIds.has(user.PERSONNO)) {
+                seenUserIds.add(user.PERSONNO);
+                uniqueUsers.push(user);
+            }
+        });
+        
+        console.log(`📊 Test Notification Recipients: ${allUsers.length} total → ${uniqueUsers.length} unique users`);
+        
+        return uniqueUsers;
+        
+    } catch (error) {
+        console.error('Error getting notification recipients for PU:', error);
+        return [];
+    }
+};
+
 const generateTicketNumber = async (pool) => {
     try {
         // Get the highest existing case number from tickets table
@@ -590,6 +866,7 @@ module.exports = {
     getHeroImageUrl,
     getTicketDetailUrl,
     getTicketNotificationRecipients,
+    getNotificationRecipientsForPU,
     getUserDisplayNameFromRequest,
     getUserMaxApprovalLevelForPU,
     getAvailableAssigneesForPU,

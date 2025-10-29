@@ -252,5 +252,6 @@ module.exports = {
   requireOperationSupervisor,
   requireStore,
   requireSupplier,
-  requireFormPermission
+  requireFormPermission,
+  requirePermissionLevel
 }; 

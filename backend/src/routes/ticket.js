@@ -80,6 +80,9 @@ router.post('/:id/reassign', requireFormPermission('TKT', 'save'), ticketControl
 // Get available assignees (requires TKT form view permission)
 router.get('/assignees/available', requireFormPermission('TKT', 'view'), ticketController.getAvailableAssignees);
 
+// Test notification recipients (requires admin level 3+)
+const { requirePermissionLevel } = require('../middleware/auth');
+router.post('/test-notification-recipients', requirePermissionLevel(3), ticketController.testNotificationRecipients);
 
 // Delete ticket (requires TKT form delete permission)
 router.delete('/:id', requireFormPermission('TKT', 'delete'), ticketController.deleteTicket);

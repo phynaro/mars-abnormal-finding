@@ -6921,6 +6921,56 @@ const sendPendingTicketNotificationsToAll = async (req, res) => {
   }
 };
 
+// Test notification recipients for a PU and action type (admin testing tool)
+const testNotificationRecipients = async (req, res) => {
+  try {
+    const { puno, actionType, created_by, assigned_to } = req.body;
+
+    // Validate required fields
+    if (!puno || !actionType) {
+      return res.status(400).json({
+        success: false,
+        message: 'puno and actionType are required'
+      });
+    }
+
+    // Validate action type
+    const validActionTypes = [
+      'create', 'accept', 'start', 'finish', 'reject', 'escalate',
+      'plan', 'reassign', 'reopen', 'approve_review', 'approve_close'
+    ];
+    
+    if (!validActionTypes.includes(actionType)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid actionType. Must be one of: ${validActionTypes.join(', ')}`
+      });
+    }
+
+    // Get notification recipients using helper function (without actor)
+    const { getNotificationRecipientsForPU } = require('./ticketController/helpers');
+    const recipients = await getNotificationRecipientsForPU(
+      puno,
+      actionType,
+      created_by || null,
+      assigned_to || null
+    );
+
+    res.json({
+      success: true,
+      data: recipients,
+      count: recipients.length
+    });
+  } catch (error) {
+    console.error('Error testing notification recipients:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get notification recipients',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createTicket,
   getTickets,
@@ -6952,4 +7002,5 @@ module.exports = {
   
   sendPendingTicketNotification,
   sendPendingTicketNotificationsToAll,
+  testNotificationRecipients,
 };
