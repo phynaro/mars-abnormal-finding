@@ -10,6 +10,9 @@ export interface User {
   department?: string;
   shift?: string;
   role: string;
+  groupNo?: number;
+  groupCode?: string;
+  groupName?: string;
   permissionLevel: number;
   lastLogin?: string;
   createdAt?: string;

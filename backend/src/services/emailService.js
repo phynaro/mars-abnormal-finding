@@ -437,6 +437,7 @@ const EMAIL_TEMPLATES = {
             <div class="ticket-info">
               <p><span class="highlight">Title:</span> ${ticketData.title}</p>
               <p><span class="highlight">Critical Level:</span> ${getCriticalLevelText(ticketData.pucriticalno)}</p>
+              ${ticketData.ticket_class_en || ticketData.ticket_class_th ? `<p><span class="highlight">Ticket Class:</span> ${ticketData.ticket_class_en || ticketData.ticket_class_th}</p>` : ''}
               <p><span class="highlight">Affected Point:</span> ${ticketData.affected_point_name} (${ticketData.affected_point_type})</p>
             </div>
             
@@ -540,6 +541,7 @@ const EMAIL_TEMPLATES = {
             <div class="ticket-info">
               <p><span class="highlight">Title:</span> ${ticketData.title}</p>
               <p><span class="highlight">Critical Level:</span> ${getCriticalLevelText(ticketData.pucriticalno)}</p>
+              ${ticketData.ticket_class_en || ticketData.ticket_class_th ? `<p><span class="highlight">Ticket Class:</span> ${ticketData.ticket_class_en || ticketData.ticket_class_th}</p>` : ''}
             </div>
             
             <div style="text-align: center;">

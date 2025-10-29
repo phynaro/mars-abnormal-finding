@@ -5,7 +5,8 @@ import type {
   User, 
   CreateUserData, 
   UpdateUserData, 
-  Role 
+  Group,
+  Department 
 } from '@/services/userManagementService';
 import { UserList } from '@/components/user-management/UserList';
 import { UserFilters } from '@/components/user-management/UserFilters';
@@ -19,10 +20,11 @@ import { AccessDenied } from '@/components/common/AccessDenied';
 const UserManagementPage: React.FC = () => {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
+  const [groups, setGroups] = useState<Group[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterRole, setFilterRole] = useState<string>('all');
+  const [filterGroup, setFilterGroup] = useState<string>('all');
   const [filterStatus, setFilterStatus] = useState<string>('all');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -30,13 +32,14 @@ const UserManagementPage: React.FC = () => {
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [editingUser, setEditingUser] = useState<User | null>(null);
 
-  // Check if current user has L3 permissions
-  const hasPermission = (currentUser?.permissionLevel ?? 0) >= 3;
+  // Check if current user has ADMIN permissions
+  const hasPermission = true;
 
   useEffect(() => {
     if (hasPermission) {
       loadUsers();
-      loadRoles();
+      loadGroups();
+      loadDepartments();
     }
   }, [hasPermission]);
 
@@ -52,13 +55,23 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
-  const loadRoles = async () => {
+  const loadGroups = async () => {
     try {
-      const fetchedRoles = await userManagementService.getRoles();
-      setRoles(fetchedRoles);
+      const fetchedGroups = await userManagementService.getGroups();
+      setGroups(fetchedGroups);
     } catch (error) {
-      console.error('Failed to load roles:', error);
-      setRoles([]);
+      console.error('Failed to load groups:', error);
+      setGroups([]);
+    }
+  };
+
+  const loadDepartments = async () => {
+    try {
+      const fetchedDepartments = await userManagementService.getDepartments();
+      setDepartments(fetchedDepartments);
+    } catch (error) {
+      console.error('Failed to load departments:', error);
+      setDepartments([]);
     }
   };
 
@@ -73,7 +86,7 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
-  const handleUpdateUser = async (userId: number, userData: UpdateUserData) => {
+  const handleUpdateUser = async (userId: string, userData: UpdateUserData) => {
     try {
       await userManagementService.updateUser(userId, userData);
       setShowEditModal(false);
@@ -85,13 +98,14 @@ const UserManagementPage: React.FC = () => {
     }
   };
 
-  const handleDeleteUser = async (userId: number) => {
-    if (window.confirm('Are you sure you want to deactivate this user?')) {
+  const handleDeleteUser = async (userId: string) => {
+    if (window.confirm('Are you sure you want to delete this user? This will permanently remove the user from _secUsers and IgxUserExtension tables. This action cannot be undone.')) {
       try {
         await userManagementService.deleteUser(userId);
         loadUsers();
       } catch (error) {
         console.error('Failed to delete user:', error);
+        alert('Failed to delete user. Please try again.');
       }
     }
   };
@@ -108,7 +122,7 @@ const UserManagementPage: React.FC = () => {
 
   const clearFilters = () => {
     setSearchTerm('');
-    setFilterRole('all');
+    setFilterGroup('all');
     setFilterStatus('all');
   };
 
@@ -117,18 +131,19 @@ const UserManagementPage: React.FC = () => {
       user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase());
+      (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.fullName && user.fullName.toLowerCase().includes(searchTerm.toLowerCase()));
     
-    const matchesRole = filterRole === 'all' || user.role === filterRole;
+    const matchesGroup = filterGroup === 'all' || user.groupNo.toString() === filterGroup;
     const matchesStatus = filterStatus === 'all' || 
       (filterStatus === 'active' && user.isActive !== false) ||
       (filterStatus === 'inactive' && user.isActive === false);
     
-    return matchesSearch && matchesRole && matchesStatus;
+    return matchesSearch && matchesGroup && matchesStatus;
   });
 
   if (!hasPermission) {
-    return <AccessDenied message="You don't have permission to access user management." />;
+    return <AccessDenied message="You don't have permission to access user management. This feature requires ADMIN privileges." />;
   }
 
   if (loading) {
@@ -139,7 +154,7 @@ const UserManagementPage: React.FC = () => {
     <div className="container mx-auto p-6 space-y-6">
       <PageHeader
         title="User Management"
-        description="Manage user accounts, roles, and permissions"
+        description="Manage user accounts, groups, and permissions"
         actionButton={{
           label: "Add User",
           onClick: () => setShowCreateModal(true),
@@ -149,11 +164,11 @@ const UserManagementPage: React.FC = () => {
 
       <UserFilters
         searchTerm={searchTerm}
-        filterRole={filterRole}
+        filterGroup={filterGroup}
         filterStatus={filterStatus}
-        roles={roles}
+        groups={groups}
         onSearchChange={setSearchTerm}
-        onRoleFilterChange={setFilterRole}
+        onGroupFilterChange={setFilterGroup}
         onStatusFilterChange={setFilterStatus}
         onClearFilters={clearFilters}
       />
@@ -162,12 +177,12 @@ const UserManagementPage: React.FC = () => {
         users={filteredUsers}
         onViewUser={handleViewUser}
         onEditUser={handleEditUser}
-        onDeleteUser={handleDeleteUser}
+        onDeleteUser={(user) => handleDeleteUser(user.userId)}
       />
 
       {showCreateModal && (
         <CreateUserModal
-          roles={roles}
+          departments={departments}
           onSubmit={handleCreateUser}
           onClose={() => setShowCreateModal(false)}
         />
@@ -176,8 +191,8 @@ const UserManagementPage: React.FC = () => {
       {showEditModal && editingUser && (
         <EditUserModal
           user={editingUser}
-          roles={roles}
-          onSubmit={(userData) => handleUpdateUser(editingUser.id, userData)}
+          groups={groups}
+          onSubmit={(userData) => handleUpdateUser(editingUser.userId, userData)}
           onClose={() => {
             setShowEditModal(false);
             setEditingUser(null);

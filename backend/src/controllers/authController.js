@@ -1103,5 +1103,6 @@ module.exports = {
   verifyLiffToken,
   getLineProfile,
   lineLogin,
-  linkLineAccount
+  linkLineAccount,
+  hashPasswordMD5
 }; 

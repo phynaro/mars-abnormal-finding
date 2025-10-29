@@ -63,6 +63,7 @@ const createTicket = async (req, res) => {
         const puno = parseOptionalInt(rawBody.puno);
         const equipmentIdInput = parseOptionalInt(rawBody.equipment_id);
         const pucriticalnoInput = parseOptionalInt(rawBody.pucriticalno);
+        const ticketClassInput = parseOptionalInt(rawBody.ticketClass);
         const severityLevel = typeof rawBody.severity_level === 'string' ? rawBody.severity_level : rawBody.severity_level?.toString?.();
         const priorityLevel = typeof rawBody.priority === 'string' ? rawBody.priority : rawBody.priority?.toString?.();
         const imageType = typeof rawBody.image_type === 'string' && rawBody.image_type.trim()
@@ -104,16 +105,35 @@ const createTicket = async (req, res) => {
             validatedEquipmentId = equipmentIdInput;
         }
 
+        // Validate ticketClass if provided
+        let validatedTicketClass = null;
+        if (ticketClassInput) {
+            const ticketClassCheck = await runQuery(pool, `
+                SELECT id FROM IgxTicketClass WHERE id = @ticketClass
+            `, [
+                { name: 'ticketClass', type: sql.Int, value: ticketClassInput }
+            ]);
+
+            if (mapRecordset(ticketClassCheck).length === 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: 'Invalid ticket class'
+                });
+            }
+
+            validatedTicketClass = ticketClassInput;
+        }
+
         // Create ticket record
         const ticketInsertResult = await runQuery(pool, `
             INSERT INTO IgxTickets (
-                ticket_number, title, description, puno, equipment_id, pucriticalno,
+                ticket_number, title, description, puno, equipment_id, pucriticalno, ticketClass,
                 severity_level, priority,
                 created_by,
                 status, created_at, updated_at
             )
             VALUES (
-                @ticket_number, @title, @description, @puno, @equipment_id, @pucriticalno,
+                @ticket_number, @title, @description, @puno, @equipment_id, @pucriticalno, @ticketClass,
                 @severity_level, @priority,
                 @created_by,
                 'open', GETDATE(), GETDATE()
@@ -126,6 +146,7 @@ const createTicket = async (req, res) => {
             { name: 'puno', type: sql.Int, value: puno },
             { name: 'equipment_id', type: sql.Int, value: validatedEquipmentId },
             { name: 'pucriticalno', type: sql.Int, value: pucriticalnoInput },
+            { name: 'ticketClass', type: sql.Int, value: validatedTicketClass },
             { name: 'severity_level', type: sql.VarChar(20), value: severityLevel || 'medium' },
             { name: 'priority', type: sql.VarChar(20), value: priorityLevel || 'normal' },
             { name: 'created_by', type: sql.Int, value: created_by }
@@ -154,11 +175,14 @@ const createTicket = async (req, res) => {
                 pu.PUNAME as pu_name,
                 eq.EQNO as equipment_id,
                 eq.EQCODE as equipment_code,
-                eq.EQNAME as equipment_name
+                eq.EQNAME as equipment_name,
+                tc.name_en as ticket_class_en,
+                tc.name_th as ticket_class_th
             FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
             LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
+            LEFT JOIN IgxTicketClass tc ON t.ticketClass = tc.id
             WHERE t.id = @ticket_id
         `, [
             { name: 'ticket_id', type: sql.Int, value: ticketId }
@@ -396,6 +420,22 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                     const heroImageUrl = getHeroImageUrl(beforeImages.length > 0 ? beforeImages : imagesResult.recordset);
                     console.log(`🎯 DEBUG: heroImageUrl = ${heroImageUrl}`);
                     // Prepare flexible message for LINE
+                    const extraKVs = [
+                        // { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
+                        // { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },
+                        { label: 'Critical Level', value: (getCriticalLevelText(ticketData.pucriticalno)).toUpperCase() }
+                    ];
+                    
+                    // Add ticket class if present
+                    if (ticketData.ticket_class_th || ticketData.ticket_class_en) {
+                        extraKVs.push({ 
+                            label: 'Ticket Class', 
+                            value: ticketData.ticket_class_th || ticketData.ticket_class_en 
+                        });
+                    }
+                    
+                    extraKVs.push({ label: 'Reported by', value: reporterName });
+                    
                     const linePayload = {
                         caseNo: ticket_number,
                         assetName: ticketData.equipment_name || ticketData.pudescription || 'Unknown Asset',
@@ -404,12 +444,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                         comment: description,
                         heroImageUrl: heroImageUrl,
                         detailUrl: `${process.env.LIFF_URL}/tickets/${ticketId}`,  
-                        extraKVs: [
-                            // { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
-                            // { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },
-                            { label: 'Critical Level', value: (getCriticalLevelText(ticketData.pucriticalno)).toUpperCase() },
-                            { label: 'Reported by', value: reporterName }
-                        ] 
+                        extraKVs: extraKVs
                     };
                     console.log('linePayload', linePayload);
                     const linePromises = lineRecipients.map(user => {
@@ -616,12 +651,16 @@ const getTickets = async (req, res) => {
                     -- PU information
                     pu.PUCODE as pu_pucode,
                     pu.PUNAME as pu_name,
+                    -- Ticket Class information
+                    tc.name_en as ticket_class_en,
+                    tc.name_th as ticket_class_th,
                     ROW_NUMBER() OVER (ORDER BY t.created_at DESC) as row_num
                 FROM IgxTickets t
                 LEFT JOIN Person r ON t.created_by = r.PERSONNO
                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                 LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN IgxTicketClass tc ON t.ticketClass = tc.id
                 ${whereClause}
             ) AS paginated_results
             WHERE row_num > @offset AND row_num <= @offset + @limit
@@ -722,7 +761,10 @@ const getTicketById = async (req, res) => {
                     fm.FailureModeName as failure_mode_name,
                     -- Cedar integration information
                     wo.WFStatusCode as cedar_wf_status_code,
-                    wo.COSTCENTERNO as cedar_cost_center_no
+                    wo.COSTCENTERNO as cedar_cost_center_no,
+                    -- Ticket Class information
+                    tc.name_en as ticket_class_en,
+                    tc.name_th as ticket_class_th
                 FROM IgxTickets t
                 LEFT JOIN Person r ON t.created_by = r.PERSONNO
                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
@@ -738,6 +780,7 @@ const getTicketById = async (req, res) => {
                 LEFT JOIN FailureModes fm ON t.failure_mode_id = fm.FailureModeNo AND fm.FlagDel != 'Y'
                 LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
                 LEFT JOIN WO wo ON t.cedar_wono = wo.WONO
+                LEFT JOIN IgxTicketClass tc ON t.ticketClass = tc.id
                 WHERE t.id = @id
             `);
 

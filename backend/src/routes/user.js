@@ -24,6 +24,7 @@ router.get('/all-basic', userController.getAllUsers); // Get all users for filte
 // User management routes (Admin only)
 router.get('/all', userManagementController.getAllUsers);
 router.get('/groups', userManagementController.getAvailableGroups);
+router.get('/departments', userManagementController.getDepartments);
 router.get('/:userId', userManagementController.getUserById);
 router.post('/', userManagementController.createUser);
 router.put('/:userId', userManagementController.updateUser);

@@ -1714,6 +1714,18 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
               </div>
 
+              {/* Ticket Class */}
+              {(ticket.ticket_class_en || ticket.ticket_class_th) && (
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                    Ticket Class
+                  </p>
+                  <p className="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                    {language === 'en' ? ticket.ticket_class_en : ticket.ticket_class_th}
+                  </p>
+                </div>
+              )}
+
               <dl className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">

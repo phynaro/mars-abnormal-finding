@@ -5,26 +5,26 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Search } from 'lucide-react';
-import type { Role } from '../../services/userManagementService';
+import type { Group } from '../../services/userManagementService';
 
 interface UserFiltersProps {
   searchTerm: string;
-  filterRole: string;
+  filterGroup: string;
   filterStatus: string;
-  roles: Role[];
+  groups: Group[];
   onSearchChange: (value: string) => void;
-  onRoleFilterChange: (value: string) => void;
+  onGroupFilterChange: (value: string) => void;
   onStatusFilterChange: (value: string) => void;
   onClearFilters: () => void;
 }
 
 export const UserFilters: React.FC<UserFiltersProps> = ({
   searchTerm,
-  filterRole,
+  filterGroup,
   filterStatus,
-  roles,
+  groups,
   onSearchChange,
-  onRoleFilterChange,
+  onGroupFilterChange,
   onStatusFilterChange,
   onClearFilters
 }) => {
@@ -47,15 +47,17 @@ export const UserFilters: React.FC<UserFiltersProps> = ({
           </div>
           
           <div>
-            <Label htmlFor="role-filter">Filter by Role</Label>
-            <Select value={filterRole} onValueChange={onRoleFilterChange}>
+            <Label htmlFor="group-filter">Filter by Group</Label>
+            <Select value={filterGroup} onValueChange={onGroupFilterChange}>
               <SelectTrigger>
-                <SelectValue placeholder="All Roles" />
+                <SelectValue placeholder="All Groups" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Roles</SelectItem>
-                {roles.map(role => (
-                  <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
+                <SelectItem value="all">All Groups</SelectItem>
+                {groups.map(group => (
+                  <SelectItem key={group.groupNo} value={group.groupNo.toString()}>
+                    {group.groupCode} - {group.groupName}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>

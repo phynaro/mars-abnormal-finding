@@ -43,27 +43,40 @@ export const ViewUserModal: React.FC<ViewUserModalProps> = ({
             </div>
           </div>
           
-          <div>
-            <Label>Email</Label>
-            <p className="text-sm text-gray-600">{user.email}</p>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <Label>Email</Label>
+              <p className="text-sm text-gray-600">{user.email || 'Not specified'}</p>
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <p className="text-sm text-gray-600">{user.phone || 'Not specified'}</p>
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Employee ID</Label>
-              <p className="text-sm text-gray-600">{user.employeeID || 'Not specified'}</p>
+              <Label>Person Code</Label>
+              <p className="text-sm text-gray-600">{user.personCode || 'Not specified'}</p>
             </div>
+            <div>
+              <Label>Title</Label>
+              <p className="text-sm text-gray-600">{user.title || 'Not specified'}</p>
+            </div>
+          </div>
+          
+          <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Department</Label>
-              <p className="text-sm text-gray-600">{user.department || 'Not specified'}</p>
+              <p className="text-sm text-gray-600">{user.departmentName || user.department || 'Not specified'}</p>
+            </div>
+            <div>
+              <Label>Site</Label>
+              <p className="text-sm text-gray-600">{user.siteName || user.siteNo || 'Not specified'}</p>
             </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label>Shift</Label>
-              <p className="text-sm text-gray-600">{user.shift || 'Not specified'}</p>
-            </div>
             <div>
               <Label>Status</Label>
               <div className="flex items-center">
@@ -77,13 +90,17 @@ export const ViewUserModal: React.FC<ViewUserModalProps> = ({
                 </span>
               </div>
             </div>
+            <div>
+              <Label>LINE ID</Label>
+              <p className="text-sm text-gray-600">{user.lineId || 'Not linked'}</p>
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Role</Label>
+              <Label>Security Group</Label>
               <Badge className={getPermissionLevelColor(user.permissionLevel)}>
-                {user.role}
+                {user.groupCode} - {user.groupName}
               </Badge>
             </div>
             <div>

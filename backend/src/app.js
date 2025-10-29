@@ -117,6 +117,7 @@ const targetRoutes = require('./routes/target');
 const personalTargetRoutes = require('./routes/personalTarget');
 const accessRequestRoutes = require('./routes/accessRequest');
 const notificationScheduleRoutes = require('./routes/notificationSchedule');
+const ticketClassRoutes = require('./routes/ticketClass');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/access-request', accessRequestRoutes);
@@ -138,6 +139,7 @@ app.use('/api/administration', administrationRoutes);
 app.use('/api/targets', targetRoutes);
 app.use('/api/personal-targets', personalTargetRoutes);
 app.use('/api/notification-schedules', notificationScheduleRoutes);
+app.use('/api/ticketclass', ticketClassRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

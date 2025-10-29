@@ -5,51 +5,85 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 export interface User {
   id: number;
+  userId: string;
   username: string;
   email: string;
   firstName: string;
   lastName: string;
-  employeeID?: string;
-  department?: string;
-  shift?: string;
-  role: string;
+  fullName?: string;
+  personCode?: string;
+  phone?: string;
+  title?: string;
+  department?: number;
+  departmentCode?: string;
+  departmentName?: string;
+  craft?: number;
+  crew?: number;
+  siteNo?: number;
+  siteCode?: string;
+  siteName?: string;
+  groupNo: number;
+  groupCode: string;
+  groupName: string;
+  levelReport?: number;
   permissionLevel: number;
+  storeRoom?: number;
+  dbNo?: number;
+  lineId?: string;
+  avatarUrl?: string;
   lastLogin?: string;
   createdAt?: string;
   isActive?: boolean;
 }
 
 export interface CreateUserData {
-  username: string;
-  email: string;
+  userId: string;
   password: string;
   firstName: string;
   lastName: string;
-  employeeID?: string;
-  department?: string;
-  shift?: string;
-  role: string;
-  permissionLevel: number;
+  email?: string;
+  phone?: string;
+  title?: string;
+  personCode?: string;
+  department?: number;
+  craft?: number;
+  crew?: number;
+  siteNo?: number;
+  groupNo: number;
+  levelReport?: number;
+  storeRoom?: number;
+  dbNo?: number;
+  lineId?: string;
 }
 
 export interface UpdateUserData {
   firstName?: string;
   lastName?: string;
   email?: string;
-  employeeID?: string;
-  department?: string;
-  shift?: string;
-  role?: string;
-  permissionLevel?: number;
+  phone?: string;
+  title?: string;
+  department?: number;
+  craft?: number;
+  crew?: number;
+  siteNo?: number;
+  groupNo?: number;
+  levelReport?: number;
+  storeRoom?: number;
+  dbNo?: number;
+  lineId?: string;
   isActive?: boolean;
 }
 
-export interface Role {
-  id: string;
-  name: string;
-  description: string;
-  permissionLevel: number;
-  permissions: string[];
+export interface Group {
+  groupNo: number;
+  groupCode: string;
+  groupName: string;
+}
+
+export interface Department {
+  deptNo: number;
+  deptCode: string;
+  deptName: string;
 }
 
 export interface UserManagementResponse {
@@ -189,10 +223,10 @@ class UserManagementService {
     }
   }
 
-  // Get available roles
-  async getRoles(): Promise<Role[]> {
+  // Get available groups
+  async getGroups(): Promise<Group[]> {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/roles`, {
+      const response = await fetch(`${API_BASE_URL}/users/groups`, {
         method: 'GET',
         headers: getAuthHeaders(),
       });
@@ -200,12 +234,32 @@ class UserManagementService {
       const result = await response.json();
 
       if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch roles');
+        throw new Error(result.message || 'Failed to fetch groups');
       }
 
-      return result.roles || [];
+      return result.groups || [];
     } catch (error) {
-      throw new Error(error instanceof Error ? error.message : 'Failed to fetch roles');
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch groups');
+    }
+  }
+
+  // Get available departments
+  async getDepartments(): Promise<Department[]> {
+    try {
+      const response = await fetch(`${API_BASE_URL}/users/departments`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.message || 'Failed to fetch departments');
+      }
+
+      return result.departments || [];
+    } catch (error) {
+      throw new Error(error instanceof Error ? error.message : 'Failed to fetch departments');
     }
   }
 
@@ -271,22 +325,6 @@ class UserManagementService {
     }
   }
 
-  // Get available security groups (from _secUserGroups)
-  async getGroups(): Promise<AvailableGroup[]> {
-    try {
-      const response = await fetch(`${API_BASE_URL}/users/groups`, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-      });
-      const result = await response.json();
-      if (!response.ok) {
-        throw new Error(result.message || 'Failed to fetch groups');
-      }
-      return result.groups || [];
-    } catch (error) {
-      throw new Error(error instanceof Error ? error.message : 'Failed to fetch groups');
-    }
-  }
 }
 
 export const userManagementService = new UserManagementService();

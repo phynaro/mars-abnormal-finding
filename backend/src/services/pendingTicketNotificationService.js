@@ -57,6 +57,26 @@ const buildCarouselFromTickets = (tickets, options = {}) => {
       heroImageUrl = `${baseUrl}${ticket.image_url}`;
     }
 
+    const extraKVs = [
+      { label: 'Critical Level', value: getCriticalLevelText(ticket.pucriticalno) }
+    ];
+    
+    // Add ticket class if present
+    if (ticket.ticket_class_th || ticket.ticket_class_en) {
+      extraKVs.push({
+        label: 'Ticket Class',
+        value: ticket.ticket_class_th || ticket.ticket_class_en
+      });
+    }
+    
+    // Add scheduled finish if present
+    if (ticket.schedule_finish) {
+      extraKVs.push({
+        label: 'Scheduled Finish',
+        value: new Date(ticket.schedule_finish).toLocaleString('th-TH')
+      });
+    }
+    
     const payload = {
       caseNo: ticket.ticket_number || '-',
       assetName: ticket.equipment_name || ticket.pudescription || 'Unknown Asset',
@@ -64,10 +84,7 @@ const buildCarouselFromTickets = (tickets, options = {}) => {
       comment: ticket.description || '-',
       heroImageUrl: heroImageUrl,
       detailUrl: `${process.env.LIFF_URL || 'https://example.com'}/tickets/${ticket.id}`,
-      extraKVs: [
-        { label: 'Critical Level', value: getCriticalLevelText(ticket.pucriticalno) },
-        ...(ticket.schedule_finish ? [{ label: 'Scheduled Finish', value: new Date(ticket.schedule_finish).toLocaleString('th-TH') }] : [])
-      ]
+      extraKVs: extraKVs
     };
 
     return abnFlexService.buildTicketFlexMessage(
@@ -80,7 +97,7 @@ const buildCarouselFromTickets = (tickets, options = {}) => {
   // Return carousel message
   return {
     type: "flex",
-    altText: `คุณมีตั๋วงานรอดำเนินการ ${tickets.length} รายการ`,
+    altText: `คุณมีงานงานรอดำเนินการ ${tickets.length} รายการ`,
     contents: {
       type: "carousel",
       contents: bubbles
@@ -116,11 +133,14 @@ class PendingTicketNotificationService {
             t.pucriticalno,
             pe.pudescription,
             eq.EQNAME as equipment_name,
-            img.image_url
+            img.image_url,
+            tc.name_en as ticket_class_en,
+            tc.name_th as ticket_class_th
           FROM IgxTickets t
           LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
           LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
           LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
+          LEFT JOIN IgxTicketClass tc ON t.ticketClass = tc.id
           LEFT JOIN (
             SELECT 
               ticket_id,

@@ -56,6 +56,7 @@ import TicketApprovalManagementPage from './pages/settings/TicketApprovalManagem
 import NotificationScheduleManagementPage from './pages/settings/NotificationScheduleManagementPage';
 import WorkflowTypesPage from './pages/works/WorkflowTypesPage';
 import Loading from './components/common/Loading';
+import PermissionRoute from './components/common/PermissionRoute';
 
 // Main App Component with Routing
 const AppContent: React.FC = () => {
@@ -252,12 +253,37 @@ const AppContent: React.FC = () => {
           <Route path="tickets/:ticketId" element={<TicketDetailsPage />} />
           <Route path="profile" element={<ProfilePage />} />
 
-          {/* Asset Management Routes */}
-          <Route path="settings" element={<HierarchyViewPage />} />
-          <Route path="settings/hierarchy" element={<HierarchyViewPage />} />
-          <Route path="settings/ticket-approvals" element={<TicketApprovalManagementPage />} />
-          <Route path="settings/targets" element={<TargetManagementPage />} />
-          <Route path="settings/notification-schedules" element={<NotificationScheduleManagementPage />} />
+          {/* Settings Routes - Protected by settings_access permission */}
+          <Route path="settings" element={
+            <PermissionRoute requiredPermission="settings_access">
+              <HierarchyViewPage />
+            </PermissionRoute>
+          } />
+          <Route path="settings/hierarchy" element={
+            <PermissionRoute requiredPermission="settings_access">
+              <HierarchyViewPage />
+            </PermissionRoute>
+          } />
+          <Route path="settings/ticket-approvals" element={
+            <PermissionRoute requiredPermission="settings_access">
+              <TicketApprovalManagementPage />
+            </PermissionRoute>
+          } />
+          <Route path="settings/targets" element={
+            <PermissionRoute requiredPermission="settings_access">
+              <TargetManagementPage />
+            </PermissionRoute>
+          } />
+          <Route path="settings/notification-schedules" element={
+            <PermissionRoute requiredPermission="settings_access">
+              <NotificationScheduleManagementPage />
+            </PermissionRoute>
+          } />
+          <Route path="settings/user-management" element={
+            <PermissionRoute requiredPermission="user_management">
+              <UserManagementPage />
+            </PermissionRoute>
+          } />
           {/* Spare Part (Inventory) */}
           <Route path="spare" element={<InventoryOverviewPage />} />
           <Route path="spare/overview" element={<InventoryOverviewPage />} />

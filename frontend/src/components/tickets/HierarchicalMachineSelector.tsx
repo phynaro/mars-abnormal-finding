@@ -291,7 +291,7 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
     setSelectedMachine(value);
     
     if (value && selectedPlant && selectedArea && selectedLine) {
-      // Find the selected machine data from the machines array
+      // Find the Selected Production Unit data from the machines array
       const selectedMachineData = machines.find(m => m.code === value);
       if (selectedMachineData) {
         // Use the machine data directly since it now contains all the details
@@ -414,7 +414,7 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
               disabled={disabled || loadingMachines}
             >
               <SelectTrigger>
-                <SelectValue placeholder={loadingMachines ? "Loading machines..." : "Select machine..."} />
+                <SelectValue placeholder={loadingMachines ? "Loading machines..." : "Select Production Unit..."} />
               </SelectTrigger>
               <SelectContent>
                 {machines.map((machine, index) => (

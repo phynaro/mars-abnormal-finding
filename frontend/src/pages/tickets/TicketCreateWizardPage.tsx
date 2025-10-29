@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
 import { hierarchyService, type PUCritical } from '@/services/hierarchyService';
+import { ticketClassService, type TicketClass } from '@/services/ticketClassService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/ui/file-upload';
@@ -47,7 +48,7 @@ const stepIllustrations: Record<StepKey, string> = {
 const TicketCreateWizardPage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -88,6 +89,11 @@ const TicketCreateWizardPage: React.FC = () => {
   // Critical levels state
   const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
+  
+  // Ticket class state
+  const [ticketClasses, setTicketClasses] = useState<TicketClass[]>([]);
+  const [ticketClassesLoading, setTicketClassesLoading] = useState(false);
+  const [ticketClass, setTicketClass] = useState<number | undefined>(undefined);
 
   // Images
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
@@ -213,6 +219,7 @@ const TicketCreateWizardPage: React.FC = () => {
   // Load critical levels on component mount
   useEffect(() => {
     loadCriticalLevels();
+    loadTicketClasses();
   }, []);
 
   // Load critical levels function
@@ -232,6 +239,24 @@ const TicketCreateWizardPage: React.FC = () => {
       });
     } finally {
       setCriticalLevelsLoading(false);
+    }
+  };
+
+  // Load ticket classes function
+  const loadTicketClasses = async () => {
+    try {
+      setTicketClassesLoading(true);
+      const classes = await ticketClassService.getTicketClasses();
+      setTicketClasses(classes);
+    } catch (error) {
+      console.error('Error loading ticket classes:', error);
+      toast({
+        title: t('common.error'),
+        description: 'Failed to load ticket classes',
+        variant: 'destructive'
+      });
+    } finally {
+      setTicketClassesLoading(false);
     }
   };
 
@@ -400,6 +425,7 @@ const TicketCreateWizardPage: React.FC = () => {
         puno: puno,
         equipment_id: selectedEquipment?.EQNO,
         pucriticalno: pucriticalno,
+        ticketClass: ticketClass,
         severity_level: severity,
         priority,
       };
@@ -783,14 +809,14 @@ const TicketCreateWizardPage: React.FC = () => {
                 />
               )}
               
-              {/* Selected Machine Display */}
+              {/* Selected Production Unit Display */}
               {selectedMachine && (
                 <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                        <p className="text-sm font-medium text-green-800 dark:text-green-200">Selected Machine</p>
+                        <p className="text-sm font-medium text-green-800 dark:text-green-200">Selected Production Unit</p>
                       </div>
                       <p className="text-sm text-green-700 dark:text-green-300 mb-1">{selectedMachine.PUDESC}</p>
                       <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">{selectedMachine.PUCODE}</p>
@@ -969,19 +995,40 @@ const TicketCreateWizardPage: React.FC = () => {
             <StepIllustration step="severity_priority" />
             <div className="space-y-4">
               <div>
-                <Label className="text-base font-semibold">Critical Level</Label>
+                <Label className="text-base font-semibold">{t('ticket.criticalLevel')}</Label>
                 <Select
                   value={pucriticalno?.toString() || ''}
                   onValueChange={(v) => setPucriticalno(parseInt(v))}
                   disabled={criticalLevelsLoading}
                 >
                   <SelectTrigger className="mt-2">
-                    <SelectValue placeholder={criticalLevelsLoading ? "Loading critical levels..." : "Select critical level..."} />
+                    <SelectValue placeholder={criticalLevelsLoading ? t('common.loading') : t('ticket.criticalLevel')} />
                   </SelectTrigger>
                   <SelectContent>
                     {criticalLevels.map((level) => (
                       <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
                         {level.PUCRITICALNAME}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label className="text-base font-semibold">{t('ticket.ticketClass')}</Label>
+                <Select
+                  value={ticketClass?.toString() || 'none'}
+                  onValueChange={(v) => setTicketClass(v === 'none' ? undefined : parseInt(v))}
+                  disabled={ticketClassesLoading}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={ticketClassesLoading ? "Loading ticket classes..." : "Select ticket class..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {ticketClasses.map((tc) => (
+                      <SelectItem key={tc.id} value={tc.id.toString()}>
+                        {language === 'en' ? tc.name_en : tc.name_th}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -1049,9 +1096,18 @@ const TicketCreateWizardPage: React.FC = () => {
                   <span className="font-medium">{title}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Critical Level:</span> 
+                  <span className="text-gray-500">{t('ticket.criticalLevel')}:</span> 
                   <span className="font-medium">
                     {pucriticalno ? criticalLevels.find(level => level.PUCRITICALNO === pucriticalno)?.PUCRITICALNAME || `Level ${pucriticalno}` : '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t('ticket.ticketClass')}:</span> 
+                  <span className="font-medium">
+                    {ticketClass ? (language === 'en' 
+                      ? ticketClasses.find(tc => tc.id === ticketClass)?.name_en || '-' 
+                      : ticketClasses.find(tc => tc.id === ticketClass)?.name_th || '-') 
+                      : 'None'}
                   </span>
                 </div>
                 {/* <div className="flex justify-between">

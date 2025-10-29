@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
 import { hierarchyService, type PUCritical } from '@/services/hierarchyService';
+import { ticketClassService, type TicketClass } from '@/services/ticketClassService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/ui/file-upload';
@@ -35,16 +36,17 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 const TicketCreatePage: React.FC = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const [submitting, setSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState<Pick<CreateTicketRequest, 'title' | 'description' | 'severity_level' | 'priority'> & { puno?: number; equipment_id?: number; pucriticalno?: number }>({
+  const [formData, setFormData] = useState<Pick<CreateTicketRequest, 'title' | 'description' | 'severity_level' | 'priority'> & { puno?: number; equipment_id?: number; pucriticalno?: number; ticketClass?: number | null }>({
     title: '',
     description: '',
     puno: undefined,
     equipment_id: undefined,
     pucriticalno: undefined,
+    ticketClass: undefined,
     severity_level: 'medium',
     priority: 'normal',
   });
@@ -78,6 +80,10 @@ const TicketCreatePage: React.FC = () => {
   // Critical levels state
   const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
+  
+  // Ticket class state
+  const [ticketClasses, setTicketClasses] = useState<TicketClass[]>([]);
+  const [ticketClassesLoading, setTicketClassesLoading] = useState(false);
 
   // Create optimized preview images for faster loading
   useEffect(() => {
@@ -345,6 +351,7 @@ const TicketCreatePage: React.FC = () => {
   // Load critical levels on component mount
   useEffect(() => {
     loadCriticalLevels();
+    loadTicketClasses();
   }, []);
 
   // Load critical levels function
@@ -364,6 +371,24 @@ const TicketCreatePage: React.FC = () => {
       });
     } finally {
       setCriticalLevelsLoading(false);
+    }
+  };
+
+  // Load ticket classes function
+  const loadTicketClasses = async () => {
+    try {
+      setTicketClassesLoading(true);
+      const classes = await ticketClassService.getTicketClasses();
+      setTicketClasses(classes);
+    } catch (error) {
+      console.error('Error loading ticket classes:', error);
+      toast({
+        title: t('common.error'),
+        description: 'Failed to load ticket classes',
+        variant: 'destructive'
+      });
+    } finally {
+      setTicketClassesLoading(false);
     }
   };
 
@@ -496,6 +521,7 @@ const TicketCreatePage: React.FC = () => {
         puno: formData.puno,
         equipment_id: formData.equipment_id,
         pucriticalno: formData.pucriticalno,
+        ticketClass: formData.ticketClass,
         severity_level: formData.severity_level,
         priority: formData.priority,
       };
@@ -675,7 +701,7 @@ const TicketCreatePage: React.FC = () => {
                   />
                 )}
                 
-                {/* Selected Machine Display */}
+                {/* Selected Production Unit Display */}
                 {selectedMachine && (
                   <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                     <div className="flex items-start justify-between">
@@ -819,6 +845,28 @@ const TicketCreatePage: React.FC = () => {
                     {criticalLevels.map((level) => (
                       <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
                         {level.PUCRITICALNAME}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Ticket Class */}
+              <div className="space-y-2">
+                <Label htmlFor="ticketClass">{t('ticket.ticketClass')}</Label>
+                <Select
+                  value={formData.ticketClass?.toString() || 'none'}
+                  onValueChange={(v) => handleInputChange('ticketClass', v === 'none' ? null : parseInt(v))}
+                  disabled={ticketClassesLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={ticketClassesLoading ? "Loading ticket classes..." : "Select ticket class..."} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {ticketClasses.map((ticketClass) => (
+                      <SelectItem key={ticketClass.id} value={ticketClass.id.toString()}>
+                        {language === 'en' ? ticketClass.name_en : ticketClass.name_th}
                       </SelectItem>
                     ))}
                   </SelectContent>

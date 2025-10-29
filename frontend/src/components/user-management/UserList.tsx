@@ -14,12 +14,13 @@ import {
   XCircle 
 } from 'lucide-react';
 import type { User } from '../../services/userManagementService';
+import { getAvatarUrl } from '@/utils/url';
 
 interface UserListProps {
   users: User[];
   onViewUser: (user: User) => void;
   onEditUser: (user: User) => void;
-  onDeleteUser: (userId: number) => void;
+  onDeleteUser: (user: User) => void;
 }
 
 const getPermissionLevelColor = (level: number) => {
@@ -62,16 +63,29 @@ export const UserList: React.FC<UserListProps> = ({
                 <tr key={user.id} className="border-b hover:bg-gray-50">
                   <td className="p-3">
                     <div className="flex items-center space-x-3">
-                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center">
-                        <span className="text-primary-foreground font-semibold text-sm">
-                          {user.firstName.charAt(0)}{user.lastName.charAt(0)}
-                        </span>
+                      <div className="w-10 h-10 bg-primary rounded-full flex items-center justify-center overflow-hidden">
+                        {user.avatarUrl ? (
+                          <img 
+                            src={getAvatarUrl(user.avatarUrl)} 
+                            alt={`${user.firstName} ${user.lastName}`}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              // Fallback to initials if image fails to load
+                              e.currentTarget.style.display = 'none';
+                              e.currentTarget.parentElement!.innerHTML = `<span class="text-primary-foreground font-semibold text-sm">${user.firstName.charAt(0)}${user.lastName.charAt(0)}</span>`;
+                            }}
+                          />
+                        ) : (
+                          <span className="text-primary-foreground font-semibold text-sm">
+                            {user.firstName.charAt(0)}{user.lastName.charAt(0)}
+                          </span>
+                        )}
                       </div>
                       <div>
-                        <div className="font-medium">{user.firstName} {user.lastName}</div>
+                        <div className="font-medium">{user.fullName || `${user.firstName} ${user.lastName}`}</div>
                         <div className="text-sm text-gray-500">@{user.username}</div>
-                        {user.employeeID && (
-                          <div className="text-xs text-gray-400">ID: {user.employeeID}</div>
+                        {user.personCode && (
+                          <div className="text-xs text-gray-400">Code: {user.personCode}</div>
                         )}
                       </div>
                     </div>
@@ -88,16 +102,16 @@ export const UserList: React.FC<UserListProps> = ({
                   
                   <td className="p-3">
                     <div className="space-y-1">
-                      {user.department && (
+                      {user.departmentName && (
                         <div className="flex items-center text-sm">
                           <Building className="h-3 w-3 mr-2 text-gray-400" />
-                          {user.department}
+                          {user.departmentName}
                         </div>
                       )}
-                      {user.shift && (
+                      {user.siteName && (
                         <div className="flex items-center text-sm">
                           <Clock className="h-3 w-3 mr-2 text-gray-400" />
-                          {user.shift}
+                          {user.siteName}
                         </div>
                       )}
                     </div>
@@ -106,7 +120,7 @@ export const UserList: React.FC<UserListProps> = ({
                   <td className="p-3">
                     <div className="space-y-2">
                       <Badge className={getPermissionLevelColor(user.permissionLevel)}>
-                        {user.role}
+                        {user.groupCode}
                       </Badge>
                       <div className="text-xs text-gray-500">
                         Level {user.permissionLevel}
@@ -159,7 +173,7 @@ export const UserList: React.FC<UserListProps> = ({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onDeleteUser(user.id)}
+                        onClick={() => onDeleteUser(user)}
                         className="text-red-600 hover:text-red-700"
                       >
                         <Trash2 className="h-4 w-4" />

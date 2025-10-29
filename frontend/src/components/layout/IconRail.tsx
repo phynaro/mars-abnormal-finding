@@ -10,6 +10,7 @@ import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { getAvatarUrl } from '../../utils/url';
+import { checkPermission } from '@/utils/permissionChecker';
 
 interface IconRailProps {
   activeId: string | null;
@@ -24,8 +25,15 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
   const { language, setLanguage } = useLanguage();
   const { periodWeek } = usePeriodWeek();
 
-  // Permission checks disabled: show all items regardless of user level
-  const canAccess = (_item: MenuItem) => true;
+  // Permission check function
+  const canAccess = (item: MenuItem) => {
+    // Check if this is the settings menu
+    if (item.id === 'settings') {
+      return checkPermission(user?.id, 'settings_access').allowed;
+    }
+    // For other items, allow access (you can add more checks here)
+    return true;
+  };
 
   // If user clicked an icon that has submenu but hasn't navigated yet,
   // highlight only that icon (not the previous route's icon)
@@ -37,6 +45,11 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
       <TooltipProvider>
         <div className="flex flex-col items-center py-3 gap-2">
           {menuItems.map(item => {
+            // Check if user has permission to see this item
+            if (!canAccess(item)) {
+              return null;
+            }
+            
             const isActive = forceHighlightById ? (activeId === item.id) : location.pathname.startsWith(item.path);
             return (
               <Tooltip key={item.id}>

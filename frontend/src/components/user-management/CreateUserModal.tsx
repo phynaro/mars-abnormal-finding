@@ -4,36 +4,49 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import type { CreateUserData, Role } from '../../services/userManagementService';
+import type { CreateUserData } from '../../services/userManagementService';
+
+interface Department {
+  deptNo: number;
+  deptCode: string;
+  deptName: string;
+}
 
 interface CreateUserModalProps {
-  roles: Role[];
+  departments: Department[];
   onSubmit: (userData: CreateUserData) => Promise<void>;
   onClose: () => void;
 }
 
 export const CreateUserModal: React.FC<CreateUserModalProps> = ({
-  roles,
+  departments,
   onSubmit,
   onClose
 }) => {
   const [formData, setFormData] = useState<CreateUserData>({
-    username: '',
-    email: '',
+    userId: '',
     password: '',
     firstName: '',
     lastName: '',
-    employeeID: '',
-    department: '',
-    shift: '',
-    role: '',
-    permissionLevel: 1
+    email: '',
+    phone: '',
+    personCode: '',
+    department: undefined,
+    siteNo: 3,        // Default site
+    groupNo: 11,      // Default security group
+    levelReport: 5,   // Default level
+    storeRoom: 1,
+    dbNo: 1
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string>('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.username || !formData.email || !formData.password || !formData.firstName || !formData.lastName || !formData.role) {
+    setError('');
+    
+    if (!formData.userId || !formData.password || !formData.firstName || !formData.lastName) {
+      setError('Please fill in all required fields (User ID, Password, First Name, Last Name)');
       return;
     }
 
@@ -41,13 +54,12 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     try {
       await onSubmit(formData);
     } catch (error) {
-      console.error('Failed to create user:', error);
-    } finally {
+      setError(error instanceof Error ? error.message : 'Failed to create user');
       setIsSubmitting(false);
     }
   };
 
-  const handleInputChange = (field: keyof CreateUserData, value: string | number) => {
+  const handleInputChange = (field: keyof CreateUserData, value: string | number | undefined) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
@@ -59,126 +71,135 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
           <CardDescription>Add a new user to the system</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="firstName">First Name *</Label>
-                <Input
-                  id="firstName"
-                  value={formData.firstName}
-                  onChange={(e) => handleInputChange('firstName', e.target.value)}
-                  required
-                />
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                {error}
               </div>
-              <div>
-                <Label htmlFor="lastName">Last Name *</Label>
-                <Input
-                  id="lastName"
-                  value={formData.lastName}
-                  onChange={(e) => handleInputChange('lastName', e.target.value)}
-                  required
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="username">Username *</Label>
-                <Input
-                  id="username"
-                  value={formData.username}
-                  onChange={(e) => handleInputChange('username', e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="email">Email *</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => handleInputChange('email', e.target.value)}
-                  required
-                />
+            )}
+
+            {/* Authentication Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold border-b pb-2">Authentication</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="userId">User ID *</Label>
+                  <Input
+                    id="userId"
+                    value={formData.userId}
+                    onChange={(e) => handleInputChange('userId', e.target.value)}
+                    placeholder="e.g., john.doe"
+                    required
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Login username</p>
+                </div>
+                <div>
+                  <Label htmlFor="password">Password *</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    value={formData.password}
+                    onChange={(e) => handleInputChange('password', e.target.value)}
+                    placeholder="Enter password"
+                    required
+                  />
+                </div>
               </div>
             </div>
-            
-            <div>
-              <Label htmlFor="password">Password *</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) => handleInputChange('password', e.target.value)}
-                required
-              />
+
+            {/* Personal Information Section */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold border-b pb-2">Personal Information</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="firstName">First Name *</Label>
+                  <Input
+                    id="firstName"
+                    value={formData.firstName}
+                    onChange={(e) => handleInputChange('firstName', e.target.value)}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="lastName">Last Name *</Label>
+                  <Input
+                    id="lastName"
+                    value={formData.lastName}
+                    onChange={(e) => handleInputChange('lastName', e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="personCode">Person Code</Label>
+                  <Input
+                    id="personCode"
+                    value={formData.personCode}
+                    onChange={(e) => handleInputChange('personCode', e.target.value)}
+                    placeholder="Employee code"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={(e) => handleInputChange('email', e.target.value)}
+                    placeholder="email@example.com"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="phone">Phone</Label>
+                  <Input
+                    id="phone"
+                    value={formData.phone}
+                    onChange={(e) => handleInputChange('phone', e.target.value)}
+                    placeholder="Phone number"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="department">Department</Label>
+                  <Select 
+                    value={formData.department?.toString()} 
+                    onValueChange={(value) => handleInputChange('department', parseInt(value))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select Department (Optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {departments.map(dept => (
+                        <SelectItem key={dept.deptNo} value={dept.deptNo.toString()}>
+                          {dept.deptCode} - {dept.deptName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">Leave empty if not applicable</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Info Section */}
+            <div className="bg-blue-50 border border-blue-200 p-4 rounded">
+              <p className="text-sm text-blue-800">
+                <strong>Default Settings:</strong>
+              </p>
+              <ul className="text-sm text-blue-700 mt-2 space-y-1 ml-4 list-disc">
+                <li>Site: Site 3 (default)</li>
+                <li>Security Group: Group 11 (default)</li>
+                <li>Permission Level: Level 5 (default)</li>
+                <li>Status: Inactive (will activate on first login)</li>
+              </ul>
             </div>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="employeeID">Employee ID</Label>
-                <Input
-                  id="employeeID"
-                  value={formData.employeeID}
-                  onChange={(e) => handleInputChange('employeeID', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="department">Department</Label>
-                <Input
-                  id="department"
-                  value={formData.department}
-                  onChange={(e) => handleInputChange('department', e.target.value)}
-                />
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="shift">Shift</Label>
-                <Input
-                  id="shift"
-                  value={formData.shift}
-                  onChange={(e) => handleInputChange('shift', e.target.value)}
-                />
-              </div>
-              <div>
-                <Label htmlFor="role">Role *</Label>
-                <Select 
-                  value={formData.role} 
-                  onValueChange={(value) => handleInputChange('role', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select Role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {roles.map(role => (
-                      <SelectItem key={role.id} value={role.id}>{role.name}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            
-            <div>
-              <Label htmlFor="permissionLevel">Permission Level *</Label>
-              <Select 
-                value={formData.permissionLevel.toString()} 
-                onValueChange={(value) => handleInputChange('permissionLevel', parseInt(value))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select Permission Level" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Level 1 - Basic Access</SelectItem>
-                  <SelectItem value="2">Level 2 - Manager Access</SelectItem>
-                  <SelectItem value="3">Level 3 - Admin Access</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button type="button" variant="outline" onClick={onClose}>
+            <div className="flex justify-end space-x-2 pt-4 border-t">
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
                 Cancel
               </Button>
               <Button type="submit" disabled={isSubmitting}>

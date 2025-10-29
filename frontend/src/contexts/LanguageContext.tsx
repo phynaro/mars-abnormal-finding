@@ -452,7 +452,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.wizardSelectPlant': 'Select Plant',
     'ticket.wizardSelectArea': 'Select Area',
     'ticket.wizardSelectLine': 'Select Line',
-    'ticket.wizardSelectMachine': 'Select Machine',
+    'ticket.wizardSelectMachine': 'Select Production Unit',
     'ticket.wizardSelectPUCODE': 'Select PUCODE',
     'ticket.wizardSelectFailureMode': 'Select Failure Mode',
     'ticket.wizardUploadImages': 'Upload Images',
@@ -470,7 +470,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.selectPlant': 'Select Plant',
     'ticket.selectArea': 'Select Area',
     'ticket.selectLine': 'Select Line',
-    'ticket.selectMachine': 'Select Machine',
+    'ticket.selectMachine': 'Select Production Unit',
     'ticket.selectNumber': 'Select Number',
     'ticket.hierarchyPathSelected': 'Selected Path',
     'ticket.hierarchyHelpText': 'Navigate through the hierarchy to find your production unit. You can select at any level - Plant, Area, Line, or Machine.',
@@ -573,7 +573,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.downtimeAvoidanceHours': 'Downtime Avoidance (hours)',
     'ticket.costAvoidanceTHB': 'Cost Avoidance (THB)',
     'ticket.selectFailureMode': 'Select failure mode',
-    'ticket.satisfactionRating': 'Satisfaction Rating (1-5)',
+    'ticket.satisfactionRating': 'Satisfaction Rating',
     'ticket.newAssignee': 'New Assignee *',
     'ticket.searchL2L3User': 'Search Maintenance/Planner by name/email',
     'ticket.searching': 'Searching...',
@@ -590,6 +590,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.chooseFiles': 'Choose Files',
     'ticket.showing': 'Showing',
     'ticket.criticalLevel': 'Critical Level',
+    'ticket.ticketClass': 'Ticket Class (Optional)',
     'ticketManagement.title': 'Abnormal Finding Report',
     'ticketManagement.createTicket': 'Create Ticket',
 
@@ -1324,7 +1325,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.downtimeAvoidanceHours': 'เวลาหยุดทำงานที่หลีกเลี่ยงได้ (ชั่วโมง)',
     'ticket.costAvoidanceTHB': 'ต้นทุนที่หลีกเลี่ยงได้ (บาท)',
     'ticket.selectFailureMode': 'เลือกลักษณะปัญหา',
-    'ticket.satisfactionRating': 'คะแนนความพึงพอใจ (1-5)',
+    'ticket.satisfactionRating': 'คะแนนความพึงพอใจ',
     'ticket.newAssignee': 'ผู้รับผิดชอบใหม่ *',
     'ticket.searchL2L3User': 'ค้นหาผู้ใช้ ซ่อมบำรุง/แพลนเนอร์ ตามชื่อ/อีเมล',
     'ticket.searching': 'กำลังค้นหา...',
@@ -1343,10 +1344,11 @@ const translations: Record<Language, Record<string, string>> = {
     'ticketManagement.createTicket': 'แจ้งความผิดปกติ',
     'ticket.showing': 'กำลังแสดง',
     'ticket.criticalLevel': 'ระดับความสำคัญ *',
+    'ticket.ticketClass': 'ประเภทงาน (ไม่บังคับ)',
   
+
   
-    
-    // Dashboard specific
+        // Dashboard specific
     'dashboard.abnormalReport': 'แดชบอร์ดรายงานความผิดปกติ',
     'dashboard.totalTickets': 'จำนวนรายงานทั้งหมด',
     'dashboard.closedTickets': 'รายงานที่ปิดแล้ว',

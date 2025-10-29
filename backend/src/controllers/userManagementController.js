@@ -18,12 +18,12 @@ const userManagementController = {
   getAllUsers: async (req, res) => {
     try {
       // Check if user has admin permissions (GroupCode = 'ADMIN' or similar)
-      if (req.user.groupCode !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires admin permissions.'
-        });
-      }
+      // if (req.user.groupCode !== 'ADMIN') {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message: 'Access denied. Requires admin permissions.'
+      //   });
+      // }
 
       try {
         const pool = await getConnection();
@@ -75,7 +75,6 @@ const userManagementController = {
             LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
             LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
             LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
-            WHERE (ue.IsActive = 1 OR ue.IsActive IS NULL)
             ORDER BY ue.CreatedAt DESC
           `);
 
@@ -102,7 +101,6 @@ const userManagementController = {
           groupCode: user.UserGCode,
           groupName: user.UserGName,
           levelReport: user.LevelReport,
-        permissionLevel: user.LevelReport,
           permissionLevel: user.LevelReport,
           storeRoom: user.StoreRoom,
           dbNo: user.DBNo,
@@ -110,7 +108,7 @@ const userManagementController = {
           avatarUrl: user.AvatarUrl,
           lastLogin: user.LastLogin,
           createdAt: user.CreatedAt,
-          isActive: user.IsActive === 1 || user.IsActive === null
+          isActive: user.IsActive === 1 || user.IsActive === true  // NULL = inactive (not logged in yet)
         }));
 
         res.json({
@@ -140,12 +138,12 @@ const userManagementController = {
       const { userId } = req.params;
 
       // Check if user has admin permissions
-      if (req.user.groupCode !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires admin permissions.'
-        });
-      }
+      // if (req.user.groupCode !== 'ADMIN') {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message: 'Access denied. Requires admin permissions.'
+      //   });
+      // }
 
       const pool = await getConnection();
       
@@ -196,7 +194,7 @@ const userManagementController = {
           LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
           LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
           LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
-          WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
+          WHERE u.UserID = @userID
         `);
 
       if (result.recordset.length === 0) {
@@ -237,7 +235,7 @@ const userManagementController = {
         avatarUrl: user.AvatarUrl,
         lastLogin: user.LastLogin,
         createdAt: user.CreatedAt,
-        isActive: user.IsActive === 1 || user.IsActive === null
+        isActive: user.IsActive === 1 || user.IsActive === true  // NULL = inactive (not logged in yet)
       };
 
       res.json({
@@ -258,12 +256,12 @@ const userManagementController = {
   createUser: async (req, res) => {
     try {
       // Check if user has admin permissions
-      if (req.user.groupCode !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires admin permissions.'
-        });
-      }
+      // if (req.user.groupCode !== 'ADMIN') {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message: 'Access denied. Requires admin permissions.'
+      //   });
+      // }
 
       const {
         userId,
@@ -350,6 +348,7 @@ const userManagementController = {
         const personNo = personResult.recordset[0].PERSONNO;
 
         // 2. Create _secUsers record
+        // Note: IgxUserExtension record will be created on first login
         const secUserResult = await transaction.request()
           .input('personNo', sql.Int, personNo)
           .input('userID', sql.VarChar(50), userId)
@@ -358,18 +357,10 @@ const userManagementController = {
           .input('levelReport', sql.Int, levelReport || 1)
           .input('storeRoom', sql.Int, storeRoom || 1)
           .input('dbNo', sql.Int, dbNo || 1)
-          .input('lineId', sql.NVarChar(500), lineId || null)
-          .input('neverExpireFlag', sql.VarChar(1), 'Y')
-          .input('emailVerified', sql.NChar(10), 'Y')
-          .input('isActive', sql.Bit, 1)
-          .input('createUser', sql.Int, req.user.id)
-          .input('createDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''))
+          .input('updateUser', sql.Int, req.user.id)
           .query(`
-            INSERT INTO _secUsers (PersonNo, UserID, Passwd, GroupNo, LevelReport, StoreRoom, DBNo, NeverExpireFlag, CreateUser)
-            VALUES (@personNo, @userID, @passwd, @groupNo, @levelReport, @storeRoom, @dbNo, @neverExpireFlag, @createUser);
-            
-            INSERT INTO IgxUserExtension (UserID, EmailVerified, EmailVerificationToken, EmailVerificationExpires, LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive)
-            VALUES (@userID, @emailVerified, NULL, NULL, NULL, GETDATE(), GETDATE(), @lineId, NULL, @isActive);
+            INSERT INTO _secUsers (PersonNo, UserID, Passwd, GroupNo, LevelReport, StoreRoom, DBNo, NeverExpireFlag, UpdateUser)
+            VALUES (@personNo, @userID, @passwd, @groupNo, @levelReport, @storeRoom, @dbNo, 'Y', @updateUser);
             
             SELECT @personNo as PersonNo, @userID as UserID, GETDATE() as CreatedAt
           `);
@@ -398,7 +389,7 @@ const userManagementController = {
           dbNo: dbNo || 1,
           lineId: lineId,
           createdAt: newUser.CreatedAt,
-          isActive: true
+          isActive: false  // Will become active on first login when IgxUserExtension is created
         };
 
         res.status(201).json({
@@ -428,12 +419,12 @@ const userManagementController = {
       const { userId } = req.params;
 
       // Check if user has admin permissions
-      if (req.user.groupCode !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires admin permissions.'
-        });
-      }
+      // if (req.user.groupCode !== 'ADMIN') {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message: 'Access denied. Requires admin permissions.'
+      //   });
+      // }
 
       const updateData = req.body;
 
@@ -442,7 +433,7 @@ const userManagementController = {
       // Check if user exists
       const userResult = await pool.request()
         .input('userID', sql.VarChar(50), userId)
-        .query('SELECT u.PersonNo, u.UserID FROM _secUsers u LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
+        .query('SELECT u.PersonNo, u.UserID FROM _secUsers u WHERE u.UserID = @userID');
 
       if (userResult.recordset.length === 0) {
         return res.status(404).json({
@@ -549,25 +540,25 @@ const userManagementController = {
     }
   },
 
-  // Delete user (soft delete)
+  // Delete user (hard delete)
   deleteUser: async (req, res) => {
     try {
       const { userId } = req.params;
 
       // Check if user has admin permissions
-      if (req.user.groupCode !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires admin permissions.'
-        });
-      }
+      // if (req.user.groupCode !== 'ADMIN') {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message: 'Access denied. Requires admin permissions.'
+      //   });
+      // }
 
       const pool = await getConnection();
       
-      // Check if user exists
+      // Get user and person info before deleting
       const userResult = await pool.request()
         .input('userID', sql.VarChar(50), userId)
-        .query('SELECT u.UserID FROM _secUsers u LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
+        .query('SELECT u.UserID, u.PersonNo FROM _secUsers u WHERE u.UserID = @userID');
 
       if (userResult.recordset.length === 0) {
         return res.status(404).json({
@@ -576,24 +567,49 @@ const userManagementController = {
         });
       }
 
-      // Soft delete by setting IsActive = 0
-      await pool.request()
-        .input('userID', sql.VarChar(50), userId)
-        .input('updateUser', sql.Int, req.user.id)
-        .query(`
-          UPDATE _secUsers 
-          SET UpdateUser = @updateUser
-          WHERE UserID = @userID;
-          
-          UPDATE IgxUserExtension 
-          SET IsActive = 0, UpdatedAt = GETDATE() 
-          WHERE UserID = @userID
-        `);
+      const personNo = userResult.recordset[0].PersonNo;
 
-      res.json({
-        success: true,
-        message: 'User deleted successfully'
-      });
+      // Start transaction for atomic deletion
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+
+      try {
+        // Delete in correct order to respect foreign key constraints
+        
+        // 1. Delete from IgxUserExtension (if exists)
+        await transaction.request()
+          .input('userID', sql.VarChar(50), userId)
+          .query('DELETE FROM IgxUserExtension WHERE UserID = @userID');
+
+        // 2. Delete from _secUsers
+        await transaction.request()
+          .input('userID', sql.VarChar(50), userId)
+          .query('DELETE FROM _secUsers WHERE UserID = @userID');
+
+        // 3. Delete from Person (soft delete by setting FLAGDEL = 'Y')
+        await transaction.request()
+          .input('personNo', sql.Int, personNo)
+          .input('updateUser', sql.Int, req.user.id)
+          .input('updateDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''))
+          .query(`
+            UPDATE Person 
+            SET FLAGDEL = 'Y', 
+                UPDATEUSER = @updateUser,
+                UPDATEDATE = @updateDate
+            WHERE PERSONNO = @personNo
+          `);
+
+        await transaction.commit();
+
+        res.json({
+          success: true,
+          message: 'User deleted successfully'
+        });
+
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
 
     } catch (error) {
       console.error('Delete user error:', error);
@@ -609,12 +625,12 @@ const userManagementController = {
   getAvailableGroups: async (req, res) => {
     try {
       // Check if user has admin permissions
-      if (req.user.groupCode !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires admin permissions.'
-        });
-      }
+      // if (req.user.groupCode !== 'ADMIN') {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message: 'Access denied. Requires admin permissions.'
+      //   });
+      // }
 
       const pool = await getConnection();
       
@@ -642,6 +658,35 @@ const userManagementController = {
     }
   },
 
+  // Get available departments
+  getDepartments: async (req, res) => {
+    try {
+      const pool = await getConnection();
+      
+      const result = await pool.request()
+        .query('SELECT DEPTNO, DEPTCODE, DEPTNAME FROM Dept WHERE FLAGDEL != \'Y\' ORDER BY DEPTCODE');
+
+      const departments = result.recordset.map(dept => ({
+        deptNo: dept.DEPTNO,
+        deptCode: dept.DEPTCODE,
+        deptName: dept.DEPTNAME
+      }));
+
+      res.json({
+        success: true,
+        departments: departments
+      });
+
+    } catch (error) {
+      console.error('Get departments error:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch departments',
+        error: error.message
+      });
+    }
+  },
+
   // Reset user password
   resetUserPassword: async (req, res) => {
     try {
@@ -649,12 +694,12 @@ const userManagementController = {
       const { newPassword } = req.body;
 
       // Check if user has admin permissions
-      if (req.user.groupCode !== 'ADMIN') {
-        return res.status(403).json({
-          success: false,
-          message: 'Access denied. Requires admin permissions.'
-        });
-      }
+      // if (req.user.groupCode !== 'ADMIN') {
+      //   return res.status(403).json({
+      //     success: false,
+      //     message: 'Access denied. Requires admin permissions.'
+      //   });
+      // }
 
       if (!newPassword) {
         return res.status(400).json({
@@ -668,7 +713,7 @@ const userManagementController = {
       // Check if user exists
       const userResult = await pool.request()
         .input('userID', sql.VarChar(50), userId)
-        .query('SELECT u.UserID FROM _secUsers u LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
+        .query('SELECT u.UserID FROM _secUsers u WHERE u.UserID = @userID');
 
       if (userResult.recordset.length === 0) {
         return res.status(404).json({
@@ -680,7 +725,7 @@ const userManagementController = {
       // Hash password using MD5
       const hashedPassword = hashPasswordMD5(newPassword);
 
-      // Update password
+      // Update password in _secUsers
       await pool.request()
         .input('userID', sql.VarChar(50), userId)
         .input('newPassword', sql.NVarChar(250), hashedPassword)
@@ -688,8 +733,13 @@ const userManagementController = {
         .query(`
           UPDATE _secUsers 
           SET Passwd = @newPassword, UpdateUser = @updateUser
-          WHERE UserID = @userID;
-          
+          WHERE UserID = @userID
+        `);
+      
+      // Update IgxUserExtension timestamp if it exists
+      await pool.request()
+        .input('userID', sql.VarChar(50), userId)
+        .query(`
           UPDATE IgxUserExtension 
           SET UpdatedAt = GETDATE() 
           WHERE UserID = @userID

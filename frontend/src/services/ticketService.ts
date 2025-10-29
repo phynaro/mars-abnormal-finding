@@ -10,6 +10,9 @@ export interface Ticket {
   pucode?: string; // New field for PUCODE
   puno?: number; // New field for PU ID
   pucriticalno?: number; // New field for Critical Level
+  ticketClass?: number | null; // New field for Ticket Class ID
+  ticket_class_en?: string; // Ticket Class name in English
+  ticket_class_th?: string; // Ticket Class name in Thai
   cedar_wocode?: string; // CEDAR work order code
   cedar_wono?: number; // CEDAR work order number
   cedar_sync_status?: string; // Cedar sync status (success, error, pending, syncing)
@@ -138,6 +141,7 @@ export interface CreateTicketRequest {
   puno?: number; // New field for PU ID
   equipment_id?: number; // New field for Equipment ID
   pucriticalno?: number; // New field for Critical Level
+  ticketClass?: number | null; // New field for Ticket Class
   plant_id?: number;
   area_id?: number;
   line_id?: number;
