@@ -927,6 +927,15 @@ const TicketDetailsPage: React.FC = () => {
             );
           }
 
+          // Validate that at least one "after" image exists
+          const afterImages =
+            ticket?.images?.filter((img) => img.image_type === "after") || [];
+          if (afterImages.length === 0) {
+            throw new Error(
+              "Cannot finish ticket: At least one 'after' image is required",
+            );
+          }
+
           const downtimeAvoidanceHours = parseFloat(downtimeAvoidance);
           const costAvoidanceAmount = parseFloat(costAvoidance);
           const failureMode = parseInt(failureModeId, 10);

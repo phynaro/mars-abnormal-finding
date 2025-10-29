@@ -446,7 +446,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                         detailUrl: `${process.env.LIFF_URL}/tickets/${ticketId}`,  
                         extraKVs: extraKVs
                     };
-                    console.log('linePayload', linePayload);
+              
                     const linePromises = lineRecipients.map(user => {
                         return abnFlexService.sendToUser(user.LineID, [
                             abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.OPEN, linePayload)
@@ -3475,6 +3475,24 @@ const finishTicket = async (req, res) => {
       });
     }
 
+    // Check if ticket has at least one "after" image
+    const afterImagesResult = await runQuery(
+      pool,
+      "SELECT COUNT(*) as count FROM IgxTicketImages WHERE ticket_id = @id AND image_type = @image_type",
+      [
+        { name: "id", type: sql.Int, value: id },
+        { name: "image_type", type: sql.VarChar(20), value: "after" },
+      ]
+    );
+
+    const afterImageCount = afterImagesResult.recordset[0]?.count || 0;
+    if (afterImageCount === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Cannot finish ticket: At least one 'after' image is required",
+      });
+    }
+
     // Update ticket status to finished with new fields and workflow tracking
     const updateQuery = `
             UPDATE IgxTickets 
@@ -3526,7 +3544,7 @@ const finishTicket = async (req, res) => {
     }
     finalQuery += ` WHERE id = @id`;
 
-    console.log(finalQuery);
+    
     await request.query(finalQuery);
 
     await insertStatusHistory(pool, {

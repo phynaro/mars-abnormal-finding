@@ -301,7 +301,7 @@ class CedarIntegrationService {
       if (!ticket) {
         throw new Error("Ticket not found");
       }
-      console.log("ticket result", ticket);
+      
       // WO is created only when ticket is accepted (action = 'accept')
       if (action === "accept" && !ticket.cedar_wono) {
         console.log(
