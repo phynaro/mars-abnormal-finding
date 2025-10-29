@@ -29,6 +29,7 @@ import {
   UserCheck,
   X,
 } from "lucide-react";
+import { formatUITime } from "@/utils/timezone";
 
 type PendingTicketsSectionProps = {
   tickets: APIPendingTicket[];
@@ -234,10 +235,6 @@ const renderMobileCardContent = (
   fieldKey: string,
   t: (key: string) => string,
 ) => {
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString();
-  const formatDateTime = (dateString: string) =>
-    new Date(dateString).toLocaleString();
 
   switch (fieldKey) {
     case "accepted_at":
@@ -245,7 +242,7 @@ const renderMobileCardContent = (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
           <span>
-            {t("homepage.accepted")}: {formatDate(ticket.accepted_at)}
+            {t("homepage.accepted")}: {formatUITime(ticket.accepted_at)}
           </span>
         </div>
       ) : null;
@@ -263,7 +260,7 @@ const renderMobileCardContent = (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
           <span>
-            {t("homepage.escalated")}: {formatDateTime(ticket.escalated_at)}
+            {t("homepage.escalated")}: {formatUITime(ticket.escalated_at)}
           </span>
         </div>
       ) : null;
@@ -281,7 +278,7 @@ const renderMobileCardContent = (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
           <span>
-            {t("homepage.reviewed")}: {formatDateTime(ticket.reviewed_at)}
+            {t("homepage.reviewed")}: {formatUITime(ticket.reviewed_at)}
           </span>
         </div>
       ) : null;
@@ -299,7 +296,7 @@ const renderMobileCardContent = (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
           <span>
-            {t("homepage.finished")}: {formatDateTime(ticket.finished_at)}
+            {t("homepage.finished")}: {formatUITime(ticket.finished_at)}
           </span>
         </div>
       ) : null;
@@ -317,7 +314,7 @@ const renderMobileCardContent = (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
           <span>
-            {t("homepage.rejected")}: {formatDateTime(ticket.rejected_at)}
+            {t("homepage.rejected")}: {formatUITime(ticket.rejected_at)}
           </span>
         </div>
       ) : null;
@@ -336,7 +333,7 @@ const renderMobileCardContent = (
           <Clock className="w-4 h-4 text-muted-foreground" />
           <span>
             {t("homepage.scheduledStart")}:{" "}
-            {formatDateTime(ticket.schedule_start)}
+            {formatUITime(ticket.schedule_start)}
           </span>
         </div>
       ) : null;
@@ -346,7 +343,7 @@ const renderMobileCardContent = (
           <Clock className="w-4 h-4 text-muted-foreground" />
           <span>
             {t("homepage.scheduledFinish")}:{" "}
-            {formatDateTime(ticket.schedule_finish)}
+            {formatUITime(ticket.schedule_finish)}
           </span>
         </div>
       ) : null;
@@ -364,7 +361,7 @@ const renderMobileCardContent = (
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-muted-foreground" />
           <span>
-            {t("homepage.created")}: {formatDate(ticket.created_at)}
+            {t("homepage.created")}: {formatUITime(ticket.created_at)}
           </span>
         </div>
       );
@@ -383,10 +380,6 @@ const renderMobileCardContent = (
 };
 
 const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: string) => string) => {
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString();
-  const formatDateTime = (dateString: string) =>
-    new Date(dateString).toLocaleString();
 
   switch (fieldKey) {
     case "ticket_number":
@@ -450,13 +443,13 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
     case "created_at":
       return (
         <span className="text-muted-foreground">
-          {formatDate(ticket.created_at)}
+          {formatUITime(ticket.created_at)}
         </span>
       );
     case "accepted_at":
       return ticket.accepted_at ? (
         <span className="text-muted-foreground">
-          {formatDate(ticket.accepted_at)}
+          {formatUITime(ticket.accepted_at)}
         </span>
       ) : (
         <span className="text-muted-foreground">-</span>
@@ -473,7 +466,7 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
     case "escalated_at":
       return ticket.escalated_at ? (
         <span className="text-muted-foreground">
-          {formatDateTime(ticket.escalated_at)}
+          {formatUITime(ticket.escalated_at)}
         </span>
       ) : (
         <span className="text-muted-foreground">-</span>
@@ -490,7 +483,7 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
     case "reviewed_at":
       return ticket.reviewed_at ? (
         <span className="text-muted-foreground">
-          {formatDateTime(ticket.reviewed_at)}
+          {formatUITime(ticket.reviewed_at)}
         </span>
       ) : (
         <span className="text-muted-foreground">-</span>
@@ -507,7 +500,7 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
     case "finished_at":
       return ticket.finished_at ? (
         <span className="text-muted-foreground">
-          {formatDateTime(ticket.finished_at)}
+          {formatUITime(ticket.finished_at)}
         </span>
       ) : (
         <span className="text-muted-foreground">-</span>
@@ -524,7 +517,7 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
     case "rejected_at":
       return ticket.rejected_at ? (
         <span className="text-muted-foreground">
-          {formatDateTime(ticket.rejected_at)}
+          {formatUITime(ticket.rejected_at)}
         </span>
       ) : (
         <span className="text-muted-foreground">-</span>
@@ -541,7 +534,7 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
     case "scheduled_start":
       return ticket.schedule_start ? (
         <span className="text-muted-foreground">
-          {formatDateTime(ticket.schedule_start)}
+          {formatUITime(ticket.schedule_start)}
         </span>
       ) : (
         <span className="text-muted-foreground">-</span>
@@ -549,7 +542,7 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
     case "scheduled_complete":
       return ticket.schedule_finish ? (
         <span className="text-muted-foreground">
-          {formatDateTime(ticket.schedule_finish)}
+          {formatUITime(ticket.schedule_finish)}
         </span>
       ) : (
         <span className="text-muted-foreground">-</span>
@@ -645,13 +638,11 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
               className="border rounded-lg p-4 bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
               onClick={() => onTicketClick(ticket.id)}
             >
-              <div className="flex justify-between items-start">
-                <div>
-                  <div className="text-sm text-muted-foreground">
-                    #{ticket.ticket_number}
-                  </div>
-                  <div className="text-lg font-semibold">{ticket.title}</div>
-                </div>
+              {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
+              <div className="flex justify-between items-center gap-2 mb-2">
+                <span className="text-sm text-muted-foreground font-medium">
+                  #{ticket.ticket_number}
+                </span>
                 <div className="flex gap-2 items-center">
                   <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
                     <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
@@ -662,23 +653,26 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
                   </div>
                 </div>
               </div>
-              <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
+
+              {/* div2: Title */}
+              <div className="text-lg font-semibold mb-2">
+                {ticket.title}
+              </div>
+
+              {/* div3: Description */}
+              <div className="text-sm text-muted-foreground line-clamp-2 mb-3">
                 {ticket.description}
               </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {/* <Badge className={getTicketPriorityClass(ticket.priority)}>
-                  {ticket.priority?.toUpperCase()}
-                </Badge>
-                <Badge className={getTicketSeverityClass(ticket.severity_level)}>
-                  {ticket.severity_level?.toUpperCase()}
-                </Badge> */}
+
+              {/* div4: PU Name */}
+              <div className="mb-3">
                 <Badge variant="outline" className="text-xs">
                   {ticket.pu_name || ticket.pucode || "N/A"}
                 </Badge>
-     
               </div>
 
-              <div className="mt-3 text-sm text-muted-foreground space-y-1">
+              {/* div5: Others */}
+              <div className="text-sm text-muted-foreground space-y-1">
                 {config.columns.slice(5).map((column) => {
                   const content = renderMobileCardContent(
                     ticket,

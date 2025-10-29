@@ -694,16 +694,12 @@ export const TicketList: React.FC = () => {
                   className="border rounded-lg p-4 bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
                   onClick={() => handleViewTicket(ticket)}
                 >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="text-sm text-muted-foreground">
-                        #{ticket.ticket_number}
-                      </div>
-                      <div className="text-lg font-semibold">
-                        {ticket.title}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
+                  {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
+                  <div className="flex justify-between items-center gap-2 mb-2">
+                    <span className="text-sm text-muted-foreground font-medium">
+                      #{ticket.ticket_number}
+                    </span>
+                    <div className="flex gap-2 items-center">
                       <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
                         <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
                         <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
@@ -713,23 +709,26 @@ export const TicketList: React.FC = () => {
                       </div>
                     </div>
                   </div>
-                  <div className="mt-2 text-sm text-muted-foreground line-clamp-2">
+
+                  {/* div2: Title */}
+                  <div className="text-lg font-semibold mb-2">
+                    {ticket.title}
+                  </div>
+
+                  {/* div3: Description */}
+                  <div className="text-sm text-muted-foreground line-clamp-2 mb-3">
                     {ticket.description}
                   </div>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    {/* <Badge className={getTicketPriorityClass(ticket.priority)}>
-                      {ticket.priority?.toUpperCase()}
-                    </Badge>
-                    <Badge
-                      className={getTicketSeverityClass(ticket.severity_level)}
-                    >
-                      {ticket.severity_level?.toUpperCase()}
-                    </Badge> */}
+
+                  {/* div4: PU Name */}
+                  <div className="mb-3">
                     <Badge variant="outline" className="text-xs">
                       {ticket.pu_name || ticket.pucode || 'N/A'}
                     </Badge>
                   </div>
-                  <div className="mt-3 text-sm text-muted-foreground">
+
+                  {/* div5: Others */}
+                  <div className="text-sm text-muted-foreground space-y-1">
                     <div className="flex items-center gap-2">
                       <User className="w-4 h-4" />
                       <span>
@@ -738,7 +737,7 @@ export const TicketList: React.FC = () => {
                       </span>
                     </div>
                     {ticket.assigned_to && (
-                      <div className="flex items-center gap-2 mt-1">
+                      <div className="flex items-center gap-2">
                         <User className="w-4 h-4" />
                         <span>
                           {t('ticket.assignedTo')}:{" "}
@@ -746,9 +745,10 @@ export const TicketList: React.FC = () => {
                         </span>
                       </div>
                     )}
-                  </div>
-                  <div className="mt-4 text-xs text-muted-foreground">
-                    <span>{t('ticket.created')} {formatDate(ticket.created_at)}</span>
+                    <div className="flex items-center gap-2">
+                      <Clock className="w-4 h-4" />
+                      <span>{t('ticket.created')} {formatDate(ticket.created_at)}</span>
+                    </div>
                   </div>
                 </div>
               ))}
