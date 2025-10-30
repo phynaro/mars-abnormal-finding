@@ -56,6 +56,8 @@ const getTicketApprovals = async (req, res) => {
              per.FIRSTNAME, 
              per.LASTNAME, 
              per.PERSONCODE,
+             d.DEPTCODE,
+             d.DEPTNAME,
              CASE 
                WHEN ta.approval_level = 1 THEN 'L1 - Create/Review/Reopen'
                WHEN ta.approval_level = 2 THEN 'L2 - Accept/Reject/Escalate/Finish'
@@ -66,8 +68,9 @@ const getTicketApprovals = async (req, res) => {
              COUNT(*) as total_approvals
       FROM IgxTicketApproval ta
       LEFT JOIN Person per ON ta.personno = per.PERSONNO
+      LEFT JOIN Dept d ON per.DEPTNO = d.DEPTNO
       ${whereClause}
-      GROUP BY ta.personno, ta.approval_level, per.PERSON_NAME, per.FIRSTNAME, per.LASTNAME, per.PERSONCODE
+      GROUP BY ta.personno, ta.approval_level, per.PERSON_NAME, per.FIRSTNAME, per.LASTNAME, per.PERSONCODE, d.DEPTCODE, d.DEPTNAME
       ORDER BY per.PERSON_NAME, ta.approval_level
     `);
 

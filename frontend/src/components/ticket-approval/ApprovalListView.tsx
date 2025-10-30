@@ -13,8 +13,12 @@ interface ApprovalListViewProps {
   loading: boolean;
   searchTerm: string;
   filterActive: string;
+  filterApprovalLevel: string;
+  filterDepartment: string;
   onSearchChange: (search: string) => void;
   onFilterChange: (filter: string) => void;
+  onApprovalLevelFilterChange: (filter: string) => void;
+  onDepartmentFilterChange: (filter: string) => void;
   onCreate: () => void;
   onEdit: (approval: TicketApprovalSummary) => void;
   onDelete: (approval: TicketApprovalSummary) => void;
@@ -25,19 +29,36 @@ const ApprovalListView: React.FC<ApprovalListViewProps> = ({
   loading,
   searchTerm,
   filterActive,
+  filterApprovalLevel,
+  filterDepartment,
   onSearchChange,
   onFilterChange,
+  onApprovalLevelFilterChange,
+  onDepartmentFilterChange,
   onCreate,
   onEdit,
   onDelete
 }) => {
+  // Get unique approval levels and departments for filter dropdowns
+  const uniqueApprovalLevels = Array.from(new Set(approvals.map(a => a.approval_level)))
+    .sort((a, b) => a - b);
+  const uniqueDepartments = Array.from(new Set(
+    approvals
+      .map(a => a.DEPTCODE || '')
+      .filter(code => code)
+  )).sort();
+
   const filteredApprovals = approvals.filter(approval => {
     const matchesSearch = approval.personno.toString().includes(searchTerm) ||
                          approval.person_name?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesActive = filterActive === 'all' || 
                          (filterActive === 'active' && approval.is_active) ||
                          (filterActive === 'inactive' && !approval.is_active);
-    return matchesSearch && matchesActive;
+    const matchesApprovalLevel = filterApprovalLevel === 'all' || 
+                                 approval.approval_level.toString() === filterApprovalLevel;
+    const matchesDepartment = filterDepartment === 'all' || 
+                             (approval.DEPTCODE || '') === filterDepartment;
+    return matchesSearch && matchesActive && matchesApprovalLevel && matchesDepartment;
   });
 
   return (
@@ -70,20 +91,62 @@ const ApprovalListView: React.FC<ApprovalListViewProps> = ({
                 className="pl-9"
               />
             </div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="active-filter" className="text-sm text-muted-foreground">
-                Status
-              </Label>
-              <Select value={filterActive} onValueChange={onFilterChange}>
-                <SelectTrigger id="active-filter" className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Label htmlFor="active-filter" className="text-sm text-muted-foreground">
+                  Status
+                </Label>
+                <Select value={filterActive} onValueChange={onFilterChange}>
+                  <SelectTrigger id="active-filter" className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="approval-level-filter" className="text-sm text-muted-foreground">
+                  Level
+                </Label>
+                <Select value={filterApprovalLevel} onValueChange={onApprovalLevelFilterChange}>
+                  <SelectTrigger id="approval-level-filter" className="w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {uniqueApprovalLevels.map(level => (
+                      <SelectItem key={level} value={level.toString()}>
+                        Level {level}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="department-filter" className="text-sm text-muted-foreground">
+                  Dept
+                </Label>
+                <Select value={filterDepartment} onValueChange={onDepartmentFilterChange}>
+                  <SelectTrigger id="department-filter" className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All</SelectItem>
+                    {uniqueDepartments.map(deptCode => {
+                      const approval = approvals.find(a => a.DEPTCODE === deptCode);
+                      const deptName = approval?.DEPTNAME || deptCode;
+                      return (
+                        <SelectItem key={deptCode} value={deptCode}>
+                          {deptName}
+                        </SelectItem>
+                      );
+                    })}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
           </div>
 

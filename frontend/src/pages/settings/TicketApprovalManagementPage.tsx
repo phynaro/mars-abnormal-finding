@@ -30,6 +30,8 @@ const TicketApprovalManagementPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterActive, setFilterActive] = useState<string>('all');
+  const [filterApprovalLevel, setFilterApprovalLevel] = useState<string>('all');
+  const [filterDepartment, setFilterDepartment] = useState<string>('all');
   const [personSearch, setPersonSearch] = useState('');
   const [showPersonSearch, setShowPersonSearch] = useState(false);
   const { toast } = useToast();
@@ -953,8 +955,12 @@ const TicketApprovalManagementPage: React.FC = () => {
       loading={loading}
       searchTerm={searchTerm}
       filterActive={filterActive}
+      filterApprovalLevel={filterApprovalLevel}
+      filterDepartment={filterDepartment}
       onSearchChange={setSearchTerm}
       onFilterChange={setFilterActive}
+      onApprovalLevelFilterChange={setFilterApprovalLevel}
+      onDepartmentFilterChange={setFilterDepartment}
       onCreate={handleCreate}
       onEdit={handleEditApproval}
       onDelete={handleDeleteApproval}

@@ -34,6 +34,8 @@ export interface TicketApprovalSummary {
   FIRSTNAME: string;
   LASTNAME: string;
   PERSONCODE: string;
+  DEPTCODE?: string;
+  DEPTNAME?: string;
   approval_level_name: string;
   total_approvals: number;
 }
