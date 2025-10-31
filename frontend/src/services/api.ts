@@ -1,4 +1,5 @@
 import { getAuthHeaders } from '../utils/authHeaders';
+import { handleApiError } from '../utils/apiErrorHandler';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -21,7 +22,7 @@ class ApiService {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = await handleApiError(response);
       throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
 
@@ -37,7 +38,7 @@ class ApiService {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = await handleApiError(response);
       throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
 
@@ -53,7 +54,7 @@ class ApiService {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = await handleApiError(response);
       throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
 
@@ -68,7 +69,7 @@ class ApiService {
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
+      const errorData = await handleApiError(response);
       throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
     }
 

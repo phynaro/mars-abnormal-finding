@@ -592,8 +592,19 @@ const getProfile = async (req, res) => {
 };
 
 // Validate Token (for middleware)
+// Returns { decoded, error } where error contains error details if validation fails
 const validateToken = async (token) => {
   try {
+    // Check if token exists and has basic JWT format (three parts separated by dots)
+    if (!token || typeof token !== 'string') {
+      return { decoded: null, error: { type: 'MALFORMED', message: 'Token is missing or invalid format' } };
+    }
+
+    const tokenParts = token.split('.');
+    if (tokenParts.length !== 3) {
+      return { decoded: null, error: { type: 'MALFORMED', message: 'JWT malformed: token must have 3 parts' } };
+    }
+
     // Verify JWT token
     const decoded = jwt.verify(token, JWT_SECRET);
     
@@ -604,14 +615,28 @@ const validateToken = async (token) => {
       .query('SELECT u.UserID, ue.IsActive FROM _secUsers u LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)');
 
     if (userResult.recordset.length === 0 || (userResult.recordset[0].IsActive !== null && !userResult.recordset[0].IsActive)) {
-      return null;
+      return { decoded: null, error: { type: 'INVALID_USER', message: 'User not found or inactive' } };
     }
 
-    return decoded;
+    return { decoded, error: null };
 
   } catch (error) {
     console.error('Token validation error:', error);
-    return null;
+    
+    // Check for specific JWT error types
+    if (error.name === 'JsonWebTokenError') {
+      if (error.message.includes('malformed') || error.message.includes('invalid')) {
+        return { decoded: null, error: { type: 'MALFORMED', message: 'JWT malformed: ' + error.message } };
+      }
+      return { decoded: null, error: { type: 'INVALID', message: 'Invalid token: ' + error.message } };
+    }
+    
+    if (error.name === 'TokenExpiredError') {
+      return { decoded: null, error: { type: 'EXPIRED', message: 'Token expired: ' + error.message } };
+    }
+    
+    // Generic error
+    return { decoded: null, error: { type: 'UNKNOWN', message: 'Token validation failed: ' + error.message } };
   }
 };
 

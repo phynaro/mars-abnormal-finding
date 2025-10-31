@@ -287,9 +287,23 @@ class AuthService {
       const result = await response.json();
 
       if (!response.ok) {
-        // If we get 401 or 403, the token is invalid/expired
+        // If we get 401 or 403, the token is invalid/expired/malformed
         if (response.status === 401 || response.status === 403) {
-          this.clearAuth();
+          // Check if it's a malformed JWT
+          const isMalformed = result.code === 'JWT_MALFORMED' || 
+                             result.message?.toLowerCase().includes('jwt malformed') ||
+                             result.message?.toLowerCase().includes('malformed');
+          
+          if (isMalformed || result.requireLogin) {
+            // Clear auth and redirect to login
+            this.clearAuth();
+            if (!window.location.pathname.includes('/login')) {
+              window.location.href = '/login';
+            }
+          } else {
+            // Just clear auth for other invalid tokens
+            this.clearAuth();
+          }
         }
         throw new Error(result.message || 'Failed to get profile');
       }

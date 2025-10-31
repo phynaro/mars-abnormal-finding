@@ -18,7 +18,7 @@ const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
 const abnFlexService = require('./abnormalFindingFlexService');
 const { getCriticalLevelText } = require('../utils/criticalMapping');
-const { getHeroImageUrl, getFrontendBaseUrl } = require('../controllers/ticketController/helpers');
+const { getFrontendBaseUrl } = require('../controllers/ticketController/helpers');
 
 // ===== HELPER FUNCTIONS =====
 

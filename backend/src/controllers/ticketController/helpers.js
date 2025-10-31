@@ -867,6 +867,7 @@ module.exports = {
     getTicketDetailUrl,
     getTicketNotificationRecipients,
     getNotificationRecipientsForPU,
+    getNotificationApproversWithLineId,
     getUserDisplayNameFromRequest,
     getUserMaxApprovalLevelForPU,
     getAvailableAssigneesForPU,

@@ -27,12 +27,33 @@ const authenticateToken = async (req, res, next) => {
     }
 
     // Validate token and get user info
-    const decodedToken = await validateToken(token);
+    const { decoded: decodedToken, error: tokenError } = await validateToken(token);
     
     if (!decodedToken) {
+      // Check if token is malformed - return 401 to trigger login redirect
+      if (tokenError && tokenError.type === 'MALFORMED') {
+        return res.status(401).json({ 
+          success: false, 
+          message: tokenError.message || 'JWT malformed',
+          code: 'JWT_MALFORMED',
+          requireLogin: true
+        });
+      }
+      
+      // For expired or invalid tokens, also return 401
+      if (tokenError && (tokenError.type === 'EXPIRED' || tokenError.type === 'INVALID')) {
+        return res.status(401).json({ 
+          success: false, 
+          message: tokenError.message || 'Invalid or expired token',
+          code: tokenError.type,
+          requireLogin: true
+        });
+      }
+      
+      // For other errors, return 403
       return res.status(403).json({ 
         success: false, 
-        message: 'Invalid or expired token' 
+        message: tokenError?.message || 'Invalid or expired token' 
       });
     }
 

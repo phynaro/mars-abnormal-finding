@@ -223,6 +223,7 @@ app.use('*', (req, res) => {
 
 // Initialize scheduled jobs
 const pendingTicketNotificationJob = require('./jobs/pendingTicketNotificationJob');
+const oldOpenTicketNotificationJob = require('./jobs/oldOpenTicketNotificationJob');
 
 // Start server
 app.listen(PORT, async () => {
@@ -237,6 +238,12 @@ app.listen(PORT, async () => {
     await pendingTicketNotificationJob.initialize();
   } else {
     console.log('⚠️  Pending ticket notifications are disabled via environment variable');
+  }
+  
+  if (process.env.ENABLE_OLD_OPEN_TICKET_NOTIFICATIONS !== 'false') {
+    await oldOpenTicketNotificationJob.initialize();
+  } else {
+    console.log('⚠️  Old open ticket notifications are disabled via environment variable');
   }
 });
 

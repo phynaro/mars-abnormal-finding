@@ -407,8 +407,10 @@ class TicketService {
     });
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to fetch tickets');
+      // Use error handler to detect malformed JWT and redirect to login
+      const { handleApiError } = await import('../utils/apiErrorHandler');
+      const errorData = await handleApiError(response);
+      throw new Error(errorData.message || 'Failed to fetch tickets');
     }
 
     return response.json();
