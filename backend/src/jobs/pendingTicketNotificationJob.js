@@ -73,6 +73,20 @@ class PendingTicketNotificationJob {
         return;
       }
 
+      // Parse cron expression to extract hour and minute
+      // Format: minute hour day month dayOfWeek (e.g., '0 9 * * *')
+      const cronParts = cronExpression.trim().split(/\s+/);
+      let cronMinute = cronParts[0] || '0';
+      let cronHour = cronParts[1] || '9';
+      
+      // Handle special cron values - use default if not a number
+      if (cronMinute === '*' || isNaN(parseInt(cronMinute, 10))) {
+        cronMinute = '0';
+      }
+      if (cronHour === '*' || isNaN(parseInt(cronHour, 10))) {
+        cronHour = '9';
+      }
+
       // Create new scheduled task
       this.currentTask = cron.schedule(cronExpression, async () => {
         if (this.isRunning) {
@@ -97,17 +111,19 @@ class PendingTicketNotificationJob {
           console.log('✅ Scheduled notification job completed:', result);
 
           // Update next_run (calculate next occurrence)
-          // This is approximate - cron handles the actual scheduling
-          const nextRunDate = new Date();
-          nextRunDate.setHours(nextRunDate.getHours() + 24); // Approximate 24 hours later
+          // This is for display purposes only - cron handles the actual scheduling
+          // Calculate next run using the hour and minute from the cron expression
+          const hour = parseInt(cronHour, 10);
+          const minute = parseInt(cronMinute, 10);
+          const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
           
-          await pool.request().query(`
-            UPDATE IgxNotificationSchedule
-            SET next_run = @nextRunDate
-            WHERE notification_type = 'pending_tickets'
-          `, [
-            { name: 'nextRunDate', type: sql.DateTime, value: nextRunDate }
-          ]);
+          await pool.request()
+            .input('timeStr', sql.VarChar(8), timeStr)
+            .query(`
+              UPDATE IgxNotificationSchedule
+              SET next_run = DATEADD(day, 1, CAST(CAST(GETDATE() AS DATE) AS DATETIME) + CAST(@timeStr AS TIME))
+              WHERE notification_type = 'pending_tickets'
+            `);
 
         } catch (error) {
           console.error('❌ Error in scheduled notification job:', error);

@@ -593,6 +593,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.ticketClass': 'Ticket Class (Optional)',
     'ticketManagement.title': 'Abnormal Finding Report',
     'ticketManagement.createTicket': 'Create Ticket',
+    'ticket.atLeastOneAfterImageRequired': 'At least one "after" image is required',
 
     // Dashboard specific
     'dashboard.abnormalReport': 'Abnormal Report Dashboard',
@@ -1345,6 +1346,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.showing': 'กำลังแสดง',
     'ticket.criticalLevel': 'ระดับความสำคัญ *',
     'ticket.ticketClass': 'ประเภทงาน (ไม่บังคับ)',
+    'ticket.atLeastOneAfterImageRequired': 'ต้องมีรูปภาพ "หลังการแก้ไข" อย่างน้อย 1 รูป',
   
 
   

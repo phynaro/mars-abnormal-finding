@@ -932,7 +932,8 @@ const TicketDetailsPage: React.FC = () => {
             ticket?.images?.filter((img) => img.image_type === "after") || [];
           if (afterImages.length === 0) {
             throw new Error(
-              "Cannot finish ticket: At least one 'after' image is required",
+              t('ticket.atLeastOneAfterImageRequired'),
+              //"Cannot finish ticket: At least one 'after' image is required",
             );
           }
 
@@ -2435,6 +2436,25 @@ const TicketDetailsPage: React.FC = () => {
                   <p className="text-xs text-gray-500">
                     {t('ticket.actualFinishTimeHelp')}
                   </p>
+                  {(() => {
+                    // Get the actual start time to compare (use edited value if provided, otherwise use ticket's existing value)
+                    const startTime = actualStartAtEdit || (ticket?.actual_start_at ? new Date(ticket.actual_start_at).toISOString().slice(0, 16) : null);
+                    const finishTime = actualFinishAt;
+                    
+                    if (startTime && finishTime) {
+                      const start = new Date(startTime);
+                      const finish = new Date(finishTime);
+                      
+                      if (finish < start) {
+                        return (
+                          <p className="text-xs text-red-500">
+                            {t('ticket.actualFinishBeforeStartError') || 'Actual finish time cannot be before actual start time'}
+                          </p>
+                        );
+                      }
+                    }
+                    return null;
+                  })()}
                 </div>
                 <div className="space-y-2">
                   <Label>{t('ticket.downtimeAvoidanceHours')}</Label>
@@ -2642,7 +2662,23 @@ const TicketDetailsPage: React.FC = () => {
                   acting ||
                   (actionType === "plan" && (!scheduleStart || !scheduleFinish || (!actionExtraId && !(isL2Plus && !isL3Plus)))) ||
                   (actionType === "start" && !actualStartAt) ||
-                  (actionType === "finish" && (!downtimeAvoidance || !costAvoidance || !failureModeId || !actualFinishAt)) ||
+                  (actionType === "finish" && (
+                    !downtimeAvoidance || 
+                    !costAvoidance || 
+                    !failureModeId || 
+                    !actualFinishAt ||
+                    (() => {
+                      // Validate that finish time is not before start time
+                      const startTime = actualStartAtEdit || (ticket?.actual_start_at ? new Date(ticket.actual_start_at).toISOString().slice(0, 16) : null);
+                      const finishTime = actualFinishAt;
+                      if (startTime && finishTime) {
+                        const start = new Date(startTime);
+                        const finish = new Date(finishTime);
+                        return finish < start;
+                      }
+                      return false;
+                    })()
+                  )) ||
                   (actionType === "reject" && (!actionComment || actionComment.trim() === "")) ||
                   (actionType === "reassign" && (!scheduleStart || !scheduleFinish || !actionExtraId)) ||
                   (actionType === "escalate" && !actionExtraId)
