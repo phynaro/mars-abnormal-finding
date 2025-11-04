@@ -767,7 +767,21 @@ const TicketDetailsPage: React.FC = () => {
     setSelectedCriticalLevel(null);
     setCriticalLevels([]);
     // Reset plan action fields
-    setScheduleStart("");
+    if (type === "plan") {
+      // Set schedule start to next upcoming hour
+      const now = new Date();
+      now.setHours(now.getHours() + 1);
+      now.setMinutes(0);
+      now.setSeconds(0);
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      setScheduleStart(`${year}-${month}-${day}T${hours}:${minutes}`);
+    } else {
+      setScheduleStart("");
+    }
     setScheduleFinish("");
     // Reset start action fields
     if (type === "start") {
@@ -2311,6 +2325,33 @@ const TicketDetailsPage: React.FC = () => {
                     required
                   />
                 </div>
+                
+                {/* Helper buttons to add hours from schedule start */}
+                {scheduleStart && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Quick add:</span>
+                    {[1, 2, 3].map((hours) => (
+                      <button
+                        key={hours}
+                        type="button"
+                        onClick={() => {
+                          const startDate = new Date(scheduleStart);
+                          startDate.setHours(startDate.getHours() + hours);
+                          const year = startDate.getFullYear();
+                          const month = String(startDate.getMonth() + 1).padStart(2, '0');
+                          const day = String(startDate.getDate()).padStart(2, '0');
+                          const hoursStr = String(startDate.getHours()).padStart(2, '0');
+                          const minutesStr = String(startDate.getMinutes()).padStart(2, '0');
+                          setScheduleFinish(`${year}-${month}-${day}T${hoursStr}:${minutesStr}`);
+                        }}
+                        className="px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        +{hours}h
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
                 <div className="space-y-2">
                   <Label>{t('ticket.scheduleFinish')}</Label>
                   <Input
@@ -2425,6 +2466,33 @@ const TicketDetailsPage: React.FC = () => {
                     {t('ticket.actualStartTimeEditHelp')}
                   </p>
                 </div>
+                
+                {/* Helper buttons to add hours from start time */}
+                {actualStartAtEdit && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 mr-1">Quick add:</span>
+                    {[1, 2, 3].map((hours) => (
+                      <button
+                        key={hours}
+                        type="button"
+                        onClick={() => {
+                          const startDate = new Date(actualStartAtEdit);
+                          startDate.setHours(startDate.getHours() + hours);
+                          const year = startDate.getFullYear();
+                          const month = String(startDate.getMonth() + 1).padStart(2, '0');
+                          const day = String(startDate.getDate()).padStart(2, '0');
+                          const hoursStr = String(startDate.getHours()).padStart(2, '0');
+                          const minutesStr = String(startDate.getMinutes()).padStart(2, '0');
+                          setActualFinishAt(`${year}-${month}-${day}T${hoursStr}:${minutesStr}`);
+                        }}
+                        className="px-2.5 py-1 text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                      >
+                        +{hours}h
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
                 <div className="space-y-2">
                   <Label>{t('ticket.actualFinishTime')}</Label>
                   <Input
