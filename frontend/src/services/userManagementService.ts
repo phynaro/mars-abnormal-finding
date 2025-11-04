@@ -62,6 +62,7 @@ export interface UpdateUserData {
   email?: string;
   phone?: string;
   title?: string;
+  personCode?: string;
   department?: number;
   craft?: number;
   crew?: number;

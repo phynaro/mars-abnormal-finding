@@ -191,7 +191,7 @@ const UserManagementPage: React.FC = () => {
       {showEditModal && editingUser && (
         <EditUserModal
           user={editingUser}
-          groups={groups}
+          departments={departments}
           onSubmit={(userData) => handleUpdateUser(editingUser.userId, userData)}
           onClose={() => {
             setShowEditModal(false);
