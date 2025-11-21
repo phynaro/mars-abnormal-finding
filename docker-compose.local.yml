@@ -1,25 +1,27 @@
 services:
-  # Backend service with local build
+  # Backend service with local build and hot reload
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     image: mars-backend:local
     container_name: mars-backend-local
+    command: npm run dev
     env_file:
-      - ./backend/.env.development
+      - ./backend/.env
     environment:
       - NODE_ENV=development
     volumes:
       # Mount source code for development (hot reload)
-      - ./backend/src:/app/src:ro
-      - ./backend/swagger:/app/swagger:ro
+      - ./backend/src:/app/src
+      - ./backend/swagger:/app/swagger
       # Persistent uploads directory
       - ./backend/uploads:/app/uploads
       # Mount logs directory for debugging
       - ./backend/logs:/app/logs
-    ports:
-      - "3001:3001"
+      # Preserve node_modules (anonymous volume)
+      - /app/node_modules
+    # No port mapping - only accessible through nginx proxy
     networks:
       - mars-network
     restart: unless-stopped
@@ -30,26 +32,22 @@ services:
       retries: 3
       start_period: 40s
 
-  # Frontend service with local build
+  # Frontend service with Vite dev server and hot reload
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        NODE_ENV: development
-        VITE_API_URL: http://localhost/api
-        VITE_LIFF_ID: ${VITE_LIFF_ID:-your-liff-id-here}
+      dockerfile: Dockerfile.dev
     image: mars-frontend:local
     container_name: mars-frontend-local
-    env_file:
-      - ./frontend/.env.development
+    command: npm run dev
     environment:
       - NODE_ENV=development
-      - VITE_API_URL=http://localhost/api
-      - VITE_LIFF_ID=${VITE_LIFF_ID:-your-liff-id-here}
+      - VITE_API_URL=/api
+      - VITE_LIFF_ID=2008351084-nRdr4kE4
     volumes:
-      # Mount built files for development
-      - ./frontend/dist:/usr/share/nginx/html:ro
+      # Mount source code for development (hot reload)
+      - ./frontend:/app
+      - /app/node_modules
     # No port mapping - only accessible through nginx proxy
     networks:
       - mars-network
@@ -73,7 +71,7 @@ services:
       - "443:443"
     volumes:
       # Use local nginx configuration
-      - ./nginx-development.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx-local-dev.conf:/etc/nginx/nginx.conf:ro
       # SSL certificates (optional)
       # - ./ssl:/etc/ssl:ro
     depends_on:

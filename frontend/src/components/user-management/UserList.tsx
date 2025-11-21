@@ -108,12 +108,12 @@ export const UserList: React.FC<UserListProps> = ({
                           {user.departmentName}
                         </div>
                       )}
-                      {user.siteName && (
+                      {/* {user.siteName && (
                         <div className="flex items-center text-sm">
                           <Clock className="h-3 w-3 mr-2 text-gray-400" />
                           {user.siteName}
                         </div>
-                      )}
+                      )} */}
                     </div>
                   </td>
                   
@@ -122,9 +122,9 @@ export const UserList: React.FC<UserListProps> = ({
                       <Badge className={getPermissionLevelColor(user.permissionLevel)}>
                         {user.groupCode}
                       </Badge>
-                      <div className="text-xs text-gray-500">
+                      {/* <div className="text-xs text-gray-500">
                         Level {user.permissionLevel}
-                      </div>
+                      </div> */}
                     </div>
                   </td>
                   
