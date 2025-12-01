@@ -24,12 +24,6 @@ const HomePage: React.FC = () => {
   const [pendingTickets, setPendingTickets] = useState<APIPendingTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pendingTicketsPagination, setPendingTicketsPagination] = useState({
-    page: 1,
-    limit: 10,
-    total: 0,
-    pages: 0
-  });
 
   // Personal tab time range filter state - Applied (currently active)
   const [personalTimeFilter, setPersonalTimeFilter] = useState<string>('this-period');
@@ -74,13 +68,9 @@ const HomePage: React.FC = () => {
 
       try {
         setLoading(true);
-        const response = await ticketService.getUserPendingTickets({
-          page: pendingTicketsPagination.page,
-          limit: pendingTicketsPagination.limit
-        });
+        const response = await ticketService.getUserPendingTickets();
         if (response.success) {
           setPendingTickets(response.data.tickets);
-          setPendingTicketsPagination(response.data.pagination);
           console.log('Pending tickets data:', response.data);
         } else {
           setError(t('homepage.failedToFetchPendingTickets'));
@@ -98,7 +88,7 @@ const HomePage: React.FC = () => {
     };
 
     fetchPendingTickets();
-  }, [isAuthenticated, user, pendingTicketsPagination.page, pendingTicketsPagination.limit]);
+  }, [isAuthenticated, user]);
 
   // Fetch personal ticket data when filters change
   useEffect(() => {
@@ -136,10 +126,6 @@ const HomePage: React.FC = () => {
 
   const handleTicketClick = (ticketId: number) => {
     navigate(`/tickets/${ticketId}`, { state: { from: '/home' } });
-  };
-
-  const handlePendingTicketsPageChange = (page: number) => {
-    setPendingTicketsPagination(prev => ({ ...prev, page }));
   };
 
   // Handle KPI setup modal
@@ -382,8 +368,6 @@ const HomePage: React.FC = () => {
             loading={loading}
             error={error}
             onTicketClick={handleTicketClick}
-            pagination={pendingTicketsPagination}
-            onPageChange={handlePendingTicketsPageChange}
           />
         </TabsContent>
 

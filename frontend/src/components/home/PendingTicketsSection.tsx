@@ -36,13 +36,13 @@ type PendingTicketsSectionProps = {
   loading: boolean;
   error: string | null;
   onTicketClick: (ticketId: number) => void;
-  pagination: {
+  pagination?: {
     page: number;
     limit: number;
     total: number;
     pages: number;
   };
-  onPageChange: (page: number) => void;
+  onPageChange?: (page: number) => void;
 };
 
 type RelationshipConfig = {
@@ -767,7 +767,7 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
         renderTicketTable(relationship, groupedTickets[relationship]),
       )}
 
-      {pagination.pages > 1 && (
+      {pagination && onPageChange && pagination.pages > 1 && (
         <div className="flex justify-between items-center mt-6">
           <div className="text-sm text-muted-foreground">
             {t("ticket.showing")}{" "}

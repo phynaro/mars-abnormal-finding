@@ -3484,6 +3484,18 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       }
     }
 
+    // Build WHERE clause for waiting tickets (all currently open tickets, regardless of creation date)
+    // Still apply plant/area filters if specified
+    let waitingTicketsWhereClause = `WHERE t.status = 'open'`;
+    
+    if (plant && plant !== 'all') {
+      waitingTicketsWhereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      waitingTicketsWhereClause += ` AND pe.area = '${area}'`;
+    }
+
     // Get current period KPIs
     const currentKPIsQuery = `
       SELECT 
@@ -3496,6 +3508,15 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       FROM IgxTickets t
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       ${currentWhereClause}
+    `;
+
+    // Get waiting tickets count separately (all currently open tickets, not filtered by creation date)
+    const waitingTicketsQuery = `
+      SELECT 
+        COUNT(*) as waitingTickets
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+      ${waitingTicketsWhereClause}
     `;
 
     // Get comparison period KPIs
@@ -3544,7 +3565,9 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
 LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
+      AND t.status IN ('closed', 'resolved')
       GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
+      HAVING ISNULL(SUM(t.cost_avoidance), 0) > 0
       ORDER BY totalSavings DESC
     `;
 
@@ -3560,14 +3583,44 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
 LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
+      AND t.status IN ('closed', 'resolved')
       GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
+      HAVING ISNULL(SUM(t.downtime_avoidance_hours), 0) > 0
       ORDER BY totalDowntimeSaved DESC
     `;
 
+    // Build WHERE clause for comparison period waiting tickets (if comparison period is provided)
+    let compareWaitingTicketsWhereClause = '';
+    if (compareWhereClause) {
+      compareWaitingTicketsWhereClause = `WHERE t.status = 'open'`;
+      
+      if (plant && plant !== 'all') {
+        compareWaitingTicketsWhereClause += ` AND pe.plant = '${plant}'`;
+      }
+      
+      if (area && area !== 'all') {
+        compareWaitingTicketsWhereClause += ` AND pe.area = '${area}'`;
+      }
+    }
+
+    // Get comparison period waiting tickets count (if comparison period is provided)
+    let compareWaitingTicketsQuery = '';
+    if (compareWaitingTicketsWhereClause) {
+      compareWaitingTicketsQuery = `
+        SELECT 
+          COUNT(*) as waitingTickets
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        ${compareWaitingTicketsWhereClause}
+      `;
+    }
+
     // Execute all queries
-    const [currentKPIsResult, compareKPIsResult, topReporterResult, topCostSaverResult, topDowntimeSaverResult] = await Promise.all([
+    const [currentKPIsResult, compareKPIsResult, waitingTicketsResult, compareWaitingTicketsResult, topReporterResult, topCostSaverResult, topDowntimeSaverResult] = await Promise.all([
       pool.request().query(currentKPIsQuery),
       compareKPIsQuery ? pool.request().query(compareKPIsQuery) : Promise.resolve({ recordset: [{ totalTickets: 0, closedTickets: 0, pendingTickets: 0, totalDowntimeAvoidance: 0, totalCostAvoidance: 0 }] }),
+      pool.request().query(waitingTicketsQuery),
+      compareWaitingTicketsQuery ? pool.request().query(compareWaitingTicketsQuery) : Promise.resolve({ recordset: [{ waitingTickets: 0 }] }),
       pool.request().query(topPerformersQuery),
       pool.request().query(topCostSaverQuery),
       pool.request().query(topDowntimeSaverQuery)
@@ -3575,6 +3628,8 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
 
     const currentKPIs = currentKPIsResult.recordset[0];
     const compareKPIs = compareKPIsResult.recordset[0];
+    const waitingTicketsCount = waitingTicketsResult.recordset[0]?.waitingTickets || 0;
+    const compareWaitingTicketsCount = compareWaitingTicketsResult.recordset[0]?.waitingTickets || 0;
     const topReporter = topReporterResult.recordset[0] || null;
     const topCostSaver = topCostSaverResult.recordset[0] || null;
     const topDowntimeSaver = topDowntimeSaverResult.recordset[0] || null;
@@ -3628,7 +3683,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     const comparisonMetrics = {
       ticketGrowthRate: calculateGrowthRate(currentKPIs.totalTickets, compareKPIs.totalTickets),
       closureRateImprovement: calculateGrowthRate(currentKPIs.closedTickets, compareKPIs.closedTickets),
-      waitingTicketsChange: calculateGrowthRate(currentKPIs.waitingTickets, compareKPIs.waitingTickets),
+      waitingTicketsChange: calculateGrowthRate(waitingTicketsCount, compareWaitingTicketsCount),
       costAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalCostAvoidance, compareKPIs.totalCostAvoidance),
       downtimeAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalDowntimeAvoidance, compareKPIs.totalDowntimeAvoidance)
     };
@@ -3642,8 +3697,8 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
           totalTicketsLastPeriod: compareKPIs.totalTickets || 0,
           closedTicketsThisPeriod: currentKPIs.closedTickets || 0,
           closedTicketsLastPeriod: compareKPIs.closedTickets || 0,
-          waitingTicketsThisPeriod: currentKPIs.waitingTickets || 0,
-          waitingTicketsLastPeriod: compareKPIs.waitingTickets || 0,
+          waitingTicketsThisPeriod: waitingTicketsCount || 0,
+          waitingTicketsLastPeriod: compareWaitingTicketsCount || 0,
           pendingTicketsThisPeriod: currentKPIs.pendingTickets || 0,
           pendingTicketsLastPeriod: compareKPIs.pendingTickets || 0,
           totalDowntimeAvoidanceThisPeriod: currentKPIs.totalDowntimeAvoidance || 0,

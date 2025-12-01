@@ -172,8 +172,7 @@ export interface TicketFilters {
   page?: number;
   limit?: number;
   status?: string;
-  priority?: string;
-  severity_level?: string;
+  pucriticalno?: number;  // Critical Level (replaces priority and severity_level)
   assigned_to?: number;
   created_by?: number;
   search?: string;
@@ -751,14 +750,9 @@ class TicketService {
     return result;
   }
 
-  async getUserPendingTickets(params?: { page?: number; limit?: number }): Promise<{ success: boolean; data: { tickets: PendingTicket[]; pagination: { page: number; limit: number; total: number; pages: number } } }> {
+  async getUserPendingTickets(): Promise<{ success: boolean; data: { tickets: PendingTicket[] } }> {
     const headers = getAuthHeaders();
-    const queryParams = new URLSearchParams();
-    
-    if (params?.page) queryParams.set('page', params.page.toString());
-    if (params?.limit) queryParams.set('limit', params.limit.toString());
-    
-    const url = `${API_BASE_URL}/tickets/pending/user${queryParams.toString() ? `?${queryParams.toString()}` : ''}`;
+    const url = `${API_BASE_URL}/tickets/pending/user`;
     const res = await fetch(url, { headers });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to fetch pending tickets');

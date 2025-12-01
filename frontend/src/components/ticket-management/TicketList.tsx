@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, TicketFilters } from "@/services/ticketService";
+import { hierarchyService, type PUCritical } from "@/services/hierarchyService";
 import authService from "@/services/authService";
 import { useToast } from "@/hooks/useToast";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -71,6 +72,8 @@ export const TicketList: React.FC = () => {
   const [plants, setPlants] = useState<HierarchyOption[]>([]);
   const [areas, setAreas] = useState<HierarchyOption[]>([]);
   const [users, setUsers] = useState<Array<{id: number; name: string; email?: string}>>([]);
+  const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
+  const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
   const { toast } = useToast();
 
   // Helper function to check if user is L3/Admin (permission level 3 or higher)
@@ -86,8 +89,7 @@ export const TicketList: React.FC = () => {
     page: 1,
     limit: 10,
     status: "",
-    priority: "",
-    severity_level: "",
+    pucriticalno: undefined,
     search: "",
     plant: undefined,
     area: undefined,
@@ -160,6 +162,21 @@ export const TicketList: React.FC = () => {
     }
   };
 
+  const fetchCriticalLevels = async () => {
+    try {
+      setCriticalLevelsLoading(true);
+      const response = await hierarchyService.getPUCriticalLevels();
+      if (response.success) {
+        setCriticalLevels(response.data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch critical levels:', error);
+      setCriticalLevels([]);
+    } finally {
+      setCriticalLevelsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchTickets();
   }, [filters]);
@@ -168,6 +185,7 @@ export const TicketList: React.FC = () => {
     fetchPlants();
     // Don't fetch areas on mount - wait for plant selection
     fetchUsers();
+    fetchCriticalLevels();
   }, []);
 
   // Refetch areas when plant filter changes
@@ -198,8 +216,7 @@ export const TicketList: React.FC = () => {
       page: 1,
       limit: 10,
       status: "",
-      priority: "",
-      severity_level: "",
+      pucriticalno: undefined,
       search: "",
       plant: undefined,
       area: undefined,
@@ -209,7 +226,7 @@ export const TicketList: React.FC = () => {
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.priority || filters.severity_level || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to);
+    return !!(filters.status || filters.pucriticalno || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to);
   };
 
   const handlePageChange = (page: number) => {
@@ -435,40 +452,24 @@ export const TicketList: React.FC = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="priority">{t('ticket.priority')}</Label>
+                  <Label htmlFor="critical">{t('ticket.criticalLevel')}</Label>
                   <Select
-                    value={filters.priority || "all"}
-                    onValueChange={(v) => handleFilterChange("priority", v === "all" ? "" : v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('ticket.allPriorities')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('ticket.allPriorities')}</SelectItem>
-                      <SelectItem value="low">{t('ticket.low')}</SelectItem>
-                      <SelectItem value="normal">{t('ticket.normal')}</SelectItem>
-                      <SelectItem value="high">{t('ticket.high')}</SelectItem>
-                      <SelectItem value="urgent">{t('ticket.urgent')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="severity">{t('ticket.severity')}</Label>
-                  <Select
-                    value={filters.severity_level || "all"}
+                    value={filters.pucriticalno ? filters.pucriticalno.toString() : "all"}
                     onValueChange={(v) =>
-                      handleFilterChange("severity_level", v === "all" ? "" : v)
+                      handleFilterChange("pucriticalno", v === "all" ? undefined : parseInt(v))
                     }
+                    disabled={criticalLevelsLoading}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder={t('ticket.allSeverities')} />
+                      <SelectValue placeholder={criticalLevelsLoading ? t('common.loading') : t('ticket.allCriticalLevels')} />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="all">{t('ticket.allSeverities')}</SelectItem>
-                      <SelectItem value="low">{t('ticket.low')}</SelectItem>
-                      <SelectItem value="medium">{t('ticket.medium')}</SelectItem>
-                      <SelectItem value="high">{t('ticket.high')}</SelectItem>
-                      <SelectItem value="critical">{t('ticket.critical')}</SelectItem>
+                      <SelectItem value="all">{t('ticket.allCriticalLevels')}</SelectItem>
+                      {criticalLevels.map((level) => (
+                        <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
+                          {level.PUCRITICALNAME}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -591,21 +592,12 @@ export const TicketList: React.FC = () => {
               />
             </Badge>
           )}
-          {filters.priority && (
+          {filters.pucriticalno && (
             <Badge variant="secondary" className="gap-1">
-              Priority: {filters.priority.toUpperCase()}
+              {t('ticket.criticalLevel')}: {getCriticalLevelText(filters.pucriticalno, t)}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
-                onClick={() => clearFilter("priority")}
-              />
-            </Badge>
-          )}
-          {filters.severity_level && (
-            <Badge variant="secondary" className="gap-1">
-              Severity: {filters.severity_level.toUpperCase()}
-              <X
-                className="h-3 w-3 cursor-pointer hover:text-destructive"
-                onClick={() => clearFilter("severity_level")}
+                onClick={() => clearFilter("pucriticalno")}
               />
             </Badge>
           )}

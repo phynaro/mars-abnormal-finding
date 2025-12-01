@@ -387,6 +387,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.criticalLevel5': 'Production Stop',
     'ticket.criticalLevel6': 'Production Dropped',
     'ticket.criticalLevel7': 'No Impact',
+    'ticket.allCriticalLevels': 'All Critical Levels',
     'ticket.finished': 'Finished',
     'ticket.escalated': 'Escalated',
     'ticket.reopenedInProgress': 'Reopened',
@@ -1138,6 +1139,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.criticalLevel5': 'การผลิตหยุด',
     'ticket.criticalLevel6': 'กำลังการผลิตลดลง',
     'ticket.criticalLevel7': 'ไม่มีผลกระทบ',
+    'ticket.allCriticalLevels': 'ทุกระดับความสำคัญ',
     
     'ticket.finished': 'เสร็จสิ้น',
     'ticket.escalated': 'ยกระดับ',

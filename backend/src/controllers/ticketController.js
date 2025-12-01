@@ -520,8 +520,7 @@ const getTickets = async (req, res) => {
       page = 1,
       limit = 10,
       status,
-      priority,
-      severity_level,
+      pucriticalno,
       assigned_to,
       created_by,
       search,
@@ -540,17 +539,12 @@ const getTickets = async (req, res) => {
       params.push({ name: "status", value: status, type: sql.VarChar(20) });
     }
 
-    if (priority) {
-      whereClause += " AND t.priority = @priority";
-      params.push({ name: "priority", value: priority, type: sql.VarChar(20) });
-    }
-
-    if (severity_level) {
-      whereClause += " AND t.severity_level = @severity_level";
+    if (pucriticalno) {
+      whereClause += " AND t.pucriticalno = @pucriticalno";
       params.push({
-        name: "severity_level",
-        value: severity_level,
-        type: sql.VarChar(20),
+        name: "pucriticalno",
+        value: parseInt(pucriticalno),
+        type: sql.Int,
       });
     }
 
@@ -5943,7 +5937,6 @@ const reopenTicket = async (req, res) => {
 const getUserPendingTickets = async (req, res) => {
   try {
     const userId = req.user.id; // Changed from req.user.personno to req.user.id
-    const { page = 1, limit = 10 } = req.query;
 
     if (!userId) {
       return res.status(400).json({
@@ -5952,172 +5945,127 @@ const getUserPendingTickets = async (req, res) => {
       });
     }
 
-    const offset = (page - 1) * limit;
     const pool = await sql.connect(dbConfig);
 
-    // First, get total count for pagination with deduplication
-    const countRequest = pool.request();
-    const countQuery = `
-            SELECT COUNT(DISTINCT t.id) as total
-            FROM IgxTickets t
-            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
-                AND ta.plant_code = pe.plant 
-                AND ta.is_active = 1
-                AND (
-                    -- Exact line match
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                    OR
-                    -- Area-level approval (area matches, line is null in approval)
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                    OR
-                    -- Plant-level approval (area and line are null in approval)
-                    (ta.area_code IS NULL AND ta.line_code IS NULL)
-                )
-            WHERE (
-                -- IgxTickets created by the user
-                t.created_by = @userId
-                OR 
-                -- IgxTickets where user has approval_level >= 2 for the line/area/plant
-                (ta.approval_level >= 2 AND ta.is_active = 1)
-            )
-            AND t.status NOT IN ('closed', 'finished', 'canceled', 'rejected_final')
-        `;
-
-    const countResult = await countRequest
-      .input("userId", sql.Int, userId)
-      .query(countQuery);
-
-    const total = countResult.recordset[0].total;
-
-    // Query to get tickets related to the user with deduplication
-    // Using nested queries to properly handle deduplication and pagination
+    // Query to get all tickets related to the user with deduplication
     const query = `
             SELECT *
             FROM (
                 SELECT 
-                    *,
-                    ROW_NUMBER() OVER (ORDER BY created_at DESC) as row_num
-                FROM (
-                    SELECT 
-                        t.*,
-                        r.PERSON_NAME as reporter_name,
-                        r.EMAIL as reporter_email,
-                        r.PHONE as reporter_phone,
-                        a.PERSON_NAME as assignee_name,
-                        a.EMAIL as assignee_email,
-                        a.PHONE as assignee_phone,
-                        -- Hierarchy information from IgxPUExtension (prioritize most specific)
-                        pe.pucode,
-                        pe.plant as plant_code,
-                        pe.area as area_code,
-                        pe.line as line_code,
-                        pe.machine as machine_code,
-                        pe.number as machine_number,
-                        pe.pudescription as pudescription,
-                        pe.digit_count,
-                        -- Hierarchy names based on digit patterns
-                        (SELECT TOP 1 pudescription 
-                         FROM IgxPUExtension pe2 
-                         WHERE pe2.plant = pe.plant 
-                         AND pe2.area IS NULL 
-                         AND pe2.line IS NULL 
-                         AND pe2.machine IS NULL) as plant_name,
-                        (SELECT TOP 1 pudescription 
-                         FROM IgxPUExtension pe2 
-                         WHERE pe2.plant = pe.plant 
-                         AND pe2.area = pe.area 
-                         AND pe2.line IS NULL 
-                         AND pe2.machine IS NULL) as area_name,
-                        (SELECT TOP 1 pudescription 
-                         FROM IgxPUExtension pe2 
-                         WHERE pe2.plant = pe.plant 
-                         AND pe2.area = pe.area 
-                         AND pe2.line = pe.line 
-                         AND pe2.machine IS NULL) as line_name,
-                        (SELECT TOP 1 pudescription 
-                         FROM IgxPUExtension pe2 
-                         WHERE pe2.plant = pe.plant 
-                         AND pe2.area = pe.area 
-                         AND pe2.line = pe.line 
-                         AND pe2.machine = pe.machine) as machine_name,
-                        -- PU information
-                        pu.PUCODE as pu_pucode,
-                        pu.PUNAME as pu_name,
-                        -- User's relationship to this ticket (prioritize highest approval level)
-                        CASE 
-                            WHEN t.status = 'escalated' AND ta.approval_level >= 3 THEN 'escalate_approver'
-                            WHEN t.status = 'reviewed' AND ta.approval_level = 4 THEN 'close_approver'
-                            WHEN t.status = 'finished' AND t.created_by = @userId THEN 'review_approver'
-                            WHEN t.status = 'in_progress' AND t.assigned_to = @userId THEN 'assignee'
-                            WHEN t.status = 'reopened_in_progress' AND t.assigned_to = @userId THEN 'assignee'
-                            WHEN t.status = 'planed' AND t.assigned_to = @userId THEN 'assignee'
-                            WHEN t.status = 'open' AND ta.approval_level >= 2 THEN 'accept_approver'
-                            WHEN t.status = 'accepted' AND (ta.approval_level = 2 OR ta.approval_level = 3) THEN 'planner'
-                            WHEN t.status = 'rejected_pending_l3_review' AND ta.approval_level >= 3 THEN 'reject_approver'
-                            WHEN t.assigned_to = @userId THEN 'assignee'
-                            WHEN t.created_by = @userId THEN 'requester'
-                            ELSE 'viewer'
-                        END as user_relationship,
-                        ta.approval_level as user_approval_level,
-                        -- Action person names
-                        accepted_person.PERSON_NAME as accepted_by_name,
-                        escalated_person.PERSON_NAME as escalated_by_name,
-                        reviewed_person.PERSON_NAME as reviewed_by_name,
-                        finished_person.PERSON_NAME as finished_by_name,
-                        rejected_person.PERSON_NAME as rejected_by_name,
-                        -- Deduplication: prioritize rows with higher digit_count and approval_level
-                        ROW_NUMBER() OVER (
-                            PARTITION BY t.id 
-                            ORDER BY 
-                                ISNULL(pe.digit_count, 0) DESC,
-                                ISNULL(ta.approval_level, 0) DESC,
-                                t.created_at DESC
-                        ) as dedup_row_num
-                    FROM IgxTickets t
-                    LEFT JOIN Person r ON t.created_by = r.PERSONNO
-                    LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
-                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-                    LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
-                        AND ta.plant_code = pe.plant 
-                        AND ta.is_active = 1
-                        AND (
-                            -- Exact line match
-                            (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                            OR
-                            -- Area-level approval (area matches, line is null in approval)
-                            (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                            OR
-                            -- Plant-level approval (area and line are null in approval)
-                            (ta.area_code IS NULL AND ta.line_code IS NULL)
-                        )
-                    LEFT JOIN Person accepted_person ON t.accepted_by = accepted_person.PERSONNO
-                    LEFT JOIN Person escalated_person ON t.escalated_by = escalated_person.PERSONNO
-                    LEFT JOIN Person reviewed_person ON t.reviewed_by = reviewed_person.PERSONNO
-                    LEFT JOIN Person finished_person ON t.finished_by = finished_person.PERSONNO
-                    LEFT JOIN Person rejected_person ON t.rejected_by = rejected_person.PERSONNO
-                    WHERE (
-                        -- IgxTickets created by the user
-                        t.created_by = @userId
-                        OR 
-                        -- IgxTickets where user has approval_level >= 2 for the line/area/plant
-                        (ta.approval_level >= 2 AND ta.is_active = 1)
+                    t.*,
+                    r.PERSON_NAME as reporter_name,
+                    r.EMAIL as reporter_email,
+                    r.PHONE as reporter_phone,
+                    a.PERSON_NAME as assignee_name,
+                    a.EMAIL as assignee_email,
+                    a.PHONE as assignee_phone,
+                    -- Hierarchy information from IgxPUExtension (prioritize most specific)
+                    pe.pucode,
+                    pe.plant as plant_code,
+                    pe.area as area_code,
+                    pe.line as line_code,
+                    pe.machine as machine_code,
+                    pe.number as machine_number,
+                    pe.pudescription as pudescription,
+                    pe.digit_count,
+                    -- Hierarchy names based on digit patterns
+                    (SELECT TOP 1 pudescription 
+                     FROM IgxPUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area IS NULL 
+                     AND pe2.line IS NULL 
+                     AND pe2.machine IS NULL) as plant_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM IgxPUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line IS NULL 
+                     AND pe2.machine IS NULL) as area_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM IgxPUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line = pe.line 
+                     AND pe2.machine IS NULL) as line_name,
+                    (SELECT TOP 1 pudescription 
+                     FROM IgxPUExtension pe2 
+                     WHERE pe2.plant = pe.plant 
+                     AND pe2.area = pe.area 
+                     AND pe2.line = pe.line 
+                     AND pe2.machine = pe.machine) as machine_name,
+                    -- PU information
+                    pu.PUCODE as pu_pucode,
+                    pu.PUNAME as pu_name,
+                    -- User's relationship to this ticket (prioritize highest approval level)
+                    CASE 
+                        WHEN t.status = 'escalated' AND ta.approval_level >= 3 THEN 'escalate_approver'
+                        WHEN t.status = 'reviewed' AND ta.approval_level = 4 THEN 'close_approver'
+                        WHEN t.status = 'finished' AND t.created_by = @userId THEN 'review_approver'
+                        WHEN t.status = 'in_progress' AND t.assigned_to = @userId THEN 'assignee'
+                        WHEN t.status = 'reopened_in_progress' AND t.assigned_to = @userId THEN 'assignee'
+                        WHEN t.status = 'planed' AND t.assigned_to = @userId THEN 'assignee'
+                        WHEN t.status = 'open' AND ta.approval_level >= 2 THEN 'accept_approver'
+                        WHEN t.status = 'accepted' AND (ta.approval_level = 2 OR ta.approval_level = 3) THEN 'planner'
+                        WHEN t.status = 'rejected_pending_l3_review' AND ta.approval_level >= 3 THEN 'reject_approver'
+                        WHEN t.assigned_to = @userId THEN 'assignee'
+                        WHEN t.created_by = @userId THEN 'requester'
+                        ELSE 'viewer'
+                    END as user_relationship,
+                    ta.approval_level as user_approval_level,
+                    -- Action person names
+                    accepted_person.PERSON_NAME as accepted_by_name,
+                    escalated_person.PERSON_NAME as escalated_by_name,
+                    reviewed_person.PERSON_NAME as reviewed_by_name,
+                    finished_person.PERSON_NAME as finished_by_name,
+                    rejected_person.PERSON_NAME as rejected_by_name,
+                    -- Deduplication: prioritize rows with higher digit_count and approval_level
+                    ROW_NUMBER() OVER (
+                        PARTITION BY t.id 
+                        ORDER BY 
+                            ISNULL(pe.digit_count, 0) DESC,
+                            ISNULL(ta.approval_level, 0) DESC,
+                            t.created_at DESC
+                    ) as dedup_row_num
+                FROM IgxTickets t
+                LEFT JOIN Person r ON t.created_by = r.PERSONNO
+                LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
+                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+                LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
+                    AND ta.plant_code = pe.plant 
+                    AND ta.is_active = 1
+                    AND (
+                        -- Exact line match
+                        (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
+                        OR
+                        -- Area-level approval (area matches, line is null in approval)
+                        (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
+                        OR
+                        -- Plant-level approval (area and line are null in approval)
+                        (ta.area_code IS NULL AND ta.line_code IS NULL)
                     )
-                    AND t.status NOT IN ('closed', 'canceled', 'rejected_final')
-                ) AS deduped_results
-                WHERE dedup_row_num = 1
-            ) AS paginated_results
-            WHERE row_num > @offset AND row_num <= @offset + @limit
+                LEFT JOIN Person accepted_person ON t.accepted_by = accepted_person.PERSONNO
+                LEFT JOIN Person escalated_person ON t.escalated_by = escalated_person.PERSONNO
+                LEFT JOIN Person reviewed_person ON t.reviewed_by = reviewed_person.PERSONNO
+                LEFT JOIN Person finished_person ON t.finished_by = finished_person.PERSONNO
+                LEFT JOIN Person rejected_person ON t.rejected_by = rejected_person.PERSONNO
+                WHERE (
+                    -- IgxTickets created by the user
+                    t.created_by = @userId
+                    OR 
+                    -- IgxTickets where user has approval_level >= 2 for the line/area/plant
+                    (ta.approval_level >= 2 AND ta.is_active = 1)
+                )
+                AND t.status NOT IN ('closed', 'canceled', 'rejected_final')
+            ) AS deduped_results
+            WHERE dedup_row_num = 1
+            ORDER BY created_at DESC
         `;
 
     // Create a new request for the main query
     const mainRequest = pool.request();
     const result = await mainRequest
       .input("userId", sql.Int, userId)
-      .input("offset", sql.Int, offset)
-      .input("limit", sql.Int, limit)
       .query(query);
 
     const tickets = result.recordset;
@@ -6126,12 +6074,6 @@ const getUserPendingTickets = async (req, res) => {
       success: true,
       data: {
         tickets,
-        pagination: {
-          page: parseInt(page),
-          limit: parseInt(limit),
-          total,
-          pages: Math.ceil(total / limit),
-        },
       },
     });
   } catch (error) {

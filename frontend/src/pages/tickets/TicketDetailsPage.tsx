@@ -701,7 +701,7 @@ const TicketDetailsPage: React.FC = () => {
         </button>
         {(isCreator || isAssignedUser || isL2Plus) && (
           <button
-            className="absolute right-3 top-3 hidden rounded-full bg-white/90 p-1 text-red-600 shadow-sm transition hover:bg-white group-hover:block disabled:opacity-50"
+            className="absolute right-3 top-3 block rounded-full bg-white/90 p-1 text-red-600 shadow-sm transition hover:bg-white sm:hidden sm:group-hover:block disabled:opacity-50"
             title="Delete image"
             disabled={deletingImageId === img.id}
             onClick={async () => {
