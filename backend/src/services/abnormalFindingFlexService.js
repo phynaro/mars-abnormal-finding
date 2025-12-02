@@ -317,7 +317,8 @@ function buildTicketFlexMessage(state, payload, options = {}) {
 class TicketNotificationService {
   constructor() {
     this.channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
-    this.apiBase = 'https://api.line.me/v2/bot/message';
+    //this.apiBase = 'https://api.line.me/v2/bot/message';
+    this.apiBase = 'https://default82d7037e747a42f887d16122afc26d.ec.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/4f2b5416fca24dc38c5205a2b077d8e9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=96wuyaCkrDLJxXhRun-l5qyVH3nqyYYKkHLaQSK4m0c';
     this.timeout = 10000; // 10 seconds
   }
 
@@ -361,20 +362,26 @@ class TicketNotificationService {
 
       // Send to LINE API
       const payload = {
-        to: lineUserId,
-        messages: processedMessages,
+        line_payload: {
+          to: lineUserId,
+          messages: processedMessages,
+        },
+        access_token: this.channelAccessToken,
       };
 
+      console.log('payload :', payload);
+
       const response = await axios.post(
-        `${this.apiBase}/push`,
-        payload,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.channelAccessToken}`,
-          },
-          timeout: this.timeout,
-        }
+     //   `${this.apiBase}/push`,
+     `${this.apiBase}`,payload
+        // payload,
+        // {
+        //   headers: {
+        //     'Content-Type': 'application/json',
+        //     Authorization: `Bearer ${this.channelAccessToken}`,
+        //   },
+        //   timeout: this.timeout,
+        // }
       );
 
       return { 

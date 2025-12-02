@@ -57,7 +57,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/useToast";
 import authService from "@/services/authService";
-import { formatTimelineTime, formatUITime } from "@/utils/timezone";
+import { formatTimelineTime, formatUITime, timestampToDatetimeLocal } from "@/utils/timezone";
 import {
   getTicketPriorityClass,
   getTicketSeverityClass,
@@ -812,13 +812,8 @@ const TicketDetailsPage: React.FC = () => {
       
       // Pre-populate actual start time with existing value if available
       if (ticket?.actual_start_at) {
-        const startDate = new Date(ticket.actual_start_at);
-        const startYear = startDate.getFullYear();
-        const startMonth = String(startDate.getMonth() + 1).padStart(2, '0');
-        const startDay = String(startDate.getDate()).padStart(2, '0');
-        const startHours = String(startDate.getHours()).padStart(2, '0');
-        const startMinutes = String(startDate.getMinutes()).padStart(2, '0');
-        setActualStartAtEdit(`${startYear}-${startMonth}-${startDay}T${startHours}:${startMinutes}`);
+        // Use the helper function to properly convert UTC+7 timestamp to datetime-local format
+        setActualStartAtEdit(timestampToDatetimeLocal(ticket.actual_start_at));
       } else {
         setActualStartAtEdit("");
       }
@@ -2506,7 +2501,7 @@ const TicketDetailsPage: React.FC = () => {
                   </p>
                   {(() => {
                     // Get the actual start time to compare (use edited value if provided, otherwise use ticket's existing value)
-                    const startTime = actualStartAtEdit || (ticket?.actual_start_at ? new Date(ticket.actual_start_at).toISOString().slice(0, 16) : null);
+                    const startTime = actualStartAtEdit || (ticket?.actual_start_at ? timestampToDatetimeLocal(ticket.actual_start_at) : null);
                     const finishTime = actualFinishAt;
                     
                     if (startTime && finishTime) {
@@ -2737,7 +2732,7 @@ const TicketDetailsPage: React.FC = () => {
                     !actualFinishAt ||
                     (() => {
                       // Validate that finish time is not before start time
-                      const startTime = actualStartAtEdit || (ticket?.actual_start_at ? new Date(ticket.actual_start_at).toISOString().slice(0, 16) : null);
+                      const startTime = actualStartAtEdit || (ticket?.actual_start_at ? timestampToDatetimeLocal(ticket.actual_start_at) : null);
                       const finishTime = actualFinishAt;
                       if (startTime && finishTime) {
                         const start = new Date(startTime);

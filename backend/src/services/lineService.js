@@ -25,9 +25,12 @@ class LineWebhookService {
   constructor() {
     this.channelAccessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN || '';
     this.channelSecret = process.env.LINE_CHANNEL_SECRET || '';
-    this.apiBase = 'https://api.line.me/v2/bot/message';
+    //this.apiBase = 'https://api.line.me/v2/bot/message';
+    this.apiBase = 'https://default82d7037e747a42f887d16122afc26d.ec.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/4f2b5416fca24dc38c5205a2b077d8e9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=96wuyaCkrDLJxXhRun-l5qyVH3nqyYYKkHLaQSK4m0c';
     this.timeout = 10000; // 10 seconds
   }
+
+  
 
   /**
    * Checks if the service is properly configured
@@ -56,6 +59,8 @@ class LineWebhookService {
    */
   async sendToUser(lineUserId, messages) {
     try {
+
+      console.log('apiBase :', this.apiBase);
       // Validation
       if (!this.isConfigured()) {
         console.warn('LINE service not configured; skipping message send');
