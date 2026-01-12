@@ -21,6 +21,11 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
     allowedHosts: ['localhost', '127.0.0.1', '192.168.0.241', 'pch.trazor.cloud'],
+    // Enable polling for file watching (required for Docker on Windows)
+    watch: {
+      usePolling: true,
+      interval: 1000
+    },
     hmr: {
       host: 'pch.trazor.cloud',
       protocol: 'wss'
