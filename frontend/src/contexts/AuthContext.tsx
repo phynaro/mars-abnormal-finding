@@ -55,25 +55,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const initializeApp = async () => {
       try {
         // Step 1: Initialize LIFF
-        console.log("Starting LIFF initialization...");
+       // console.log("Starting LIFF initialization...");
         setLiffLoading(true);
         
         await liff.init({ liffId: import.meta.env.VITE_LIFF_ID });
         
-        console.log("LIFF initialization completed successfully");
+       // console.log("LIFF initialization completed successfully");
         setLiffObject(liff);
         setLiffError(null);
-        console.log("in app? ", liff.isInClient());
+       // console.log("in app? ", liff.isInClient());
         
         // Check if user is logged in to LINE (for both in-app and external browser)
         if (!liff.isLoggedIn()) {
-          console.log("User not logged in to LINE");
+         // console.log("User not logged in to LINE");
           if (liff.isInClient()) {
-            console.log("In LINE client, initiating login...");
+           // console.log("In LINE client, initiating login...");
             liff.login(); // Note: login() doesn't return a Promise, it redirects
             return; // Exit early as login() will redirect the page
           } else {
-            console.log("External browser, skipping LINE login flow - user can login manually");
+           // console.log("External browser, skipping LINE login flow - user can login manually");
             setLiffTokenVerified(false);
             setLiffTokenVerificationResult({
               success: false,
@@ -84,52 +84,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         } else {
           // User is logged in to LINE (either in-app or external browser after manual login)
-          console.log("User is logged in to LINE");
+         // console.log("User is logged in to LINE");
           if (liff.isInClient()) {
-            console.log("In LINE client");
+           // console.log("In LINE client");
           } else {
-            console.log("In external browser (after LINE login)");
+          //  console.log("In external browser (after LINE login)");
           }
           
           // User is logged in to LINE, log LIFF information
-          console.log("LIFF is logged in:", liff.isLoggedIn());
-          console.log("LIFF context:", liff.getContext());
-          console.log("LIFF OS:", liff.getOS());
-          console.log("LIFF version:", liff.getVersion());
-          console.log("LIFF language:", liff.getLanguage());
+          // console.log("LIFF is logged in:", liff.isLoggedIn());
+          // console.log("LIFF context:", liff.getContext());
+          // console.log("LIFF OS:", liff.getOS());
+          // console.log("LIFF version:", liff.getVersion());
+          // console.log("LIFF language:", liff.getLanguage());
           
           // Get profile information (this is async)
           try {
             const profile = await liff.getProfile();
-            console.log("LIFF profile:", profile);
+          //  console.log("LIFF profile:", profile);
           } catch (profileError) {
             console.warn("Could not get LIFF profile:", profileError);
           }
           
-          console.log("LIFF access token:", liff.getAccessToken());
-          console.log("LIFF ID token:", liff.getIDToken());
+          // console.log("LIFF access token:", liff.getAccessToken());
+          // console.log("LIFF ID token:", liff.getIDToken());
           
           // Step 2: Verify LIFF access token with backend
           const accessToken = liff.getAccessToken();
           if (accessToken) {
-            console.log("Verifying LIFF access token with backend...");
+            //console.log("Verifying LIFF access token with backend...");
             try {
               const verificationResult = await authService.verifyLiffToken(accessToken);
-              console.log("LIFF token verification result:", verificationResult);
+              //console.log("LIFF token verification result:", verificationResult);
               setLiffTokenVerificationResult(verificationResult);
               setLiffTokenVerified(verificationResult.success);
 
               // Step 2.1: Get LINE profile if token is verified
               if (verificationResult.success) {
-                console.log("Getting LINE profile...");
+              //  console.log("Getting LINE profile...");
                 try {
                   const profileResult = await authService.getLineProfile(accessToken);
-                  console.log("LINE profile result:", profileResult);
+                 // console.log("LINE profile result:", profileResult);
                   setLineProfile(profileResult);
 
                   // Step 2.2: Attempt LINE login if profile is successfully retrieved
                   if (profileResult.success && profileResult.profile) {
-                    console.log("Attempting LINE login with profile:", profileResult.profile);
+                  //  console.log("Attempting LINE login with profile:", profileResult.profile);
                     try {
                       const lineLoginData: LineLoginData = {
                         userId: profileResult.profile.userId,
@@ -138,7 +138,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                       };
                       
                       await authService.lineLogin(lineLoginData);
-                      console.log("LINE login successful!");
+                  //    console.log("LINE login successful!");
                       
                       // Get the user from authService to ensure consistency
                       const currentUser = authService.getCurrentUser();
@@ -172,8 +172,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
         
         // Step 3: Check authentication (runs for both LINE client and external browser)
-        console.log("Checking authentication...");
+       // console.log("Checking authentication...");
         const currentUser = authService.getCurrentUser();
+        console.log("currentUser", currentUser);
         if (currentUser && authService.isAuthenticated()) {
           setUser(currentUser);
           // Optionally refresh user data from server

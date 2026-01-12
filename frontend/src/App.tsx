@@ -22,6 +22,7 @@ import DashboardBacklogDetailPage from './pages/dashboard/DashboardBacklogDetail
 import AbnormalReportDashboardV2Page from './pages/dashboard/AbnormalReportDashboardV2Page';
 import PersonalKPIComparisonPage from './pages/dashboard/PersonalKPIComparisonPage';
 import DepartmentUserKPIDashboardPage from './pages/dashboard/DepartmentUserKPIDashboardPage';
+import AreaDashboardPage from './pages/dashboard/AreaDashboardPage';
 import UserActivityChartPage from './pages/charts/UserActivityChartPage';
 import TargetManagementPage from './pages/settings/TargetManagementPage';
 import UserManagementPage from './pages/settings/UserManagementPage';
@@ -216,6 +217,7 @@ const AppContent: React.FC = () => {
           <Route path="dashboard/abnormal" element={<AbnormalReportDashboardV2Page />} />
           <Route path="dashboard/personal-kpi-comparison" element={<PersonalKPIComparisonPage />} />
           <Route path="dashboard/department-user-kpi" element={<DepartmentUserKPIDashboardPage />} />
+          <Route path="dashboard/area/:areaName" element={<AreaDashboardPage />} />
           <Route path="dashboard/maintenance-kpi" element={<DashboardMaintenanceKPIPage />} />
           <Route path="dashboard/preventive-maintenance" element={<DashboardPreventiveMaintenancePage />} />
           <Route path="dashboard/calibration" element={<DashboardCalibrationPage />} />

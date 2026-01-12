@@ -187,3 +187,87 @@ export const getDateRangeForFilter = (
     }
   }
 };
+
+/**
+ * Gets the date range for a specific week within a period
+ * Each period has 4 weeks (28 days / 7 = 4 weeks)
+ * Week 1: Days 1-7, Week 2: Days 8-14, Week 3: Days 15-21, Week 4: Days 22-28
+ */
+export const getWeekDateRange = (year: number, period: number, week: number): { startDate: Date; endDate: Date } => {
+  if (week < 1 || week > 4) {
+    throw new Error('Week must be between 1 and 4');
+  }
+
+  const { startDate: periodStart } = getPeriodDateRange(year, period);
+  const weekStartDate = new Date(periodStart);
+  weekStartDate.setDate(periodStart.getDate() + (week - 1) * 7);
+
+  const weekEndDate = new Date(weekStartDate);
+  weekEndDate.setDate(weekStartDate.getDate() + 6); // 7 days total (inclusive)
+
+  return {
+    startDate: weekStartDate,
+    endDate: weekEndDate
+  };
+};
+
+/**
+ * Gets the date range for area dashboard with optional week and date filtering
+ * Used by AreaDashboardPage
+ */
+export const getDateRangeForAreaDashboard = (
+  timeFilter: string,
+  year: number,
+  period?: number,
+  week?: number,
+  date?: string
+): {
+  startDate: string;
+  endDate: string;
+} => {
+  let baseRange: { startDate: string; endDate: string };
+
+  // Get base date range from time filter
+  if (timeFilter === 'ytd') {
+    const { startDate, endDate } = getCompanyYearDateRange(year);
+    baseRange = {
+      startDate: formatLocalDate(startDate),
+      endDate: formatLocalDate(endDate)
+    };
+  } else if (timeFilter === 'period' && period) {
+    const { startDate, endDate } = getPeriodDateRange(year, period);
+    baseRange = {
+      startDate: formatLocalDate(startDate),
+      endDate: formatLocalDate(endDate)
+    };
+  } else {
+    // Default to current period
+    const now = new Date();
+    const currentPeriodInfo = calculatePeriodForDate(now, year);
+    const { startDate, endDate } = getPeriodDateRange(year, currentPeriodInfo.period);
+    baseRange = {
+      startDate: formatLocalDate(startDate),
+      endDate: formatLocalDate(endDate)
+    };
+  }
+
+  // Apply week filter if provided
+  if (week && period) {
+    const { startDate: weekStart, endDate: weekEnd } = getWeekDateRange(year, period, week);
+    return {
+      startDate: formatLocalDate(weekStart),
+      endDate: formatLocalDate(weekEnd)
+    };
+  }
+
+  // Apply date filter if provided
+  if (date) {
+    return {
+      startDate: date,
+      endDate: date
+    };
+  }
+
+  // Return base range if no additional filters
+  return baseRange;
+};

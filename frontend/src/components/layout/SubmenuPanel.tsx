@@ -29,19 +29,30 @@ export const SubmenuPanel: React.FC<SubmenuPanelProps> = ({ activeId, collapsed 
             <div className="font-medium truncate">{active.label}</div>
           </div>
           <nav className="flex-1 overflow-y-auto overflow-x-hidden py-2 transition-opacity duration-300 opacity-100">
-            {items.map(child => {
-              const isActive = location.pathname === child.path;
-              return (
-                <button
-                  key={child.id}
-                  className={`w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-hover hover:text-hover-foreground min-w-0 ${isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-                  onClick={() => navigate(child.path)}
-                >
-                  <span className="">{child.icon}</span>
-                  <span className="text-sm truncate">{child.label}</span>
-                </button>
-              );
-            })}
+            {items
+              .filter(child => {
+                // Hide Area Dashboard routes for userId 550
+                if ((child.id === 'dashboard-area-pouch' || 
+                     child.id === 'dashboard-area-dry' || 
+                     child.id === 'dashboard-area-pt') && 
+                    !(user?.id === 550)) {
+                  return false;
+                }
+                return true;
+              })
+              .map(child => {
+                const isActive = location.pathname === child.path;
+                return (
+                  <button
+                    key={child.id}
+                    className={`w-full flex items-center gap-3 px-4 py-2 text-left hover:bg-hover hover:text-hover-foreground min-w-0 ${isActive ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
+                    onClick={() => navigate(child.path)}
+                  >
+                    <span className="">{child.icon}</span>
+                    <span className="text-sm truncate">{child.label}</span>
+                  </button>
+                );
+              })}
           </nav>
         </>
       )}

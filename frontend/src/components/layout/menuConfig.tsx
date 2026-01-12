@@ -54,6 +54,9 @@ export const menuItems: MenuItem[] = [
       // { id: 'dashboard-spare-part', label: 'Spare Part', icon: <Boxes className="h-4 w-4" />, path: '/dashboard/spare-part', permissionLevel: 1 },
      { id: 'dashboard-personal-kpi', label: 'Personal KPI', icon: <BarChart3 className="h-4 w-4" />, path: '/dashboard/personal-kpi-comparison', permissionLevel: 1 },
      { id: 'dashboard-department-user-kpi', label: 'Department User KPI', icon: <Users className="h-4 w-4" />, path: '/dashboard/department-user-kpi', permissionLevel: 1 },
+     { id: 'dashboard-area-pouch', label: 'Pouch Dashboard', icon: <MapPin className="h-4 w-4" />, path: '/dashboard/area/pouch', permissionLevel: 1 },
+     { id: 'dashboard-area-dry', label: 'Dry Dashboard', icon: <MapPin className="h-4 w-4" />, path: '/dashboard/area/dry', permissionLevel: 1 },
+     { id: 'dashboard-area-pt', label: 'PT Dashboard', icon: <MapPin className="h-4 w-4" />, path: '/dashboard/area/pt', permissionLevel: 1 },
     ]
   },
   // {
