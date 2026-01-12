@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 // Removed outer Card wrapper for direct placement
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,7 @@ interface HierarchyOption {
 
 export const TicketList: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useLanguage();
   const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -84,18 +85,29 @@ export const TicketList: React.FC = () => {
   // Modal states
   // Removed view modal state
 
+  // Initialize filters from URL parameters
+  const initializeFiltersFromURL = (): TicketFilters => {
+    const urlFilters: TicketFilters = {
+      page: parseInt(searchParams.get('page') || '1'),
+      limit: parseInt(searchParams.get('limit') || '10'),
+      status: searchParams.get('status') || "",
+      pucriticalno: searchParams.get('pucriticalno') ? parseInt(searchParams.get('pucriticalno')!) : undefined,
+      search: searchParams.get('search') || "",
+      plant: searchParams.get('plant') || undefined,
+      area: searchParams.get('area') || undefined,
+      created_by: searchParams.get('created_by') ? parseInt(searchParams.get('created_by')!) : undefined,
+      assigned_to: searchParams.get('assigned_to') ? parseInt(searchParams.get('assigned_to')!) : undefined,
+      startDate: searchParams.get('startDate') || undefined,
+      endDate: searchParams.get('endDate') || undefined,
+      puno: searchParams.get('puno') || undefined,
+      delay: searchParams.get('delay') === 'true' ? true : undefined,
+      team: (searchParams.get('team') as 'operator' | 'reliability') || undefined,
+    };
+    return urlFilters;
+  };
+
   // Filters
-  const [filters, setFilters] = useState<TicketFilters>({
-    page: 1,
-    limit: 10,
-    status: "",
-    pucriticalno: undefined,
-    search: "",
-    plant: undefined,
-    area: undefined,
-    created_by: undefined,
-    assigned_to: undefined,
-  });
+  const [filters, setFilters] = useState<TicketFilters>(initializeFiltersFromURL());
 
   const fetchTickets = async () => {
     try {
@@ -177,6 +189,28 @@ export const TicketList: React.FC = () => {
     }
   };
 
+  // Initialize filters from URL on mount
+  useEffect(() => {
+    const urlFilters = initializeFiltersFromURL();
+    setFilters(urlFilters);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount
+
+  // Handle URL parameter changes (e.g., when navigating from Area Dashboard)
+  useEffect(() => {
+    const urlFilters = initializeFiltersFromURL();
+    // Check if URL params differ from current filters (excluding page which changes frequently)
+    const currentFiltersForComparison = { ...filters };
+    const urlFiltersForComparison = { ...urlFilters };
+    delete currentFiltersForComparison.page;
+    delete urlFiltersForComparison.page;
+    
+    const filtersChanged = JSON.stringify(urlFiltersForComparison) !== JSON.stringify(currentFiltersForComparison);
+    if (filtersChanged) {
+      setFilters(urlFilters);
+    }
+  }, [searchParams.toString()]); // Only when search params string changes
+
   useEffect(() => {
     fetchTickets();
   }, [filters]);
@@ -198,21 +232,51 @@ export const TicketList: React.FC = () => {
     }
   }, [filters.plant]);
 
+  // Sync filters to URL parameters
+  const syncFiltersToURL = (newFilters: TicketFilters) => {
+    const params = new URLSearchParams();
+    
+    Object.entries(newFilters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        if (key === 'delay' && typeof value === 'boolean') {
+          if (value) {
+            params.set(key, 'true');
+          }
+        } else {
+          params.set(key, value.toString());
+        }
+      }
+    });
+    
+    setSearchParams(params, { replace: true });
+  };
+
   const handleFilterChange = (key: keyof TicketFilters, value: any) => {
+    let updatedFilters: TicketFilters;
+    
     // When plant changes, reset area filter
     if (key === 'plant') {
-      setFilters((prev) => ({ ...prev, [key]: value, area: undefined, page: 1 }));
+      updatedFilters = { ...filters, [key]: value, area: undefined, page: 1 };
     } else {
-      setFilters((prev) => ({ ...prev, [key]: value, page: 1 }));
+      updatedFilters = { ...filters, [key]: value, page: 1 };
     }
+    
+    setFilters(updatedFilters);
+    syncFiltersToURL(updatedFilters);
   };
 
   const clearFilter = (key: keyof TicketFilters) => {
-    setFilters((prev) => ({ ...prev, [key]: key === 'page' || key === 'limit' ? prev[key] : undefined, page: 1 }));
+    const updatedFilters = { 
+      ...filters, 
+      [key]: key === 'page' || key === 'limit' ? filters[key] : undefined, 
+      page: 1 
+    };
+    setFilters(updatedFilters);
+    syncFiltersToURL(updatedFilters);
   };
 
   const clearAllFilters = () => {
-    setFilters({
+    const clearedFilters: TicketFilters = {
       page: 1,
       limit: 10,
       status: "",
@@ -222,11 +286,18 @@ export const TicketList: React.FC = () => {
       area: undefined,
       created_by: undefined,
       assigned_to: undefined,
-    });
+      startDate: undefined,
+      endDate: undefined,
+      puno: undefined,
+      delay: undefined,
+      team: undefined,
+    };
+    setFilters(clearedFilters);
+    syncFiltersToURL(clearedFilters);
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.pucriticalno || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to);
+    return !!(filters.status || filters.pucriticalno || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.team);
   };
 
   const handlePageChange = (page: number) => {
@@ -643,6 +714,45 @@ export const TicketList: React.FC = () => {
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("assigned_to")}
+              />
+            </Badge>
+          )}
+          {filters.startDate && filters.endDate && (
+            <Badge variant="secondary" className="gap-1">
+              Date Range: {new Date(filters.startDate).toLocaleDateString()} - {new Date(filters.endDate).toLocaleDateString()}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => {
+                  clearFilter("startDate");
+                  clearFilter("endDate");
+                }}
+              />
+            </Badge>
+          )}
+          {filters.puno && (
+            <Badge variant="secondary" className="gap-1">
+              PU IDs: {filters.puno.split(',').length > 1 ? `${filters.puno.split(',').length} PUs` : filters.puno}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("puno")}
+              />
+            </Badge>
+          )}
+          {filters.delay && (
+            <Badge variant="secondary" className="gap-1">
+              Delayed Tickets
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("delay")}
+              />
+            </Badge>
+          )}
+          {filters.team && (
+            <Badge variant="secondary" className="gap-1">
+              Team: {filters.team.charAt(0).toUpperCase() + filters.team.slice(1)}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("team")}
               />
             </Badge>
           )}

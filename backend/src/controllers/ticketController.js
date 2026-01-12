@@ -526,6 +526,11 @@ const getTickets = async (req, res) => {
       search,
       plant,
       area,
+      startDate,
+      endDate,
+      puno,
+      delay,
+      team,
     } = req.query;
 
     const offset = (page - 1) * limit;
@@ -534,9 +539,99 @@ const getTickets = async (req, res) => {
     let whereClause = "WHERE 1=1";
     const params = [];
 
+    // Date range filter
+    if (startDate && endDate) {
+      whereClause += " AND CAST(t.created_at AS DATE) >= @startDate AND CAST(t.created_at AS DATE) <= @endDate";
+      params.push({ name: "startDate", value: startDate, type: sql.Date });
+      params.push({ name: "endDate", value: endDate, type: sql.Date });
+    }
+
+    // Status filter - support comma-separated values
     if (status) {
-      whereClause += " AND t.status = @status";
-      params.push({ name: "status", value: status, type: sql.VarChar(20) });
+      if (status.includes(',')) {
+        // Multiple statuses
+        const statusList = status.split(',').map(s => s.trim());
+        const statusPlaceholders = statusList.map((_, index) => `@status${index}`).join(',');
+        whereClause += ` AND t.status IN (${statusPlaceholders})`;
+        statusList.forEach((statusValue, index) => {
+          // Use VarChar(50) to accommodate longer status values like 'rejected_pending_l3_review' (26 chars)
+          params.push({ name: `status${index}`, value: statusValue, type: sql.VarChar(50) });
+        });
+      } else {
+        // Single status
+        whereClause += " AND t.status = @status";
+        // Use VarChar(50) to accommodate longer status values
+        params.push({ name: "status", value: status, type: sql.VarChar(50) });
+      }
+    }
+
+    // PU filter - support comma-separated values
+    if (puno) {
+      if (puno.includes(',')) {
+        // Multiple PU IDs
+        const punoList = puno.split(',').map(p => parseInt(p.trim())).filter(p => !isNaN(p));
+        if (punoList.length > 0) {
+          const punoPlaceholders = punoList.map((_, index) => `@puno${index}`).join(',');
+          whereClause += ` AND t.puno IN (${punoPlaceholders})`;
+          punoList.forEach((punoValue, index) => {
+            params.push({ name: `puno${index}`, value: punoValue, type: sql.Int });
+          });
+        }
+      } else {
+        // Single PU ID
+        const punoValue = parseInt(puno);
+        if (!isNaN(punoValue)) {
+          whereClause += " AND t.puno = @puno";
+          params.push({ name: "puno", value: punoValue, type: sql.Int });
+        }
+      }
+    }
+
+    // Delay filter
+    if (delay === 'true' || delay === true) {
+      whereClause += " AND t.schedule_finish < GETDATE() AND t.status NOT IN ('closed', 'finished', 'canceled', 'rejected_final')";
+    }
+
+    // Team filter - requires department identification
+    let teamDeptFilter = '';
+    let teamDeptNos = [];
+    if (team === 'operator' || team === 'reliability') {
+      // Get team department mappings
+      const deptQuery = `
+        SELECT DISTINCT 
+          d.DEPTNO,
+          d.DEPTNAME,
+          CASE 
+            WHEN UPPER(d.DEPTNAME) LIKE '%OPERATOR%' 
+              OR UPPER(d.DEPTNAME) LIKE '%PRODUCTION%'
+              OR UPPER(d.DEPTCODE) LIKE '%OP%'
+            THEN 'operator'
+            WHEN UPPER(d.DEPTNAME) LIKE '%RELIABILITY%'
+              OR UPPER(d.DEPTNAME) LIKE '%MAINTENANCE%'
+              OR UPPER(d.DEPTCODE) LIKE '%REL%'
+              OR UPPER(d.DEPTCODE) LIKE '%MAINT%'
+            THEN 'reliability'
+            ELSE NULL
+          END as team_type
+        FROM Dept d
+        WHERE d.FLAGDEL != 'Y'
+      `;
+      
+      const deptResult = await pool.request().query(deptQuery);
+      teamDeptNos = deptResult.recordset
+        .filter(d => d.team_type === team)
+        .map(d => d.DEPTNO);
+      
+      if (teamDeptNos.length > 0) {
+        const deptPlaceholders = teamDeptNos.map((_, i) => `@teamDept${i}`).join(',');
+        teamDeptFilter = `(${deptPlaceholders})`;
+        teamDeptNos.forEach((deptNo, index) => {
+          params.push({ name: `teamDept${index}`, value: deptNo, type: sql.Int });
+        });
+      } else {
+        // No matching departments, return empty result
+        teamDeptFilter = '(SELECT NULL WHERE 1=0)';
+      }
     }
 
     if (pucriticalno) {
@@ -576,6 +671,15 @@ const getTickets = async (req, res) => {
     if (area) {
       whereClause += " AND pe.area = @area";
       params.push({ name: "area", value: area, type: sql.VarChar(50) });
+    }
+
+    // Add team filter to WHERE clause if applicable
+    if (teamDeptFilter) {
+      whereClause += ` AND (
+        (t.finished_by IS NOT NULL AND EXISTS (SELECT 1 FROM Person p_finished WHERE p_finished.PERSONNO = t.finished_by AND p_finished.DEPTNO IN ${teamDeptFilter}))
+        OR (t.reviewed_by IS NOT NULL AND EXISTS (SELECT 1 FROM Person p_reviewed WHERE p_reviewed.PERSONNO = t.reviewed_by AND p_reviewed.DEPTNO IN ${teamDeptFilter}))
+        OR (t.assigned_to IS NOT NULL AND EXISTS (SELECT 1 FROM Person p_assigned WHERE p_assigned.PERSONNO = t.assigned_to AND p_assigned.DEPTNO IN ${teamDeptFilter}))
+      )`;
     }
 
     // Build the request with parameters

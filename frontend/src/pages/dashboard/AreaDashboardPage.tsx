@@ -134,14 +134,7 @@ const AreaDashboardPage: React.FC = () => {
     params.set('startDate', dateRange.startDate);
     params.set('endDate', dateRange.endDate);
     
-    if (areaCode) {
-      params.set('area', areaCode);
-    }
-    
-    if (machineCode) {
-      params.set('machine', machineCode);
-    }
-    
+    // Don't pass area code - rely only on PU IDs
     // If multiple PU IDs provided (for machine with multiple PUs), use them
     // Otherwise use single puno if provided
     if (puIds && puIds.length > 0) {
@@ -151,10 +144,13 @@ const AreaDashboardPage: React.FC = () => {
     }
 
     // Add status filter based on metric type
+    // Open tickets: all statuses NOT IN ('closed', 'finished', 'canceled', 'rejected_final')
+    // This matches the logic in areaDashboardController.js
     if (metricType === 'open') {
-      params.set('status', 'open');
+      params.set('status', 'open,accepted,planed,in_progress,rejected_pending_l3_review,reviewed,escalated,reopened_in_progress');
     } else if (metricType === 'closed') {
-      params.set('status', 'closed');
+      // Closed tickets: 'closed' and 'finished' statuses
+      params.set('status', 'closed,finished');
     } else if (metricType === 'pending') {
       // Pending tickets have various statuses
       params.set('status', 'in_progress,escalated,planed,accepted');
@@ -167,6 +163,17 @@ const AreaDashboardPage: React.FC = () => {
     }
 
     navigate(`/tickets?${params.toString()}`);
+  };
+
+  // Get all PU IDs from all machines in an area
+  const getAllAreaPuIds = (area: AreaMetrics): number[] => {
+    const allPuIds: number[] = [];
+    area.machines.forEach(machine => {
+      if (machine.puIds && machine.puIds.length > 0) {
+        allPuIds.push(...machine.puIds);
+      }
+    });
+    return allPuIds;
   };
 
   // Get area display name from config
@@ -338,38 +345,38 @@ const AreaDashboardPage: React.FC = () => {
                             <TableRow>
                               <TableHead>Machine</TableHead>
                               <TableHead className="text-center cursor-pointer hover:bg-muted"
-                                onClick={() => handleCellClick(area.areaCode, null, null, 'open')}
+                                onClick={() => handleCellClick(area.areaCode, null, null, 'open', undefined, getAllAreaPuIds(area))}
                               >
                                 Open
                               </TableHead>
                               <TableHead className="text-center cursor-pointer hover:bg-muted"
-                                onClick={() => handleCellClick(area.areaCode, null, null, 'closed')}
+                                onClick={() => handleCellClick(area.areaCode, null, null, 'closed', undefined, getAllAreaPuIds(area))}
                               >
                                 Closed
                               </TableHead>
                               <TableHead className="text-center">%Closed</TableHead>
                               <TableHead className="text-center cursor-pointer hover:bg-muted"
-                                onClick={() => handleCellClick(area.areaCode, null, null, 'closed', 'operator')}
+                                onClick={() => handleCellClick(area.areaCode, null, null, 'closed', 'operator', getAllAreaPuIds(area))}
                               >
                                 %Closed by Op
                               </TableHead>
                               <TableHead className="text-center cursor-pointer hover:bg-muted"
-                                onClick={() => handleCellClick(area.areaCode, null, null, 'closed', 'reliability')}
+                                onClick={() => handleCellClick(area.areaCode, null, null, 'closed', 'reliability', getAllAreaPuIds(area))}
                               >
                                 %Closed by Rel
                               </TableHead>
                               <TableHead className="text-center cursor-pointer hover:bg-muted"
-                                onClick={() => handleCellClick(area.areaCode, null, null, 'pending', 'operator')}
+                                onClick={() => handleCellClick(area.areaCode, null, null, 'pending', 'operator', getAllAreaPuIds(area))}
                               >
                                 Pending by Op
                               </TableHead>
                               <TableHead className="text-center cursor-pointer hover:bg-muted"
-                                onClick={() => handleCellClick(area.areaCode, null, null, 'pending', 'reliability')}
+                                onClick={() => handleCellClick(area.areaCode, null, null, 'pending', 'reliability', getAllAreaPuIds(area))}
                               >
                                 Pending by Rel
                               </TableHead>
                               <TableHead className="text-center cursor-pointer hover:bg-muted"
-                                onClick={() => handleCellClick(area.areaCode, null, null, 'delay')}
+                                onClick={() => handleCellClick(area.areaCode, null, null, 'delay', undefined, getAllAreaPuIds(area))}
                               >
                                 Delay
                               </TableHead>
@@ -448,7 +455,7 @@ const AreaDashboardPage: React.FC = () => {
                           <span className="text-sm font-medium">Open</span>
                           <span 
                             className="text-lg font-bold cursor-pointer hover:text-primary"
-                            onClick={() => handleCellClick(area.areaCode, null, null, 'open')}
+                            onClick={() => handleCellClick(area.areaCode, null, null, 'open', undefined, getAllAreaPuIds(area))}
                           >
                             {area.areaMetrics.openTickets}
                           </span>
@@ -457,7 +464,7 @@ const AreaDashboardPage: React.FC = () => {
                           <span className="text-sm font-medium">Closed</span>
                           <span 
                             className="text-lg font-bold cursor-pointer hover:text-primary"
-                            onClick={() => handleCellClick(area.areaCode, null, null, 'closed')}
+                            onClick={() => handleCellClick(area.areaCode, null, null, 'closed', undefined, getAllAreaPuIds(area))}
                           >
                             {area.areaMetrics.closedTickets}
                           </span>

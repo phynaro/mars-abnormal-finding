@@ -178,6 +178,11 @@ export interface TicketFilters {
   search?: string;
   plant?: string;  // Plant code from PUExtension
   area?: string;   // Area code from PUExtension
+  startDate?: string;  // Start date for date range filter
+  endDate?: string;    // End date for date range filter
+  puno?: string;        // Comma-separated PU IDs (e.g., "895,917,939")
+  delay?: boolean | string;  // Filter for delayed tickets
+  team?: 'operator' | 'reliability';  // Team-based filter
 }
 
 // Legacy hierarchy interfaces (deprecated - use PUExtension data instead)
