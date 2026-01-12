@@ -82,7 +82,7 @@ const AppContent: React.FC = () => {
         }
       } else if (showCatLoading && catStartTime) {
         const elapsed = Date.now() - catStartTime;
-        const minDisplayTime = 3000; // 3 seconds
+        const minDisplayTime = 2000; // 3 seconds
         const remaining = Math.max(0, minDisplayTime - elapsed);
         
         if (remaining > 0) {

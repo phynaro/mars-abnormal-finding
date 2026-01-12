@@ -2130,8 +2130,15 @@ const TicketDetailsPage: React.FC = () => {
 
       {/* Confirm Action Modal with comment */}
       <Dialog open={actionOpen} onOpenChange={setActionOpen}>
-        <DialogContent className={`max-w-lg ${actionType === "accept" && showEquipmentSelector ? 'max-h-[90vh] overflow-y-auto' : ''}`}>
-          <div className="space-y-4">
+        <DialogContent className={`max-w-lg overflow-x-hidden ${
+          (actionType === "accept" && showEquipmentSelector) || 
+          actionType === "finish" || 
+          actionType === "plan" || 
+          actionType === "reassign"
+            ? 'max-h-[90vh] overflow-y-auto' 
+            : ''
+        }`}>
+          <div className="space-y-4 min-w-0">
             <h3 className="text-lg font-semibold capitalize">
               {actionType.replace("_", " ")}
             </h3>
@@ -2310,14 +2317,15 @@ const TicketDetailsPage: React.FC = () => {
               </div>
             )}
             {actionType === "plan" && (
-              <div className="space-y-4">
-                <div className="space-y-2">
+              <div className="space-y-4 min-w-0 w-full">
+                <div className="space-y-2 min-w-0 w-full">
                   <Label>{t('ticket.scheduleStart')}</Label>
                   <Input
                     type="datetime-local"
                     value={scheduleStart}
                     onChange={(e) => setScheduleStart(e.target.value)}
                     required
+                    className="w-full max-w-full min-w-0 box-border"
                   />
                 </div>
                 
@@ -2347,13 +2355,14 @@ const TicketDetailsPage: React.FC = () => {
                   </div>
                 )}
                 
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0 w-full">
                   <Label>{t('ticket.scheduleFinish')}</Label>
                   <Input
                     type="datetime-local"
                     value={scheduleFinish}
                     onChange={(e) => setScheduleFinish(e.target.value)}
                     required
+                    className="w-full max-w-full min-w-0 box-border"
                   />
                 </div>
                 <div className="space-y-2">
@@ -2432,14 +2441,15 @@ const TicketDetailsPage: React.FC = () => {
               </div>
             )}
             {actionType === "start" && (
-              <div className="space-y-4">
-                <div className="space-y-2">
+              <div className="space-y-4 min-w-0 w-full">
+                <div className="space-y-2 min-w-0 w-full">
                   <Label>{t('ticket.actualStartTime')}</Label>
                   <Input
                     type="datetime-local"
                     value={actualStartAt}
                     onChange={(e) => setActualStartAt(e.target.value)}
                     required
+                    className="w-full max-w-full min-w-0 box-border"
                   />
                   <p className="text-xs text-gray-500">
                     {t('ticket.actualStartTimeHelp')}
@@ -2448,18 +2458,16 @@ const TicketDetailsPage: React.FC = () => {
               </div>
             )}
             {actionType === "finish" && (
-              <div className="space-y-4">
-                <div className="space-y-2">
+              <div className="space-y-4 min-w-0 w-full">
+                <div className="space-y-2 min-w-0 w-full">
                   <Label>{t('ticket.actualStartTime')}</Label>
                   <Input
                     type="datetime-local"
                     value={actualStartAtEdit}
                     onChange={(e) => setActualStartAtEdit(e.target.value)}
                     placeholder={t('ticket.actualStartTimeHelp')}
+                    className="w-full max-w-full min-w-0 box-border"
                   />
-                  <p className="text-xs text-gray-500">
-                    {t('ticket.actualStartTimeEditHelp')}
-                  </p>
                 </div>
                 
                 {/* Helper buttons to add hours from start time */}
@@ -2488,17 +2496,15 @@ const TicketDetailsPage: React.FC = () => {
                   </div>
                 )}
                 
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0 w-full">
                   <Label>{t('ticket.actualFinishTime')}</Label>
                   <Input
                     type="datetime-local"
                     value={actualFinishAt}
                     onChange={(e) => setActualFinishAt(e.target.value)}
                     required
+                    className="w-full max-w-full min-w-0 box-border"
                   />
-                  <p className="text-xs text-gray-500">
-                    {t('ticket.actualFinishTimeHelp')}
-                  </p>
                   {(() => {
                     // Get the actual start time to compare (use edited value if provided, otherwise use ticket's existing value)
                     const startTime = actualStartAtEdit || (ticket?.actual_start_at ? timestampToDatetimeLocal(ticket.actual_start_at) : null);
@@ -2577,23 +2583,25 @@ const TicketDetailsPage: React.FC = () => {
               </div>
             )}
             {actionType === "reassign" && (
-              <div className="space-y-4">
-                <div className="space-y-2">
+              <div className="space-y-4 min-w-0 w-full">
+                <div className="space-y-2 min-w-0 w-full">
                   <Label>{t('ticket.scheduleStart')}</Label>
                   <Input
                     type="datetime-local"
                     value={scheduleStart}
                     onChange={(e) => setScheduleStart(e.target.value)}
                     required
+                    className="w-full max-w-full min-w-0 box-border"
                   />
                 </div>
-                <div className="space-y-2">
+                <div className="space-y-2 min-w-0 w-full">
                   <Label>{t('ticket.scheduleFinish')}</Label>
                   <Input
                     type="datetime-local"
                     value={scheduleFinish}
                     onChange={(e) => setScheduleFinish(e.target.value)}
                     required
+                    className="w-full max-w-full min-w-0 box-border"
                   />
                 </div>
                 <div className="space-y-2">

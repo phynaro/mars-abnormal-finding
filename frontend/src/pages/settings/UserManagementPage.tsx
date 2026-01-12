@@ -128,9 +128,9 @@ const UserManagementPage: React.FC = () => {
 
   const filteredUsers = users.filter(user => {
     const matchesSearch = 
-      user.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (user.firstName && user.firstName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.lastName && user.lastName.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
       (user.fullName && user.fullName.toLowerCase().includes(searchTerm.toLowerCase()));
     

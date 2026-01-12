@@ -325,27 +325,102 @@ const userManagementController = {
       await transaction.begin();
 
       try {
-        // 1. Create Person record
-        const personResult = await transaction.request()
-          .input('personCode', sql.NVarChar(20), personCode || null)
-          .input('firstName', sql.NVarChar(30), firstName)
-          .input('lastName', sql.NVarChar(30), lastName)
-          .input('email', sql.NVarChar(200), email || null)
-          .input('phone', sql.NVarChar(30), phone || null)
-          .input('title', sql.NVarChar(200), title || null)
-          .input('department', sql.Int, department || null)
-          .input('craft', sql.Int, craft || null)
-          .input('crew', sql.Int, crew || null)
-          .input('siteNo', sql.Int, siteNo || null)
-          .input('createUser', sql.Int, req.user.id)
-          .input('createDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''))
-          .query(`
-            INSERT INTO Person (PERSONCODE, FIRSTNAME, LASTNAME, EMAIL, PHONE, TITLE, DEPTNO, CRAFTNO, CREWNO, SiteNo, PERSON_NAME, FLAGDEL, CREATEUSER, CREATEDATE)
-            OUTPUT INSERTED.PERSONNO
-            VALUES (@personCode, @firstName, @lastName, @email, @phone, @title, @department, @craft, @crew, @siteNo, @firstName + ' ' + @lastName, 'F', @createUser, @createDate)
-          `);
+        // 1. Check for existing Person record before creating
+        // Priority: PERSONCODE first, then EMAIL
+        let personNo = null;
+        let existingPersonCheck;
+        
+        // First check by PERSONCODE if provided (higher priority)
+        if (personCode) {
+          existingPersonCheck = await transaction.request()
+            .input('personCode', sql.NVarChar(20), personCode)
+            .query(`
+              SELECT TOP 1 PERSONNO 
+              FROM Person 
+              WHERE FLAGDEL != 'Y' AND PERSONCODE = @personCode
+            `);
+        }
+        
+        // If no match by PERSONCODE, check by EMAIL if provided
+        if ((!existingPersonCheck || existingPersonCheck.recordset.length === 0) && email) {
+          existingPersonCheck = await transaction.request()
+            .input('email', sql.NVarChar(200), email)
+            .query(`
+              SELECT TOP 1 PERSONNO 
+              FROM Person 
+              WHERE FLAGDEL != 'Y' AND EMAIL = @email
+            `);
+        }
 
-        const personNo = personResult.recordset[0].PERSONNO;
+        if (existingPersonCheck && existingPersonCheck.recordset.length > 0) {
+          // Use existing Person
+          personNo = existingPersonCheck.recordset[0].PERSONNO;
+          console.log(`Linking to existing Person record: PERSONNO=${personNo}`);
+
+          // Check if Person is already linked to a _secUsers account
+          const existingLinkCheck = await transaction.request()
+            .input('personNo', sql.Int, personNo)
+            .query('SELECT UserID FROM _secUsers WHERE PersonNo = @personNo');
+
+          if (existingLinkCheck.recordset.length > 0) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: `Person is already linked to user account: ${existingLinkCheck.recordset[0].UserID}. Cannot create duplicate user.`
+            });
+          }
+
+          // Update existing Person record with any new/missing information
+          await transaction.request()
+            .input('personNo', sql.Int, personNo)
+            .input('firstName', sql.NVarChar(30), firstName)
+            .input('lastName', sql.NVarChar(30), lastName)
+            .input('email', sql.NVarChar(200), email || null)
+            .input('phone', sql.NVarChar(30), phone || null)
+            .input('title', sql.NVarChar(200), title || null)
+            .input('department', sql.Int, department || null)
+            .input('craft', sql.Int, craft || null)
+            .input('crew', sql.Int, crew || null)
+            .input('siteNo', sql.Int, siteNo || null)
+            .input('updateUser', sql.Int, req.user.id)
+            .query(`
+              UPDATE Person 
+              SET FIRSTNAME = COALESCE(@firstName, FIRSTNAME),
+                  LASTNAME = COALESCE(@lastName, LASTNAME),
+                  EMAIL = COALESCE(@email, EMAIL),
+                  PHONE = COALESCE(@phone, PHONE),
+                  TITLE = COALESCE(@title, TITLE),
+                  DEPTNO = COALESCE(@department, DEPTNO),
+                  CRAFTNO = COALESCE(@craft, CRAFTNO),
+                  CREWNO = COALESCE(@crew, CREWNO),
+                  SiteNo = COALESCE(@siteNo, SiteNo),
+                  PERSON_NAME = LTRIM(RTRIM(ISNULL(COALESCE(@firstName, FIRSTNAME), '') + ' ' + ISNULL(COALESCE(@lastName, LASTNAME), ''))),
+                  UPDATEDATE = CONVERT(NVARCHAR(8), GETDATE(), 112),
+                  UPDATEUSER = @updateUser
+              WHERE PERSONNO = @personNo
+            `);
+        } else {
+          // Create new Person record
+          const personResult = await transaction.request()
+            .input('personCode', sql.NVarChar(20), personCode || null)
+            .input('firstName', sql.NVarChar(30), firstName)
+            .input('lastName', sql.NVarChar(30), lastName)
+            .input('email', sql.NVarChar(200), email || null)
+            .input('phone', sql.NVarChar(30), phone || null)
+            .input('title', sql.NVarChar(200), title || null)
+            .input('department', sql.Int, department || null)
+            .input('craft', sql.Int, craft || null)
+            .input('crew', sql.Int, crew || null)
+            .input('siteNo', sql.Int, siteNo || null)
+            .input('createUser', sql.Int, req.user.id)
+            .input('createDate', sql.NVarChar(8), new Date().toISOString().slice(0, 10).replace(/-/g, ''))
+            .query(`
+              INSERT INTO Person (PERSONCODE, FIRSTNAME, LASTNAME, EMAIL, PHONE, TITLE, DEPTNO, CRAFTNO, CREWNO, SiteNo, PERSON_NAME, FLAGDEL, CREATEUSER, CREATEDATE)
+              OUTPUT INSERTED.PERSONNO
+              VALUES (@personCode, @firstName, @lastName, @email, @phone, @title, @department, @craft, @crew, @siteNo, @firstName + ' ' + @lastName, 'F', @createUser, @createDate)
+            `);
+          personNo = personResult.recordset[0].PERSONNO;
+        }
 
         // 2. Create _secUsers record
         // Note: IgxUserExtension record will be created on first login
