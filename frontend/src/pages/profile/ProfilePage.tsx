@@ -12,9 +12,11 @@ import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import Cropper from 'react-easy-crop';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { HelpCircle, Key, MessageSquare, User, Unlink, LogOut } from 'lucide-react';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
 import { compressImage, formatFileSize, isFileSizeValid } from '@/utils/imageCompression';
+import userManagementService, { type Department } from '@/services/userManagementService';
 
 const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
@@ -23,17 +25,23 @@ const ProfilePage: React.FC = () => {
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [email, setEmail] = useState(user?.email || '');
   const [phone, setPhone] = useState((user as any)?.phone || '');
+  const [deptNo, setDeptNo] = useState<number | undefined>((user as any)?.department);
+  const [personCode, setPersonCode] = useState((user as any)?.personCode || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
   
   // Original values for change detection
   const [originalValues, setOriginalValues] = useState({
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     email: user?.email || '',
-    phone: (user as any)?.phone || ''
+    phone: (user as any)?.phone || '',
+    deptNo: (user as any)?.department,
+    personCode: (user as any)?.personCode || ''
   });
   // Cropper state
   const [showCropper, setShowCropper] = useState(false);
@@ -59,12 +67,21 @@ const ProfilePage: React.FC = () => {
       firstName !== originalValues.firstName ||
       lastName !== originalValues.lastName ||
       email !== originalValues.email ||
-      phone !== originalValues.phone
+      phone !== originalValues.phone ||
+      (deptNo !== undefined ? deptNo : null) !== (originalValues.deptNo !== undefined ? originalValues.deptNo : null) ||
+      personCode !== originalValues.personCode
     );
   };
 
   const updateProfile = async () => {
     if (!user) return;
+    
+    // Validate personCode length
+    if (personCode && personCode.length > 20) {
+      alert(t('profile.personCodeTooLong') || 'Person code must be 20 characters or less');
+      return;
+    }
+    
     setLoading(true);
     try {
       const res = await fetch(`${getApiBaseUrl()}/users/profile`, {
@@ -73,7 +90,14 @@ const ProfilePage: React.FC = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
         },
-        body: JSON.stringify({ firstName, lastName, email, phone })
+        body: JSON.stringify({ 
+          firstName, 
+          lastName, 
+          email, 
+          phone,
+          deptNo: deptNo !== undefined ? deptNo : null,
+          personCode: personCode || null
+        })
       });
       const result = await res.json();
       if (!res.ok) throw new Error(result.message || t('profile.failedToUpdateProfile'));
@@ -84,7 +108,9 @@ const ProfilePage: React.FC = () => {
         firstName,
         lastName,
         email,
-        phone
+        phone,
+        deptNo,
+        personCode
       });
       
       alert(t('profile.profileUpdated'));
@@ -339,6 +365,23 @@ const ProfilePage: React.FC = () => {
     };
   }, [imageSrc]);
 
+  // Fetch departments list
+  useEffect(() => {
+    const fetchDepartments = async () => {
+      try {
+        setDepartmentsLoading(true);
+        const depts = await userManagementService.getDepartments();
+        setDepartments(depts);
+      } catch (error) {
+        console.error('Failed to fetch departments:', error);
+        setDepartments([]);
+      } finally {
+        setDepartmentsLoading(false);
+      }
+    };
+    fetchDepartments();
+  }, []);
+
   // Fetch LINE profile when user changes
   useEffect(() => {
     if (user?.lineId) {
@@ -351,11 +394,19 @@ const ProfilePage: React.FC = () => {
   // Update original values when user data changes
   useEffect(() => {
     if (user) {
+      setFirstName(user.firstName || '');
+      setLastName(user.lastName || '');
+      setEmail(user.email || '');
+      setPhone((user as any)?.phone || '');
+      setDeptNo((user as any)?.department);
+      setPersonCode((user as any)?.personCode || '');
       setOriginalValues({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        phone: (user as any)?.phone || ''
+        phone: (user as any)?.phone || '',
+        deptNo: (user as any)?.department,
+        personCode: (user as any)?.personCode || ''
       });
     }
   }, [user]);
@@ -413,6 +464,41 @@ const ProfilePage: React.FC = () => {
               <div className="space-y-2">
                 <Label>{t('profile.phone')}</Label>
                 <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label>{t('profile.department')}</Label>
+                <Select
+                  value={deptNo !== undefined ? deptNo.toString() : undefined}
+                  onValueChange={(value) => {
+                    if (value === 'none') {
+                      setDeptNo(undefined);
+                    } else {
+                      setDeptNo(value ? parseInt(value, 10) : undefined);
+                    }
+                  }}
+                  disabled={departmentsLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={departmentsLoading ? t('common.loading') : t('profile.selectDepartment') || 'Select Department'} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">{t('profile.noDepartment') || 'No Department'}</SelectItem>
+                    {departments.map((dept) => (
+                      <SelectItem key={dept.deptNo} value={dept.deptNo.toString()}>
+                        {dept.deptName} ({dept.deptCode})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>{t('profile.personCode')}</Label>
+                <Input 
+                  value={personCode} 
+                  onChange={(e) => setPersonCode(e.target.value)} 
+                  maxLength={20}
+                  placeholder={t('profile.personCodePlaceholder') || 'Employee code (max 20 characters)'}
+                />
               </div>
             </div>
             <div className="flex items-center gap-2">

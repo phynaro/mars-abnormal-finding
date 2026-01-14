@@ -14,20 +14,44 @@ const userController = {
   updateProfile: async (req, res) => {
     try {
       const userId = req.user.userId; // Use userId from JWT
-      const { firstName, lastName, email, phone, title, lineId } = req.body;
+      const { firstName, lastName, email, phone, title, lineId, deptNo, personCode } = req.body;
 
       const pool = await sql.connect(dbConfig);
       
+      // Validate personCode length if provided
+      if (personCode !== undefined && personCode !== null && personCode.length > 20) {
+        return res.status(400).json({ 
+          success: false, 
+          message: 'Person code must be 20 characters or less' 
+        });
+      }
+
+      // Validate deptNo exists in Dept table if provided
+      if (deptNo !== undefined && deptNo !== null) {
+        const deptCheck = await pool.request()
+          .input('deptNo', sql.Int, deptNo)
+          .query('SELECT DEPTNO FROM Dept WHERE DEPTNO = @deptNo AND FLAGDEL != \'Y\'');
+        
+        if (deptCheck.recordset.length === 0) {
+          return res.status(400).json({ 
+            success: false, 
+            message: 'Invalid department number' 
+          });
+        }
+      }
+      
       // Update Person table (main user information)
       // Only update if at least one field is provided
-      if (firstName !== undefined || lastName !== undefined || email !== undefined || phone !== undefined || title !== undefined) {
+      if (firstName !== undefined || lastName !== undefined || email !== undefined || phone !== undefined || title !== undefined || deptNo !== undefined || personCode !== undefined) {
         const personRequest = pool.request()
           .input('personNo', sql.Int, req.user.id) // PersonNo from JWT
           .input('firstName', sql.NVarChar(30), firstName !== undefined ? firstName : null) // Max 30 chars
           .input('lastName', sql.NVarChar(30), lastName !== undefined ? lastName : null) // Max 30 chars
           .input('email', sql.NVarChar(200), email !== undefined ? email : null) // Max 200 chars
           .input('phone', sql.NVarChar(30), phone !== undefined ? phone : null) // Max 30 chars
-          .input('title', sql.NVarChar(200), title !== undefined ? title : null); // Max 200 chars
+          .input('title', sql.NVarChar(200), title !== undefined ? title : null) // Max 200 chars
+          .input('deptNo', sql.Int, deptNo !== undefined ? deptNo : null)
+          .input('personCode', sql.NVarChar(20), personCode !== undefined ? personCode : null); // Max 20 chars
 
         await personRequest.query(`
           UPDATE Person
@@ -36,6 +60,8 @@ const userController = {
               EMAIL = COALESCE(@email, EMAIL),
               PHONE = COALESCE(@phone, PHONE),
               TITLE = COALESCE(@title, TITLE),
+              DEPTNO = COALESCE(@deptNo, DEPTNO),
+              PERSONCODE = COALESCE(@personCode, PERSONCODE),
               UPDATEDATE = CONVERT(NVARCHAR(8), GETDATE(), 112),
               UPDATEUSER = @personNo
           WHERE PERSONNO = @personNo;

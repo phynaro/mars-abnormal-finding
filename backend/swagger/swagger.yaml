@@ -408,6 +408,15 @@ paths:
                   type: string
                   description: User's job title
                   example: "Maintenance Engineer"
+                deptNo:
+                  type: integer
+                  description: Department number (references Dept.DEPTNO)
+                  example: 1
+                personCode:
+                  type: string
+                  description: Employee code (max 20 characters)
+                  maxLength: 20
+                  example: "EMP001"
                 lineId:
                   type: string
                   description: LINE messaging ID for notifications
