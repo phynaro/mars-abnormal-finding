@@ -6,6 +6,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
 import { 
   calculatePeriodForDate, 
   getDateRangeForAreaDashboard,
@@ -450,32 +451,79 @@ const AreaDashboardPage: React.FC = () => {
                       <CardTitle>Area Summary</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">Open</span>
-                          <span 
-                            className="text-lg font-bold cursor-pointer hover:text-primary"
-                            onClick={() => handleCellClick(area.areaCode, null, null, 'open', undefined, getAllAreaPuIds(area))}
-                          >
-                            {area.areaMetrics.openTickets}
-                          </span>
+                      {/* Donut Chart */}
+                      {area.areaMetrics.openTickets + area.areaMetrics.closedTickets > 0 ? (
+                        <div className="w-full h-[250px]">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={[
+                                  { name: 'Open', value: area.areaMetrics.openTickets },
+                                  { name: 'Closed', value: area.areaMetrics.closedTickets }
+                                ]}
+                                cx="50%"
+                                cy="50%"
+                                innerRadius={60}
+                                outerRadius={80}
+                                paddingAngle={2}
+                                dataKey="value"
+                                onClick={(data) => {
+                                  if (data.name === 'Open') {
+                                    handleCellClick(area.areaCode, null, null, 'open', undefined, getAllAreaPuIds(area));
+                                  } else if (data.name === 'Closed') {
+                                    handleCellClick(area.areaCode, null, null, 'closed', undefined, getAllAreaPuIds(area));
+                                  }
+                                }}
+                              >
+                                <Cell 
+                                  key="cell-open" 
+                                  fill="#ef4444"
+                                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                                />
+                                <Cell 
+                                  key="cell-closed" 
+                                  fill="#3b82f6"
+                                  className="cursor-pointer hover:opacity-80 transition-opacity"
+                                />
+                              </Pie>
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    const data = payload[0];
+                                    const total = area.areaMetrics.openTickets + area.areaMetrics.closedTickets;
+                                    const percentage = total > 0 ? Math.round((data.value as number / total) * 100) : 0;
+                                    return (
+                                      <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                                        <p className="font-medium text-foreground">{data.name}</p>
+                                        <p className="text-sm text-muted-foreground">
+                                          {data.value} tickets ({percentage}%)
+                                        </p>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Legend 
+                                verticalAlign="bottom" 
+                                height={36}
+                                formatter={(value) => {
+                                  const total = area.areaMetrics.openTickets + area.areaMetrics.closedTickets;
+                                  const data = value === 'Open' 
+                                    ? area.areaMetrics.openTickets 
+                                    : area.areaMetrics.closedTickets;
+                                  const percentage = total > 0 ? Math.round((data / total) * 100) : 0;
+                                  return `${value}: ${data} (${percentage}%)`;
+                                }}
+                              />
+                            </PieChart>
+                          </ResponsiveContainer>
                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm font-medium">Closed</span>
-                          <span 
-                            className="text-lg font-bold cursor-pointer hover:text-primary"
-                            onClick={() => handleCellClick(area.areaCode, null, null, 'closed', undefined, getAllAreaPuIds(area))}
-                          >
-                            {area.areaMetrics.closedTickets}
-                          </span>
+                      ) : (
+                        <div className="w-full h-[250px] flex items-center justify-center text-muted-foreground">
+                          <p className="text-sm">No tickets in this period</p>
                         </div>
-                        <div className="flex justify-between items-center pt-2 border-t">
-                          <span className="text-sm font-medium">%Closed</span>
-                          <span className="text-lg font-bold">
-                            {area.areaMetrics.percentClosed}%
-                          </span>
-                        </div>
-                      </div>
+                      )}
                     </CardContent>
                   </Card>
                 </div>

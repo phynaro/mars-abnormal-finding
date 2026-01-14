@@ -87,9 +87,195 @@ export const areaDashboardConfigs: Record<string, AreaDashboardConfig[]> = {
 
         // Add more machines as needed
       ],
+    }, 
+    {
+      areaCode: "PP-LOADER",
+      areaName: "Loader Area",
+      plant: "PP",
+      machines: [
+        {
+          machineName: "Loader1",
+          puIds: [895],
+        },
+        {
+          machineName: "Loader2",
+          puIds: [917],
+        }
+      ],
+    },
+    {
+      areaCode: "PP-FRONT PROCESS",
+      areaName: "FRONT PROCESS",
+      plant: "PP",
+      machines: [
+        {
+          machineName: "OFM1",
+          puIds: [895],
+        },
+        {
+          machineName: "OFM2",
+          puIds: [917],
+        },
+        {
+          machineName: "Fish",
+          puIds: [917],
+        },
+        {
+          machineName: "Chicken",
+          puIds: [917],
+        },
+      ],
+    },
+    {
+      areaCode: "PP-RECIPE",
+      areaName: "RECIPE",
+      plant: "PP",
+      machines: [
+        {
+          machineName: "Sauce Makeup",
+          puIds: [895],
+        },
+        {
+          machineName: "Tote",
+          puIds: [917],
+        },
+        {
+          machineName: "Weight Scale",
+          puIds: [917],
+        },
+        {
+          machineName: "Soy Oil Station",
+          puIds: [917],
+        }
+      ],
+    },
+    {
+      areaCode: "PP-NISHIBE",
+      areaName: "NISHIBE",
+      plant: "PP",
+      machines: [
+        {
+          machineName: "Nishibe1",
+          puIds: [895],
+        },
+        {
+          machineName: "Nishibe2",
+          puIds: [917],
+        },
+        {
+          machineName: "Nishibe3",
+          puIds: [917],
+        },
+        {
+          machineName: "Nishibe4",
+          puIds: [917],
+        },
+        {
+          machineName: "Nishibe5",
+          puIds: [917],
+        },
+      ],
+    },
+    {
+      areaCode: "PP-RETORT",
+      areaName: "RETORT",
+      plant: "PP",
+      machines: [
+        {
+          machineName: "Retort1",
+          puIds: [895],
+        },
+        {
+          machineName: "Retort2",
+          puIds: [917],
+        },
+        {
+          machineName: "Retort3",
+          puIds: [917],
+        },
+        {
+          machineName: "Retort4",
+          puIds: [917],
+        },
+        {
+          machineName: "Retort5",
+          puIds: [917],
+        },
+        {
+          machineName: "Retort6",
+          puIds: [917],
+        },
+        {
+          machineName: "Retort7",
+          puIds: [917],
+        },
+        {
+          machineName: "Retort8",
+          puIds: [917],
+        }
+      ],
+    },
+    {
+      areaCode: "PP-UNLOADER",
+      areaName: "UNLOADER",
+      plant: "PP",
+      machines: [
+        {
+          machineName: "Unloader1",
+          puIds: [895],
+        },
+        {
+          machineName: "Unloader2",
+          puIds: [917],
+        },
+        {
+          machineName: "Unloader3",
+          puIds: [917],
+        },
+      ],
+    },
+    {
+      areaCode: "PP-PACKING",
+      areaName: "PACKING",
+      plant: "PP",
+      machines: [
+        {
+          machineName: "Packing Line 1",
+          puIds: [895],
+        },
+        {
+          machineName: "Packing Line 2",
+          puIds: [917],
+        },
+        {
+          machineName: "Packing Line 3",
+          puIds: [917],
+        }
+      ],
+    },
+    {
+      areaCode: "PP-VLM",
+      areaName: "VLM",
+      plant: "PP",
+      machines: [
+        {
+          machineName: "VLM",
+          puIds: [895],
+        }
+      ],
+    },
+    {
+      areaCode: "PP-PACKMASTER",
+      areaName: "PACKMASTER",
+      plant: "PP",
+      machines: [
+        {
+          machineName: "Packmaster",
+          puIds: [895],
+        }
+      ],
     },
   ],
-
   /**
    * Dry Area Configuration
    * Route: /dashboard/area/dry
