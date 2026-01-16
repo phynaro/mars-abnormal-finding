@@ -5561,7 +5561,7 @@ const getAvailableAssignees = async (req, res) => {
             puno,
             minApprovalLevel
           );
-          console.log(users);
+         // console.log(users);
           // Apply search filter if provided
           assignees = users
             .filter((user) => {

@@ -83,7 +83,7 @@ const getRelationshipConfig = (
       title: t("homepage.ticketsToAccept"),
       color: "text-blue-600",
       bgColor: "bg-blue-50 border-blue-200",
-      priority: 2,
+      priority: 7,
       columns: [
         { key: "ticket_number", label: "Ticket #" },
         { key: "title", label: "Title" },
@@ -174,7 +174,7 @@ const getRelationshipConfig = (
       title: t("homepage.myAssignedTickets"),
       color: "text-green-600",
       bgColor: "bg-green-50 border-green-200",
-      priority: 7,
+      priority: 2,
       columns: [
         { key: "ticket_number", label: "Ticket #" },
         { key: "title", label: "Title" },
