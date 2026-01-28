@@ -746,12 +746,19 @@ const getNotificationRecipientsForPU = async (puno, actionType, createdBy = null
 
 const generateTicketNumber = async (pool) => {
     try {
-        // Get the highest existing case number from tickets table
+        // Get current year's last 2 digits (e.g., 25 for 2025, 26 for 2026)
+        const currentYear = new Date().getFullYear();
+        const yearSuffix = currentYear.toString().slice(-2);
+        const yearPrefix = `AB${yearSuffix}`;
+        
+        // Get the highest existing case number from tickets table for the current year
+        const yearPattern = `${yearPrefix}-%`;
         const result = await pool.request()
+            .input('yearPattern', sql.NVarChar(20), yearPattern)
             .query(`
                 SELECT TOP 1 ticket_number 
                 FROM IgxTickets 
-                WHERE ticket_number LIKE 'AB25-%'
+                WHERE ticket_number LIKE @yearPattern
                 ORDER BY CAST(SUBSTRING(ticket_number, 6, 5) AS INT) DESC
             `);
 
@@ -759,19 +766,22 @@ const generateTicketNumber = async (pool) => {
         
         if (result.recordset.length > 0) {
             const latestTicketNumber = result.recordset[0].ticket_number;
-            // Extract the case number part (after 'AB25-')
+            // Extract the case number part (after 'ABXX-' where XX is the year)
             const caseNumberStr = latestTicketNumber.substring(5);
             const currentCaseNumber = parseInt(caseNumberStr, 10);
             nextCaseNumber = currentCaseNumber + 1;
         }
 
-        return `AB25-${nextCaseNumber.toString().padStart(5, '0')}`;
+        return `${yearPrefix}-${nextCaseNumber.toString().padStart(5, '0')}`;
 
     } catch (error) {
         console.error('Error generating ticket number:', error);
-        // Fallback: use timestamp-based approach
+        // Fallback: use timestamp-based approach with current year
+        const currentYear = new Date().getFullYear();
+        const yearSuffix = currentYear.toString().slice(-2);
+        const yearPrefix = `AB${yearSuffix}`;
         const timestamp = Date.now().toString().slice(-5);
-        return `AB25-${timestamp}`;
+        return `${yearPrefix}-${timestamp}`;
     }
 };
 
