@@ -40,6 +40,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { formatTimelineTime } from "@/utils/timezone";
 import {
   getTicketPriorityClass,
@@ -472,166 +473,169 @@ export const TicketList: React.FC = () => {
                 <span className="ml-2 hidden sm:inline">{t('homepage.filters')}</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl dark:text-gray-100">
-              <DialogHeader>
+            <DialogContent className="max-w-3xl max-h-[90vh] dark:text-gray-100 flex flex-col">
+              <DialogHeader className="flex-shrink-0">
                 <DialogTitle>{t('ticket.filterByStatus')}</DialogTitle>
               </DialogHeader>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="search">{t('common.search')}</Label>
-                  <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
-                    <Input
-                      id="search"
-                      placeholder={t('ticket.searchTickets')}
-                      value={filters.search || ""}
-                      onChange={(e) =>
-                        handleFilterChange("search", e.target.value)
+              <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* 1. Search */}
+                  <div className="space-y-2">
+                    <Label htmlFor="search">{t('common.search')}</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
+                      <Input
+                        id="search"
+                        placeholder={t('ticket.searchTickets')}
+                        value={filters.search || ""}
+                        onChange={(e) =>
+                          handleFilterChange("search", e.target.value)
+                        }
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  {/* 2. Created By */}
+                  <div className="space-y-2">
+                    <Label htmlFor="created_by">{t('ticket.createdBy')}</Label>
+                    <SearchableCombobox
+                      options={[
+                        { value: "all", label: t('ticket.allUsers') },
+                        ...users.map((user) => ({
+                          value: user.id.toString(),
+                          label: user.name,
+                        })),
+                      ]}
+                      value={filters.created_by ? filters.created_by.toString() : "all"}
+                      onValueChange={(v) =>
+                        handleFilterChange("created_by", v === "all" ? undefined : parseInt(v))
                       }
-                      className="pl-10"
+                      placeholder={t('ticket.allUsers')}
+                      searchPlaceholder={t('ticket.searchUsers')}
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="status">{t('ticket.status')}</Label>
-                  <Select
-                    value={filters.status || "all"}
-                    onValueChange={(v) => handleFilterChange("status", v === "all" ? "" : v)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('ticket.allStatuses')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('ticket.allStatuses')}</SelectItem>
-                      <SelectItem value="open">{t('ticket.open')}</SelectItem>
-                      <SelectItem value="assigned">{t('ticket.assigned')}</SelectItem>
-                      <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
-                      <SelectItem value="reviewed">{t('ticket.reviewed')}</SelectItem>
-                      <SelectItem value="closed">{t('ticket.closed')}</SelectItem>
-                      <SelectItem value="rejected_pending_l3_review">
-                        {t('ticket.rejectedPendingL3Review')}
-                      </SelectItem>
-                      <SelectItem value="rejected_final">
-                        {t('ticket.rejectedFinal')}
-                      </SelectItem>
-                      <SelectItem value="finished">{t('ticket.finished')}</SelectItem>
-                      <SelectItem value="escalated">{t('ticket.escalated')}</SelectItem>
-                      <SelectItem value="reopened_in_progress">
-                        {t('ticket.reopenedInProgress')}
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="critical">{t('ticket.criticalLevel')}</Label>
-                  <Select
-                    value={filters.pucriticalno ? filters.pucriticalno.toString() : "all"}
-                    onValueChange={(v) =>
-                      handleFilterChange("pucriticalno", v === "all" ? undefined : parseInt(v))
-                    }
-                    disabled={criticalLevelsLoading}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={criticalLevelsLoading ? t('common.loading') : t('ticket.allCriticalLevels')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('ticket.allCriticalLevels')}</SelectItem>
-                      {criticalLevels.map((level) => (
-                        <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
-                          {level.PUCRITICALNAME}
+                  {/* 3. Assigned To */}
+                  <div className="space-y-2">
+                    <Label htmlFor="assigned_to">{t('ticket.assignedTo')}</Label>
+                    <SearchableCombobox
+                      options={[
+                        { value: "all", label: t('ticket.allUsers') },
+                        ...users.map((user) => ({
+                          value: user.id.toString(),
+                          label: user.name,
+                        })),
+                      ]}
+                      value={filters.assigned_to ? filters.assigned_to.toString() : "all"}
+                      onValueChange={(v) =>
+                        handleFilterChange("assigned_to", v === "all" ? undefined : parseInt(v))
+                      }
+                      placeholder={t('ticket.allUsers')}
+                      searchPlaceholder={t('ticket.searchUsers')}
+                    />
+                  </div>
+                  {/* 4. Plant */}
+                  <div className="space-y-2">
+                    <Label htmlFor="plant">Plant</Label>
+                    <Select
+                      value={filters.plant || "all"}
+                      onValueChange={(v) =>
+                        handleFilterChange("plant", v === "all" ? undefined : v)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Plants" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Plants</SelectItem>
+                        {plants.map((plant) => (
+                          <SelectItem key={plant.code} value={plant.code}>
+                            {plant.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* 5. Area */}
+                  <div className="space-y-2">
+                    <Label htmlFor="area">{t('ticket.area')}</Label>
+                    <Select
+                      value={filters.area || "all"}
+                      onValueChange={(v) =>
+                        handleFilterChange("area", v === "all" ? undefined : v)
+                      }
+                      disabled={!filters.plant}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={
+                          !filters.plant 
+                            ? 'Select plant first' 
+                            : t('ticket.allAreas')
+                        } />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('ticket.allAreas')}</SelectItem>
+                        {areas.map((area) => (
+                          <SelectItem key={area.code} value={area.code}>
+                            {area.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* 6. Status */}
+                  <div className="space-y-2">
+                    <Label htmlFor="status">{t('ticket.status')}</Label>
+                    <Select
+                      value={filters.status || "all"}
+                      onValueChange={(v) => handleFilterChange("status", v === "all" ? "" : v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('ticket.allStatuses')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('ticket.allStatuses')}</SelectItem>
+                        <SelectItem value="open">{t('ticket.open')}</SelectItem>
+                        <SelectItem value="assigned">{t('ticket.assigned')}</SelectItem>
+                        <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
+                        <SelectItem value="reviewed">{t('ticket.reviewed')}</SelectItem>
+                        <SelectItem value="closed">{t('ticket.closed')}</SelectItem>
+                        <SelectItem value="rejected_pending_l3_review">
+                          {t('ticket.rejectedPendingL3Review')}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="plant">Plant</Label>
-                  <Select
-                    value={filters.plant || "all"}
-                    onValueChange={(v) =>
-                      handleFilterChange("plant", v === "all" ? undefined : v)
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Plants" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Plants</SelectItem>
-                      {plants.map((plant) => (
-                        <SelectItem key={plant.code} value={plant.code}>
-                          {plant.name}
+                        <SelectItem value="rejected_final">
+                          {t('ticket.rejectedFinal')}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="area">{t('ticket.area')}</Label>
-                  <Select
-                    value={filters.area || "all"}
-                    onValueChange={(v) =>
-                      handleFilterChange("area", v === "all" ? undefined : v)
-                    }
-                    disabled={!filters.plant}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={
-                        !filters.plant 
-                          ? 'Select plant first' 
-                          : t('ticket.allAreas')
-                      } />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('ticket.allAreas')}</SelectItem>
-                      {areas.map((area) => (
-                        <SelectItem key={area.code} value={area.code}>
-                          {area.name}
+                        <SelectItem value="finished">{t('ticket.finished')}</SelectItem>
+                        <SelectItem value="escalated">{t('ticket.escalated')}</SelectItem>
+                        <SelectItem value="reopened_in_progress">
+                          {t('ticket.reopenedInProgress')}
                         </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="created_by">{t('ticket.createdBy')}</Label>
-                  <Select
-                    value={filters.created_by ? filters.created_by.toString() : "all"}
-                    onValueChange={(v) =>
-                      handleFilterChange("created_by", v === "all" ? undefined : parseInt(v))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('ticket.allUsers')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('ticket.allUsers')}</SelectItem>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="assigned_to">{t('ticket.assignedTo')}</Label>
-                  <Select
-                    value={filters.assigned_to ? filters.assigned_to.toString() : "all"}
-                    onValueChange={(v) =>
-                      handleFilterChange("assigned_to", v === "all" ? undefined : parseInt(v))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder={t('ticket.allUsers')} />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">{t('ticket.allUsers')}</SelectItem>
-                      {users.map((user) => (
-                        <SelectItem key={user.id} value={user.id.toString()}>
-                          {user.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* 7. Critical Level */}
+                  <div className="space-y-2">
+                    <Label htmlFor="critical">{t('ticket.criticalLevel')}</Label>
+                    <Select
+                      value={filters.pucriticalno ? filters.pucriticalno.toString() : "all"}
+                      onValueChange={(v) =>
+                        handleFilterChange("pucriticalno", v === "all" ? undefined : parseInt(v))
+                      }
+                      disabled={criticalLevelsLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={criticalLevelsLoading ? t('common.loading') : t('ticket.allCriticalLevels')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('ticket.allCriticalLevels')}</SelectItem>
+                        {criticalLevels.map((level) => (
+                          <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
+                            {level.PUCRITICALNAME}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </DialogContent>
