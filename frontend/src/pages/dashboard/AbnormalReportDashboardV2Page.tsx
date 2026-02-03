@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend,
-  ComposedChart, AreaChart, Area, Line, LabelList
+  ComposedChart, AreaChart, Area, Line, LabelList, Cell
 } from 'recharts';
 import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
@@ -17,7 +17,7 @@ import {
   AlertTriangle, CheckCircle, User, Award,
   BarChart3, Filter, X
 } from 'lucide-react';
-import dashboardService, { type AbnormalFindingKPIResponse, type AreaData, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityResponse, type UserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse } from '@/services/dashboardService';
+import dashboardService, { type AbnormalFindingKPIResponse, type AreaData, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityResponse, type UserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse, type CaseCountByPUResponse } from '@/services/dashboardService';
 import { KPITileSkeleton } from '@/components/ui/kpi-tile-skeleton';
 import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -320,6 +320,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   const [costImpactReporterData, setCostImpactReporterData] = useState<CostImpactReporterLeaderboardResponse['data']['costImpactReporterData']>([]);
   const [costImpactReporterLoading, setCostImpactReporterLoading] = useState<boolean>(false);
+
+  const [caseCountByPUData, setCaseCountByPUData] = useState<Array<{ puno: number; puName: string; caseCount: number }>>([]);
+  const [caseCountByPULoading, setCaseCountByPULoading] = useState<boolean>(false);
 
   const [downtimeByFailureModeData, setDowntimeByFailureModeData] = useState<DowntimeByFailureModeResponse['data']['downtimeByFailureModeData']>([]);
   const [downtimeByFailureModeLoading, setDowntimeByFailureModeLoading] = useState<boolean>(false);
@@ -967,6 +970,34 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
+  // Fetch Case Count by PU Data
+  const fetchCaseCountByPUData = useCallback(async () => {
+    try {
+      setCaseCountByPULoading(true);
+      
+      // Calculate the date range based on time filter
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
+      };
+
+      const response = await dashboardService.getCaseCountByPU(params);
+      
+      if (response.success) {
+        setCaseCountByPUData(response.data.caseCountByPUData);
+      }
+    } catch (error) {
+      console.error('Error fetching case count by PU data:', error);
+      setCaseCountByPUData([]);
+    } finally {
+      setCaseCountByPULoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+
   // Update selectedYear when timeFilter changes (only for applied filters)
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -1067,6 +1098,11 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   useEffect(() => {
     fetchCostByFailureModeData();
   }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCostByFailureModeData]);
+
+  // Fetch case count by PU data when time filter, period, or filters change
+  useEffect(() => {
+    fetchCaseCountByPUData();
+  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCaseCountByPUData]);
 
   // Fetch resolve duration by area data when time filter or period changes (only when "All Area" is selected)
   useEffect(() => {
@@ -2527,6 +2563,88 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Case Count by PU - Full Width Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('dashboard.caseCountByPU')}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {caseCountByPULoading ? (
+              <div className="flex items-center justify-center h-[400px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+              </div>
+            ) : caseCountByPUData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                <AlertTriangle className="h-8 w-8 mb-2" />
+                <p className="text-sm font-medium">No Data Available</p>
+                <p className="text-xs text-center mt-1">
+                  Unable to load case count by PU data.<br />
+                  Please check your connection or contact support.
+                </p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={Math.max(450, caseCountByPUData.length *30 + 60)}>
+                <BarChart 
+                  data={caseCountByPUData} 
+                  layout="vertical" 
+                  margin={{ top: 20, right: 30, left: 20, bottom: 15 }}
+                  barCategoryGap={0}
+                  barSize={18}
+                >
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis 
+                    type="number" 
+                    allowDecimals={false}
+                    label={{ value: t('dashboard.caseCount'), position: 'insideBottom', offset: -10 }}
+                  />
+                  <YAxis 
+                    dataKey="puName" 
+                    type="category" 
+                    width={300}
+                  />
+                  <RechartsTooltip 
+                    formatter={(value) => [`${value} ${t('dashboard.tickets')}`, t('dashboard.caseCount')]}
+                    labelFormatter={(label) => `PU: ${label}`}
+                  />
+                  <Bar 
+                    dataKey="caseCount" 
+                    fill="hsl(var(--primary))"
+                    shape={(props: any) => {
+                      const { payload, ...barProps } = props;
+                      return (
+                        <g>
+                          <rect
+                            {...barProps}
+                            style={{ cursor: 'pointer' }}
+                            onClick={() => {
+                              if (payload) {
+                                const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+                                const params = new URLSearchParams({
+                                  startDate: dateRange.startDate,
+                                  endDate: dateRange.endDate,
+                                  puno: payload.puno.toString()
+                                });
+                                window.open(`/tickets?${params.toString()}`, '_blank');
+                              }
+                            }}
+                          />
+                        </g>
+                      );
+                    }}
+                  >
+                    {caseCountByPUData.map((entry, index) => (
+                      <Cell 
+                        key={`cell-${index}`}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {/* Speed Charts */}

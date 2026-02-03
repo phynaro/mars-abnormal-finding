@@ -4192,6 +4192,94 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
   }
 };
 
+/**
+ * Get Case Count by PU
+ * Returns ticket counts grouped by Production Unit (PU), ordered from max to min
+ */
+exports.getCaseCountByPU = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    
+    // Extract query parameters
+    const {
+      startDate,
+      endDate,
+      plant,
+      area
+    } = req.query;
+
+    // Validate required parameters
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    // Build WHERE clause based on filters
+    let whereClause = `WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'`;
+    
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+    
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
+    }
+
+    // Get case count by PU
+    const caseCountByPUQuery = `
+      SELECT 
+        pu.PUNO as puno,
+        pu.PUNAME as puName,
+        COUNT(DISTINCT t.id) as caseCount
+      FROM IgxTickets t
+      INNER JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+      LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+      ${whereClause}
+      GROUP BY pu.PUNO, pu.PUNAME
+      HAVING COUNT(DISTINCT t.id) > 0
+      ORDER BY caseCount DESC, pu.PUNAME ASC
+    `;
+
+    const result = await pool.request().query(caseCountByPUQuery);
+    
+    // Transform the data for frontend consumption
+    const caseCountByPUData = result.recordset.map(row => ({
+      puno: row.puno,
+      puName: row.puName || `PU ${row.puno}`,
+      caseCount: row.caseCount
+    }));
+
+    const totalTickets = caseCountByPUData.reduce((sum, item) => sum + item.caseCount, 0);
+
+    res.json({
+      success: true,
+      data: {
+        caseCountByPUData,
+        summary: {
+          totalPUs: caseCountByPUData.length,
+          totalTickets: totalTickets,
+          appliedFilters: {
+            startDate: startDate,
+            endDate: endDate,
+            plant: plant && plant !== 'all' ? plant : null,
+            area: area && area !== 'all' ? area : null
+          }
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error in getCaseCountByPU:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 exports.getPersonalKPIComparison = getPersonalKPIComparison;
 exports.getDepartmentUserKPITicketsCreated = getDepartmentUserKPITicketsCreated;
 exports.getDepartmentUserKPITicketsAssigned = getDepartmentUserKPITicketsAssigned;

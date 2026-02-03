@@ -534,6 +534,29 @@ export interface DowntimeImpactReporterLeaderboardResponse {
   };
 }
 
+export interface CaseCountByPUDataPoint {
+  puno: number;
+  puName: string;
+  caseCount: number;
+}
+
+export interface CaseCountByPUResponse {
+  success: boolean;
+  data: {
+    caseCountByPUData: CaseCountByPUDataPoint[];
+    summary: {
+      totalPUs: number;
+      totalTickets: number;
+      appliedFilters: {
+        startDate: string;
+        endDate: string;
+        plant: string | null;
+        area: string | null;
+      };
+    };
+  };
+}
+
 
 class DashboardService {
   private baseURL = `${(import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '')}/dashboard`;
@@ -912,6 +935,27 @@ class DashboardService {
     const url = `${this.baseURL}/downtime-impact-reporter-leaderboard?${queryParams.toString()}`;
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch downtime impact reporter leaderboard data');
+    return res.json();
+  }
+
+  async getCaseCountByPU(params: {
+    startDate: string;
+    endDate: string;
+    plant?: string;
+    area?: string;
+  }): Promise<CaseCountByPUResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
+    if (params.plant !== undefined) {
+      queryParams.set('plant', params.plant);
+    }
+    if (params.area !== undefined) {
+      queryParams.set('area', params.area);
+    }
+    const url = `${this.baseURL}/case-count-by-pu?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch case count by PU data');
     return res.json();
   }
 
