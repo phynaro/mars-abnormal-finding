@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,18 +18,23 @@ import {
   ArrowUp,
   Calendar,
   CheckCircle,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Eye,
   Lock,
+  LayoutGrid,
   Star,
+  Table,
   Ticket,
   User,
   UserCheck,
   X,
 } from "lucide-react";
 import { formatUITime } from "@/utils/timezone";
+import { getFileUrl } from "@/utils/url";
 
 type PendingTicketsSectionProps = {
   tickets: APIPendingTicket[];
@@ -553,36 +558,40 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
 };
 
 const MobileCardSkeleton = () => (
-  <div className="border rounded-lg p-4 bg-card">
-    <div className="flex justify-between items-start">
-      <div className="flex-1">
-        <Skeleton className="h-4 w-16 mb-2" />
-        <Skeleton className="h-6 w-3/4 mb-2" />
+  <div className="border rounded-lg bg-card overflow-hidden flex flex-col">
+    {/* Image skeleton */}
+    <Skeleton className="w-full aspect-[3/2]" />
+    <div className="p-4 flex-1 flex flex-col">
+      <div className="flex justify-between items-start">
+        <div className="flex-1">
+          <Skeleton className="h-4 w-16 mb-2" />
+          <Skeleton className="h-6 w-3/4 mb-2" />
+        </div>
+        <Skeleton className="h-6 w-20 rounded-full" />
       </div>
-      <Skeleton className="h-6 w-20 rounded-full" />
-    </div>
-    <Skeleton className="h-4 w-full mb-1" />
-    <Skeleton className="h-4 w-2/3 mb-3" />
-    <div className="flex flex-wrap gap-2 mb-3">
-      <Skeleton className="h-5 w-16 rounded-full" />
-      <Skeleton className="h-5 w-16 rounded-full" />
-      <Skeleton className="h-5 w-24 rounded-full" />
-    </div>
-    <div className="space-y-2 mb-3">
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-4 w-4" />
-        <Skeleton className="h-4 w-32" />
+      <Skeleton className="h-4 w-full mb-1" />
+      <Skeleton className="h-4 w-2/3 mb-3" />
+      <div className="flex flex-wrap gap-2 mb-3">
+        <Skeleton className="h-5 w-16 rounded-full" />
+        <Skeleton className="h-5 w-16 rounded-full" />
+        <Skeleton className="h-5 w-24 rounded-full" />
       </div>
-      <div className="flex items-center gap-2">
-        <Skeleton className="h-4 w-4" />
-        <Skeleton className="h-4 w-28" />
+      <div className="space-y-2 mb-3">
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4" />
+          <Skeleton className="h-4 w-32" />
+        </div>
+        <div className="flex items-center gap-2">
+          <Skeleton className="h-4 w-4" />
+          <Skeleton className="h-4 w-28" />
+        </div>
       </div>
-    </div>
-    <div className="flex justify-between items-center">
-      <Skeleton className="h-3 w-40" />
-      <div className="flex gap-2">
-        <Skeleton className="h-8 w-16" />
-        <Skeleton className="h-8 w-16" />
+      <div className="flex justify-between items-center">
+        <Skeleton className="h-3 w-40" />
+        <div className="flex gap-2">
+          <Skeleton className="h-8 w-16" />
+          <Skeleton className="h-8 w-16" />
+        </div>
       </div>
     </div>
   </div>
@@ -597,7 +606,20 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
   onPageChange,
 }) => {
   const { t } = useLanguage();
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  
+  // View mode state - default to 'card', persist in localStorage
+  const [viewMode, setViewMode] = useState<'table' | 'card'>(() => {
+    const saved = localStorage.getItem('pendingTicketsViewMode');
+    return (saved === 'card' || saved === 'table') ? saved : 'card';
+  });
 
+  const handleViewModeChange = (mode: 'table' | 'card') => {
+    setViewMode(mode);
+    localStorage.setItem('pendingTicketsViewMode', mode);
+  };
+
+  // Group tickets by relationship and sort by created_at (older first)
   const groupedTickets = tickets.reduce(
     (groups, ticket) => {
       const relationship = ticket.user_relationship || "viewer";
@@ -610,118 +632,325 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
     {} as Record<string, APIPendingTicket[]>,
   );
 
+  // Sort tickets within each group by created_at (ascending - older first)
+  Object.keys(groupedTickets).forEach((relationship) => {
+    groupedTickets[relationship].sort((a, b) => {
+      const dateA = new Date(a.created_at).getTime();
+      const dateB = new Date(b.created_at).getTime();
+      return dateA - dateB;
+    });
+  });
+
   const relationshipTypes = Object.keys(groupedTickets).sort((a, b) => {
     const configA = getRelationshipConfig(a, t);
     const configB = getRelationshipConfig(b, t);
     return configA.priority - configB.priority;
   });
 
+  const toggleSection = (relationship: string) => {
+    setExpandedSections((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(relationship)) {
+        newSet.delete(relationship);
+      } else {
+        newSet.add(relationship);
+      }
+      return newSet;
+    });
+  };
+
   const renderTicketTable = (
     relationship: string,
     relationshipTickets: APIPendingTicket[],
+    isFirstSection: boolean = false,
   ) => {
     const config = getRelationshipConfig(relationship, t);
+    const isExpanded = expandedSections.has(relationship);
+    const MAX_TICKETS = 8;
+    const hasMore = relationshipTickets.length > MAX_TICKETS;
+    const displayedTickets = isExpanded 
+      ? relationshipTickets 
+      : relationshipTickets.slice(0, MAX_TICKETS);
 
     return (
       <div key={relationship} className="mb-6">
-        <div className="flex items-center gap-2 mb-3">
-          <div className={config.color}>{config.icon}</div>
-          <h3 className={`text-lg font-semibold ${config.color}`}>
-            {config.title} ({relationshipTickets.length})
-          </h3>
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2">
+            <div className={config.color}>{config.icon}</div>
+            <h3 className={`text-lg font-semibold ${config.color}`}>
+              {config.title} ({relationshipTickets.length})
+            </h3>
+          </div>
+          {/* View Toggle Buttons - Desktop Only, shown only on first section */}
+          {isFirstSection && (
+            <div className="hidden lg:flex rounded border overflow-hidden">
+              <Button
+                variant={viewMode === 'card' ? 'default' : 'ghost'}
+                className="rounded-none flex items-center gap-1"
+                onClick={() => handleViewModeChange('card')}
+                title="Card view"
+                size="sm"
+              >
+                <LayoutGrid className="h-4 w-4" />
+                <span className="hidden sm:inline">Card</span>
+              </Button>
+              <Button
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
+                className="rounded-none flex items-center gap-1"
+                onClick={() => handleViewModeChange('table')}
+                title="Table view"
+                size="sm"
+              >
+                <Table className="h-4 w-4" />
+                <span className="hidden sm:inline">Table</span>
+              </Button>
+            </div>
+          )}
         </div>
 
+        {/* Mobile Card View - Always show cards on mobile with preview image */}
         <div className="block lg:hidden space-y-4">
-          {relationshipTickets.map((ticket) => (
+          {displayedTickets.map((ticket) => (
             <div
               key={ticket.id}
-              className="border rounded-lg p-4 bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
+              className="border rounded-lg bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30 overflow-hidden flex flex-col"
               onClick={() => onTicketClick(ticket.id)}
             >
-              {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
-              <div className="flex justify-between items-center gap-2 mb-2">
-                <span className="text-sm text-muted-foreground font-medium">
-                  #{ticket.ticket_number}
-                </span>
-                <div className="flex gap-2 items-center">
-                  <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
-                    <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
-                    <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+              {/* Preview Image - 3:2 aspect ratio */}
+              {ticket.first_image_url ? (
+                <img 
+                  src={getFileUrl(ticket.first_image_url)} 
+                  alt={ticket.title}
+                  className="w-full aspect-[3/2] object-cover"
+                />
+              ) : (
+                <div className="w-full aspect-[3/2] bg-muted flex items-center justify-center">
+                  <span className="text-muted-foreground text-sm">No image</span>
+                </div>
+              )}
+              
+              <div className="p-4 flex-1 flex flex-col">
+                {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
+                <div className="flex justify-between items-center gap-2 mb-2">
+                  <span className="text-sm text-muted-foreground font-medium">
+                    #{ticket.ticket_number}
+                  </span>
+                  <div className="flex gap-2 items-center flex-shrink-0">
+                    <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
+                      <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+                      <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+                    </div>
+                    <div className={getTicketStatusClassModern(ticket.status)}>
+                      <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                    </div>
                   </div>
-                  <div className={getTicketStatusClassModern(ticket.status)}>
-                    <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                </div>
+
+                {/* div2: Title */}
+                <div className="text-lg font-semibold mb-2 line-clamp-2">
+                  {ticket.title}
+                </div>
+
+                {/* div3: Description */}
+                <div className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-1">
+                  {ticket.description}
+                </div>
+
+                {/* div4: PU Name */}
+                <div className="mb-3">
+                  <Badge variant="outline" className="text-xs">
+                    {ticket.pu_name || ticket.pucode || "N/A"}
+                  </Badge>
+                </div>
+
+                {/* div5: Others */}
+                <div className="text-sm text-muted-foreground space-y-1 mt-auto">
+                  {config.columns.slice(5).map((column) => {
+                    const content = renderMobileCardContent(
+                      ticket,
+                      column.key,
+                      t,
+                    );
+                    if (!content) return null;
+                    return <div key={column.key}>{content}</div>;
+                  })}
+                </div>
+              </div>
+            </div>
+          ))}
+          {hasMore && (
+            <div className="flex justify-center pt-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleSection(relationship)}
+                className="flex items-center gap-2"
+              >
+                {isExpanded ? (
+                  <>
+                    <ChevronUp className="h-4 w-4" />
+                    {t("common.showLess")}
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="h-4 w-4" />
+                    {t("common.seeMore")} ({relationshipTickets.length - MAX_TICKETS} {t("common.more")})
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </div>
+
+        {/* Desktop Card View */}
+        {viewMode === 'card' && (
+          <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+            {displayedTickets.map((ticket) => (
+              <div
+                key={ticket.id}
+                className="border rounded-lg bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30 overflow-hidden flex flex-col"
+                onClick={() => onTicketClick(ticket.id)}
+              >
+                {/* Preview Image - 3:2 aspect ratio */}
+                {(ticket as any).first_image_url ? (
+                  <img 
+                    src={getFileUrl((ticket as any).first_image_url)} 
+                    alt={ticket.title}
+                    className="w-full aspect-[3/2] object-cover"
+                  />
+                ) : (
+                  <div className="w-full aspect-[3/2] bg-muted flex items-center justify-center">
+                    <span className="text-muted-foreground text-sm">No image</span>
+                  </div>
+                )}
+                
+                <div className="p-4 flex-1 flex flex-col">
+                  {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
+                  <div className="flex justify-between items-center gap-2 mb-2">
+                    <span className="text-sm text-muted-foreground font-medium">
+                      #{ticket.ticket_number}
+                    </span>
+                    <div className="flex gap-2 items-center flex-shrink-0">
+                      <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
+                        <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+                        <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+                      </div>
+                      <div className={getTicketStatusClassModern(ticket.status)}>
+                        <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* div2: Title */}
+                  <div className="text-lg font-semibold mb-2 line-clamp-2">
+                    {ticket.title}
+                  </div>
+
+                  {/* div3: Description */}
+                  <div className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-1">
+                    {ticket.description}
+                  </div>
+
+                  {/* div4: PU Name */}
+                  <div className="mb-3">
+                    <Badge variant="outline" className="text-xs">
+                      {ticket.pu_name || ticket.pucode || "N/A"}
+                    </Badge>
+                  </div>
+
+                  {/* div5: Others */}
+                  <div className="text-sm text-muted-foreground space-y-1 mt-auto">
+                    {config.columns.slice(5).map((column) => {
+                      const content = renderMobileCardContent(
+                        ticket,
+                        column.key,
+                        t,
+                      );
+                      if (!content) return null;
+                      return <div key={column.key}>{content}</div>;
+                    })}
                   </div>
                 </div>
               </div>
-
-              {/* div2: Title */}
-              <div className="text-lg font-semibold mb-2">
-                {ticket.title}
-              </div>
-
-              {/* div3: Description */}
-              <div className="text-sm text-muted-foreground line-clamp-2 mb-3">
-                {ticket.description}
-              </div>
-
-              {/* div4: PU Name */}
-              <div className="mb-3">
-                <Badge variant="outline" className="text-xs">
-                  {ticket.pu_name || ticket.pucode || "N/A"}
-                </Badge>
-              </div>
-
-              {/* div5: Others */}
-              <div className="text-sm text-muted-foreground space-y-1">
-                {config.columns.slice(5).map((column) => {
-                  const content = renderMobileCardContent(
-                    ticket,
-                    column.key,
-                    t,
-                  );
-                  if (!content) return null;
-                  return <div key={column.key}>{content}</div>;
-                })}
-              </div>
-
-              {/* <div className="mt-4 text-xs text-muted-foreground">
-                <span>
-                  {t("ticket.created")}{" "}
-                  {new Date(ticket.created_at).toLocaleDateString()}
-                </span>
-              </div> */}
-            </div>
-          ))}
-        </div>
-
-        <div className="hidden lg:block overflow-x-auto rounded border">
-          <table className="min-w-full text-sm">
-            <thead className="bg-muted/50 text-left">
-              <tr>
-                {config.columns.map((column) => (
-                  <th key={column.key} className="px-4 py-2">
-                    {column.label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {relationshipTickets.map((ticket) => (
-                <tr
-                  key={ticket.id}
-                  className="border-t cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
-                  onClick={() => onTicketClick(ticket.id)}
+            ))}
+            {hasMore && (
+              <div className="col-span-full flex justify-center pt-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleSection(relationship)}
+                  className="flex items-center gap-2"
                 >
+                  {isExpanded ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                      {t("common.showLess")}
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      {t("common.seeMore")} ({relationshipTickets.length - MAX_TICKETS} {t("common.more")})
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Desktop Table View */}
+        {viewMode === 'table' && (
+          <div className="hidden lg:block overflow-x-auto rounded border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-muted/50 text-left">
+                <tr>
                   {config.columns.map((column) => (
-                    <td key={column.key} className="px-4 py-2">
-                      {renderCellContent(ticket, column.key, t)}
-                    </td>
+                    <th key={column.key} className="px-4 py-2">
+                      {column.label}
+                    </th>
                   ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {displayedTickets.map((ticket) => (
+                  <tr
+                    key={ticket.id}
+                    className="border-t cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
+                    onClick={() => onTicketClick(ticket.id)}
+                  >
+                    {config.columns.map((column) => (
+                      <td key={column.key} className="px-4 py-2">
+                        {renderCellContent(ticket, column.key, t)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {hasMore && (
+              <div className="flex justify-center py-3 border-t bg-muted/20">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleSection(relationship)}
+                  className="flex items-center gap-2"
+                >
+                  {isExpanded ? (
+                    <>
+                      <ChevronUp className="h-4 w-4" />
+                      {t("common.showLess")}
+                    </>
+                  ) : (
+                    <>
+                      <ChevronDown className="h-4 w-4" />
+                      {t("common.seeMore")} ({relationshipTickets.length - MAX_TICKETS} {t("common.more")})
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     );
   };
@@ -729,14 +958,26 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
   if (loading) {
     return (
       <>
+        {/* Mobile Skeleton Cards - Always show on mobile */}
         <div className="block lg:hidden space-y-4">
           {Array.from({ length: 3 }).map((_, index) => (
             <MobileCardSkeleton key={index} />
           ))}
         </div>
-        <div className="hidden lg:flex justify-center items-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-        </div>
+        {/* Desktop Loading - Card view skeleton */}
+        {viewMode === 'card' && (
+          <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <MobileCardSkeleton key={index} />
+            ))}
+          </div>
+        )}
+        {/* Desktop Loading - Table view spinner */}
+        {viewMode === 'table' && (
+          <div className="hidden lg:flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        )}
       </>
     );
   }
@@ -763,8 +1004,8 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
 
   return (
     <>
-      {relationshipTypes.map((relationship) =>
-        renderTicketTable(relationship, groupedTickets[relationship]),
+      {relationshipTypes.map((relationship, index) =>
+        renderTicketTable(relationship, groupedTickets[relationship], index === 0),
       )}
 
       {pagination && onPageChange && pagination.pages > 1 && (

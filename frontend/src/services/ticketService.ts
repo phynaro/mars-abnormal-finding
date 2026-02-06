@@ -250,6 +250,7 @@ export interface PendingTicket {
   schedule_start?: string;
   schedule_finish?: string;
   machine_number?: number;
+  first_image_url?: string; // First image URL for preview
 }
 
 export interface PUCODE {

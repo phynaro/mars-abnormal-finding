@@ -42,6 +42,9 @@ const translations: Record<Language, Record<string, string>> = {
     'common.clear': 'Clear',
     'common.close': 'Close',
     'common.retry': 'Retry',
+    'common.seeMore': 'See More',
+    'common.showLess': 'Show Less',
+    'common.more': 'more',
     // Navigation
     'nav.home': 'Home',
     'nav.dashboard': 'Dashboard',
@@ -801,6 +804,9 @@ const translations: Record<Language, Record<string, string>> = {
     'common.hideFilters': 'ซ่อนตัวกรอง',
     'common.showFilters': 'แสดงตัวกรอง',
     'common.retry': 'ลองใหม่',
+    'common.seeMore': 'ดูเพิ่มเติม',
+    'common.showLess': 'แสดงน้อยลง',
+    'common.more': 'เพิ่มเติม',
     // Navigation
     'nav.home': 'หน้าหลัก',
     'nav.dashboard': 'แดชบอร์ด',

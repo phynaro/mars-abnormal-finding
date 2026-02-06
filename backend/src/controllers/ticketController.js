@@ -6105,6 +6105,11 @@ const getUserPendingTickets = async (req, res) => {
                     -- PU information
                     pu.PUCODE as pu_pucode,
                     pu.PUNAME as pu_name,
+                    -- First image URL for preview
+                    (SELECT TOP 1 image_url 
+                     FROM IgxTicketImages 
+                     WHERE ticket_id = t.id 
+                     ORDER BY uploaded_at) as first_image_url,
                     -- User's relationship to this ticket (prioritize highest approval level)
                     CASE 
                         WHEN t.status = 'escalated' AND ta.approval_level >= 3 THEN 'escalate_approver'
