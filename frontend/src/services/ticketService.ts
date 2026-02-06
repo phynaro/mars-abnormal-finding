@@ -89,6 +89,7 @@ export interface Ticket {
   pu_pucode?: string; // From PU table
   pudescription?: string; // From PUExtension table
   digit_count?: number; // From PUExtension table
+  first_image_url?: string; // First image URL for preview (from ticket list)
   images?: TicketImage[];
   comments?: TicketComment[];
   status_history?: TicketStatusHistory[];

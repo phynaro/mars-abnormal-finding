@@ -24,6 +24,8 @@ import {
   AlertTriangle,
   Download,
   X,
+  Table,
+  LayoutGrid,
 } from "lucide-react";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, TicketFilters } from "@/services/ticketService";
@@ -42,6 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { formatTimelineTime } from "@/utils/timezone";
+import { getFileUrl } from "@/utils/url";
 import {
   getTicketPriorityClass,
   getTicketSeverityClass,
@@ -78,6 +81,12 @@ export const TicketList: React.FC = () => {
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
   const { toast } = useToast();
 
+  // View mode state - default to 'card', persist in localStorage
+  const [viewMode, setViewMode] = useState<'table' | 'card'>(() => {
+    const saved = localStorage.getItem('ticketListViewMode');
+    return (saved === 'card' || saved === 'table') ? saved : 'card';
+  });
+
   // Helper function to check if user is L3/Admin (permission level 3 or higher)
   const isL3User = () => {
     return (user?.permissionLevel || 0) >= 3;
@@ -90,7 +99,7 @@ export const TicketList: React.FC = () => {
   const initializeFiltersFromURL = (): TicketFilters => {
     const urlFilters: TicketFilters = {
       page: parseInt(searchParams.get('page') || '1'),
-      limit: parseInt(searchParams.get('limit') || '10'),
+      limit: parseInt(searchParams.get('limit') || '12'),
       status: searchParams.get('status') || "",
       pucriticalno: searchParams.get('pucriticalno') ? parseInt(searchParams.get('pucriticalno')!) : undefined,
       search: searchParams.get('search') || "",
@@ -279,7 +288,7 @@ export const TicketList: React.FC = () => {
   const clearAllFilters = () => {
     const clearedFilters: TicketFilters = {
       page: 1,
-      limit: 10,
+      limit: 12,
       status: "",
       pucriticalno: undefined,
       search: "",
@@ -303,6 +312,11 @@ export const TicketList: React.FC = () => {
 
   const handlePageChange = (page: number) => {
     setFilters((prev) => ({ ...prev, page }));
+  };
+
+  const handleViewModeChange = (mode: 'table' | 'card') => {
+    setViewMode(mode);
+    localStorage.setItem('ticketListViewMode', mode);
   };
 
   const handleViewTicket = (ticket: Ticket) => {
@@ -423,36 +437,40 @@ export const TicketList: React.FC = () => {
   };
 
   const MobileCardSkeleton = () => (
-    <div className="border rounded-lg p-4 bg-card">
-      <div className="flex justify-between items-start">
-        <div className="flex-1">
-          <Skeleton className="h-4 w-16 mb-2" />
-          <Skeleton className="h-6 w-3/4 mb-2" />
+    <div className="border rounded-lg bg-card overflow-hidden flex flex-col">
+      {/* Image skeleton - only for desktop card view */}
+      <Skeleton className="w-full aspect-[3/2] hidden lg:block" />
+      <div className="p-4 flex-1 flex flex-col">
+        <div className="flex justify-between items-start">
+          <div className="flex-1">
+            <Skeleton className="h-4 w-16 mb-2" />
+            <Skeleton className="h-6 w-3/4 mb-2" />
+          </div>
+          <Skeleton className="h-6 w-20 rounded-full" />
         </div>
-        <Skeleton className="h-6 w-20 rounded-full" />
-      </div>
-      <Skeleton className="h-4 w-full mb-1" />
-      <Skeleton className="h-4 w-2/3 mb-3" />
-      <div className="flex flex-wrap gap-2 mb-3">
-        <Skeleton className="h-5 w-16 rounded-full" />
-        <Skeleton className="h-5 w-16 rounded-full" />
-        <Skeleton className="h-5 w-24 rounded-full" />
-      </div>
-      <div className="space-y-2 mb-3">
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-4 w-4" />
-          <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-full mb-1" />
+        <Skeleton className="h-4 w-2/3 mb-3" />
+        <div className="flex flex-wrap gap-2 mb-3">
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-5 w-16 rounded-full" />
+          <Skeleton className="h-5 w-24 rounded-full" />
         </div>
-        <div className="flex items-center gap-2">
-          <Skeleton className="h-4 w-4" />
-          <Skeleton className="h-4 w-28" />
+        <div className="space-y-2 mb-3">
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-4" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-4 w-4" />
+            <Skeleton className="h-4 w-28" />
+          </div>
         </div>
-      </div>
-      <div className="flex justify-between items-center">
-        <Skeleton className="h-3 w-40" />
-        <div className="flex gap-2">
-          <Skeleton className="h-8 w-16" />
-          <Skeleton className="h-8 w-16" />
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-3 w-40" />
+          <div className="flex gap-2">
+            <Skeleton className="h-8 w-16" />
+            <Skeleton className="h-8 w-16" />
+          </div>
         </div>
       </div>
     </div>
@@ -640,6 +658,29 @@ export const TicketList: React.FC = () => {
               </div>
             </DialogContent>
           </Dialog>
+          {/* View Toggle Buttons - Desktop Only */}
+          <div className="hidden lg:flex rounded border overflow-hidden">
+            <Button
+              variant={viewMode === 'card' ? 'default' : 'ghost'}
+              className="rounded-none flex items-center gap-1"
+              onClick={() => handleViewModeChange('card')}
+              title="Card view"
+              size="sm"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Card</span>
+            </Button>
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              className="rounded-none flex items-center gap-1"
+              onClick={() => handleViewModeChange('table')}
+              title="Table view"
+              size="sm"
+            >
+              <Table className="h-4 w-4" />
+              <span className="hidden sm:inline">Table</span>
+            </Button>
+          </div>
           <Button
             variant="outline"
             size="sm"
@@ -775,16 +816,26 @@ export const TicketList: React.FC = () => {
       <div>
         {loading ? (
           <>
-            {/* Mobile Skeleton Cards */}
+            {/* Mobile Skeleton Cards - Always show on mobile */}
             <div className="block lg:hidden space-y-4">
               {Array.from({ length: 3 }).map((_, index) => (
                 <MobileCardSkeleton key={index} />
               ))}
             </div>
-            {/* Desktop Spinner */}
-            <div className="hidden lg:flex justify-center items-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-            </div>
+            {/* Desktop Loading - Card view skeleton */}
+            {viewMode === 'card' && (
+              <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                {Array.from({ length: 8 }).map((_, index) => (
+                  <MobileCardSkeleton key={index} />
+                ))}
+              </div>
+            )}
+            {/* Desktop Loading - Table view spinner */}
+            {viewMode === 'table' && (
+              <div className="hidden lg:flex justify-center items-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              </div>
+            )}
           </>
         ) : tickets.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
@@ -792,7 +843,7 @@ export const TicketList: React.FC = () => {
           </div>
         ) : (
           <>
-            {/* Mobile Cards */}
+            {/* Mobile Cards - Always show on mobile */}
             <div className="block lg:hidden space-y-4">
               {tickets.map((ticket) => (
                 <div 
@@ -860,8 +911,94 @@ export const TicketList: React.FC = () => {
               ))}
             </div>
 
-            {/* Desktop Table */}
-            <div className="hidden lg:block overflow-x-auto rounded border">
+            {/* Desktop Card View */}
+            {viewMode === 'card' && (
+              <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+                {tickets.map((ticket) => (
+                  <div 
+                    key={ticket.id} 
+                    className="border rounded-lg bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30 overflow-hidden flex flex-col"
+                    onClick={() => handleViewTicket(ticket)}
+                  >
+                    {/* Preview Image - 3:2 aspect ratio */}
+                    {ticket.first_image_url ? (
+                      <img 
+                        src={getFileUrl(ticket.first_image_url)} 
+                        alt={ticket.title}
+                        className="w-full aspect-[3/2] object-cover"
+                      />
+                    ) : (
+                      <div className="w-full aspect-[3/2] bg-muted flex items-center justify-center">
+                        <span className="text-muted-foreground text-sm">No image</span>
+                      </div>
+                    )}
+                    
+                    <div className="p-4 flex-1 flex flex-col">
+                      {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
+                      <div className="flex justify-between items-center gap-2 mb-2">
+                        <span className="text-sm text-muted-foreground font-medium">
+                          #{ticket.ticket_number}
+                        </span>
+                        <div className="flex gap-2 items-center flex-shrink-0">
+                          <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
+                            <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+                            <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+                          </div>
+                          <div className={getTicketStatusClassModern(ticket.status)}>
+                            <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* div2: Title */}
+                      <div className="text-lg font-semibold mb-2 line-clamp-2">
+                        {ticket.title}
+                      </div>
+
+                      {/* div3: Description */}
+                      <div className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-1">
+                        {ticket.description}
+                      </div>
+
+                      {/* div4: PU Name */}
+                      <div className="mb-3">
+                        <Badge variant="outline" className="text-xs">
+                          {ticket.pu_name || ticket.pucode || 'N/A'}
+                        </Badge>
+                      </div>
+
+                      {/* div5: Others */}
+                      <div className="text-sm text-muted-foreground space-y-1 mt-auto">
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">
+                            {t('ticket.createdBy')}:{" "}
+                            {ticket.reporter_name || `User ${ticket.created_by}`}
+                          </span>
+                        </div>
+                        {ticket.assigned_to && (
+                          <div className="flex items-center gap-2">
+                            <User className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate">
+                              {t('ticket.assignedTo')}:{" "}
+                              {ticket.assignee_name || `User ${ticket.assigned_to}`}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">{t('ticket.created')} {formatDate(ticket.created_at)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Desktop Table View */}
+            {viewMode === 'table' && (
+              <div className="hidden lg:block overflow-x-auto rounded border">
               <table className="min-w-full text-sm">
                 <thead className="bg-muted/50 text-left">
                   <tr>
@@ -962,13 +1099,14 @@ export const TicketList: React.FC = () => {
                 </tbody>
               </table>
             </div>
+            )}
 
             {/* Pagination */}
             {totalPages > 1 && (
               <div className="flex justify-between items-center mt-6">
                 <div className="text-sm text-muted-foreground">
-                  {t('ticket.showing')} {(currentPage - 1) * (filters.limit || 10) + 1} {t('ticket.to')}{" "}
-                  {Math.min(currentPage * (filters.limit || 10), totalTickets)}{" "}
+                  {t('ticket.showing')} {(currentPage - 1) * (filters.limit || 12) + 1} {t('ticket.to')}{" "}
+                  {Math.min(currentPage * (filters.limit || 12), totalTickets)}{" "}
                   {t('ticket.of')} {totalTickets} {t('nav.tickets').toLowerCase()}
                 </div>
                 <div className="flex gap-2">

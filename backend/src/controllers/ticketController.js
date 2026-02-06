@@ -752,6 +752,11 @@ const getTickets = async (req, res) => {
                     -- Ticket Class information
                     tc.name_en as ticket_class_en,
                     tc.name_th as ticket_class_th,
+                    -- First image URL for preview
+                    (SELECT TOP 1 image_url 
+                     FROM IgxTicketImages 
+                     WHERE ticket_id = t.id 
+                     ORDER BY uploaded_at) as first_image_url,
                     ROW_NUMBER() OVER (ORDER BY t.created_at DESC) as row_num
                 FROM IgxTickets t
                 LEFT JOIN Person r ON t.created_by = r.PERSONNO
