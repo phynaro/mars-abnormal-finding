@@ -15,6 +15,8 @@ export type PersonalKPISectionProps = {
   personalKPIError: string | null;
   selectedYear: number;
   onKpiSetupClick: (type: "report" | "fix") => void;
+  dateRange?: { startDate: string; endDate: string };
+  userId?: number;
 };
 
 const PersonalKPISection: React.FC<PersonalKPISectionProps> = ({
@@ -29,12 +31,16 @@ const PersonalKPISection: React.FC<PersonalKPISectionProps> = ({
   personalKPIError,
   selectedYear,
   onKpiSetupClick,
+  dateRange,
+  userId,
 }) => (
   <div className="space-y-4">
     <PersonalKPITiles
       kpiData={personalKPIData}
       loading={personalKPILoading}
       error={personalKPIError}
+      dateRange={dateRange}
+      userId={userId}
     />
     {/* Charts section - side by side on large screens, stacked on smaller screens */}
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

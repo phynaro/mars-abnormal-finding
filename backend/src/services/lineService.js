@@ -93,22 +93,24 @@ class LineWebhookService {
         }
       }
 
-      // Send to LINE API
-      const payload = {
+     // Send to LINE API
+     const payload = {
+      line_payload: {
         to: lineUserId,
         messages: processedMessages,
-      };
-
+      },
+      access_token: this.channelAccessToken,
+    };
       const response = await axios.post(
-        `${this.apiBase}/push`,
-        payload,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${this.channelAccessToken}`,
-          },
-          timeout: this.timeout,
-        }
+        `${this.apiBase}`,
+        payload
+       // {
+         // headers: {
+           // 'Content-Type': 'application/json',
+        //    Authorization: `Bearer ${this.channelAccessToken}`,
+        //  },
+         // timeout: this.timeout,
+       // }
       );
 
       return { 

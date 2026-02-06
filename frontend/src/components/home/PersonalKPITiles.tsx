@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AlertTriangle, CheckCircle, DollarSign, TrendingDown, TrendingUp } from "lucide-react";
@@ -8,6 +9,8 @@ export type PersonalKPITilesProps = {
   kpiData: any;
   loading: boolean;
   error: string | null;
+  dateRange?: { startDate: string; endDate: string };
+  userId?: number;
 };
 
 const formatCurrencyDynamic = (
@@ -39,8 +42,11 @@ const PersonalKPITiles: React.FC<PersonalKPITilesProps> = ({
   kpiData,
   loading,
   error,
+  dateRange,
+  userId,
 }) => {
   const { t } = useLanguage();
+  const navigate = useNavigate();
 
   if (loading) {
     return (
@@ -115,6 +121,17 @@ const PersonalKPITiles: React.FC<PersonalKPITilesProps> = ({
 
   const { userRole, reporterMetrics, actionPersonMetrics, summary } = kpiData;
 
+  const handleTileClick = (filterType: 'created_by' | 'assigned_to') => {
+    if (!userId || !dateRange) return;
+    
+    const params = new URLSearchParams();
+    params.set(filterType, userId.toString());
+    params.set('startDate', dateRange.startDate);
+    params.set('endDate', dateRange.endDate);
+    
+    navigate(`/tickets?${params.toString()}`);
+  };
+
   const reporterTiles = [
     {
       title: t("homepage.myReportsCreated"),
@@ -125,6 +142,8 @@ const PersonalKPITiles: React.FC<PersonalKPITilesProps> = ({
       changeType: summary.reporterComparisonMetrics.reportGrowthRate.type,
       icon: <AlertTriangle className="h-4 w-4" />,
       color: "text-brand",
+      clickable: true,
+      filterType: 'created_by' as const,
     },
     {
       title: t("homepage.downtimeAvoidedByMyReports"),
@@ -178,6 +197,8 @@ const PersonalKPITiles: React.FC<PersonalKPITilesProps> = ({
             summary.actionPersonComparisonMetrics.casesFixedGrowthRate.type,
           icon: <CheckCircle className="h-4 w-4" />,
           color: "text-success",
+          clickable: true,
+          filterType: 'assigned_to' as const,
         },
         {
           title: t("homepage.downtimeIFixed"),
@@ -218,48 +239,56 @@ const PersonalKPITiles: React.FC<PersonalKPITilesProps> = ({
       ]
     : [];
 
-  const renderKpiTile = (kpi: any, index: number) => (
-    <Card key={`${kpi.title}-${index}`}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium text-muted-foreground">
-              {kpi.title}
-            </p>
-            {kpi.tooltip ? (
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <p className="text-2xl font-bold cursor-help">{kpi.value}</p>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{kpi.tooltip}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ) : (
-              <p className="text-2xl font-bold">{kpi.value}</p>
-            )}
-            {kpi.change !== undefined && (
-              <div className="flex items-center mt-1">
-                {kpi.change > 0 ? (
-                  <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
-                ) : (
-                  <TrendingDown className="h-3 w-3 text-red-500 mr-1" />
-                )}
-                <span className={`text-xs ${kpi.change > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {`${Math.abs(kpi.change).toFixed(1)}%`}
-                </span>
-              </div>
-            )}
+  const renderKpiTile = (kpi: any, index: number) => {
+    const isClickable = kpi.clickable && userId && dateRange;
+    
+    return (
+      <Card 
+        key={`${kpi.title}-${index}`}
+        className={isClickable ? "cursor-pointer transition-all hover:shadow-md hover:scale-[1.02]" : ""}
+        onClick={isClickable ? () => handleTileClick(kpi.filterType) : undefined}
+      >
+        <CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium text-muted-foreground">
+                {kpi.title}
+              </p>
+              {kpi.tooltip ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <p className={`text-2xl font-bold ${isClickable ? 'cursor-pointer' : 'cursor-help'}`}>{kpi.value}</p>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{kpi.tooltip}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              ) : (
+                <p className={`text-2xl font-bold ${isClickable ? 'cursor-pointer' : ''}`}>{kpi.value}</p>
+              )}
+              {kpi.change !== undefined && (
+                <div className="flex items-center mt-1">
+                  {kpi.change > 0 ? (
+                    <TrendingUp className="h-3 w-3 text-green-500 mr-1" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3 text-red-500 mr-1" />
+                  )}
+                  <span className={`text-xs ${kpi.change > 0 ? 'text-green-500' : 'text-red-500'}`}>
+                    {`${Math.abs(kpi.change).toFixed(1)}%`}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className={`p-2 rounded-lg ${kpi.color}`}>
+              {kpi.icon}
+            </div>
           </div>
-          <div className={`p-2 rounded-lg ${kpi.color}`}>
-            {kpi.icon}
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  );
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="space-y-4">

@@ -423,6 +423,8 @@ const HomePage: React.FC = () => {
             personalKPILoading={personalKPILoading}
             personalKPIError={personalKPIError}
             onKpiSetupClick={handleKpiSetupClick}
+            dateRange={getDateRangeForFilter(personalTimeFilter, personalSelectedYear, personalSelectedPeriod)}
+            userId={user?.id}
           />
         </TabsContent>
 

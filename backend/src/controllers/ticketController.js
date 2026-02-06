@@ -6243,37 +6243,19 @@ const getUserTicketCountPerPeriod = async (req, res) => {
     // Note: WHERE clause logic moved into main query for better DateDim integration
 
     // Get tickets count per period (28-day periods P1-P13)
-    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/IgxPUExtension matches
+    // Only count tickets created by the user (t.created_by = @userId)
+    // When startDate/endDate are provided, use them exclusively; otherwise filter by CompanyYear
     const query = `
             SELECT 
                 'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
                 COUNT(DISTINCT t.id) as tickets
             FROM IgxTickets t
-            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
-                AND ta.plant_code = pe.plant 
-                AND ta.is_active = 1
-                AND (
-                    -- Exact line match
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                    OR
-                    -- Area-level approval (area matches, line is null in approval)
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                    OR
-                    -- Plant-level approval (area and line are null in approval)
-                    (ta.area_code IS NULL AND ta.line_code IS NULL)
-                )
             JOIN IgxDateDim AS dd ON dd.DateKey = CAST(t.created_at AS DATE)
-            WHERE (
-                -- IgxTickets created by the user
-                t.created_by = @userId
-                OR 
-                -- IgxTickets where user has approval_level > 2 for the line
-                (ta.approval_level > 2 AND ta.is_active = 1)
-            ) AND dd.CompanyYear = @year
+            WHERE t.created_by = @userId
             AND t.status != 'canceled'
-            ${startDate && endDate ? 'AND t.created_at >= @startDate AND t.created_at <= @endDate' : ''}
+            ${startDate && endDate 
+                ? 'AND t.created_at >= @startDate AND t.created_at <= @endDate'
+                : 'AND dd.CompanyYear = @year'}
             GROUP BY dd.PeriodNo
             ORDER BY dd.PeriodNo
 `;
@@ -6375,37 +6357,19 @@ const getUserFinishedTicketCountPerPeriod = async (req, res) => {
     // Note: WHERE clause logic moved into main query for better DateDim integration
 
     // Get Finished tickets count per period (28-day periods P1-P13)
-    // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/IgxPUExtension matches
+    // Only count tickets finished by the user (t.finished_by = @userId)
+    // When startDate/endDate are provided, use them exclusively; otherwise filter by CompanyYear
     const query = `
             SELECT 
                 'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
                 COUNT(DISTINCT t.id) as tickets
             FROM IgxTickets t
-            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
-                AND ta.plant_code = pe.plant 
-                AND ta.is_active = 1
-                AND (
-                    -- Exact line match
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                    OR
-                    -- Area-level approval (area matches, line is null in approval)
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                    OR
-                    -- Plant-level approval (area and line are null in approval)
-                    (ta.area_code IS NULL AND ta.line_code IS NULL)
-                )
             JOIN IgxDateDim AS dd ON dd.DateKey = CAST(t.finished_at AS DATE)
-            WHERE (
-                -- IgxTickets Finished by the user
-                t.finished_by = @userId
-                OR 
-                -- IgxTickets where user has approval_level > 2 for the line and was involved
-                (ta.approval_level > 2 AND ta.is_active = 1)
-            ) AND dd.CompanyYear = @year
+            WHERE t.finished_by = @userId
             AND t.status IN ('closed', 'finished')
-            ${startDate && endDate ? 'AND t.finished_at >= @startDate AND t.finished_at <= @endDate' : ''}
+            ${startDate && endDate 
+                ? 'AND t.finished_at >= @startDate AND t.finished_at <= @endDate'
+                : 'AND dd.CompanyYear = @year'}
             GROUP BY dd.PeriodNo
             ORDER BY dd.PeriodNo
         `;
@@ -6501,6 +6465,7 @@ const getPersonalKPIData = async (req, res) => {
     const isL2Plus = l2Result.recordset[0].l2_count > 0;
 
     // Get current period data - REPORTER metrics (for all users)
+    // Only count tickets created by the user (t.created_by = @userId)
     // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/IgxPUExtension matches
     const reporterMetricsQuery = `
             SELECT 
@@ -6514,33 +6479,13 @@ const getPersonalKPIData = async (req, res) => {
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsThisPeriod
             FROM IgxTickets t
-            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
-                AND ta.plant_code = pe.plant 
-                AND ta.is_active = 1
-                AND (
-                    -- Exact line match
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                    OR
-                    -- Area-level approval (area matches, line is null in approval)
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                    OR
-                    -- Plant-level approval (area and line are null in approval)
-                    (ta.area_code IS NULL AND ta.line_code IS NULL)
-                )
-            WHERE (
-                -- IgxTickets created by the user
-                t.created_by = @userId
-                OR 
-                -- IgxTickets where user has approval_level >= 2 for the line/area/plant
-                (ta.approval_level > 2 AND ta.is_active = 1)
-            )
+            WHERE t.created_by = @userId
             AND t.created_at >= @startDate 
             AND t.created_at <= @endDate
         `;
 
     // Get comparison period data - REPORTER metrics
+    // Only count tickets created by the user (t.created_by = @userId)
     // Fixed with DISTINCT to prevent duplicate counting due to multiple TicketApproval/IgxPUExtension matches
     const reporterComparisonQuery = `
             SELECT 
@@ -6554,28 +6499,7 @@ const getPersonalKPIData = async (req, res) => {
                     COALESCE(cost_avoidance, 0) 
                 ELSE 0 END) as costAvoidedByReportsLastPeriod
             FROM IgxTickets t
-            LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-            LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-            LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
-                AND ta.plant_code = pe.plant 
-                AND ta.is_active = 1
-                AND (
-                    -- Exact line match
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                    OR
-                    -- Area-level approval (area matches, line is null in approval)
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                    OR
-                    -- Plant-level approval (area and line are null in approval)
-                    (ta.area_code IS NULL AND ta.line_code IS NULL)
-                )
-            WHERE (
-                -- IgxTickets created by the user
-                t.created_by = @userId
-                OR 
-                -- IgxTickets where user has approval_level >= 2 for the line/area/plant
-                (ta.approval_level > 2 AND ta.is_active = 1)
-            )
+            WHERE t.created_by = @userId
             AND t.created_at >= @compare_startDate 
             AND t.created_at <= @compare_endDate
         `;
@@ -6613,28 +6537,7 @@ const getPersonalKPIData = async (req, res) => {
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesThisPeriod
                 FROM IgxTickets t
-                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-                LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
-                AND ta.plant_code = pe.plant 
-                AND ta.is_active = 1
-                AND (
-                    -- Exact line match
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                    OR
-                    -- Area-level approval (area matches, line is null in approval)
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                    OR
-                    -- Plant-level approval (area and line are null in approval)
-                    (ta.area_code IS NULL AND ta.line_code IS NULL)
-                )
-                WHERE (
-                    -- IgxTickets Finished by the user
-                    t.finished_by = @userId
-                    OR 
-                    -- IgxTickets where user has approval_level >= 2 for the line/area/plant and was involved
-                    (ta.approval_level > 2 AND ta.is_active = 1)
-                )
+                WHERE t.finished_by = @userId
                 AND t.finished_at >= @startDate 
                 AND t.finished_at <= @endDate
             `;
@@ -6649,28 +6552,7 @@ const getPersonalKPIData = async (req, res) => {
                         COALESCE(cost_avoidance, 0) 
                     ELSE 0 END) as costAvoidedByFixesLastPeriod
                 FROM IgxTickets t
-                LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-                LEFT JOIN IgxTicketApproval ta ON ta.personno = @userId 
-                AND ta.plant_code = pe.plant 
-                AND ta.is_active = 1
-                AND (
-                    -- Exact line match
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ISNULL(ta.line_code, '') = ISNULL(pe.line, ''))
-                    OR
-                    -- Area-level approval (area matches, line is null in approval)
-                    (ISNULL(ta.area_code, '') = ISNULL(pe.area, '') AND ta.line_code IS NULL)
-                    OR
-                    -- Plant-level approval (area and line are null in approval)
-                    (ta.area_code IS NULL AND ta.line_code IS NULL)
-                )
-                WHERE (
-                    -- IgxTickets Finished by the user
-                    t.finished_by = @userId
-                    OR 
-                    -- IgxTickets where user has approval_level >= 2 for the line/area/plant and was involved
-                    (ta.approval_level > 2 AND ta.is_active = 1)
-                )
+                WHERE t.finished_by = @userId
                 AND t.finished_at >= @compare_startDate 
                 AND t.finished_at <= @compare_endDate
             `;
