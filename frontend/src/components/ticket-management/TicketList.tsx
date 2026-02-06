@@ -438,8 +438,8 @@ export const TicketList: React.FC = () => {
 
   const MobileCardSkeleton = () => (
     <div className="border rounded-lg bg-card overflow-hidden flex flex-col">
-      {/* Image skeleton - only for desktop card view */}
-      <Skeleton className="w-full aspect-[3/2] hidden lg:block" />
+      {/* Image skeleton */}
+      <Skeleton className="w-full aspect-[3/2]" />
       <div className="p-4 flex-1 flex flex-col">
         <div className="flex justify-between items-start">
           <div className="flex-1">
@@ -848,63 +848,78 @@ export const TicketList: React.FC = () => {
               {tickets.map((ticket) => (
                 <div 
                   key={ticket.id} 
-                  className="border rounded-lg p-4 bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30"
+                  className="border rounded-lg bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30 overflow-hidden flex flex-col"
                   onClick={() => handleViewTicket(ticket)}
                 >
-                  {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
-                  <div className="flex justify-between items-center gap-2 mb-2">
-                    <span className="text-sm text-muted-foreground font-medium">
-                      #{ticket.ticket_number}
-                    </span>
-                    <div className="flex gap-2 items-center">
-                      <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
-                        <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
-                        <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
-                      </div>
-                      <div className={getTicketStatusClassModern(ticket.status)}>
-                        <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
-                      </div>
+                  {/* Preview Image - 3:2 aspect ratio */}
+                  {ticket.first_image_url ? (
+                    <img 
+                      src={getFileUrl(ticket.first_image_url)} 
+                      alt={ticket.title}
+                      className="w-full aspect-[3/2] object-cover"
+                    />
+                  ) : (
+                    <div className="w-full aspect-[3/2] bg-muted flex items-center justify-center">
+                      <span className="text-muted-foreground text-sm">No image</span>
                     </div>
-                  </div>
-
-                  {/* div2: Title */}
-                  <div className="text-lg font-semibold mb-2">
-                    {ticket.title}
-                  </div>
-
-                  {/* div3: Description */}
-                  <div className="text-sm text-muted-foreground line-clamp-2 mb-3">
-                    {ticket.description}
-                  </div>
-
-                  {/* div4: PU Name */}
-                  <div className="mb-3">
-                    <Badge variant="outline" className="text-xs">
-                      {ticket.pu_name || ticket.pucode || 'N/A'}
-                    </Badge>
-                  </div>
-
-                  {/* div5: Others */}
-                  <div className="text-sm text-muted-foreground space-y-1">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4" />
-                      <span>
-                        {t('ticket.createdBy')}:{" "}
-                        {ticket.reporter_name || `User ${ticket.created_by}`}
+                  )}
+                  
+                  <div className="p-4 flex-1 flex flex-col">
+                    {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
+                    <div className="flex justify-between items-center gap-2 mb-2">
+                      <span className="text-sm text-muted-foreground font-medium">
+                        #{ticket.ticket_number}
                       </span>
+                      <div className="flex gap-2 items-center flex-shrink-0">
+                        <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
+                          <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+                          <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+                        </div>
+                        <div className={getTicketStatusClassModern(ticket.status)}>
+                          <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
+                        </div>
+                      </div>
                     </div>
-                    {ticket.assigned_to && (
+
+                    {/* div2: Title */}
+                    <div className="text-lg font-semibold mb-2 line-clamp-2">
+                      {ticket.title}
+                    </div>
+
+                    {/* div3: Description */}
+                    <div className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-1">
+                      {ticket.description}
+                    </div>
+
+                    {/* div4: PU Name */}
+                    <div className="mb-3">
+                      <Badge variant="outline" className="text-xs">
+                        {ticket.pu_name || ticket.pucode || 'N/A'}
+                      </Badge>
+                    </div>
+
+                    {/* div5: Others */}
+                    <div className="text-sm text-muted-foreground space-y-1 mt-auto">
                       <div className="flex items-center gap-2">
-                        <User className="w-4 h-4" />
-                        <span>
-                          {t('ticket.assignedTo')}:{" "}
-                          {ticket.assignee_name || `User ${ticket.assigned_to}`}
+                        <User className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">
+                          {t('ticket.createdBy')}:{" "}
+                          {ticket.reporter_name || `User ${ticket.created_by}`}
                         </span>
                       </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <Clock className="w-4 h-4" />
-                      <span>{t('ticket.created')} {formatDate(ticket.created_at)}</span>
+                      {ticket.assigned_to && (
+                        <div className="flex items-center gap-2">
+                          <User className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">
+                            {t('ticket.assignedTo')}:{" "}
+                            {ticket.assignee_name || `User ${ticket.assigned_to}`}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate">{t('ticket.created')} {formatDate(ticket.created_at)}</span>
+                      </div>
                     </div>
                   </div>
                 </div>
