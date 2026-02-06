@@ -1,5 +1,5 @@
 /**
- * Period calculation utilities for Mars Abnormal Finding system
+ * Period calculation utilities for EDEN Driving Progressive Maintenance
  * 
  * This module provides centralized functions for calculating 28-day periods
  * based on the first Sunday of the week containing January 1st of each year.

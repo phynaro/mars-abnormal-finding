@@ -1,6 +1,6 @@
-# Mars Abnormal Finding System - Frontend
+# EDEN Driving Progressive Maintenance - Frontend
 
-This is the frontend application for the Mars Abnormal Finding System with LINE LIFF integration.
+This is the frontend application for the EDEN Driving Progressive Maintenance with LINE LIFF integration.
 
 ## Features
 

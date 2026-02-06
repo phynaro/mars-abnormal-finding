@@ -148,7 +148,7 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'OK', 
     timestamp: new Date().toISOString(),
-    message: 'Mars Abnormal Finding System API is running'
+    message: 'EDEN Driving Progressive Maintenance API is running'
   });
 });
 
