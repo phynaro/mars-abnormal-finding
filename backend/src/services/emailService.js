@@ -48,7 +48,7 @@ const sendEmailsSequentially = async (emailPromises, delayMs = 600) => {
 // Email templates
 const EMAIL_TEMPLATES = {
   verification: {
-    subject: 'Verify Your Email - Mars CMMS System',
+    subject: 'Verify Your Email - MARS CMMS System',
     html: (verificationLink, firstName) => `
       <!DOCTYPE html>
       <html lang="en">
@@ -121,7 +121,7 @@ const EMAIL_TEMPLATES = {
           
           <div class="content">
             <p>Hello ${firstName},</p>
-            <p>Thank you for registering with the Mars CMMS System. To finish your registration and activate your account, please verify your email address.</p>
+            <p>Thank you for registering with the MARS CMMS System. To finish your registration and activate your account, please verify your email address.</p>
             
             <div style="text-align: center;">
               <a href="${verificationLink}" class="btn">Verify Email Address</a>
@@ -138,7 +138,7 @@ const EMAIL_TEMPLATES = {
           </div>
           
           <div class="footer">
-            <p>This is an automated message from Mars CMMS System. Please do not reply to this email.</p>
+            <p>This is an automated message from MARS CMMS System. Please do not reply to this email.</p>
           </div>
         </div>
       </body>
@@ -146,7 +146,7 @@ const EMAIL_TEMPLATES = {
     `
   },
   welcome: {
-    subject: 'Welcome to Mars CMMS System!',
+    subject: 'Welcome to MARS CMMS System!',
     html: (firstName) => `
       <!DOCTYPE html>
       <html lang="en">
@@ -205,7 +205,7 @@ const EMAIL_TEMPLATES = {
       <body>
         <div class="container">
           <div class="header">
-            <h2>Welcome to Mars CMMS System</h2>
+            <h2>Welcome to MARS CMMS System</h2>
           </div>
           
           <div class="content">
@@ -216,7 +216,7 @@ const EMAIL_TEMPLATES = {
             
             <p>You can now access the following features:</p>
             <ul>
-              <li>Log in to the Mars CMMS System</li>
+              <li>Log in to the MARS CMMS System</li>
               <li>Access all features based on your role</li>
               <li>Create and manage tickets</li>
               <li>View reports and analytics</li>
@@ -226,7 +226,7 @@ const EMAIL_TEMPLATES = {
           </div>
           
           <div class="footer">
-            <p>Thank you for using Mars CMMS System!</p>
+            <p>Thank you for using MARS CMMS System!</p>
           </div>
         </div>
       </body>
@@ -234,7 +234,7 @@ const EMAIL_TEMPLATES = {
     `
   },
   newTicket: {
-    subject: 'New Abnormal Finding Ticket Created - Mars CMMS',
+    subject: 'New Abnormal Finding Ticket Created - MARS CMMS',
     html: (ticketData, reporterName) => `
       <!DOCTYPE html>
       <html lang="en">
@@ -315,7 +315,7 @@ const EMAIL_TEMPLATES = {
           </div>
           
           <div class="content">
-            <p>A new abnormal finding has been reported in the Mars CMMS System that requires your attention.</p>
+            <p>A new abnormal finding has been reported in the MARS CMMS System that requires your attention.</p>
             
             <div class="ticket-info">
               <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
@@ -342,7 +342,7 @@ const EMAIL_TEMPLATES = {
           </div>
           
           <div class="footer">
-            <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+            <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
           </div>
         </div>
       </body>
@@ -351,7 +351,7 @@ const EMAIL_TEMPLATES = {
   }
   ,
   assignment: {
-    subject: 'Ticket Assigned To You - Mars CMMS',
+    subject: 'Ticket Assigned To You - MARS CMMS',
     html: (ticketData, assigneeName) => `
       <!DOCTYPE html>
       <html lang="en">
@@ -447,7 +447,7 @@ const EMAIL_TEMPLATES = {
           </div>
           
           <div class="footer">
-            <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+            <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
           </div>
         </div>
       </body>
@@ -455,7 +455,7 @@ const EMAIL_TEMPLATES = {
     `
   },
   statusUpdate: {
-    subject: 'Ticket Status Updated - Mars CMMS',
+    subject: 'Ticket Status Updated - MARS CMMS',
     html: (ticketData, oldStatus, newStatus, changedByName) => `
       <!DOCTYPE html>
       <html lang="en">
@@ -550,7 +550,7 @@ const EMAIL_TEMPLATES = {
           </div>
           
           <div class="footer">
-            <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+            <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
           </div>
         </div>
       </body>
@@ -828,7 +828,7 @@ class EmailService {
               </div>
               
               <div class="footer">
-                <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
               </div>
             </div>
           </body>
@@ -965,7 +965,7 @@ class EmailService {
               </div>
               
               <div class="footer">
-                <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
               </div>
             </div>
           </body>
@@ -1105,7 +1105,7 @@ class EmailService {
               </div>
               
               <div class="footer">
-                <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
               </div>
             </div>
           </body>
@@ -1242,7 +1242,7 @@ class EmailService {
               </div>
               
               <div class="footer">
-                <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
               </div>
             </div>
           </body>
@@ -1370,7 +1370,7 @@ class EmailService {
               </div>
               
               <div class="footer">
-                <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
               </div>
             </div>
           </body>
@@ -1505,7 +1505,7 @@ class EmailService {
               </div>
               
               <div class="footer">
-                <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
               </div>
             </div>
           </body>
@@ -1647,7 +1647,7 @@ class EmailService {
                   </div>
                   
                   <div class="footer">
-                    <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                    <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
                   </div>
                 </div>
               </body>
@@ -1758,7 +1758,7 @@ class EmailService {
               </div>
               
               <div class="footer">
-                <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
               </div>
             </div>
           </body>
@@ -1860,7 +1860,7 @@ class EmailService {
               </div>
               
               <div class="footer">
-                <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
               </div>
             </div>
           </body>
@@ -1994,7 +1994,7 @@ class EmailService {
               </div>
               
               <div class="footer">
-                <p>This is an automated notification from Mars CMMS System. Please do not reply to this email.</p>
+                <p>This is an automated notification from MARS CMMS System. Please do not reply to this email.</p>
               </div>
             </div>
           </body>
