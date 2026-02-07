@@ -119,7 +119,7 @@ const RegisterPage: React.FC = () => {
             {t('auth.register')}
           </CardTitle>
           <CardDescription>
-            Create your Mars CMMS account
+            Create your MARS CMMS account
           </CardDescription>
         </CardHeader>
 

@@ -129,7 +129,7 @@ const LoginPage: React.FC = () => {
             {t('auth.login')}
           </CardTitle>
           <CardDescription>
-            Sign in using your Mars Cedar account
+            Sign in using your MARS Cedar account
           </CardDescription>
         </CardHeader>
 

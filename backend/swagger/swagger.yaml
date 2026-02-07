@@ -3,7 +3,7 @@ info:
   title: MARS System API
   description: |
     Comprehensive API for the MARS (Manufacturing Asset Resource System) including authentication,
-    work request management, and workflow processing in the Cedar6_Mars CMMS system.
+    work request management, and workflow processing in the Cedar6_MARS CMMS system.
     
     This API provides endpoints for:
     - User authentication and account management
