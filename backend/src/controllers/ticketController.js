@@ -528,6 +528,8 @@ const getTickets = async (req, res) => {
       area,
       startDate,
       endDate,
+      finishedStartDate,
+      finishedEndDate,
       puno,
       delay,
       team,
@@ -539,11 +541,18 @@ const getTickets = async (req, res) => {
     let whereClause = "WHERE 1=1";
     const params = [];
 
-    // Date range filter
+    // Date range filter (created_at)
     if (startDate && endDate) {
       whereClause += " AND CAST(t.created_at AS DATE) >= @startDate AND CAST(t.created_at AS DATE) <= @endDate";
       params.push({ name: "startDate", value: startDate, type: sql.Date });
       params.push({ name: "endDate", value: endDate, type: sql.Date });
+    }
+
+    // Finished date range filter (finished_at) - for closed tickets with finished_at in period
+    if (finishedStartDate && finishedEndDate) {
+      whereClause += " AND t.finished_at IS NOT NULL AND CAST(t.finished_at AS DATE) >= @finishedStartDate AND CAST(t.finished_at AS DATE) <= @finishedEndDate";
+      params.push({ name: "finishedStartDate", value: finishedStartDate, type: sql.Date });
+      params.push({ name: "finishedEndDate", value: finishedEndDate, type: sql.Date });
     }
 
     // Status filter - support comma-separated values

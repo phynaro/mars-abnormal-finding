@@ -360,7 +360,7 @@ const UserActivityChartPage: React.FC = () => {
         </div>
 
         {/* Export Button */}
-        <div className="p-4 border-t border-white/30">
+        {/* <div className="p-4 border-t border-white/30">
           <Button 
             onClick={exportToCSV} 
             className="w-full bg-green-600 hover:bg-green-700 text-white py-3 text-sm font-semibold"
@@ -369,7 +369,7 @@ const UserActivityChartPage: React.FC = () => {
             <Download className="h-4 w-4 mr-2" />
             Export CSV
           </Button>
-        </div>
+        </div> */}
       </div>
 
       {/* Right Pane - Main Chart */}
@@ -378,7 +378,7 @@ const UserActivityChartPage: React.FC = () => {
           <Card className="bg-white/90 backdrop-blur-sm shadow-xl h-full">
             <CardHeader className="pb-2">
               <CardTitle className="text-xl font-bold text-gray-800 text-center">
-                User Activity Ranking - All Users
+                Open Tickets Ranking
               </CardTitle>
             </CardHeader>
             <CardContent className="p-4 h-full">

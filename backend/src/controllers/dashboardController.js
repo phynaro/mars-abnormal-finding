@@ -1609,6 +1609,152 @@ exports.getAreaActivityData = async (req, res) => {
 };
 
 /**
+ * Get Area Activity Open and Closed Data
+ * Returns open tickets (created in time range) and closed tickets (finished in time range) by area
+ * Same dynamic grouping as getAreaActivityData: plant/area/equipment based on filters
+ * Open: created_at in range; Closed: status='closed', finished_at in range
+ */
+exports.getAreaActivityOpenClosed = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+
+    const {
+      startDate,
+      endDate,
+      plant,
+      area
+    } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    let openQuery;
+    let closedQuery;
+
+    if (!plant || plant === 'all') {
+      openQuery = `
+        SELECT pe.plant as display_name, pe.plant, COUNT(t.id) as ticket_count
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'
+          AND pe.plant IS NOT NULL
+        GROUP BY pe.plant
+        HAVING COUNT(t.id) > 0
+        ORDER BY ticket_count DESC, pe.plant ASC
+      `;
+      closedQuery = `
+        SELECT pe.plant as display_name, pe.plant, COUNT(t.id) as ticket_count
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        WHERE t.status = 'closed' AND t.finished_by IS NOT NULL
+          AND CAST(t.finished_at AS DATE) >= '${startDate}' AND CAST(t.finished_at AS DATE) <= '${endDate}'
+          AND pe.plant IS NOT NULL
+        GROUP BY pe.plant
+        HAVING COUNT(t.id) > 0
+        ORDER BY ticket_count DESC, pe.plant ASC
+      `;
+    } else if (!area || area === 'all') {
+      openQuery = `
+        SELECT pe.area as display_name, pe.plant, pe.area, COUNT(t.id) as ticket_count
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'
+          AND pe.plant = '${plant}' AND pe.area IS NOT NULL
+        GROUP BY pe.plant, pe.area
+        HAVING COUNT(t.id) > 0
+        ORDER BY ticket_count DESC, pe.area ASC
+      `;
+      closedQuery = `
+        SELECT pe.area as display_name, pe.plant, pe.area, COUNT(t.id) as ticket_count
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        WHERE t.status = 'closed' AND t.finished_by IS NOT NULL
+          AND CAST(t.finished_at AS DATE) >= '${startDate}' AND CAST(t.finished_at AS DATE) <= '${endDate}'
+          AND pe.plant = '${plant}' AND pe.area IS NOT NULL
+        GROUP BY pe.plant, pe.area
+        HAVING COUNT(t.id) > 0
+        ORDER BY ticket_count DESC, pe.area ASC
+      `;
+    } else {
+      openQuery = `
+        SELECT CASE WHEN pe.machine IS NOT NULL THEN pe.machine WHEN pe.line IS NOT NULL THEN pe.line ELSE 'Unknown Equipment' END as display_name,
+          pe.plant, pe.area, pe.machine, pe.line, COUNT(t.id) as ticket_count
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'
+          AND pe.plant = '${plant}' AND pe.area = '${area}'
+        GROUP BY pe.plant, pe.area, pe.machine, pe.line
+        HAVING COUNT(t.id) > 0
+        ORDER BY ticket_count DESC, CASE WHEN pe.machine IS NOT NULL THEN pe.machine WHEN pe.line IS NOT NULL THEN pe.line ELSE 'Unknown Equipment' END ASC
+      `;
+      closedQuery = `
+        SELECT CASE WHEN pe.machine IS NOT NULL THEN pe.machine WHEN pe.line IS NOT NULL THEN pe.line ELSE 'Unknown Equipment' END as display_name,
+          pe.plant, pe.area, pe.machine, pe.line, COUNT(t.id) as ticket_count
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        WHERE t.status = 'closed' AND t.finished_by IS NOT NULL
+          AND CAST(t.finished_at AS DATE) >= '${startDate}' AND CAST(t.finished_at AS DATE) <= '${endDate}'
+          AND pe.plant = '${plant}' AND pe.area = '${area}'
+        GROUP BY pe.plant, pe.area, pe.machine, pe.line
+        HAVING COUNT(t.id) > 0
+        ORDER BY ticket_count DESC, CASE WHEN pe.machine IS NOT NULL THEN pe.machine WHEN pe.line IS NOT NULL THEN pe.line ELSE 'Unknown Equipment' END ASC
+      `;
+    }
+
+    const [openResult, closedResult] = await Promise.all([
+      pool.request().query(openQuery),
+      pool.request().query(closedQuery)
+    ]);
+
+    const openByArea = openResult.recordset.map(row => ({
+      display_name: row.display_name,
+      plant: row.plant,
+      area: row.area,
+      machine: row.machine,
+      tickets: row.ticket_count
+    }));
+
+    const closedByArea = closedResult.recordset.map(row => ({
+      display_name: row.display_name,
+      plant: row.plant,
+      area: row.area,
+      machine: row.machine,
+      tickets: row.ticket_count
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        openByArea,
+        closedByArea,
+        summary: {
+          groupBy: !plant || plant === 'all' ? 'plant' : !area || area === 'all' ? 'area' : 'equipment',
+          totalOpen: openByArea.reduce((sum, item) => sum + item.tickets, 0),
+          totalClosed: closedByArea.reduce((sum, item) => sum + item.tickets, 0),
+          appliedFilters: {
+            startDate,
+            endDate,
+            plant: plant || null,
+            area: area || null
+          }
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error in getAreaActivityOpenClosed:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Get User Activity Data
  * Returns ticket counts grouped by user for the "Who Active (User)" chart
  * This chart is affected by time range and plant/area filters
@@ -1718,6 +1864,113 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
 
   } catch (error) {
     console.error('Error in getUserActivityData:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get User Closer Activity Data (Top N workers who finished the job)
+ * Returns ticket counts grouped by finished_by for the "Who Close the Tickets" chart
+ * Measures workers who completed the work, not L4 approvers
+ * Query: status = 'closed', filter by finished_at in time range, group by finished_by
+ */
+exports.getUserCloserActivity = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+
+    const {
+      startDate,
+      endDate,
+      plant,
+      area,
+      limit: limitParam
+    } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    const limit = Math.min(Math.max(parseInt(limitParam, 10) || 10, 1), 100);
+
+    let whereClause = `WHERE t.status = 'closed' AND t.finished_by IS NOT NULL AND CAST(t.finished_at AS DATE) >= '${startDate}' AND CAST(t.finished_at AS DATE) <= '${endDate}'`;
+
+    if (plant && plant !== 'all') {
+      whereClause += ` AND pe.plant = '${plant}'`;
+    }
+
+    if (area && area !== 'all') {
+      whereClause += ` AND pe.area = '${area}'`;
+    }
+
+    const userCloserActivityQuery = `
+      SELECT TOP (${limit})
+        t.finished_by as user_id,
+        p.PERSON_NAME as user_name,
+        ue.AvatarUrl as avatar_url,
+        COUNT(t.id) as ticket_count
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+      INNER JOIN Person p ON t.finished_by = p.PERSONNO
+      LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+      ${whereClause}
+      GROUP BY t.finished_by, p.PERSON_NAME, ue.AvatarUrl
+      HAVING COUNT(t.id) > 0
+      ORDER BY ticket_count DESC, p.PERSON_NAME ASC
+    `;
+
+    const result = await pool.request().query(userCloserActivityQuery);
+
+    const userCloserActivityData = result.recordset.map((row, index) => {
+      const initials = row.user_name
+        ? row.user_name.split(' ').map(n => n[0]).join('').toUpperCase()
+        : 'U' + row.user_id;
+
+      const colors = [
+        '#3b82f6', '#8b5cf6', '#10b981', '#ec4899', '#f97316',
+        '#14b8a6', '#6366f1', '#ef4444', '#eab308', '#06b6d4'
+      ];
+      const bgColor = colors[index % colors.length];
+
+      return {
+        id: row.user_id.toString(),
+        user: row.user_name || `User ${row.user_id}`,
+        tickets: row.ticket_count,
+        initials,
+        bgColor,
+        avatar: row.avatar_url
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        userCloserActivityData,
+        summary: {
+          totalUsers: userCloserActivityData.length,
+          totalTickets: userCloserActivityData.reduce((sum, item) => sum + item.tickets, 0),
+          averageTicketsPerUser: userCloserActivityData.length > 0
+            ? Math.round(userCloserActivityData.reduce((sum, item) => sum + item.tickets, 0) / userCloserActivityData.length)
+            : 0,
+          limit,
+          appliedFilters: {
+            startDate,
+            endDate,
+            plant: plant || null,
+            area: area || null
+          }
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error in getUserCloserActivity:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -3484,24 +3737,40 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       }
     }
 
-    // Build WHERE clause for waiting tickets (all currently open tickets, regardless of creation date)
-    // Still apply plant/area filters if specified
-    let waitingTicketsWhereClause = `WHERE t.status = 'open'`;
-    
+    // Build WHERE clause for waiting tickets (open tickets created in time range)
+    let waitingTicketsWhereClause = `WHERE t.status = 'open' AND CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'`;
     if (plant && plant !== 'all') {
       waitingTicketsWhereClause += ` AND pe.plant = '${plant}'`;
     }
-    
     if (area && area !== 'all') {
       waitingTicketsWhereClause += ` AND pe.area = '${area}'`;
     }
 
-    // Get current period KPIs
+    // Build WHERE clause for closed tickets (status='closed', finished_at in period - matches user-closer-activity concept)
+    let closedTicketsWhereClause = `WHERE t.status = 'closed' AND t.finished_by IS NOT NULL AND CAST(t.finished_at AS DATE) >= '${startDate}' AND CAST(t.finished_at AS DATE) <= '${endDate}'`;
+    if (plant && plant !== 'all') {
+      closedTicketsWhereClause += ` AND pe.plant = '${plant}'`;
+    }
+    if (area && area !== 'all') {
+      closedTicketsWhereClause += ` AND pe.area = '${area}'`;
+    }
+
+    // Build WHERE clause for comparison period closed tickets
+    let compareClosedTicketsWhereClause = '';
+    if (compareStartDateFormatted && compareEndDateFormatted) {
+      compareClosedTicketsWhereClause = `WHERE t.status = 'closed' AND t.finished_by IS NOT NULL AND CAST(t.finished_at AS DATE) >= '${compare_startDate}' AND CAST(t.finished_at AS DATE) <= '${compare_endDate}'`;
+      if (plant && plant !== 'all') {
+        compareClosedTicketsWhereClause += ` AND pe.plant = '${plant}'`;
+      }
+      if (area && area !== 'all') {
+        compareClosedTicketsWhereClause += ` AND pe.area = '${area}'`;
+      }
+    }
+
+    // Get current period KPIs (closed and waiting from separate queries)
     const currentKPIsQuery = `
       SELECT 
         COUNT(*) as totalTickets,
-        SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedTickets,
-        SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
         SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
         ISNULL(SUM(t.cost_avoidance), 0) as totalCostAvoidance
@@ -3510,22 +3779,28 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       ${currentWhereClause}
     `;
 
-    // Get waiting tickets count separately (all currently open tickets, not filtered by creation date)
+    // Get waiting tickets count (open tickets created in time range)
     const waitingTicketsQuery = `
-      SELECT 
-        COUNT(*) as waitingTickets
+      SELECT COUNT(*) as waitingTickets
       FROM IgxTickets t
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       ${waitingTicketsWhereClause}
     `;
 
-    // Get comparison period KPIs
+    // Get closed tickets count (status='closed', finished_at in period)
+    const closedTicketsQuery = `
+      SELECT COUNT(*) as closedTickets
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+      ${closedTicketsWhereClause}
+    `;
+
+    // Get comparison period KPIs (closed from separate query)
     let compareKPIsQuery = '';
     if (compareWhereClause) {
       compareKPIsQuery = `
         SELECT 
           COUNT(*) as totalTickets,
-          SUM(CASE WHEN t.status IN ('closed', 'Finished') THEN 1 ELSE 0 END) as closedTickets,
           SUM(CASE WHEN t.status = 'open' THEN 1 ELSE 0 END) as waitingTickets,
           SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
           ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
@@ -3533,6 +3808,17 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
         FROM IgxTickets t
         LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         ${compareWhereClause}
+      `;
+    }
+
+    // Get comparison period closed tickets count
+    let compareClosedTicketsQuery = '';
+    if (compareClosedTicketsWhereClause) {
+      compareClosedTicketsQuery = `
+        SELECT COUNT(*) as closedTickets
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        ${compareClosedTicketsWhereClause}
       `;
     }
 
@@ -3589,26 +3875,23 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ORDER BY totalDowntimeSaved DESC
     `;
 
-    // Build WHERE clause for comparison period waiting tickets (if comparison period is provided)
+    // Build WHERE clause for comparison period waiting tickets (open tickets created in compare period)
     let compareWaitingTicketsWhereClause = '';
     if (compareWhereClause) {
-      compareWaitingTicketsWhereClause = `WHERE t.status = 'open'`;
-      
+      compareWaitingTicketsWhereClause = `WHERE t.status = 'open' AND CAST(t.created_at AS DATE) >= '${compare_startDate}' AND CAST(t.created_at AS DATE) <= '${compare_endDate}'`;
       if (plant && plant !== 'all') {
         compareWaitingTicketsWhereClause += ` AND pe.plant = '${plant}'`;
       }
-      
       if (area && area !== 'all') {
         compareWaitingTicketsWhereClause += ` AND pe.area = '${area}'`;
       }
     }
 
-    // Get comparison period waiting tickets count (if comparison period is provided)
+    // Get comparison period waiting tickets count
     let compareWaitingTicketsQuery = '';
     if (compareWaitingTicketsWhereClause) {
       compareWaitingTicketsQuery = `
-        SELECT 
-          COUNT(*) as waitingTickets
+        SELECT COUNT(*) as waitingTickets
         FROM IgxTickets t
         LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
         ${compareWaitingTicketsWhereClause}
@@ -3616,10 +3899,22 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     }
 
     // Execute all queries
-    const [currentKPIsResult, compareKPIsResult, waitingTicketsResult, compareWaitingTicketsResult, topReporterResult, topCostSaverResult, topDowntimeSaverResult] = await Promise.all([
+    const [
+      currentKPIsResult,
+      compareKPIsResult,
+      waitingTicketsResult,
+      closedTicketsResult,
+      compareClosedTicketsResult,
+      compareWaitingTicketsResult,
+      topReporterResult,
+      topCostSaverResult,
+      topDowntimeSaverResult
+    ] = await Promise.all([
       pool.request().query(currentKPIsQuery),
-      compareKPIsQuery ? pool.request().query(compareKPIsQuery) : Promise.resolve({ recordset: [{ totalTickets: 0, closedTickets: 0, pendingTickets: 0, totalDowntimeAvoidance: 0, totalCostAvoidance: 0 }] }),
+      compareKPIsQuery ? pool.request().query(compareKPIsQuery) : Promise.resolve({ recordset: [{ totalTickets: 0, pendingTickets: 0, totalDowntimeAvoidance: 0, totalCostAvoidance: 0 }] }),
       pool.request().query(waitingTicketsQuery),
+      pool.request().query(closedTicketsQuery),
+      compareClosedTicketsQuery ? pool.request().query(compareClosedTicketsQuery) : Promise.resolve({ recordset: [{ closedTickets: 0 }] }),
       compareWaitingTicketsQuery ? pool.request().query(compareWaitingTicketsQuery) : Promise.resolve({ recordset: [{ waitingTickets: 0 }] }),
       pool.request().query(topPerformersQuery),
       pool.request().query(topCostSaverQuery),
@@ -3629,6 +3924,8 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     const currentKPIs = currentKPIsResult.recordset[0];
     const compareKPIs = compareKPIsResult.recordset[0];
     const waitingTicketsCount = waitingTicketsResult.recordset[0]?.waitingTickets || 0;
+    const closedTicketsCount = closedTicketsResult.recordset[0]?.closedTickets || 0;
+    const compareClosedTicketsCount = compareClosedTicketsResult.recordset[0]?.closedTickets || 0;
     const compareWaitingTicketsCount = compareWaitingTicketsResult.recordset[0]?.waitingTickets || 0;
     const topReporter = topReporterResult.recordset[0] || null;
     const topCostSaver = topCostSaverResult.recordset[0] || null;
@@ -3682,7 +3979,7 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
 
     const comparisonMetrics = {
       ticketGrowthRate: calculateGrowthRate(currentKPIs.totalTickets, compareKPIs.totalTickets),
-      closureRateImprovement: calculateGrowthRate(currentKPIs.closedTickets, compareKPIs.closedTickets),
+      closureRateImprovement: calculateGrowthRate(closedTicketsCount, compareClosedTicketsCount),
       waitingTicketsChange: calculateGrowthRate(waitingTicketsCount, compareWaitingTicketsCount),
       costAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalCostAvoidance, compareKPIs.totalCostAvoidance),
       downtimeAvoidanceGrowth: calculateGrowthRate(currentKPIs.totalDowntimeAvoidance, compareKPIs.totalDowntimeAvoidance)
@@ -3695,8 +3992,8 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
         kpis: {
           totalTicketsThisPeriod: currentKPIs.totalTickets || 0,
           totalTicketsLastPeriod: compareKPIs.totalTickets || 0,
-          closedTicketsThisPeriod: currentKPIs.closedTickets || 0,
-          closedTicketsLastPeriod: compareKPIs.closedTickets || 0,
+          closedTicketsThisPeriod: closedTicketsCount || 0,
+          closedTicketsLastPeriod: compareClosedTicketsCount || 0,
           waitingTicketsThisPeriod: waitingTicketsCount || 0,
           waitingTicketsLastPeriod: compareWaitingTicketsCount || 0,
           pendingTicketsThisPeriod: currentKPIs.pendingTickets || 0,

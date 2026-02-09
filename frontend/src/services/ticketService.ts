@@ -179,8 +179,10 @@ export interface TicketFilters {
   search?: string;
   plant?: string;  // Plant code from PUExtension
   area?: string;   // Area code from PUExtension
-  startDate?: string;  // Start date for date range filter
-  endDate?: string;    // End date for date range filter
+  startDate?: string;  // Start date for date range filter (created_at)
+  endDate?: string;    // End date for date range filter (created_at)
+  finishedStartDate?: string;  // Start date for finished_at filter (closed tickets)
+  finishedEndDate?: string;    // End date for finished_at filter (closed tickets)
   puno?: string;        // Comma-separated PU IDs (e.g., "895,917,939")
   delay?: boolean | string;  // Filter for delayed tickets
   team?: 'operator' | 'reliability';  // Team-based filter

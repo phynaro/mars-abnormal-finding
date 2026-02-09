@@ -41,8 +41,14 @@ router.get('/tickets-closed-per-period', requireFormPermission('TKT', 'view'), d
 // Get Area Activity Data (requires TKT form view permission)
 router.get('/area-activity', requireFormPermission('TKT', 'view'), dashboardController.getAreaActivityData);
 
+// Get Area Activity Open and Closed (requires TKT form view permission)
+router.get('/area-activity-open-closed', requireFormPermission('TKT', 'view'), dashboardController.getAreaActivityOpenClosed);
+
 // Get User Activity Data (requires TKT form view permission)
 router.get('/user-activity', requireFormPermission('TKT', 'view'), dashboardController.getUserActivityData);
+
+// Get User Closer Activity Data - Top N workers who finished the job (requires TKT form view permission)
+router.get('/user-closer-activity', requireFormPermission('TKT', 'view'), dashboardController.getUserCloserActivity);
 
 // Get Calendar Heatmap Data (requires TKT form view permission)
 router.get('/calendar-heatmap', requireFormPermission('TKT', 'view'), dashboardController.getCalendarHeatmapData);

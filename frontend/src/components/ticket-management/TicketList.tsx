@@ -109,6 +109,8 @@ export const TicketList: React.FC = () => {
       assigned_to: searchParams.get('assigned_to') ? parseInt(searchParams.get('assigned_to')!) : undefined,
       startDate: searchParams.get('startDate') || undefined,
       endDate: searchParams.get('endDate') || undefined,
+      finishedStartDate: searchParams.get('finishedStartDate') || undefined,
+      finishedEndDate: searchParams.get('finishedEndDate') || undefined,
       puno: searchParams.get('puno') || undefined,
       delay: searchParams.get('delay') === 'true' ? true : undefined,
       team: (searchParams.get('team') as 'operator' | 'reliability') || undefined,

@@ -199,6 +199,33 @@ export interface AreaActivityResponse {
   };
 }
 
+export interface AreaActivityOpenClosedDataPoint {
+  display_name: string;
+  plant?: string;
+  area?: string;
+  machine?: string;
+  tickets: number;
+}
+
+export interface AreaActivityOpenClosedResponse {
+  success: boolean;
+  data: {
+    openByArea: AreaActivityOpenClosedDataPoint[];
+    closedByArea: AreaActivityOpenClosedDataPoint[];
+    summary: {
+      groupBy: string;
+      totalOpen: number;
+      totalClosed: number;
+      appliedFilters: {
+        startDate: string;
+        endDate: string;
+        plant: string | null;
+        area: string | null;
+      };
+    };
+  };
+}
+
 export interface UserActivityDataPoint {
   id: string;
   user: string;
@@ -216,6 +243,34 @@ export interface UserActivityResponse {
       totalUsers: number;
       totalTickets: number;
       averageTicketsPerUser: number;
+      appliedFilters: {
+        startDate: string;
+        endDate: string;
+        plant: string | null;
+        area: string | null;
+      };
+    };
+  };
+}
+
+export interface UserCloserActivityDataPoint {
+  id: string;
+  user: string;
+  tickets: number;
+  initials: string;
+  bgColor: string;
+  avatar?: string;
+}
+
+export interface UserCloserActivityResponse {
+  success: boolean;
+  data: {
+    userCloserActivityData: UserCloserActivityDataPoint[];
+    summary: {
+      totalUsers: number;
+      totalTickets: number;
+      averageTicketsPerUser: number;
+      limit: number;
       appliedFilters: {
         startDate: string;
         endDate: string;
@@ -667,6 +722,24 @@ class DashboardService {
     return res.json();
   }
 
+  async getAreaActivityOpenClosed(params: {
+    startDate: string;
+    endDate: string;
+    plant?: string;
+    area?: string;
+  }): Promise<AreaActivityOpenClosedResponse> {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
+    });
+    const url = `${this.baseURL}/area-activity-open-closed?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch area activity open/closed data');
+    return res.json();
+  }
+
   async getUserActivityData(params: {
     startDate: string;
     endDate: string;
@@ -682,6 +755,25 @@ class DashboardService {
     const url = `${this.baseURL}/user-activity?${queryParams.toString()}`;
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch user activity data');
+    return res.json();
+  }
+
+  async getUserCloserActivity(params: {
+    startDate: string;
+    endDate: string;
+    plant?: string;
+    area?: string;
+    limit?: number;
+  }): Promise<UserCloserActivityResponse> {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
+    });
+    const url = `${this.baseURL}/user-closer-activity?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch user closer activity data');
     return res.json();
   }
 

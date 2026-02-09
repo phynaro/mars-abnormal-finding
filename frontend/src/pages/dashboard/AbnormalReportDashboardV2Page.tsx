@@ -17,7 +17,7 @@ import {
   AlertTriangle, CheckCircle, User, Award,
   BarChart3, Filter, X
 } from 'lucide-react';
-import dashboardService, { type AbnormalFindingKPIResponse, type AreaData, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityResponse, type UserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse, type CaseCountByPUResponse } from '@/services/dashboardService';
+import dashboardService, { type AbnormalFindingKPIResponse, type AreaData, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityResponse, type AreaActivityOpenClosedResponse, type UserActivityResponse, type UserCloserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse, type CaseCountByPUResponse } from '@/services/dashboardService';
 import { KPITileSkeleton } from '@/components/ui/kpi-tile-skeleton';
 import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -57,6 +57,8 @@ interface KPITile {
   icon: React.ReactNode;
   color: string;
   tooltip?: string;
+  /** URLSearchParams string for ticket list route (e.g. "startDate=2025-01-01&endDate=2025-01-31&plant=X&area=X") */
+  ticketRoute?: string;
 }
 
 interface TopPerformer {
@@ -83,6 +85,30 @@ const UserTooltip = ({ active, payload }: any) => {
         </div>
         <p className="text-sm text-gray-600">
           <span className="font-medium">{data.tickets}</span> tickets reported
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
+// Custom tooltip for closer chart (workers who finished the job)
+const CloserTooltip = ({ active, payload }: any) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+        <div className="flex items-center gap-2 mb-2">
+          <Avatar className="h-8 w-8">
+            <AvatarImage src={data.avatar} alt={data.user} />
+            <AvatarFallback style={{ backgroundColor: data.bgColor, color: 'white' }} className="font-medium">
+              {data.initials}
+            </AvatarFallback>
+          </Avatar>
+          <span className="font-medium">{data.user}</span>
+        </div>
+        <p className="text-sm text-gray-600">
+          <span className="font-medium">{data.tickets}</span> tickets finished
         </p>
       </div>
     );
@@ -302,8 +328,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const [participationLoading, setParticipationLoading] = useState<boolean>(false);
   const [areaActivityData, setAreaActivityData] = useState<AreaActivityResponse['data']['areaActivityData']>([]);
   const [areaActivityLoading, setAreaActivityLoading] = useState<boolean>(false);
+  const [areaOpenClosedData, setAreaOpenClosedData] = useState<AreaActivityOpenClosedResponse['data'] | null>(null);
+  const [areaOpenClosedLoading, setAreaOpenClosedLoading] = useState<boolean>(false);
   const [userActivityData, setUserActivityData] = useState<UserActivityResponse['data']['userActivityData']>([]);
   const [userActivityLoading, setUserActivityLoading] = useState<boolean>(false);
+  const [closerActivityData, setCloserActivityData] = useState<UserCloserActivityResponse['data']['userCloserActivityData']>([]);
+  const [closerActivityLoading, setCloserActivityLoading] = useState<boolean>(false);
   const [calendarHeatmapData, setCalendarHeatmapData] = useState<CalendarHeatmapResponse['data']['calendarData']>([]);
   const [calendarHeatmapLoading, setCalendarHeatmapLoading] = useState<boolean>(false);
   const [downtimeTrendData, setDowntimeTrendData] = useState<DowntimeAvoidanceTrendResponse['data']['downtimeTrendData']>([]);
@@ -543,6 +573,27 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   }, [selectedYear, plantFilter, areaFilter]);
 
+  // Fetch area activity open/closed data
+  const fetchAreaOpenClosedData = useCallback(async () => {
+    try {
+      setAreaOpenClosedLoading(true);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
+      };
+      const response = await dashboardService.getAreaActivityOpenClosed(params);
+      setAreaOpenClosedData(response.data);
+    } catch (err: any) {
+      console.error('Error fetching area open/closed data:', err);
+      setAreaOpenClosedData(null);
+    } finally {
+      setAreaOpenClosedLoading(false);
+    }
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod]);
+
   // Fetch user activity data
   const fetchUserActivityData = useCallback(async () => {
     try {
@@ -564,6 +615,30 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setUserActivityData([]);
     } finally {
       setUserActivityLoading(false);
+    }
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod]);
+
+  // Fetch user closer activity data (workers who finished the job)
+  const fetchCloserActivityData = useCallback(async () => {
+    try {
+      setCloserActivityLoading(true);
+
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined,
+        limit: 10
+      };
+
+      const response = await dashboardService.getUserCloserActivity(params);
+      setCloserActivityData(response.data.userCloserActivityData);
+    } catch (err: any) {
+      console.error('Error fetching closer activity data:', err);
+      setCloserActivityData([]);
+    } finally {
+      setCloserActivityLoading(false);
     }
   }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod]);
 
@@ -1031,7 +1106,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     // Don't fetch areas on mount - wait for plant selection
     fetchParticipationData();
     fetchAreaActivityData();
+    fetchAreaOpenClosedData();
     fetchUserActivityData();
+    fetchCloserActivityData();
     fetchCalendarHeatmapData();
     fetchDowntimeTrendData();
     fetchCostAvoidanceData();
@@ -1052,7 +1129,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   useEffect(() => {
     fetchKPIData();
     fetchUserActivityData();
-  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, fetchKPIData, fetchUserActivityData]);
+    fetchCloserActivityData();
+    fetchAreaOpenClosedData();
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, fetchKPIData, fetchUserActivityData, fetchCloserActivityData, fetchAreaOpenClosedData]);
 
   // Fetch calendar heatmap data when time filter, year, or area changes
   useEffect(() => {
@@ -1176,14 +1255,42 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     fetchAreaActivityData();
   }, [selectedYear, plantFilter, areaFilter, fetchAreaActivityData]);
 
-  // KPI Tiles - Dynamic data from API
+  // KPI Tiles - Dynamic data from API with ticket list routes
   const kpiTiles: KPITile[] = useMemo(() => {
     if (!kpiData) {
-      // Return empty array when loading - skeleton will be shown instead
       return [];
     }
 
     const { kpis, summary } = kpiData;
+    const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+    const baseParams = new URLSearchParams();
+    baseParams.set('startDate', dateRange.startDate);
+    baseParams.set('endDate', dateRange.endDate);
+    if (plantFilter && plantFilter !== 'all') baseParams.set('plant', plantFilter);
+    if (areaFilter && areaFilter !== 'all') baseParams.set('area', areaFilter);
+
+    const closedParams = new URLSearchParams();
+    closedParams.set('status', 'closed');
+    closedParams.set('finishedStartDate', dateRange.startDate);
+    closedParams.set('finishedEndDate', dateRange.endDate);
+    if (plantFilter && plantFilter !== 'all') closedParams.set('plant', plantFilter);
+    if (areaFilter && areaFilter !== 'all') closedParams.set('area', areaFilter);
+
+    const waitingParams = new URLSearchParams();
+    waitingParams.set('status', 'open');
+    waitingParams.set('startDate', dateRange.startDate);
+    waitingParams.set('endDate', dateRange.endDate);
+    if (plantFilter && plantFilter !== 'all') waitingParams.set('plant', plantFilter);
+    if (areaFilter && areaFilter !== 'all') waitingParams.set('area', areaFilter);
+
+    const pendingStatuses = 'accepted,planed,in_progress,finished,reviewed,escalated,reopened_in_progress,rejected_pending_l3_review';
+    const pendingParams = new URLSearchParams();
+    pendingParams.set('status', pendingStatuses);
+    pendingParams.set('startDate', dateRange.startDate);
+    pendingParams.set('endDate', dateRange.endDate);
+    if (plantFilter && plantFilter !== 'all') pendingParams.set('plant', plantFilter);
+    if (areaFilter && areaFilter !== 'all') pendingParams.set('area', areaFilter);
+
     return [
       {
         title: t('dashboard.totalTickets'),
@@ -1192,7 +1299,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         changeDescription: summary.comparisonMetrics.ticketGrowthRate.description,
         changeType: summary.comparisonMetrics.ticketGrowthRate.type,
         icon: <AlertTriangle className="h-4 w-4" />,
-        color: 'text-brand'
+        color: 'text-brand',
+        ticketRoute: baseParams.toString()
       },
       {
         title: t('dashboard.closedTickets'),
@@ -1201,19 +1309,22 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         changeDescription: summary.comparisonMetrics.closureRateImprovement.description,
         changeType: summary.comparisonMetrics.closureRateImprovement.type,
         icon: <CheckCircle className="h-4 w-4" />,
-        color: 'text-success'
+        color: 'text-success',
+        ticketRoute: closedParams.toString()
       },
       {
         title: t('dashboard.waitingTickets'),
         value: kpis.waitingTicketsThisPeriod,
         icon: <Clock className="h-4 w-4" />,
-        color: 'text-orange-500'
+        color: 'text-orange-500',
+        ticketRoute: waitingParams.toString()
       },
       {
         title: t('dashboard.pendingTickets'),
         value: kpis.pendingTicketsThisPeriod,
         icon: <Clock className="h-4 w-4" />,
-        color: 'text-warning'
+        color: 'text-warning',
+        ticketRoute: pendingParams.toString()
       },
       {
         title: t('dashboard.totalDowntimeAvoidance'),
@@ -1235,7 +1346,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         color: 'text-info'
       }
     ];
-  }, [kpiData, t]);
+  }, [kpiData, t, timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
 
   // Top Performers - Dynamic data from API
   const topPerformers: TopPerformer[] = useMemo(() => {
@@ -1296,6 +1407,26 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   }, [plantFilter, areaFilter, t]);
 
+  const areaOpenClosedChartTitle = useMemo(() => {
+    if (!plantFilter || plantFilter === 'all') {
+      return t('dashboard.whoActivePlant');
+    } else if (!areaFilter || areaFilter === 'all') {
+      return t('dashboard.whoActiveArea');
+    } else {
+      return t('dashboard.whoActiveEquipment');
+    }
+  }, [plantFilter, areaFilter, t]);
+
+  const openByAreaChartData = useMemo(() => {
+    if (!areaOpenClosedData?.openByArea) return [];
+    return areaOpenClosedData.openByArea.map(item => ({ display_name: item.display_name, tickets: item.tickets }));
+  }, [areaOpenClosedData]);
+
+  const closedByAreaChartData = useMemo(() => {
+    if (!areaOpenClosedData?.closedByArea) return [];
+    return areaOpenClosedData.closedByArea.map(item => ({ display_name: item.display_name, tickets: item.tickets }));
+  }, [areaOpenClosedData]);
+
   // Dynamic chart title for downtime trend based on filter conditions
   const downtimeTrendChartTitle = useMemo(() => {
     if (!plantFilter || plantFilter === 'all') {
@@ -1325,6 +1456,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       avatar: getAvatarUrl(item.avatar)
     }));
   }, [userActivityData, getAvatarUrl]);
+
+  const closerActivityChartData = useMemo(() => {
+    return closerActivityData.map(item => ({
+      ...item,
+      avatar: getAvatarUrl(item.avatar)
+    }));
+  }, [closerActivityData, getAvatarUrl]);
 
   // Impact and Value Charts Data (from API)
   const downtimeTrendChartData = useMemo(() => {
@@ -1598,10 +1736,13 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="2022">2022</SelectItem>
-                        <SelectItem value="2023">2023</SelectItem>
-                        <SelectItem value="2024">2024</SelectItem>
-                        <SelectItem value="2025">2025</SelectItem>
+                        {Array.from(
+                          { length: new Date().getFullYear() - 2022 + 1 },
+                          (_, i) => {
+                            const year = 2022 + i;
+                            return <SelectItem key={year} value={year.toString()}>{year}</SelectItem>;
+                          }
+                        )}
                       </SelectContent>
                     </Select>
                   </div>
@@ -1725,7 +1866,11 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           <KPITileSkeleton count={6} />
         ) : (
           kpiTiles.map((kpi, index) => (
-            <Card key={index}>
+            <Card
+              key={index}
+              className={kpi.ticketRoute ? 'cursor-pointer hover:shadow-lg transition-shadow' : ''}
+              onClick={kpi.ticketRoute ? () => window.open(`/tickets?${kpi.ticketRoute}`, '_blank') : undefined}
+            >
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div>
@@ -1916,44 +2061,6 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Who Active (Dynamic Grouping) */}
-          {/* <Card>
-            <CardHeader>
-              <CardTitle>{areaActivityChartTitle}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {areaActivityLoading ? (
-                <div className="flex items-center justify-center h-[400px]">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
-                </div>
-              ) : areaActivityChartData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
-                  <AlertTriangle className="h-8 w-8 mb-2" />
-                  <p className="text-sm font-medium">No Data Available</p>
-                  <p className="text-xs text-center mt-1">
-                    Unable to load area activity data.<br />
-                    Please check your connection or contact support.
-                  </p>
-                </div>
-              ) : (
-                <ResponsiveContainer width="100%" height={Math.max(300, areaActivityChartData.length * 40 + 60)}>
-                  <BarChart 
-                    data={areaActivityChartData} 
-                    layout="vertical" 
-                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                    barCategoryGap={6} // More space between bars
-                    barSize={35} // Taller bars
-                  >
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis type="number" allowDecimals={false} />
-                    <YAxis dataKey="display_name" type="category" width={80} />
-                    <RechartsTooltip />
-                    <Bar dataKey="tickets" fill="hsl(var(--primary))" />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </CardContent>
-          </Card> */}
 
           {/* Who Active (User) */}
           <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => {
@@ -2033,6 +2140,151 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       {/* Avatar at bar end */}
                       <LabelList content={AvatarLabel({ data: userActivityChartData, maxAvatar: 36, clipPrefix: 'user-activity-' })} />
                     </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Who Active (User) */}
+          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+            <CardHeader>
+              <CardTitle>{t('dashboard.whoCloseTickets')}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {closerActivityLoading ? (
+                <div className="flex items-center justify-center h-[400px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : closerActivityChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load closer activity data.<br />
+                    Please check your connection or contact support.
+                  </p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(400, closerActivityChartData.length * 48 + 40)}>
+                  <BarChart
+                    data={closerActivityChartData}
+                    layout="vertical"
+                    margin={{ top: 12, right: 80, left: 20, bottom: 12 }}
+                    barCategoryGap={6}
+                  >
+                    <CartesianGrid horizontal vertical={false} strokeDasharray="3 3" />
+                    <XAxis
+                      type="number"
+                      domain={[0, 'dataMax + 5']}
+                      tickLine={false}
+                      axisLine={false}
+                      allowDecimals={false}
+                    />
+                    <YAxis
+                      dataKey="user"
+                      type="category"
+                      width={110}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <RechartsTooltip
+                      content={<CloserTooltip />}
+                      cursor={{ fillOpacity: 0.06 }}
+                    />
+                    <Bar
+                      dataKey="tickets"
+                      fill="hsl(var(--accent))"
+                      radius={[0, 8, 8, 0]}
+                      isAnimationActive
+                      animationBegin={0}
+                      animationDuration={800}
+                    >
+                      <LabelList
+                        dataKey="tickets"
+                        position="right"
+                        offset={50}
+                        style={{ fill: "#555", fontWeight: 600 }}
+                      />
+                      <LabelList content={AvatarLabel({ data: closerActivityChartData, maxAvatar: 36, clipPrefix: 'closer-activity-' })} />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Open vs Close tickets by area - 50/50 split */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('dashboard.ticketsOpenedByArea')} ({areaOpenClosedChartTitle})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {areaOpenClosedLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : openByAreaChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load open tickets by area data.
+                  </p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(300, openByAreaChartData.length * 40 + 60)}>
+                  <BarChart
+                    data={openByAreaChartData}
+                    layout="vertical"
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    barCategoryGap={6}
+                    barSize={35}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis dataKey="display_name" type="category" width={80} />
+                    <RechartsTooltip />
+                    <Bar dataKey="tickets" fill="hsl(var(--primary))" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('dashboard.ticketsClosedByArea')} ({areaOpenClosedChartTitle})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {areaOpenClosedLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : closedByAreaChartData.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                  <p className="text-xs text-center mt-1">
+                    Unable to load closed tickets by area data.
+                  </p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={Math.max(300, closedByAreaChartData.length * 40 + 60)}>
+                  <BarChart
+                    data={closedByAreaChartData}
+                    layout="vertical"
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                    barCategoryGap={6}
+                    barSize={35}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis type="number" allowDecimals={false} />
+                    <YAxis dataKey="display_name" type="category" width={80} />
+                    <RechartsTooltip />
+                    <Bar dataKey="tickets" fill="hsl(var(--accent))" />
                   </BarChart>
                 </ResponsiveContainer>
               )}
