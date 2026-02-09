@@ -1,6 +1,6 @@
 # Mars Abnormal Finding - Backend API
 
-This is the backend API for the EDEN Driving Progressive Maintenance with Line Login integration for LIFF applications.
+This is the backend API for the EDEN Abnormality Handling with Line Login integration for LIFF applications.
 
 ## Features
 

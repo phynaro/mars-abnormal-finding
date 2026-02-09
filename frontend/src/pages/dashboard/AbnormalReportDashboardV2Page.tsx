@@ -1917,7 +1917,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Who Active (Dynamic Grouping) */}
-          <Card>
+          {/* <Card>
             <CardHeader>
               <CardTitle>{areaActivityChartTitle}</CardTitle>
             </CardHeader>
@@ -1953,7 +1953,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 </ResponsiveContainer>
               )}
             </CardContent>
-          </Card>
+          </Card> */}
 
           {/* Who Active (User) */}
           <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => {

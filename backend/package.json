@@ -1,7 +1,7 @@
 {
   "name": "mars-abnormal-finding-backend",
   "version": "1.0.0",
-  "description": "Backend API for EDEN Driving Progressive Maintenance with Line Login integration",
+  "description": "Backend API for EDEN Abnormality Handling with Line Login integration",
   "main": "src/app.js",
   "scripts": {
     "start": "node src/app.js",

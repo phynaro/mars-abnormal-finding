@@ -30,7 +30,7 @@ print_warning() {
 
 print_header() {
     echo -e "${CYAN}================================${NC}"
-    echo -e "${CYAN}  EDEN Driving Progressive Maintenance${NC}"
+    echo -e "${CYAN}  EDEN Abnormality Handling${NC}"
     echo -e "${CYAN}      API Testing Tool${NC}"
     echo -e "${CYAN}================================${NC}"
     echo

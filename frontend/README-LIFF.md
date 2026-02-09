@@ -1,6 +1,6 @@
-# EDEN Driving Progressive Maintenance - Frontend
+# EDEN Abnormality Handling - Frontend
 
-This is the frontend application for the EDEN Driving Progressive Maintenance with LINE LIFF integration.
+This is the frontend application for the EDEN Abnormality Handling with LINE LIFF integration.
 
 ## Features
 

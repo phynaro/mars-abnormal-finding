@@ -14,7 +14,7 @@ Tickets are grouped by `user_relationship` and displayed in the following order 
 |----------|------------------|---------------|------|-------------|
 | 1 | `escalate_approver` | Escalated Tickets | ArrowUp | Orange (text-orange-600, bg-orange-50) |
 | 2 | `assignee` | My Assigned Tickets | UserCheck | Green (text-green-600, bg-green-50) |
-| 3 | `close_approver` | Tickets to Close | Lock | Purple (text-purple-600, bg-purple-50) |
+| 3 | `close_approver` | Tickets to Approve Close | Lock | Purple (text-purple-600, bg-purple-50) |
 | 4 | `review_approver` | Tickets to Review | Star | Yellow (text-yellow-600, bg-yellow-50) |
 | 5 | `reject_approver` | Tickets to Review (Rejected) | X | Red (text-red-600, bg-red-50) |
 | 6 | `planner` | Tickets to Plan | Calendar | Indigo (text-indigo-600, bg-indigo-50) |
