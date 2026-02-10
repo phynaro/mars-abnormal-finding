@@ -32,18 +32,18 @@ const ToastStack: React.FC<ToastStackProps> = ({ toasts, onDismiss }) => {
   }
 
   return (
-    <div className="pointer-events-none fixed bottom-6 right-6 z-[9950] flex flex-col gap-3">
+    <div className="pointer-events-none fixed bottom-6 right-6 left-6 z-[9950] flex flex-col gap-3 sm:left-auto sm:w-80">
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className="pointer-events-auto flex w-80 items-start gap-3 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/90"
+          className="pointer-events-auto flex w-full max-w-full items-start gap-3 rounded-xl border border-slate-200 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur dark:border-slate-700 dark:bg-slate-900/90 sm:w-80"
           role="status"
           aria-live="polite"
         >
           <span className="mt-1 flex-shrink-0" aria-hidden="true">
             {variantIcon[toast.variant]}
           </span>
-          <div className="flex-1 text-sm text-slate-700 dark:text-slate-200">
+          <div className="min-w-0 flex-1 text-sm text-slate-700 dark:text-slate-200">
             <p className="font-medium text-slate-900 dark:text-slate-50">
               {toast.title}
             </p>
@@ -56,7 +56,7 @@ const ToastStack: React.FC<ToastStackProps> = ({ toasts, onDismiss }) => {
           <button
             type="button"
             onClick={() => onDismiss(toast.id)}
-            className="mt-1 text-slate-400 transition hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
+            className="mt-1 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 dark:hover:bg-slate-800 dark:hover:text-slate-300"
             aria-label="Dismiss notification"
           >
             <X className="h-4 w-4" />
