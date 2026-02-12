@@ -51,7 +51,9 @@ import OrgUserDetailsPage from './pages/org/OrgUserDetailsPage';
 import TicketManagementPage from './pages/tickets/TicketManagementPage';
 import TicketDetailsPage from './pages/tickets/TicketDetailsPage';
 import TicketCreatePage from './pages/tickets/TicketCreatePage';
+import TicketCreatePageV2 from './pages/tickets/TicketCreatePageV2';
 import TicketCreateWizardPage from './pages/tickets/TicketCreateWizardPage';
+import TicketCreateWizardPageV2 from './pages/tickets/TicketCreateWizardPageV2';
 import ProfilePage from './pages/profile/ProfilePage';
 import HierarchyViewPage from './pages/settings/HierarchyViewPage';
 import TicketApprovalManagementPage from './pages/settings/TicketApprovalManagementPage';
@@ -251,8 +253,10 @@ const AppContent: React.FC = () => {
 
           {/* Ticket Management Routes */}
           <Route path="tickets" element={<TicketManagementPage />} />
-          <Route path="tickets/create" element={<TicketCreatePage />} />
-          <Route path="tickets/create/wizard" element={<TicketCreateWizardPage />} />
+          <Route path="tickets/create" element={<TicketCreatePageV2 />} />
+          <Route path="tickets/create/legacy" element={<TicketCreatePage />} />
+          <Route path="tickets/create/wizard/legacy" element={<TicketCreateWizardPage />} />
+          <Route path="tickets/create/wizard" element={<TicketCreateWizardPageV2 />} />
          
           <Route path="tickets/:ticketId" element={<TicketDetailsPage />} />
           <Route path="profile" element={<ProfilePage />} />

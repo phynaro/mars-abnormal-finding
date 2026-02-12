@@ -95,8 +95,8 @@ class HierarchyService {
 
 
 
-  /** Get PU children by parent PUNO (parent-child hierarchy drill-down from dbo.PU) */
-  async getPUChildrenByParent(puno: number): Promise<{success: boolean; data: Array<{PUNO: number; PUCODE: string; PUNAME: string}>}> {
+  /** Get PU children by parent PUNO (parent-child hierarchy drill-down from dbo.PU). Use puno=0 for root-level PUs. */
+  async getPUChildrenByParent(puno: number): Promise<{success: boolean; data: Array<{puno: number; code: string; name: string; pucriticalno?: number; costcenter?: number}>}> {
     const baseURL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
     const response = await fetch(`${baseURL}/hierarchy/pu/children/${puno}`, {
       headers: this.headers()

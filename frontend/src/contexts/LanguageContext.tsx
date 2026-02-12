@@ -474,6 +474,8 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.deleteConfirm': 'Are you sure you want to delete this ticket?',
     
     // Hierarchical selection
+    'ticket.selectOption': 'Select...',
+    'ticket.selectLevel': 'Select Next Level',
     'ticket.selectionModeSearch': 'Search',
     'ticket.selectionModeHierarchy': 'Browse Hierarchy',
     'ticket.selectPlant': 'Select Plant',
@@ -1149,6 +1151,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.cancelled': 'ยกเลิก',
     'ticket.rejectedPendingL3Review': 'ปฏิเสธ (รอแพลนเนอร์ตรวจสอบ)',
     'ticket.rejectedFinal': 'ปฏิเสธ (สุดท้าย)',
+
     
     // Critical levels
     'ticket.critical': 'ความรุนแรง',
@@ -1240,6 +1243,8 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.deleteConfirm': 'คุณแน่ใจหรือไม่ว่าต้องการลบงานนี้?',
     
     // Hierarchical selection
+    'ticket.selectOption': 'Select...',
+    'ticket.selectLevel': 'เลือกระดับ',
     'ticket.selectionModeSearch': 'ค้นหา',
     'ticket.selectionModeHierarchy': 'เรียกดูตามลำดับชั้น',
     'ticket.selectPlant': 'เลือกโรงงาน',

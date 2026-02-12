@@ -658,9 +658,23 @@ const getPUChildrenByParent = async (req, res) => {
 
         const pool = await sql.connect(dbConfig);
 
-        const result = await pool.request()
-            .input('puno', sql.Int, parentPuno)
-            .query(`
+        // When puno is 0, return root-level PUs (no parent or parent 0)
+        const isRootRequest = parentPuno === 0;
+        const query = isRootRequest
+            ? `
+                SELECT 
+                    PUNO as puno,
+                    PUCODE as code,
+                    PUNAME as name,
+                    PUCRITICALNO as pucriticalno,
+                    COSTCENTERNO as costcenter
+                FROM PU 
+                WHERE (PUPARENT IS NULL OR PUPARENT = 0)
+                AND (PUNAME NOT LIKE '%DELETE%' OR PUNAME IS NULL)
+                AND (FLAGDEL != 'Y' OR FLAGDEL IS NULL)
+                ORDER BY PUCODE
+            `
+            : `
                 SELECT 
                     PUNO as puno,
                     PUCODE as code,
@@ -672,7 +686,13 @@ const getPUChildrenByParent = async (req, res) => {
                 AND (PUNAME NOT LIKE '%DELETE%' OR PUNAME IS NULL)
                 AND (FLAGDEL != 'Y' OR FLAGDEL IS NULL)
                 ORDER BY PUCODE
-            `);
+            `;
+
+        const request = pool.request();
+        if (!isRootRequest) {
+            request.input('puno', sql.Int, parentPuno);
+        }
+        const result = await request.query(query);
 
         res.json({
             success: true,

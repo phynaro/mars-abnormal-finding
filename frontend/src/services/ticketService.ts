@@ -155,6 +155,7 @@ export interface CreateTicketRequest {
   priority?: 'low' | 'normal' | 'high' | 'urgent';
   suggested_assignee_id?: number;
   schedule_finish?: string;
+  plant?: string;
 }
 
 export interface UpdateTicketRequest {
