@@ -139,7 +139,7 @@ class TargetService {
 
   // Get distinct plants from hierarchy
   async getPlants(): Promise<{ success: boolean; data: { code: string; name: string }[] }> {
-    const url = `${API_BASE_URL}/hierarchy/distinct/plants`;
+    const url = `${API_BASE_URL}/hierarchy/puextension/plants`;
     const response = await fetch(url, {
       headers: {
         'Content-Type': 'application/json',

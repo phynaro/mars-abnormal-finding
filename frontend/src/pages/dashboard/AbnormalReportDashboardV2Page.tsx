@@ -17,11 +17,12 @@ import {
   AlertTriangle, CheckCircle, User, Award,
   BarChart3, Filter, X
 } from 'lucide-react';
-import dashboardService, { type AbnormalFindingKPIResponse, type AreaData, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityResponse, type AreaActivityOpenClosedResponse, type UserActivityResponse, type UserCloserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse, type CaseCountByPUResponse } from '@/services/dashboardService';
+import dashboardService, { type AbnormalFindingKPIResponse, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityResponse, type AreaActivityOpenClosedResponse, type UserActivityResponse, type UserCloserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse, type CaseCountByPUResponse } from '@/services/dashboardService';
 import { KPITileSkeleton } from '@/components/ui/kpi-tile-skeleton';
 import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
 import authService from '@/services/authService';
+import hierarchyService from '@/services/hierarchyService';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
 import { formatLocalDate, calculatePeriodForDate, getDateRangeForFilter } from '@/utils/periodCalculations';
 
@@ -322,7 +323,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [plants, setPlants] = useState<Array<{code: string; name: string}>>([]);
   const [plantsLoading, setPlantsLoading] = useState<boolean>(false);
-  const [areas, setAreas] = useState<AreaData[]>([]);
+  const [areas, setAreas] = useState<Array<{code: string; name: string}>>([]);
   const [areasLoading, setAreasLoading] = useState<boolean>(false);
   const [participationData, setParticipationData] = useState<TicketsCountPerPeriodResponse['data']['participationData']>([]);
   const [participationLoading, setParticipationLoading] = useState<boolean>(false);
@@ -440,11 +441,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const fetchPlants = async () => {
     try {
       setPlantsLoading(true);
-      
-      const response = await fetch(`${API_BASE_URL}/hierarchy/distinct/plants`, {
-        headers: authService.getAuthHeaders()
-      });
-      const result = await response.json();
+
+      const result = await hierarchyService.getDistinctPlants();
       if (result.success) {
         setPlants(result.data);
       }
@@ -460,27 +458,22 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const fetchAreas = async (plantCode: string) => {
     try {
       setAreasLoading(true);
-      
+
       // Record start time for minimum loading duration
       const startTime = Date.now();
-      
-      const url = `${API_BASE_URL}/hierarchy/puextension/plants/${encodeURIComponent(plantCode)}/areas`;
-      const response = await fetch(url, {
-        headers: authService.getAuthHeaders()
-      });
-      const result = await response.json();
+
+      const result = await hierarchyService.getDistinctAreas(plantCode);
       if (result.success) {
         setAreas(result.data);
       }
-      
+
       // Calculate elapsed time and ensure minimum loading duration
       const elapsedTime = Date.now() - startTime;
       const remainingTime = Math.max(0, MIN_LOADING_TIME - elapsedTime);
-      
+
       if (remainingTime > 0) {
         await new Promise(resolve => setTimeout(resolve, remainingTime));
       }
-      
     } catch (err: any) {
       console.error('Error fetching areas:', err);
       setAreas([]);

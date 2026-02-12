@@ -93,26 +93,12 @@ class HierarchyService {
     return await response.json();
   }
 
-  async getMachinesByHierarchy(plant: string, area?: string, line?: string, machine?: string, number?: string): Promise<{success: boolean; data: Array<{
-    puno: number;
-    pucode: string;
-    plant: string;
-    area: string;
-    line: string;
-    machine: string;
-    number: string;
-    puname: string;
-    pudescription: string;
-    digit_count: number;
-  }>}> {
+
+
+  /** Get PU children by parent PUNO (parent-child hierarchy drill-down from dbo.PU) */
+  async getPUChildrenByParent(puno: number): Promise<{success: boolean; data: Array<{PUNO: number; PUCODE: string; PUNAME: string}>}> {
     const baseURL = (import.meta.env.VITE_API_URL || 'http://localhost:3001/api').replace(/\/$/, '');
-    const params = new URLSearchParams({ plant });
-    if (area) params.append('area', area);
-    if (line) params.append('line', line);
-    if (machine) params.append('machine', machine);
-    if (number) params.append('number', number);
-    
-    const response = await fetch(`${baseURL}/hierarchy/puextension/machines?${params.toString()}`, {
+    const response = await fetch(`${baseURL}/hierarchy/pu/children/${puno}`, {
       headers: this.headers()
     });
     return await response.json();

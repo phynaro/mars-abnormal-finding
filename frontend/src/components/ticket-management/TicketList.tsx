@@ -144,13 +144,9 @@ export const TicketList: React.FC = () => {
 
   const fetchPlants = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/hierarchy/distinct/plants`, {
-        headers: authService.getAuthHeaders()
-      });
-      const result = await response.json();
+      const result = await hierarchyService.getDistinctPlants();
       if (result.success) {
         setPlants(result.data);
-       
       }
     } catch (error) {
       console.error('Failed to fetch plants:', error);
@@ -159,11 +155,7 @@ export const TicketList: React.FC = () => {
 
   const fetchAreas = async (plantCode: string) => {
     try {
-      const url = `${API_BASE_URL}/hierarchy/puextension/plants/${encodeURIComponent(plantCode)}/areas`;
-      const response = await fetch(url, {
-        headers: authService.getAuthHeaders()
-      });
-      const result = await response.json();
+      const result = await hierarchyService.getDistinctAreas(plantCode);
       if (result.success) {
         setAreas(result.data);
       }

@@ -34,9 +34,10 @@ info:
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:3001/api
-    description: Development server
-  - url: https://api.company.com/api
+  - url: /api
+    description: Current origin (use when accessing via nginx at localhost)
+
+  - url: https://pch.trazor.cloud/api
     description: Production server
 
 paths:
@@ -587,12 +588,12 @@ paths:
                 username:
                   type: string
                   description: Username or email
-                  example: "john.doe"
+                  example: "integrax"
                 password:
                   type: string
                   format: password
                   description: User password
-                  example: "securePassword123"
+                  example: "1"
       responses:
         '200':
           description: Login successful
@@ -3285,23 +3286,165 @@ paths:
           $ref: '#/components/responses/InternalServerError'
 
   # ========== HIERARCHY ENDPOINTS ==========
-  /hierarchy/areas:
+  /hierarchy/pucode/search:
     get:
       tags:
         - Hierarchy
-      summary: Get all active areas
+      summary: Search PUCODE
       description: |
-        Retrieves all active areas from the database with their associated plant information.
-        This endpoint is useful for populating area filter dropdowns in the frontend.
-        
-        **Key Features**:
-        - Returns all active areas across all plants
-        - Includes plant information for each area
-        - Ordered by plant name, then area name
-        - Suitable for filter dropdowns and selection lists
-      operationId: getAllAreas
+        Search for PUCODE entries in the PU table by code or name.
+        Returns up to 20 matches. Search term must be at least 2 characters.
+        Only returns PUCODEs with at least 3 sections (Plant-Area-Number format).
+      operationId: searchPUCODE
       security:
         - bearerAuth: []
+      parameters:
+        - name: search
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 2
+          description: Search term (minimum 2 characters)
+      responses:
+        '200':
+          description: Successfully retrieved PUCODE matches
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PUCodeSearchResult'
+        '400':
+          description: Search term too short
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /hierarchy/pucode/{pucode}:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get PUCODE details
+      description: Get full details for a specific PUCODE including hierarchy mapping when available.
+      operationId: getPUCODEDetails
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: pucode
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The PUCODE (e.g. Plant-Area-Line-Machine-Number)
+      responses:
+        '200':
+          description: Successfully retrieved PUCODE details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      pu:
+                        $ref: '#/components/schemas/PUCodeDetail'
+                      hierarchy:
+                        type: object
+                        nullable: true
+                        description: Hierarchy IDs when available (plant_id, area_id, line_id, machine_id)
+        '404':
+          description: PUCODE not found
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /hierarchy/pucritical:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get PUCritical levels
+      description: Get PU critical levels for dropdown filters (PUCRITICALNO >= 4).
+      operationId: getPUCriticalLevels
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved critical levels
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PUCriticalLevel'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /hierarchy/puextension/plants:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get distinct plants
+      description: Get distinct plants from IgxPUExtension (digit_count=1) for filter dropdowns.
+      operationId: getDistinctPlantsFromPUExtension
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Successfully retrieved plants list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HierarchyOption'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /hierarchy/puextension/plants/{plant}/areas:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get distinct areas for plant
+      description: Get distinct areas from IgxPUExtension for a specific plant (digit_count=2).
+      operationId: getDistinctAreasFromPUExtension
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: plant
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Plant code
       responses:
         '200':
           description: Successfully retrieved areas list
@@ -3316,9 +3459,240 @@ paths:
                   data:
                     type: array
                     items:
-                      $ref: '#/components/schemas/Area'
+                      $ref: '#/components/schemas/HierarchyOption'
+        '400':
+          description: Plant is required
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /hierarchy/puextension/plants/{plant}/areas/{area}/lines:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get distinct lines for plant and area
+      description: Get distinct lines from IgxPUExtension for a specific plant and area (digit_count=3).
+      operationId: getDistinctLinesFromPUExtension
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: plant
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: area
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved lines list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/HierarchyOption'
+        '400':
+          description: Plant and area are required
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /hierarchy/puextension/plants/{plant}/areas/{area}/lines/{line}/machines:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get distinct machines for plant, area, and line
+      description: Get distinct machines from IgxPUExtension for a specific plant, area, and line.
+      operationId: getDistinctMachinesFromPUExtension
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: plant
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: area
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: line
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved machines list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PUExtensionMachine'
+        '400':
+          description: Plant, area, and line are required
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /hierarchy/puextension/plants/{plant}/areas/{area}/machines-without-lines:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get machines without lines
+      description: Get distinct machines from IgxPUExtension for plant and area where line is empty.
+      operationId: getDistinctMachinesWithoutLinesFromPUExtension
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: plant
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: area
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved machines list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/PUExtensionMachine'
+        '400':
+          description: Plant and area are required
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /hierarchy/puextension/plants/{plant}/areas/{area}/lines/{line}/machines/{machine}/numbers:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get distinct numbers for machine
+      description: Get distinct numbers from IgxPUExtension for a specific plant, area, line, and machine (digit_count=5).
+      operationId: getDistinctNumbersFromPUExtension
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: plant
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: area
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: line
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: machine
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully retrieved numbers list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        code:
+                          type: string
+                        name:
+                          type: string
+        '400':
+          description: Plant, area, line, and machine are required
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /hierarchy/pu/children/{puno}:
+    get:
+      tags:
+        - Hierarchy
+      summary: Get PU children by parent
+      description: Get direct child PU entries by parent PUNO (parent-child hierarchy drill-down from dbo.PU).
+      operationId: getPUChildrenByParent
+      parameters:
+        - name: puno
+          in: path
+          required: true
+          schema:
+            type: integer
+          description: Parent PUNO
+      responses:
+        '200':
+          description: Successfully retrieved child PU list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        PUNO:
+                          type: integer
+                        PUCODE:
+                          type: string
+                        PUNAME:
+                          type: string
+        '400':
+          description: Invalid or missing parent PUNO
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -6151,6 +6525,123 @@ components:
           format: date-time
           description: Last update timestamp
           example: "2024-01-15T10:30:00Z"
+
+    HierarchyOption:
+      type: object
+      description: Code/name pair for hierarchy filter dropdowns
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        puno:
+          type: integer
+          description: PU number (optional)
+        pucriticalno:
+          type: integer
+          description: Critical level (optional)
+
+    PUCodeSearchResult:
+      type: object
+      properties:
+        PUCODE:
+          type: string
+        PUDESC:
+          type: string
+        PUNO:
+          type: integer
+        PLANT:
+          type: string
+        AREA:
+          type: string
+        LINE:
+          type: string
+        MACHINE:
+          type: string
+        NUMBER:
+          type: string
+        PULOCATION:
+          type: string
+        PUTYPENO:
+          type: integer
+        PUSTATUSNO:
+          type: integer
+        DEPTNO:
+          type: string
+        SiteNo:
+          type: integer
+        PUCRITICALNO:
+          type: integer
+
+    PUCodeDetail:
+      type: object
+      properties:
+        PUCODE:
+          type: string
+        PUDESC:
+          type: string
+        PUNO:
+          type: integer
+        PLANT:
+          type: string
+        AREA:
+          type: string
+        LINE:
+          type: string
+        MACHINE:
+          type: string
+        NUMBER:
+          type: string
+        PULOCATION:
+          type: string
+        PUTYPENO:
+          type: integer
+        PUSTATUSNO:
+          type: integer
+        DEPTNO:
+          type: string
+        SiteNo:
+          type: integer
+
+    PUCriticalLevel:
+      type: object
+      properties:
+        PUCRITICALNO:
+          type: integer
+        PUCRITICALNAME:
+          type: string
+        PUCRITICALCODE:
+          type: string
+
+    PUExtensionMachine:
+      type: object
+      properties:
+        code:
+          type: string
+        name:
+          type: string
+        puno:
+          type: integer
+        pucode:
+          type: string
+        plant:
+          type: string
+        area:
+          type: string
+        line:
+          type: string
+        machine:
+          type: string
+        number:
+          type: string
+        puname:
+          type: string
+        pudescription:
+          type: string
+        digit_count:
+          type: integer
+        pucriticalno:
+          type: integer
 
     Area:
       type: object

@@ -84,6 +84,7 @@ const TargetManagementPage: React.FC = () => {
       const response = await targetService.getPlants();
       if (response.success) {
         setPlants(response.data);
+        console.log("plants", response.data);
       } else {
         setPlants([]);
       }

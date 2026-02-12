@@ -5,38 +5,6 @@
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
 
-// Get all active plants
-const getPlants = async (req, res) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        
-        const result = await pool.request().query(`
-            SELECT 
-                id,
-                name,
-                code,
-                description,
-                is_active
-            FROM Plant 
-            WHERE is_active = 1
-            ORDER BY name
-        `);
-
-        res.json({
-            success: true,
-            data: result.recordset
-        });
-
-    } catch (error) {
-        console.error('Error fetching plants:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch plants',
-            error: error.message
-        });
-    }
-};
-
 // Get all active areas
 const getAllAreas = async (req, res) => {
     try {
@@ -68,139 +36,6 @@ const getAllAreas = async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch areas',
-            error: error.message
-        });
-    }
-};
-
-// Get areas by plant ID
-const getAreasByPlant = async (req, res) => {
-    try {
-        const { plantId } = req.params;
-        
-        if (!plantId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Plant ID is required'
-            });
-        }
-
-        const pool = await sql.connect(dbConfig);
-        
-        const result = await pool.request()
-            .input('plantId', sql.Int, plantId)
-            .query(`
-                SELECT 
-                    id,
-                    name,
-                    code,
-                    description,
-                    plant_id,
-                    is_active
-                FROM Area 
-                WHERE plant_id = @plantId AND is_active = 1
-                ORDER BY name
-            `);
-
-        res.json({
-            success: true,
-            data: result.recordset
-        });
-
-    } catch (error) {
-        console.error('Error fetching areas:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch areas',
-            error: error.message
-        });
-    }
-};
-
-// Get lines by area ID
-const getLinesByArea = async (req, res) => {
-    try {
-        const { areaId } = req.params;
-        
-        if (!areaId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Area ID is required'
-            });
-        }
-
-        const pool = await sql.connect(dbConfig);
-        
-        const result = await pool.request()
-            .input('areaId', sql.Int, areaId)
-            .query(`
-                SELECT 
-                    id,
-                    name,
-                    code,
-                    description,
-                    area_id,
-                    is_active
-                FROM Line 
-                WHERE area_id = @areaId AND is_active = 1
-                ORDER BY name
-            `);
-
-        res.json({
-            success: true,
-            data: result.recordset
-        });
-
-    } catch (error) {
-        console.error('Error fetching lines:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch lines',
-            error: error.message
-        });
-    }
-};
-
-// Get machines by line ID
-const getMachinesByLine = async (req, res) => {
-    try {
-        const { lineId } = req.params;
-        
-        if (!lineId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Line ID is required'
-            });
-        }
-
-        const pool = await sql.connect(dbConfig);
-        
-        const result = await pool.request()
-            .input('lineId', sql.Int, lineId)
-            .query(`
-                SELECT 
-                    id,
-                    name,
-                    code,
-                    description,
-                    line_id,
-                    machine_number,
-                    is_active
-                FROM Machine 
-                WHERE line_id = @lineId AND is_active = 1
-                ORDER BY machine_number, name
-            `);
-
-        res.json({
-            success: true,
-            data: result.recordset
-        });
-
-    } catch (error) {
-        console.error('Error fetching machines:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch machines',
             error: error.message
         });
     }
@@ -400,145 +235,6 @@ const getPUCODEDetails = async (req, res) => {
     }
 };
 
-// Generate PUCODE from hierarchy selection
-const generatePUCODE = async (req, res) => {
-    try {
-        const { plantId, areaId, lineId, machineId } = req.body;
-        
-        if (!plantId || !areaId || !lineId || !machineId) {
-            return res.status(400).json({
-                success: false,
-                message: 'All hierarchy IDs are required (plantId, areaId, lineId, machineId)'
-            });
-        }
-
-        const pool = await sql.connect(dbConfig);
-        
-        const result = await pool.request()
-            .input('plantId', sql.Int, plantId)
-            .input('areaId', sql.Int, areaId)
-            .input('lineId', sql.Int, lineId)
-            .input('machineId', sql.Int, machineId)
-            .query(`
-                SELECT 
-                    p.code + '-' + a.code + '-' + l.code + '-' + m.code + '-' + CAST(m.machine_number AS VARCHAR(10)) as pucode,
-                    p.name as plant_name,
-                    a.name as area_name,
-                    l.name as line_name,
-                    m.name as machine_name,
-                    m.machine_number
-                FROM Plant p
-                INNER JOIN Area a ON p.id = a.plant_id
-                INNER JOIN Line l ON a.id = l.area_id
-                INNER JOIN Machine m ON l.id = m.line_id
-                WHERE p.id = @plantId
-                AND a.id = @areaId
-                AND l.id = @lineId
-                AND m.id = @machineId
-                AND p.is_active = 1
-                AND a.is_active = 1
-                AND l.is_active = 1
-                AND m.is_active = 1
-            `);
-
-        if (result.recordset.length === 0) {
-            return res.status(404).json({
-                success: false,
-                message: 'Invalid hierarchy selection'
-            });
-        }
-
-        res.json({
-            success: true,
-            data: result.recordset[0]
-        });
-
-    } catch (error) {
-        console.error('Error generating PUCODE:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to generate PUCODE',
-            error: error.message
-        });
-    }
-};
-
-// Get distinct plants from IgxPUExtension (for filters)
-const getDistinctPlants = async (req, res) => {
-    try {
-        const pool = await sql.connect(dbConfig);
-        
-        const result = await pool.request().query(`
-            SELECT DISTINCT 
-                plant as code,
-                pudescription as name
-            FROM IgxPUExtension
-            WHERE plant IS NOT NULL 
-            AND plant != ''
-            AND digit_count = 1
-            AND area IS NULL
-            ORDER BY plant
-        `);
-
-        res.json({
-            success: true,
-            data: result.recordset
-        });
-
-    } catch (error) {
-        console.error('Error fetching distinct plants:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch distinct plants',
-            error: error.message
-        });
-    }
-};
-
-// Get distinct areas from IgxPUExtension (for filters)
-const getDistinctAreas = async (req, res) => {
-    try {
-        const { plant } = req.query;
-        const pool = await sql.connect(dbConfig);
-        
-        let query = `
-            SELECT DISTINCT 
-                area as code,
-                pudescription as name,
-                plant
-            FROM IgxPUExtension
-            WHERE area IS NOT NULL 
-            AND area != ''
-            AND digit_count = 2
-            AND line IS NULL
-            AND machine IS NULL
-        `;
-        
-        const request = pool.request();
-        if (plant) {
-            query += ' AND plant = @plant';
-            request.input('plant', sql.VarChar(50), plant);
-        }
-        
-        query += ' ORDER BY area';
-        
-        const result = await request.query(query);
-
-        res.json({
-            success: true,
-            data: result.recordset
-        });
-
-    } catch (error) {
-        console.error('Error fetching distinct areas:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch distinct areas',
-            error: error.message
-        });
-    }
-};
-
 // Get PUCritical levels for dropdown
 const getPUCriticalLevels = async (req, res) => {
     try {
@@ -568,82 +264,82 @@ const getPUCriticalLevels = async (req, res) => {
 };
 
 // Get machines by hierarchy from IgxPUExtension table
-const getMachinesByHierarchy = async (req, res) => {
-    try {
-        const { plant, area, line, machine, number } = req.query;
+// const getMachinesByHierarchy = async (req, res) => {
+//     try {
+//         const { plant, area, line, machine, number } = req.query;
         
-        if (!plant) {
-            return res.status(400).json({
-                success: false,
-                message: 'Plant is required'
-            });
-        }
+//         if (!plant) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: 'Plant is required'
+//             });
+//         }
 
-        const pool = await sql.connect(dbConfig);
+//         const pool = await sql.connect(dbConfig);
         
-        // Determine expected digit count based on provided parameters
-        let expectedDigitCount = 1;
-        if (plant && area) expectedDigitCount = 2;
-        if (plant && area && line) expectedDigitCount = 3;
-        if (plant && area && line && machine) expectedDigitCount = 4;
-        if (plant && area && line && machine && number) expectedDigitCount = 5;
+//         // Determine expected digit count based on provided parameters
+//         let expectedDigitCount = 1;
+//         if (plant && area) expectedDigitCount = 2;
+//         if (plant && area && line) expectedDigitCount = 3;
+//         if (plant && area && line && machine) expectedDigitCount = 4;
+//         if (plant && area && line && machine && number) expectedDigitCount = 5;
 
-        const request = pool.request()
-            .input('plant', sql.NVarChar(50), plant)
-            .input('expectedDigitCount', sql.Int, expectedDigitCount);
+//         const request = pool.request()
+//             .input('plant', sql.NVarChar(50), plant)
+//             .input('expectedDigitCount', sql.Int, expectedDigitCount);
 
-        let query = `
-            SELECT 
-                puno,
-                pucode,
-                plant,
-                area,
-                line,
-                machine,
-                number,
-                puname,
-                pudescription,
-                digit_count
-            FROM IgxPUExtension
-            WHERE plant = @plant
-            AND digit_count = @expectedDigitCount
-        `;
+//         let query = `
+//             SELECT 
+//                 puno,
+//                 pucode,
+//                 plant,
+//                 area,
+//                 line,
+//                 machine,
+//                 number,
+//                 puname,
+//                 pudescription,
+//                 digit_count
+//             FROM IgxPUExtension
+//             WHERE plant = @plant
+//             AND digit_count = @expectedDigitCount
+//         `;
 
-        if (area) {
-            query += ' AND area = @area';
-            request.input('area', sql.NVarChar(50), area);
-        }
-        if (line) {
-            query += ' AND line = @line';
-            request.input('line', sql.NVarChar(50), line);
-        }
-        if (machine) {
-            query += ' AND machine = @machine';
-            request.input('machine', sql.NVarChar(50), machine);
-        }
-        if (number) {
-            query += ' AND number = @number';
-            request.input('number', sql.NVarChar(10), number);
-        }
+//         if (area) {
+//             query += ' AND area = @area';
+//             request.input('area', sql.NVarChar(50), area);
+//         }
+//         if (line) {
+//             query += ' AND line = @line';
+//             request.input('line', sql.NVarChar(50), line);
+//         }
+//         if (machine) {
+//             query += ' AND machine = @machine';
+//             request.input('machine', sql.NVarChar(50), machine);
+//         }
+//         if (number) {
+//             query += ' AND number = @number';
+//             request.input('number', sql.NVarChar(10), number);
+//         }
 
-        query += ' ORDER BY pucode';
+//         query += ' ORDER BY pucode';
 
-        const result = await request.query(query);
+//         const result = await request.query(query);
 
-        res.json({
-            success: true,
-            data: result.recordset
-        });
+//         res.json({
+//             success: true,
+//             data: result.recordset
+//         });
 
-    } catch (error) {
-        console.error('Error fetching machines by hierarchy:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch machines by hierarchy',
-            error: error.message
-        });
-    }
-};
+//     } catch (error) {
+//         console.error('Error fetching machines by hierarchy:', error);
+//         res.status(500).json({
+//             success: false,
+//             message: 'Failed to fetch machines by hierarchy',
+//             error: error.message
+//         });
+//     }
+// };
 
 // Get distinct plants from IgxPUExtension
 const getDistinctPlantsFromPUExtension = async (req, res) => {
@@ -940,24 +636,71 @@ const getDistinctNumbersFromPUExtension = async (req, res) => {
     }
 };
 
+// Get PU children by parent PUNO (parent-child hierarchy drill-down from dbo.PU)
+const getPUChildrenByParent = async (req, res) => {
+    try {
+        const { puno } = req.params;
+
+        if (puno === undefined || puno === null || puno === '') {
+            return res.status(400).json({
+                success: false,
+                message: 'Parent PUNO is required'
+            });
+        }
+
+        const parentPuno = parseInt(puno, 10);
+        if (isNaN(parentPuno)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Parent PUNO must be a valid number'
+            });
+        }
+
+        const pool = await sql.connect(dbConfig);
+
+        const result = await pool.request()
+            .input('puno', sql.Int, parentPuno)
+            .query(`
+                SELECT 
+                    PUNO as puno,
+                    PUCODE as code,
+                    PUNAME as name,
+                    PUCRITICALNO as pucriticalno,
+                    COSTCENTERNO as costcenter
+                FROM PU 
+                WHERE PUPARENT = @puno 
+                AND (PUNAME NOT LIKE '%DELETE%' OR PUNAME IS NULL)
+                AND (FLAGDEL != 'Y' OR FLAGDEL IS NULL)
+                ORDER BY PUCODE
+            `);
+
+        res.json({
+            success: true,
+            data: result.recordset
+        });
+
+    } catch (error) {
+        console.error('Error fetching PU children by parent:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch PU children',
+            error: error.message
+        });
+    }
+};
+
 
 module.exports = {
-    getPlants,
     getAllAreas,
-    getAreasByPlant,
-    getLinesByArea,
-    getMachinesByLine,
     searchPUCODE,
     getPUCODEDetails,
-    generatePUCODE,
-    getDistinctPlants,
-    getDistinctAreas,
     getPUCriticalLevels,
-    getMachinesByHierarchy,
+    //getMachinesByHierarchy,
     getDistinctPlantsFromPUExtension,
     getDistinctAreasFromPUExtension,
     getDistinctLinesFromPUExtension,
     getDistinctMachinesFromPUExtension,
     getDistinctMachinesWithoutLinesFromPUExtension,
-    getDistinctNumbersFromPUExtension
+    getDistinctNumbersFromPUExtension,
+    getPUChildrenByParent
 };

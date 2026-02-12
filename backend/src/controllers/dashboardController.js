@@ -3145,7 +3145,7 @@ exports.getTicketResolveDurationByArea = async (req, res) => {
     }
 
     const result = await pool.request().query(resolveDurationQuery);
-    console.log(result.recordset);
+    //console.log(result.recordset);
     // Transform data for the chart
     const resolveDurationByAreaData = result.recordset.map(row => ({
       display_name: row.display_name,
