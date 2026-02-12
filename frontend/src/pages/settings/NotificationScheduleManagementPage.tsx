@@ -26,6 +26,24 @@ const TIMEZONES = [
   { value: 'Europe/London', label: 'Europe/London (GMT)' }
 ];
 
+const getTimezoneOffsetString = (tz: string): string => {
+  const formatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: tz,
+    timeZoneName: 'longOffset'
+  });
+  const parts = formatter.formatToParts(new Date());
+  const tzPart = parts.find((p) => p.type === 'timeZoneName');
+  if (!tzPart?.value) return '+07:00';
+  const m = tzPart.value.match(/GMT([+-])(\d{1,2})(?::(\d{2}))?/);
+  if (m) {
+    const sign = m[1];
+    const h = m[2].padStart(2, '0');
+    const mins = (m[3] ?? '00').padStart(2, '0');
+    return `${sign}${h}:${mins}`;
+  }
+  return '+07:00';
+};
+
 const NotificationScheduleManagementPage: React.FC = () => {
   const { toast } = useToast();
   
@@ -135,10 +153,25 @@ const NotificationScheduleManagementPage: React.FC = () => {
     }
   };
 
-  const formatDate = (dateString: string | null) => {
+  /**
+   * Format datetime for display. The API returns datetimes stored in the schedule's timezone
+   * but serialized as UTC (e.g. 8 AM Bangkok becomes "08:00Z"). We re-interpret the UTC
+   * parts as the schedule's local time so it displays correctly.
+   */
+  const formatDate = (dateString: string | null, scheduleTimezone: string = 'Asia/Bangkok') => {
     if (!dateString) return 'Never';
-    return new Date(dateString).toLocaleString('en-US', {
-      timeZone: 'Asia/Bangkok',
+    const d = new Date(dateString);
+    // Stored value is in schedule timezone but sent as UTC - use UTC components as local
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    const h = String(d.getUTCHours()).padStart(2, '0');
+    const min = String(d.getUTCMinutes()).padStart(2, '0');
+    const sec = String(d.getUTCSeconds()).padStart(2, '0');
+    const offset = getTimezoneOffsetString(scheduleTimezone);
+    const asScheduleTz = `${y}-${m}-${day}T${h}:${min}:${sec}${offset}`;
+    return new Date(asScheduleTz).toLocaleString('en-US', {
+      timeZone: scheduleTimezone,
       year: 'numeric',
       month: 'short',
       day: 'numeric',
@@ -262,13 +295,13 @@ const NotificationScheduleManagementPage: React.FC = () => {
                   <div>
                     <Label className="text-muted-foreground">Last Run</Label>
                     <p className="text-sm font-medium mt-1">
-                      {formatDate(schedule.last_run)}
+                      {formatDate(schedule.last_run, schedule.timezone || 'Asia/Bangkok')}
                     </p>
                   </div>
                   <div>
                     <Label className="text-muted-foreground">Next Run</Label>
                     <p className="text-sm font-medium mt-1">
-                      {schedule.is_enabled ? formatDate(schedule.next_run) : 'N/A'}
+                      {schedule.is_enabled ? formatDate(schedule.next_run, schedule.timezone || 'Asia/Bangkok') : 'N/A'}
                     </p>
                   </div>
                 </div>
