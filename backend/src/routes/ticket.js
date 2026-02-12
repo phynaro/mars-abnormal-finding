@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ticketController = require('../controllers/ticketController');
-const { authenticateToken, requireFormPermission } = require('../middleware/auth');
+const { authenticateToken, requireFormPermission, requireDeleteTicketPermission } = require('../middleware/auth');
 const { upload, uploadMemory } = require('../middleware/upload');
 
 // Apply authentication middleware to all routes
@@ -84,8 +84,8 @@ router.get('/assignees/available', requireFormPermission('TKT', 'view'), ticketC
 const { requirePermissionLevel } = require('../middleware/auth');
 router.post('/test-notification-recipients', requirePermissionLevel(3), ticketController.testNotificationRecipients);
 
-// Delete ticket (requires TKT form delete permission)
-router.delete('/:id', requireFormPermission('TKT', 'delete'), ticketController.deleteTicket);
+// Delete ticket (requires TKT delete permission OR user is ticket creator)
+router.delete('/:id', requireDeleteTicketPermission, ticketController.deleteTicket);
 
 // Upload ticket image (requires TKT form save permission)
 router.post('/:id/images', requireFormPermission('TKT', 'save'), upload.single('image'), ticketController.uploadTicketImage);

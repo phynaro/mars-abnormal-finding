@@ -259,6 +259,56 @@ const requireFormPermission = (formId, action = 'view') => {
   };
 };
 
+// Delete ticket: allow if user has TKT delete permission OR is the ticket creator
+const requireDeleteTicketPermission = async (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({ 
+      success: false, 
+      message: 'Authentication required' 
+    });
+  }
+
+  try {
+    const { hasPermission } = require('../controllers/authController');
+    const hasDeletePermission = await hasPermission(req.user.userId, req.user.groupNo, 'TKT', 'delete');
+    
+    if (hasDeletePermission) {
+      return next();
+    }
+
+    // Check if user is the ticket creator
+    const ticketId = req.params.id;
+    if (!ticketId) {
+      return res.status(400).json({ success: false, message: 'Ticket ID required' });
+    }
+
+    const pool = await getConnection();
+    const result = await pool.request()
+      .input('id', sql.Int, ticketId)
+      .query('SELECT created_by FROM IgxTickets WHERE id = @id');
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({ success: false, message: 'Ticket not found' });
+    }
+
+    const ticket = result.recordset[0];
+    if (Number(ticket.created_by) === Number(req.user.id)) {
+      return next();
+    }
+
+    return res.status(403).json({ 
+      success: false, 
+      message: 'Insufficient permissions to delete this ticket' 
+    });
+  } catch (error) {
+    console.error('Delete ticket permission check error:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Permission check failed' 
+    });
+  }
+};
+
 module.exports = {
   authenticateToken,
   requireGroup,
@@ -274,5 +324,6 @@ module.exports = {
   requireStore,
   requireSupplier,
   requireFormPermission,
-  requirePermissionLevel
+  requirePermissionLevel,
+  requireDeleteTicketPermission
 }; 

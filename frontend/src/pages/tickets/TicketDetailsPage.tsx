@@ -1123,8 +1123,8 @@ const TicketDetailsPage: React.FC = () => {
                   {t('ticket.reassign')}
                 </Button>
               )}
-            {/* Delete button - L3+ users can delete tickets */}
-            {isL3Plus && (
+            {/* Delete button - L3+ users or ticket creator can delete tickets */}
+            {(isL3Plus || isCreator) && (
               <Button
                 variant="destructive"
                 onClick={() => {
@@ -2987,8 +2987,8 @@ const TicketDetailsPage: React.FC = () => {
                   <RotateCw className="mr-2 h-4 w-4" /> {t('ticket.reassign')}
                 </Button>
               )}
-            {/* Delete button - L3+ users can delete tickets */}
-            {isL3Plus && (
+            {/* Delete button - L3+ users or ticket creator can delete tickets */}
+            {(isL3Plus || isCreator) && (
               <Button
                 variant="destructive"
                 onClick={() => {
