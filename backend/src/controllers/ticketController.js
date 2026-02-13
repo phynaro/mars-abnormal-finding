@@ -532,6 +532,7 @@ const getTickets = async (req, res) => {
       finishedEndDate,
       puno,
       delay,
+      overdue,
       team,
     } = req.query;
 
@@ -599,6 +600,11 @@ const getTickets = async (req, res) => {
     // Delay filter
     if (delay === 'true' || delay === true) {
       whereClause += " AND t.schedule_finish < GETDATE() AND t.status NOT IN ('closed', 'finished', 'canceled', 'rejected_final')";
+    }
+
+    // Overdue filter: status in_progress or planed, and schedule_finish before now
+    if (overdue === 'true' || overdue === true) {
+      whereClause += " AND t.status IN ('in_progress', 'planed') AND t.schedule_finish IS NOT NULL AND t.schedule_finish < GETDATE()";
     }
 
     // Team filter - requires department identification

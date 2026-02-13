@@ -27,6 +27,7 @@ import {
   Table,
   LayoutGrid,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, TicketFilters } from "@/services/ticketService";
 import { hierarchyService, type PUCritical } from "@/services/hierarchyService";
@@ -55,6 +56,7 @@ import {
   getCriticalLevelIconClass,
   getCriticalLevelText,
 } from "@/utils/ticketBadgeStyles";
+import { StarRatingDisplay } from "@/components/ui/star-rating";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
@@ -113,6 +115,7 @@ export const TicketList: React.FC = () => {
       finishedEndDate: searchParams.get('finishedEndDate') || undefined,
       puno: searchParams.get('puno') || undefined,
       delay: searchParams.get('delay') === 'true' ? true : undefined,
+      overdue: searchParams.get('overdue') === 'true' ? true : undefined,
       team: (searchParams.get('team') as 'operator' | 'reliability') || undefined,
     };
     return urlFilters;
@@ -242,7 +245,7 @@ export const TicketList: React.FC = () => {
     
     Object.entries(newFilters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
-        if (key === 'delay' && typeof value === 'boolean') {
+        if ((key === 'delay' || key === 'overdue') && typeof value === 'boolean') {
           if (value) {
             params.set(key, 'true');
           }
@@ -294,6 +297,7 @@ export const TicketList: React.FC = () => {
       endDate: undefined,
       puno: undefined,
       delay: undefined,
+      overdue: undefined,
       team: undefined,
     };
     setFilters(clearedFilters);
@@ -301,7 +305,7 @@ export const TicketList: React.FC = () => {
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.pucriticalno || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.team);
+    return !!(filters.status || filters.pucriticalno || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
   };
 
   const handlePageChange = (page: number) => {
@@ -342,6 +346,60 @@ export const TicketList: React.FC = () => {
 
   const formatDate = (dateString: string) => {
     return formatTimelineTime(dateString);
+  };
+
+  // Parse API timestamp as UTC+7 when it has Z suffix (same as formatTimelineTime).
+  const parseApiDate = (dateString: string): number => {
+    const raw = dateString || '';
+    const localTimestamp = /Z$/i.test(raw) ? raw.replace(/Z$/i, '+07:00') : raw;
+    return new Date(localTimestamp).getTime();
+  };
+
+  // Returns { days, hours } overdue for in_progress / planed / reopened_in_progress tickets, or null if not overdue.
+  const getOverdueDetail = (ticket: Ticket): { days: number; hours: number } | null => {
+    if (!ticket.schedule_finish || !['in_progress', 'planed', 'reopened_in_progress'].includes(ticket.status)) return null;
+    const finish = parseApiDate(ticket.schedule_finish);
+    const now = Date.now();
+    if (finish >= now) return null;
+    const diffMs = now - finish;
+    const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    return { days, hours };
+  };
+
+  const formatOverdueText = (detail: { days: number; hours: number }): string => {
+    return formatDurationText(t('ticket.overdueLabel'), detail);
+  };
+
+  // Generic "Label: X days Y hrs" formatter for open duration, time to action, etc.
+  const formatDurationText = (label: string, detail: { days: number; hours: number }): string => {
+    const parts: string[] = [];
+    if (detail.days > 0) {
+      parts.push(`${detail.days} ${detail.days === 1 ? t('ticket.day') : t('ticket.days')}`);
+    }
+    parts.push(`${detail.hours} ${detail.hours === 1 ? t('ticket.hr') : t('ticket.hrs')}`);
+    return `${label}: ${parts.join(' ')}`;
+  };
+
+  // Open duration: now − created_at (for status open).
+  const getOpenDurationDetail = (ticket: Ticket): { days: number; hours: number } => {
+    const start = parseApiDate(ticket.created_at);
+    const diffMs = Date.now() - start;
+    const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    return { days, hours };
+  };
+
+  // Time to action: actual_finish_at − created_at (for status closed).
+  const getTimeToActionDetail = (ticket: Ticket): { days: number; hours: number } | null => {
+    if (!ticket.actual_finish_at) return null;
+    const start = parseApiDate(ticket.created_at);
+    const end = parseApiDate(ticket.actual_finish_at);
+    const diffMs = end - start;
+    if (diffMs < 0) return null;
+    const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+    const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+    return { days, hours };
   };
 
   const handleExportTickets = () => {
@@ -480,16 +538,16 @@ export const TicketList: React.FC = () => {
         <div className="flex items-center gap-2">
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" size="sm" title={t('ticket.filterByStatus')}>
+              <Button variant="outline" size="sm" title={t('ticket.filter')}>
                 <Filter className="h-4 w-4" />
                 <span className="ml-2 hidden sm:inline">{t('homepage.filters')}</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] dark:text-gray-100 flex flex-col">
+            <DialogContent className="max-w-3xl max-h-[90vh] lg:max-h-none dark:text-gray-100 flex flex-col">
               <DialogHeader className="flex-shrink-0">
-                <DialogTitle>{t('ticket.filterByStatus')}</DialogTitle>
+                <DialogTitle>{t('ticket.filter')}</DialogTitle>
               </DialogHeader>
-              <div className="overflow-y-auto flex-1 pr-2 -mr-2">
+              <div className="overflow-y-auto lg:overflow-visible flex-1 min-h-0 pr-2 -mr-2">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                   {/* 1. Search */}
                   <div className="space-y-2">
@@ -607,7 +665,8 @@ export const TicketList: React.FC = () => {
                       <SelectContent>
                         <SelectItem value="all">{t('ticket.allStatuses')}</SelectItem>
                         <SelectItem value="open">{t('ticket.open')}</SelectItem>
-                        <SelectItem value="assigned">{t('ticket.assigned')}</SelectItem>
+                        <SelectItem value="accepted">{t('ticket.accepted')}</SelectItem>
+                        <SelectItem value="planed">{t('ticket.planed')}</SelectItem>
                         <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
                         <SelectItem value="reviewed">{t('ticket.reviewed')}</SelectItem>
                         <SelectItem value="closed">{t('ticket.closed')}</SelectItem>
@@ -647,6 +706,21 @@ export const TicketList: React.FC = () => {
                         ))}
                       </SelectContent>
                     </Select>
+                  </div>
+                  {/* Overdue only: in_progress/planed with schedule_finish before now */}
+                  <div className="space-y-2 flex items-end">
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id="overdue"
+                        checked={!!filters.overdue}
+                        onCheckedChange={(checked) =>
+                          handleFilterChange("overdue", checked === true)
+                        }
+                      />
+                      <Label htmlFor="overdue" className="cursor-pointer">
+                        {t('ticket.overdue')}
+                      </Label>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -786,6 +860,15 @@ export const TicketList: React.FC = () => {
               />
             </Badge>
           )}
+          {filters.overdue && (
+            <Badge variant="secondary" className="gap-1">
+              {t('ticket.overdue')}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("overdue")}
+              />
+            </Badge>
+          )}
           {filters.team && (
             <Badge variant="secondary" className="gap-1">
               Team: {filters.team.charAt(0).toUpperCase() + filters.team.slice(1)}
@@ -892,28 +975,211 @@ export const TicketList: React.FC = () => {
                       </Badge>
                     </div>
 
-                    {/* div5: Others */}
+                    {/* div5: Status-based key info (see requirement/card.md) */}
                     <div className="text-sm text-muted-foreground space-y-1 mt-auto">
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4 flex-shrink-0" />
-                        <span className="truncate">
-                          {t('ticket.createdBy')}:{" "}
-                          {ticket.reporter_name || `User ${ticket.created_by}`}
-                        </span>
+                        <span className="truncate">{t('ticket.createdBy')}: {ticket.reporter_name || `${t('ticket.userId')} ${ticket.created_by}`}</span>
                       </div>
-                      {ticket.assigned_to && (
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate">
-                            {t('ticket.assignedTo')}:{" "}
-                            {ticket.assignee_name || `User ${ticket.assigned_to}`}
-                          </span>
-                        </div>
-                      )}
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 flex-shrink-0" />
                         <span className="truncate">{t('ticket.created')} {formatDate(ticket.created_at)}</span>
                       </div>
+                      {ticket.status === 'open' && (
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 flex-shrink-0" />
+                          <span className="truncate">{formatDurationText(t('ticket.openDuration'), getOpenDurationDetail(ticket))}</span>
+                        </div>
+                      )}
+                      {(ticket.status === 'accepted') && (
+                        <>
+                          {ticket.accepted_by != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.acceptedBy')}: {ticket.accepted_by_name || `${t('ticket.userId')} ${ticket.accepted_by}`}</span>
+                            </div>
+                          )}
+                          {ticket.accepted_at && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.acceptedAt')}: {formatDate(ticket.accepted_at)}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {(ticket.status === 'planed') && (
+                        <>
+                          {ticket.assigned_to != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                            </div>
+                          )}
+                          {ticket.schedule_start && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
+                            </div>
+                          )}
+                          {ticket.schedule_finish && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
+                            </div>
+                          )}
+                          {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
+                        </>
+                      )}
+                      {(ticket.status === 'in_progress' || ticket.status === 'reopened_in_progress') && (
+                        <>
+                          {ticket.assigned_to != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                            </div>
+                          )}
+                          {ticket.schedule_start && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
+                            </div>
+                          )}
+                          {ticket.actual_start_at && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.actualStartTime')}: {formatDate(ticket.actual_start_at)}</span>
+                            </div>
+                          )}
+                          {ticket.schedule_finish && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
+                            </div>
+                          )}
+                          {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
+                        </>
+                      )}
+                      {ticket.status === 'finished' && (
+                        <>
+                          {ticket.assigned_to != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                            </div>
+                          )}
+                          {ticket.schedule_finish && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
+                            </div>
+                          )}
+                          {ticket.actual_finish_at && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {ticket.status === 'reviewed' && (
+                        <>
+                          {ticket.assigned_to != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                            </div>
+                          )}
+                          {ticket.satisfaction_rating != null && (
+                            <div className="flex items-center gap-2">
+                              <span className="truncate">{t('ticket.rating')}:</span>
+                              <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {ticket.status === 'closed' && (
+                        <>
+                          {ticket.assigned_to != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                            </div>
+                          )}
+                          {ticket.actual_finish_at && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
+                            </div>
+)}
+                          {ticket.satisfaction_rating != null && (
+                            <div className="flex items-center gap-2">
+                              <span className="truncate">{t('ticket.rating')}:</span>
+                              <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
+                            </div>
+                          )}
+                            {(() => { const d = getTimeToActionDetail(ticket); return d ? <div className="flex items-center gap-2"><Clock className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatDurationText(t('ticket.timeToAction'), d)}</span></div> : null; })()}
+                        </>
+                      )}
+                      {ticket.status === 'escalated' && (
+                        <>
+                          {ticket.escalated_by != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.escalatedBy')}: {ticket.escalated_by_name || `${t('ticket.userId')} ${ticket.escalated_by}`}</span>
+                            </div>
+                          )}
+                          {ticket.escalated_at && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.escalatedAt')}: {formatDate(ticket.escalated_at)}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {ticket.status === 'rejected_pending_l3_review' && (
+                        <>
+                          {ticket.rejected_by != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
+                            </div>
+                          )}
+                          {ticket.rejected_at && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {ticket.status === 'rejected_final' && (
+                        <>
+                          {ticket.rejected_by != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
+                            </div>
+                          )}
+                          {ticket.rejected_at && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
+                            </div>
+                          )}
+                          {ticket.rejected_final_by != null && (
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.rejectedFinalBy')}: {ticket.rejected_final_by_name || `${t('ticket.userId')} ${ticket.rejected_final_by}`}</span>
+                            </div>
+                          )}
+                          {ticket.rejected_final_at && (
+                            <div className="flex items-center gap-2">
+                              <Clock className="w-4 h-4 flex-shrink-0" />
+                              <span className="truncate">{t('ticket.rejectedFinalAt')}: {formatDate(ticket.rejected_final_at)}</span>
+                            </div>
+                          )}
+                        </>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -976,28 +1242,211 @@ export const TicketList: React.FC = () => {
                         </Badge>
                       </div>
 
-                      {/* div5: Others */}
+                      {/* div5: Status-based key info (see requirement/card.md) */}
                       <div className="text-sm text-muted-foreground space-y-1 mt-auto">
                         <div className="flex items-center gap-2">
                           <User className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate">
-                            {t('ticket.createdBy')}:{" "}
-                            {ticket.reporter_name || `User ${ticket.created_by}`}
-                          </span>
+                          <span className="truncate">{t('ticket.createdBy')}: {ticket.reporter_name || `${t('ticket.userId')} ${ticket.created_by}`}</span>
                         </div>
-                        {ticket.assigned_to && (
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate">
-                              {t('ticket.assignedTo')}:{" "}
-                              {ticket.assignee_name || `User ${ticket.assigned_to}`}
-                            </span>
-                          </div>
-                        )}
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 flex-shrink-0" />
                           <span className="truncate">{t('ticket.created')} {formatDate(ticket.created_at)}</span>
                         </div>
+                        {ticket.status === 'open' && (
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-4 h-4 flex-shrink-0" />
+                            <span className="truncate">{formatDurationText(t('ticket.openDuration'), getOpenDurationDetail(ticket))}</span>
+                          </div>
+                        )}
+                        {(ticket.status === 'accepted') && (
+                          <>
+                            {ticket.accepted_by != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.acceptedBy')}: {ticket.accepted_by_name || `${t('ticket.userId')} ${ticket.accepted_by}`}</span>
+                              </div>
+                            )}
+                            {ticket.accepted_at && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.acceptedAt')}: {formatDate(ticket.accepted_at)}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {(ticket.status === 'planed') && (
+                          <>
+                            {ticket.assigned_to != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                              </div>
+                            )}
+                            {ticket.schedule_start && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
+                              </div>
+                            )}
+                            {ticket.schedule_finish && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
+                              </div>
+                            )}
+                            {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
+                          </>
+                        )}
+                        {(ticket.status === 'in_progress' || ticket.status === 'reopened_in_progress') && (
+                          <>
+                            {ticket.assigned_to != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                              </div>
+                            )}
+                            {ticket.schedule_start && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
+                              </div>
+                            )}
+                            {ticket.actual_start_at && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.actualStartTime')}: {formatDate(ticket.actual_start_at)}</span>
+                              </div>
+                            )}
+                            {ticket.schedule_finish && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
+                              </div>
+                            )}
+                            {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
+                          </>
+                        )}
+                        {ticket.status === 'finished' && (
+                          <>
+                            {ticket.assigned_to != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                              </div>
+                            )}
+                            {ticket.schedule_finish && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
+                              </div>
+                            )}
+                            {ticket.actual_finish_at && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {ticket.status === 'reviewed' && (
+                          <>
+                            {ticket.assigned_to != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                              </div>
+                            )}
+                            {ticket.satisfaction_rating != null && (
+                              <div className="flex items-center gap-2">
+                                <span className="truncate">{t('ticket.rating')}:</span>
+                                <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {ticket.status === 'closed' && (
+                          <>
+                            {ticket.assigned_to != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+                              </div>
+                            )}
+                            {ticket.actual_finish_at && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
+                              </div>
+                            )}
+                            {ticket.satisfaction_rating != null && (
+                              <div className="flex items-center gap-2">
+                                <span className="truncate">{t('ticket.rating')}:</span>
+                                <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
+                              </div>
+                            )}
+                            {(() => { const d = getTimeToActionDetail(ticket); return d ? <div className="flex items-center gap-2"><Clock className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatDurationText(t('ticket.timeToAction'), d)}</span></div> : null; })()}
+                          </>
+                        )}
+                        {ticket.status === 'escalated' && (
+                          <>
+                            {ticket.escalated_by != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.escalatedBy')}: {ticket.escalated_by_name || `${t('ticket.userId')} ${ticket.escalated_by}`}</span>
+                              </div>
+                            )}
+                            {ticket.escalated_at && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.escalatedAt')}: {formatDate(ticket.escalated_at)}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {ticket.status === 'rejected_pending_l3_review' && (
+                          <>
+                            {ticket.rejected_by != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
+                              </div>
+                            )}
+                            {ticket.rejected_at && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {ticket.status === 'rejected_final' && (
+                          <>
+                            {ticket.rejected_by != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
+                              </div>
+                            )}
+                            {ticket.rejected_at && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
+                              </div>
+                            )}
+                            {ticket.rejected_final_by != null && (
+                              <div className="flex items-center gap-2">
+                                <User className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.rejectedFinalBy')}: {ticket.rejected_final_by_name || `${t('ticket.userId')} ${ticket.rejected_final_by}`}</span>
+                              </div>
+                            )}
+                            {ticket.rejected_final_at && (
+                              <div className="flex items-center gap-2">
+                                <Clock className="w-4 h-4 flex-shrink-0" />
+                                <span className="truncate">{t('ticket.rejectedFinalAt')}: {formatDate(ticket.rejected_final_at)}</span>
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1021,6 +1470,7 @@ export const TicketList: React.FC = () => {
                     <th className="px-4 py-2">{t('ticket.createdBy')}</th>
                     <th className="px-4 py-2">{t('ticket.assignedTo')}</th>
                     <th className="px-4 py-2">{t('ticket.created')}</th>
+                    {/* <th className="px-4 py-2">{t('ticket.scheduleFinish')}</th> */}
                   </tr>
                 </thead>
                 <tbody>
@@ -1103,6 +1553,11 @@ export const TicketList: React.FC = () => {
                       <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
                         {formatDate(ticket.created_at)}
                       </td>
+                      {/* <td className="px-4 py-2 whitespace-nowrap text-muted-foreground">
+                        {(ticket.status === 'in_progress' || ticket.status === 'planed') && ticket.schedule_finish
+                          ? formatDate(ticket.schedule_finish)
+                          : '—'}
+                      </td> */}
                     </tr>
                   ))}
                 </tbody>

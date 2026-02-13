@@ -46,6 +46,8 @@ export interface Ticket {
   accepted_by?: number;
   rejected_at?: string;
   rejected_by?: number;
+  rejected_final_at?: string;
+  rejected_final_by?: number;
   finished_at?: string;
   finished_by?: number;
   escalated_at?: string;
@@ -66,6 +68,7 @@ export interface Ticket {
   // Workflow user names
   accepted_by_name?: string;
   rejected_by_name?: string;
+  rejected_final_by_name?: string;
   finished_by_name?: string;
   reviewed_by_name?: string;
   escalated_by_name?: string;
@@ -186,6 +189,7 @@ export interface TicketFilters {
   finishedEndDate?: string;    // End date for finished_at filter (closed tickets)
   puno?: string;        // Comma-separated PU IDs (e.g., "895,917,939")
   delay?: boolean | string;  // Filter for delayed tickets
+  overdue?: boolean | string;  // Filter for overdue (in_progress/planed with schedule_finish < now)
   team?: 'operator' | 'reliability';  // Team-based filter
 }
 
@@ -250,8 +254,14 @@ export interface PendingTicket {
   rejected_at?: string;
   rejected_by?: number;
   rejected_by_name?: string;
+  rejected_final_at?: string;
+  rejected_final_by?: number;
+  rejected_final_by_name?: string;
   schedule_start?: string;
   schedule_finish?: string;
+  actual_start_at?: string;
+  actual_finish_at?: string;
+  satisfaction_rating?: number;
   machine_number?: number;
   first_image_url?: string; // First image URL for preview
 }

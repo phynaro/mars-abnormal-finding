@@ -1,0 +1,22 @@
+Status and key info that must be shown on the card. Field names are the exact API/DB tags returned by getTickets.
+
+- **open**
+  - `created_by`, `created_at`, open duration (computed: now − created_at)
+- **accepted**
+  - `created_by`, `created_at`, `accepted_by`, `accepted_at`
+- **planed**
+  - `created_by`, `created_at`, `assigned_to`, `schedule_start`, `schedule_finish`, overdue duration (computed)
+- **in_progress** | **reopened_in_progress**
+  - `created_by`, `created_at`, `assigned_to`, `schedule_start`, `actual_start_at`, `schedule_finish`, overdue duration (computed)
+- **finished**
+  - `created_by`, `created_at`, `assigned_to`, `schedule_finish`, `actual_finish_at`
+- **reviewed**
+  - `created_by`, `created_at`, `assigned_to`, `satisfaction_rating` (star display)
+- **closed**
+  - `created_by`, `created_at`, `assigned_to`, `actual_finish_at`, `satisfaction_rating` (star), time to action (computed: actual_finish_at − created_at)
+- **escalated**
+  - `created_by`, `created_at`, `escalated_by`, `escalated_at`
+- **rejected_pending_l3_review**
+  - `created_by`, `created_at`, `rejected_by`, `rejected_at`
+- **rejected_final**
+  - `created_by`, `created_at`, `rejected_by`, `rejected_at`, `rejected_final_by`, `rejected_final_at`

@@ -16,6 +16,7 @@ import {
 } from "@/utils/ticketBadgeStyles";
 import {
   ArrowUp,
+  AlertTriangle,
   Calendar,
   CheckCircle,
   ChevronDown,
@@ -35,6 +36,7 @@ import {
 } from "lucide-react";
 import { formatUITime } from "@/utils/timezone";
 import { getFileUrl } from "@/utils/url";
+import { StarRatingDisplay } from "@/components/ui/star-rating";
 
 type PendingTicketsSectionProps = {
   tickets: APIPendingTicket[];
@@ -48,6 +50,56 @@ type PendingTicketsSectionProps = {
     pages: number;
   };
   onPageChange?: (page: number) => void;
+};
+
+// Parse API timestamp as UTC+7 when it has Z suffix (same as TicketList/timezone).
+const parseApiDate = (dateString: string): number => {
+  const raw = dateString || "";
+  const localTimestamp = /Z$/i.test(raw) ? raw.replace(/Z$/i, "+07:00") : raw;
+  return new Date(localTimestamp).getTime();
+};
+
+const getOverdueDetail = (ticket: APIPendingTicket): { days: number; hours: number } | null => {
+  if (!ticket.schedule_finish || !["in_progress", "planed", "reopened_in_progress"].includes(ticket.status)) return null;
+  const finish = parseApiDate(ticket.schedule_finish);
+  const now = Date.now();
+  if (finish >= now) return null;
+  const diffMs = now - finish;
+  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  return { days, hours };
+};
+
+const formatDurationText = (label: string, detail: { days: number; hours: number }, t: (key: string) => string): string => {
+  const parts: string[] = [];
+  if (detail.days > 0) {
+    parts.push(`${detail.days} ${detail.days === 1 ? t("ticket.day") : t("ticket.days")}`);
+  }
+  parts.push(`${detail.hours} ${detail.hours === 1 ? t("ticket.hr") : t("ticket.hrs")}`);
+  return `${label}: ${parts.join(" ")}`;
+};
+
+const formatOverdueText = (detail: { days: number; hours: number }, t: (key: string) => string): string => {
+  return formatDurationText(t("ticket.overdueLabel"), detail, t);
+};
+
+const getOpenDurationDetail = (ticket: APIPendingTicket): { days: number; hours: number } => {
+  const start = parseApiDate(ticket.created_at);
+  const diffMs = Date.now() - start;
+  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  return { days, hours };
+};
+
+const getTimeToActionDetail = (ticket: APIPendingTicket): { days: number; hours: number } | null => {
+  if (!ticket.actual_finish_at) return null;
+  const start = parseApiDate(ticket.created_at);
+  const end = parseApiDate(ticket.actual_finish_at);
+  const diffMs = end - start;
+  if (diffMs < 0) return null;
+  const days = Math.floor(diffMs / (24 * 60 * 60 * 1000));
+  const hours = Math.floor((diffMs % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  return { days, hours };
 };
 
 type RelationshipConfig = {
@@ -557,6 +609,279 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
   }
 };
 
+// Status-based card content per requirement/card.md (same concept as TicketList).
+const renderStatusBasedCardContent = (ticket: APIPendingTicket, t: (key: string) => string): React.ReactNode[] => {
+  const formatDate = (s: string) => formatUITime(s);
+  const nodes: React.ReactNode[] = [];
+
+  nodes.push(
+    <div key="created_by" className="flex items-center gap-2">
+      <User className="w-4 h-4 flex-shrink-0" />
+      <span className="truncate">{t("ticket.createdBy")}: {ticket.reporter_name || `${t("ticket.userId")} ${ticket.created_by}`}</span>
+    </div>,
+    <div key="created_at" className="flex items-center gap-2">
+      <Clock className="w-4 h-4 flex-shrink-0" />
+      <span className="truncate">{t("ticket.created")} {formatDate(ticket.created_at)}</span>
+    </div>
+  );
+
+  if (ticket.status === "open") {
+    nodes.push(
+      <div key="open_duration" className="flex items-center gap-2">
+        <Clock className="w-4 h-4 flex-shrink-0" />
+        <span className="truncate">{formatDurationText(t("ticket.openDuration"), getOpenDurationDetail(ticket), t)}</span>
+      </div>
+    );
+  }
+  if (ticket.status === "accepted") {
+    if (ticket.accepted_by != null) {
+      nodes.push(
+        <div key="accepted_by" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.acceptedBy")}: {ticket.accepted_by_name || `${t("ticket.userId")} ${ticket.accepted_by}`}</span>
+        </div>
+      );
+    }
+    if (ticket.accepted_at) {
+      nodes.push(
+        <div key="accepted_at" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.acceptedAt")}: {formatDate(ticket.accepted_at)}</span>
+        </div>
+      );
+    }
+  }
+  if (ticket.status === "planed") {
+    if (ticket.assigned_to != null) {
+      nodes.push(
+        <div key="assigned_to" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.assignedTo")}: {ticket.assignee_name || `${t("ticket.userId")} ${ticket.assigned_to}`}</span>
+        </div>
+      );
+    }
+    if (ticket.schedule_start) {
+      nodes.push(
+        <div key="schedule_start" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.scheduleStart")}: {formatDate(ticket.schedule_start)}</span>
+        </div>
+      );
+    }
+    if (ticket.schedule_finish) {
+      nodes.push(
+        <div key="schedule_finish" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.scheduleFinish")}: {formatDate(ticket.schedule_finish)}</span>
+        </div>
+      );
+    }
+    const overduePlaned = getOverdueDetail(ticket);
+    if (overduePlaned) {
+      nodes.push(
+        <div key="overdue_planed" className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{formatOverdueText(overduePlaned, t)}</span>
+        </div>
+      );
+    }
+  }
+  if (ticket.status === "in_progress" || ticket.status === "reopened_in_progress") {
+    if (ticket.assigned_to != null) {
+      nodes.push(
+        <div key="assigned_to" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.assignedTo")}: {ticket.assignee_name || `${t("ticket.userId")} ${ticket.assigned_to}`}</span>
+        </div>
+      );
+    }
+    if (ticket.schedule_start) {
+      nodes.push(
+        <div key="schedule_start" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.scheduleStart")}: {formatDate(ticket.schedule_start)}</span>
+        </div>
+      );
+    }
+    if (ticket.actual_start_at) {
+      nodes.push(
+        <div key="actual_start" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.actualStartTime")}: {formatDate(ticket.actual_start_at)}</span>
+        </div>
+      );
+    }
+    if (ticket.schedule_finish) {
+      nodes.push(
+        <div key="schedule_finish" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.scheduleFinish")}: {formatDate(ticket.schedule_finish)}</span>
+        </div>
+      );
+    }
+    const overdueProgress = getOverdueDetail(ticket);
+    if (overdueProgress) {
+      nodes.push(
+        <div key="overdue_progress" className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium">
+          <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{formatOverdueText(overdueProgress, t)}</span>
+        </div>
+      );
+    }
+  }
+  if (ticket.status === "finished") {
+    if (ticket.assigned_to != null) {
+      nodes.push(
+        <div key="assigned_to" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.assignedTo")}: {ticket.assignee_name || `${t("ticket.userId")} ${ticket.assigned_to}`}</span>
+        </div>
+      );
+    }
+    if (ticket.schedule_finish) {
+      nodes.push(
+        <div key="schedule_finish" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.scheduleFinish")}: {formatDate(ticket.schedule_finish)}</span>
+        </div>
+      );
+    }
+    if (ticket.actual_finish_at) {
+      nodes.push(
+        <div key="actual_finish" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.actualFinishTime")}: {formatDate(ticket.actual_finish_at)}</span>
+        </div>
+      );
+    }
+  }
+  if (ticket.status === "reviewed") {
+    if (ticket.assigned_to != null) {
+      nodes.push(
+        <div key="assigned_to" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.assignedTo")}: {ticket.assignee_name || `${t("ticket.userId")} ${ticket.assigned_to}`}</span>
+        </div>
+      );
+    }
+    if (ticket.satisfaction_rating != null) {
+      nodes.push(
+        <div key="rating" className="flex items-center gap-2">
+          <span className="truncate">{t("ticket.rating")}:</span>
+          <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
+        </div>
+      );
+    }
+  }
+  if (ticket.status === "closed") {
+    if (ticket.assigned_to != null) {
+      nodes.push(
+        <div key="assigned_to" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.assignedTo")}: {ticket.assignee_name || `${t("ticket.userId")} ${ticket.assigned_to}`}</span>
+        </div>
+      );
+    }
+    if (ticket.actual_finish_at) {
+      nodes.push(
+        <div key="actual_finish" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.actualFinishTime")}: {formatDate(ticket.actual_finish_at)}</span>
+        </div>
+      );
+    }
+    if (ticket.satisfaction_rating != null) {
+      nodes.push(
+        <div key="rating" className="flex items-center gap-2">
+          <span className="truncate">{t("ticket.rating")}:</span>
+          <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
+        </div>
+      );
+    }
+    const timeToAction = getTimeToActionDetail(ticket);
+    if (timeToAction) {
+      nodes.push(
+        <div key="time_to_action" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{formatDurationText(t("ticket.timeToAction"), timeToAction, t)}</span>
+        </div>
+      );
+    }
+  }
+  if (ticket.status === "escalated") {
+    if (ticket.escalated_by != null) {
+      nodes.push(
+        <div key="escalated_by" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.escalatedBy")}: {ticket.escalated_by_name || `${t("ticket.userId")} ${ticket.escalated_by}`}</span>
+        </div>
+      );
+    }
+    if (ticket.escalated_at) {
+      nodes.push(
+        <div key="escalated_at" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.escalatedAt")}: {formatDate(ticket.escalated_at)}</span>
+        </div>
+      );
+    }
+  }
+  if (ticket.status === "rejected_pending_l3_review") {
+    if (ticket.rejected_by != null) {
+      nodes.push(
+        <div key="rejected_by" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.rejectedBy")}: {ticket.rejected_by_name || `${t("ticket.userId")} ${ticket.rejected_by}`}</span>
+        </div>
+      );
+    }
+    if (ticket.rejected_at) {
+      nodes.push(
+        <div key="rejected_at" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.rejectedAt")}: {formatDate(ticket.rejected_at)}</span>
+        </div>
+      );
+    }
+  }
+  if (ticket.status === "rejected_final") {
+    if (ticket.rejected_by != null) {
+      nodes.push(
+        <div key="rejected_by" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.rejectedBy")}: {ticket.rejected_by_name || `${t("ticket.userId")} ${ticket.rejected_by}`}</span>
+        </div>
+      );
+    }
+    if (ticket.rejected_at) {
+      nodes.push(
+        <div key="rejected_at" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.rejectedAt")}: {formatDate(ticket.rejected_at)}</span>
+        </div>
+      );
+    }
+    if (ticket.rejected_final_by != null) {
+      nodes.push(
+        <div key="rejected_final_by" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.rejectedFinalBy")}: {ticket.rejected_final_by_name || `${t("ticket.userId")} ${ticket.rejected_final_by}`}</span>
+        </div>
+      );
+    }
+    if (ticket.rejected_final_at) {
+      nodes.push(
+        <div key="rejected_final_at" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.rejectedFinalAt")}: {formatDate(ticket.rejected_final_at)}</span>
+        </div>
+      );
+    }
+  }
+
+  return nodes;
+};
+
 const MobileCardSkeleton = () => (
   <div className="border rounded-lg bg-card overflow-hidden flex flex-col">
     {/* Image skeleton */}
@@ -763,17 +1088,9 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
                   </Badge>
                 </div>
 
-                {/* div5: Others */}
+                {/* div5: Status-based key info (see requirement/card.md) */}
                 <div className="text-sm text-muted-foreground space-y-1 mt-auto">
-                  {config.columns.slice(5).map((column) => {
-                    const content = renderMobileCardContent(
-                      ticket,
-                      column.key,
-                      t,
-                    );
-                    if (!content) return null;
-                    return <div key={column.key}>{content}</div>;
-                  })}
+                  {renderStatusBasedCardContent(ticket, t)}
                 </div>
               </div>
             </div>
@@ -858,17 +1175,9 @@ const PendingTicketsSection: React.FC<PendingTicketsSectionProps> = ({
                     </Badge>
                   </div>
 
-                  {/* div5: Others */}
+                  {/* div5: Status-based key info (see requirement/card.md) */}
                   <div className="text-sm text-muted-foreground space-y-1 mt-auto">
-                    {config.columns.slice(5).map((column) => {
-                      const content = renderMobileCardContent(
-                        ticket,
-                        column.key,
-                        t,
-                      );
-                      if (!content) return null;
-                      return <div key={column.key}>{content}</div>;
-                    })}
+                    {renderStatusBasedCardContent(ticket, t)}
                   </div>
                 </div>
               </div>
