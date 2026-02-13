@@ -1,6 +1,8 @@
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
 const pendingNotificationService = require('../services/pendingTicketNotificationService');
+const oldOpenTicketNotificationService = require('../services/oldOpenTicketNotificationService');
+const dueDateNotificationService = require('../services/dueDateNotificationService');
 
 /**
  * Get all notification schedules
@@ -115,15 +117,42 @@ const updateNotificationSchedule = async (req, res) => {
 };
 
 /**
- * Test notification by triggering it manually
+ * Map notification_type to service runner
+ */
+const NOTIFICATION_TEST_HANDLERS = {
+  pending_tickets: () => pendingNotificationService.sendToAllUsers(),
+  old_open_tickets: () => oldOpenTicketNotificationService.sendNotifications(),
+  due_date_reminder: () => dueDateNotificationService.sendToAllUsers()
+};
+
+/**
+ * Test notification by triggering it manually for a given schedule type.
+ * Body: { notification_type: 'pending_tickets' | 'old_open_tickets' | 'due_date_reminder' }
  */
 const testNotification = async (req, res) => {
   try {
-    const result = await pendingNotificationService.sendToAllUsers();
-    
+    const notification_type = req.body?.notification_type || req.query?.notification_type;
+
+    if (!notification_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing notification_type. Send body: { "notification_type": "pending_tickets" | "old_open_tickets" | "due_date_reminder" }'
+      });
+    }
+
+    const handler = NOTIFICATION_TEST_HANDLERS[notification_type];
+    if (!handler) {
+      return res.status(400).json({
+        success: false,
+        message: `Unknown notification_type: ${notification_type}. Supported: pending_tickets, old_open_tickets, due_date_reminder`
+      });
+    }
+
+    const result = await handler();
+
     res.json({
       success: true,
-      message: 'Test notification triggered successfully',
+      message: `Test notification (${notification_type}) triggered successfully`,
       data: result
     });
   } catch (error) {

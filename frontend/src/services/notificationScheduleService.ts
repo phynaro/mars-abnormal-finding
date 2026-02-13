@@ -66,10 +66,18 @@ class NotificationScheduleService {
     return response.json();
   }
 
-  async test(): Promise<{ success: boolean; message: string; data: any }> {
+  /**
+   * Trigger a test run for a specific notification schedule type.
+   * @param notificationType - e.g. 'pending_tickets', 'old_open_tickets', 'due_date_reminder'
+   */
+  async test(notificationType: string): Promise<{ success: boolean; message: string; data: any }> {
     const response = await fetch(`${API_BASE_URL}/test`, {
       method: 'POST',
-      headers: getAuthHeaders()
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ notification_type: notificationType })
     });
 
     if (!response.ok) {

@@ -226,6 +226,7 @@ app.use('*', (req, res) => {
 // Initialize scheduled jobs
 const pendingTicketNotificationJob = require('./jobs/pendingTicketNotificationJob');
 const oldOpenTicketNotificationJob = require('./jobs/oldOpenTicketNotificationJob');
+const dueDateNotificationJob = require('./jobs/dueDateNotificationJob');
 
 // Start server
 app.listen(PORT, async () => {
@@ -246,6 +247,12 @@ app.listen(PORT, async () => {
     await oldOpenTicketNotificationJob.initialize();
   } else {
     console.log('⚠️  Old open ticket notifications are disabled via environment variable');
+  }
+
+  if (process.env.ENABLE_DUE_DATE_NOTIFICATIONS !== 'false') {
+    await dueDateNotificationJob.initialize();
+  } else {
+    console.log('⚠️  Due-date notifications are disabled via environment variable');
   }
 });
 

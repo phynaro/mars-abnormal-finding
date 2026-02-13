@@ -36,6 +36,8 @@ const TicketState = Object.freeze({
   ESCALATED: "ESCALATED",
   CLOSED: "CLOSED",
   REOPENED: "REOPENED",
+  OVERDUE: "OVERDUE",
+  DUE_SOON: "DUE_SOON",
 });
 
 /**
@@ -55,6 +57,8 @@ const STATE_COLORS = Object.freeze({
   [TicketState.ESCALATED]: "#FB7185",          // Rose
   [TicketState.CLOSED]: "#64748B",             // Slate gray
   [TicketState.REOPENED]: "#F97316",           // Orange
+  [TicketState.OVERDUE]: "#DC2626",            // Red - late
+  [TicketState.DUE_SOON]: "#D97706",           // Amber - due within 3 days
 });
 
 /**
@@ -74,6 +78,8 @@ const STATE_LABELS_TH = Object.freeze({
   [TicketState.ESCALATED]: "ส่งต่อให้หัวหน้างาน",
   [TicketState.CLOSED]: "ปิดเคส",
   [TicketState.REOPENED]: "เปิดเคสใหม่",
+  [TicketState.OVERDUE]: "เกินกำหนด",
+  [TicketState.DUE_SOON]: "ใกล้ครบกำหนด",
 });
 
 /**
@@ -93,6 +99,8 @@ const STATE_LABELS_EN = Object.freeze({
   [TicketState.ESCALATED]: "Escalated to Manager",
   [TicketState.CLOSED]: "Ticket Closed",
   [TicketState.REOPENED]: "Ticket Reopened",
+  [TicketState.OVERDUE]: "Overdue",
+  [TicketState.DUE_SOON]: "Due Soon",
 });
 
 // ===== HELPER FUNCTIONS =====

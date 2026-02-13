@@ -49,7 +49,7 @@ const NotificationScheduleManagementPage: React.FC = () => {
   
   const [schedules, setSchedules] = useState<NotificationSchedule[]>([]);
   const [loading, setLoading] = useState(false);
-  const [testing, setTesting] = useState(false);
+  const [testingType, setTestingType] = useState<string | null>(null);
   
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [selectedSchedule, setSelectedSchedule] = useState<NotificationSchedule | null>(null);
@@ -126,21 +126,20 @@ const NotificationScheduleManagementPage: React.FC = () => {
     }
   };
 
-  const handleTest = async () => {
-    if (!confirm('This will send test notifications to all users with pending tickets. Continue?')) {
+  const handleTest = async (schedule: NotificationSchedule) => {
+    if (!confirm(`Send test notifications for "${schedule.notification_type}" now?`)) {
       return;
     }
 
     try {
-      setTesting(true);
-      const response = await notificationScheduleService.test();
-      
+      setTestingType(schedule.notification_type);
+      const response = await notificationScheduleService.test(schedule.notification_type);
+      const sent = response.data?.sent ?? response.data?.totalUsers ?? 0;
       toast({
         title: 'Success',
-        description: `Test notification sent. ${response.data.sent} users notified.`
+        description: `Test (${schedule.notification_type}): ${sent} users notified.`
       });
-      
-      await loadSchedules(); // Refresh to get updated last_run
+      await loadSchedules();
     } catch (error: any) {
       console.error('Error testing notification:', error);
       toast({
@@ -149,7 +148,7 @@ const NotificationScheduleManagementPage: React.FC = () => {
         variant: 'destructive'
       });
     } finally {
-      setTesting(false);
+      setTestingType(null);
     }
   };
 
@@ -212,23 +211,6 @@ const NotificationScheduleManagementPage: React.FC = () => {
           </p>
         </div>
         
-        <Button
-          onClick={handleTest}
-          disabled={testing}
-          variant="default"
-        >
-          {testing ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Testing...
-            </>
-          ) : (
-            <>
-              <Play className="h-4 w-4 mr-2" />
-              Test Notification
-            </>
-          )}
-        </Button>
       </div>
 
       {/* Current Configuration Card */}
@@ -259,6 +241,24 @@ const NotificationScheduleManagementPage: React.FC = () => {
                     <Badge variant={schedule.is_enabled ? 'default' : 'secondary'}>
                       {schedule.is_enabled ? 'Enabled' : 'Disabled'}
                     </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTest(schedule)}
+                      disabled={testingType !== null}
+                    >
+                      {testingType === schedule.notification_type ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Testing...
+                        </>
+                      ) : (
+                        <>
+                          <Play className="h-4 w-4 mr-2" />
+                          Test
+                        </>
+                      )}
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"
