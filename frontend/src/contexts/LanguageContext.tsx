@@ -475,6 +475,8 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Hierarchical selection
     'ticket.selectOption': 'Select...',
+    'ticket.wizardTakePhoto': 'Take Photo',
+    'ticket.wizardChooseFromGallery': 'Choose from Gallery',
     'ticket.selectLevel': 'Select Next Level',
     'ticket.selectionModeSearch': 'Search',
     'ticket.selectionModeHierarchy': 'Browse Hierarchy',
@@ -1244,6 +1246,8 @@ const translations: Record<Language, Record<string, string>> = {
     
     // Hierarchical selection
     'ticket.selectOption': 'Select...',
+    'ticket.wizardTakePhoto': 'ถ่ายรูป',
+    'ticket.wizardChooseFromGallery': 'เลือกจากแกลเลอรี่',
     'ticket.selectLevel': 'เลือกระดับ',
     'ticket.selectionModeSearch': 'ค้นหา',
     'ticket.selectionModeHierarchy': 'เรียกดูตามลำดับชั้น',
