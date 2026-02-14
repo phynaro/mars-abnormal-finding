@@ -12,7 +12,8 @@ const { compressAvatar, getSizeReductionInfo } = require('../utils/imageCompress
 
 // JWT secret key (in production, use environment variable)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+const JWT_EXPIRES_IN = '7d';
+console.log('JWT_EXPIRES_IN:', JWT_EXPIRES_IN);
 
 // Renew token when remaining lifetime is in the last 25% (sliding session)
 const JWT_RENEW_FRACTION = parseFloat(process.env.JWT_RENEW_FRACTION || '0.25', 10) || 0.25;
