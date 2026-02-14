@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 // Removed outer Card wrapper for direct placement
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -68,6 +68,7 @@ interface HierarchyOption {
 
 export const TicketList: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -309,7 +310,9 @@ export const TicketList: React.FC = () => {
   };
 
   const handlePageChange = (page: number) => {
-    setFilters((prev) => ({ ...prev, page }));
+    const updatedFilters = { ...filters, page };
+    setFilters(updatedFilters);
+    syncFiltersToURL(updatedFilters);
   };
 
   const handleViewModeChange = (mode: 'table' | 'card') => {
@@ -318,7 +321,9 @@ export const TicketList: React.FC = () => {
   };
 
   const handleViewTicket = (ticket: Ticket) => {
-    navigate(`/tickets/${ticket.id}`, { state: { from: '/tickets' } });
+    // Preserve current list URL (filters, pagination) for back navigation
+    const listUrl = location.pathname + location.search;
+    navigate(`/tickets/${ticket.id}`, { state: { from: listUrl } });
   };
 
   const handleDeleteTicket = async (ticketId: number) => {
