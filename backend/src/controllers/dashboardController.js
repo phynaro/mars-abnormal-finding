@@ -4490,6 +4490,129 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
 };
 
 /**
+ * Get Department User KPI - Closure Rate
+ * Returns closure rate (on-time closed / total closed) per user per period, grouped by schedule_finish
+ */
+const getDepartmentUserKPIClosureRate = async (req, res) => {
+  try {
+    const { deptNo, year = new Date().getFullYear() } = req.query;
+
+    if (!deptNo) {
+      return res.status(400).json({
+        success: false,
+        message: 'deptNo parameter is required'
+      });
+    }
+
+    const pool = await sql.connect(dbConfig);
+
+    const query = `
+      WITH ClosureByUserPeriod AS (
+        SELECT
+          t.assigned_to AS PERSONNO,
+          dd.PeriodNo,
+          COUNT(*) AS total,
+          SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) AS on_time_count,
+          CASE WHEN COUNT(*) > 0
+            THEN CAST(SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) * 100
+            ELSE 0
+          END AS rate_pct
+        FROM IgxTickets t
+        INNER JOIN Person p ON p.PERSONNO = t.assigned_to AND p.DEPTNO = @deptNo AND p.FLAGDEL != 'Y'
+        INNER JOIN IgxDateDim dd ON dd.DateKey = CAST(t.schedule_finish AS DATE) AND dd.CompanyYear = @year
+        WHERE t.assigned_to IS NOT NULL
+          AND t.status IN ('closed', 'finished')
+          AND t.schedule_finish IS NOT NULL
+          AND t.actual_finish_at IS NOT NULL
+        GROUP BY t.assigned_to, dd.PeriodNo
+      ),
+      AllUserPeriods AS (
+        SELECT
+          p.PERSONNO,
+          p.PERSON_NAME,
+          p.DEPTNO,
+          d.DEPTNAME,
+          periods.PeriodNo
+        FROM Person p
+        INNER JOIN Dept d ON p.DEPTNO = d.DEPTNO
+        CROSS JOIN (
+          SELECT 1 AS PeriodNo UNION SELECT 2 UNION SELECT 3 UNION SELECT 4
+          UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8
+          UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION SELECT 12 UNION SELECT 13
+        ) periods
+        WHERE p.DEPTNO = @deptNo AND p.FLAGDEL != 'Y'
+      ),
+      FinalData AS (
+        SELECT
+          aup.PERSONNO,
+          aup.PERSON_NAME,
+          aup.DEPTNO,
+          aup.DEPTNAME,
+          'P' + CAST(aup.PeriodNo AS VARCHAR(10)) AS period,
+          ISNULL(cup.rate_pct, 0) AS tickets,
+          ISNULL(tpt.target_value, 0) AS target
+        FROM AllUserPeriods aup
+        LEFT JOIN ClosureByUserPeriod cup
+          ON aup.PERSONNO = cup.PERSONNO AND aup.PeriodNo = cup.PeriodNo
+        LEFT JOIN IgxTicketPersonTarget tpt
+          ON tpt.PERSONNO = aup.PERSONNO
+          AND tpt.period = 'P' + CAST(aup.PeriodNo AS VARCHAR(10))
+          AND tpt.year = @year
+          AND tpt.type = 'closure'
+      )
+      SELECT * FROM FinalData
+      ORDER BY PERSONNO, period
+    `;
+
+    const result = await pool.request()
+      .input('deptNo', sql.Int, parseInt(deptNo))
+      .input('year', sql.Int, parseInt(year))
+      .query(query);
+
+    const userMap = {};
+    result.recordset.forEach(row => {
+      if (!userMap[row.PERSONNO]) {
+        userMap[row.PERSONNO] = {
+          personno: row.PERSONNO,
+          personName: row.PERSON_NAME,
+          deptNo: row.DEPTNO,
+          deptName: row.DEPTNAME,
+          periods: []
+        };
+      }
+      userMap[row.PERSONNO].periods.push({
+        period: row.period,
+        tickets: Math.round(row.tickets * 10) / 10,
+        target: row.target
+      });
+    });
+
+    const users = Object.values(userMap);
+    const departmentName = users.length > 0 ? users[0].deptName : 'Unknown';
+
+    res.json({
+      success: true,
+      data: {
+        users,
+        summary: {
+          totalUsers: users.length,
+          year: parseInt(year),
+          deptNo: parseInt(deptNo),
+          deptName: departmentName
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error in getDepartmentUserKPIClosureRate:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Get Case Count by PU
  * Returns ticket counts grouped by Production Unit (PU), ordered from max to min
  */
@@ -4580,3 +4703,4 @@ exports.getCaseCountByPU = async (req, res) => {
 exports.getPersonalKPIComparison = getPersonalKPIComparison;
 exports.getDepartmentUserKPITicketsCreated = getDepartmentUserKPITicketsCreated;
 exports.getDepartmentUserKPITicketsAssigned = getDepartmentUserKPITicketsAssigned;
+exports.getDepartmentUserKPIClosureRate = getDepartmentUserKPIClosureRate;

@@ -100,6 +100,7 @@ router.get('/department-user-kpi/tickets-created', requireFormPermission('TKT', 
 
 // Get Department User KPI - Tickets Assigned (requires TKT form view permission)
 router.get('/department-user-kpi/tickets-assigned', requireFormPermission('TKT', 'view'), dashboardController.getDepartmentUserKPITicketsAssigned);
+router.get('/department-user-kpi/closure-rate', requireFormPermission('TKT', 'view'), dashboardController.getDepartmentUserKPIClosureRate);
 
 // Get Case Count by PU (requires TKT form view permission)
 router.get('/case-count-by-pu', requireFormPermission('TKT', 'view'), dashboardController.getCaseCountByPU);

@@ -1092,6 +1092,20 @@ class DashboardService {
     if (!res.ok) throw new Error('Failed to fetch department user KPI (tickets assigned)');
     return res.json();
   }
+
+  // Get Department User KPI - Closure Rate
+  async getDepartmentUserKPIClosureRate(params: {
+    deptNo: number;
+    year: number;
+  }): Promise<DepartmentUserKPIResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('deptNo', String(params.deptNo));
+    queryParams.set('year', String(params.year));
+    const url = `${this.baseURL}/department-user-kpi/closure-rate?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch department user KPI (closure rate)');
+    return res.json();
+  }
 }
 
 export const dashboardService = new DashboardService();

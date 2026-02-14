@@ -9,13 +9,13 @@ import type { Department } from "@/services/personnelService";
 export type DepartmentUserKPIFilterPanelProps = {
   selectedDeptNo: number | null;
   selectedYear: number;
-  selectedKPIType: 'created' | 'assigned';
+  selectedKPIType: 'created' | 'assigned' | 'closure';
   departments: Department[];
   years: number[];
   loading: boolean;
   onDeptChange: (deptNo: number | null) => void;
   onYearChange: (year: number) => void;
-  onKPITypeChange: (type: 'created' | 'assigned') => void;
+  onKPITypeChange: (type: 'created' | 'assigned' | 'closure') => void;
   onApply: () => void;
   onReset: () => void;
   onHideFilters: () => void;
@@ -104,7 +104,7 @@ const DepartmentUserKPIFilterPanel: React.FC<DepartmentUserKPIFilterPanelProps> 
           <label className="text-sm font-medium">{t("dashboard.departmentUserKPI.kpiType")}</label>
           <Select
             value={selectedKPIType}
-            onValueChange={(value) => onKPITypeChange(value as 'created' | 'assigned')}
+            onValueChange={(value) => onKPITypeChange(value as 'created' | 'assigned' | 'closure')}
             disabled={loading}
           >
             <SelectTrigger>
@@ -113,6 +113,7 @@ const DepartmentUserKPIFilterPanel: React.FC<DepartmentUserKPIFilterPanelProps> 
             <SelectContent>
               <SelectItem value="created">{t("dashboard.departmentUserKPI.ticketsCreated")}</SelectItem>
               <SelectItem value="assigned">{t("dashboard.departmentUserKPI.ticketsAssigned")}</SelectItem>
+              <SelectItem value="closure">{t("dashboard.departmentUserKPI.closureRate")}</SelectItem>
             </SelectContent>
           </Select>
         </div>

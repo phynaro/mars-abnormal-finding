@@ -8,7 +8,7 @@ import type { DepartmentUserKPISummary, DepartmentUserKPIUserData } from "@/type
 export type DepartmentUserKPISummaryCardsProps = {
   summary: DepartmentUserKPISummary | null;
   userData: DepartmentUserKPIUserData[];
-  kpiType: 'created' | 'assigned';
+  kpiType: 'created' | 'assigned' | 'closure';
   loading: boolean;
 };
 
@@ -41,12 +41,19 @@ const DepartmentUserKPISummaryCards: React.FC<DepartmentUserKPISummaryCardsProps
     return null;
   }
 
-  // Calculate total tickets from userData instead of summary.users
-  const totalTickets = userData.reduce((sum, user) => 
+  const isClosure = kpiType === 'closure';
+  const totalTickets = userData.reduce((sum, user) =>
     sum + user.periods.reduce((periodSum, period) => periodSum + period.tickets, 0), 0
   );
-
   const avgTicketsPerUser = userData.length > 0 ? totalTickets / userData.length : 0;
+  const avgClosureRatePct = isClosure && userData.length > 0
+    ? userData.reduce((sum, user) => {
+        const userAvg = user.periods.length > 0
+          ? user.periods.reduce((s, p) => s + p.tickets, 0) / user.periods.length
+          : 0;
+        return sum + userAvg;
+      }, 0) / userData.length
+    : 0;
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -98,23 +105,26 @@ const DepartmentUserKPISummaryCards: React.FC<DepartmentUserKPISummaryCardsProps
         </CardContent>
       </Card>
 
-      {/* Total Tickets */}
+      {/* Total / Avg Closure Rate */}
       <Card>
         <CardHeader className="pb-2">
           <CardTitle className="text-sm flex items-center space-x-2">
             <BarChart3 className="h-4 w-4" />
             <span>
-              {kpiType === 'created' 
-                ? t("dashboard.departmentUserKPI.totalCreated") 
-                : t("dashboard.departmentUserKPI.totalAssigned")
-              }
+              {isClosure
+                ? t("dashboard.departmentUserKPI.closureRate")
+                : kpiType === 'created'
+                  ? t("dashboard.departmentUserKPI.totalCreated")
+                  : t("dashboard.departmentUserKPI.totalAssigned")}
             </span>
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="text-2xl font-bold">{totalTickets}</div>
+          <div className="text-2xl font-bold">
+            {isClosure ? `${avgClosureRatePct.toFixed(1)}%` : totalTickets}
+          </div>
           <p className="text-xs text-muted-foreground">
-            {t("dashboard.departmentUserKPI.avgPerUser")}: {avgTicketsPerUser.toFixed(1)}
+            {isClosure ? t("dashboard.departmentUserKPI.avgClosureRate") : `${t("dashboard.departmentUserKPI.avgPerUser")}: ${avgTicketsPerUser.toFixed(1)}`}
           </p>
         </CardContent>
       </Card>

@@ -21,12 +21,12 @@ const DepartmentUserKPIDashboardPage: React.FC = () => {
   // Filter state
   const [selectedDeptNo, setSelectedDeptNo] = useState<number | null>(null);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedKPIType, setSelectedKPIType] = useState<'created' | 'assigned'>('created');
+  const [selectedKPIType, setSelectedKPIType] = useState<'created' | 'assigned' | 'closure'>('created');
 
   // Pending filters (not yet applied)
   const [pendingDeptNo, setPendingDeptNo] = useState<number | null>(null);
   const [pendingYear, setPendingYear] = useState<number>(new Date().getFullYear());
-  const [pendingKPIType, setPendingKPIType] = useState<'created' | 'assigned'>('created');
+  const [pendingKPIType, setPendingKPIType] = useState<'created' | 'assigned' | 'closure'>('created');
 
   // Data state
   const [userData, setUserData] = useState<DepartmentUserKPIUserData[]>([]);
@@ -92,10 +92,15 @@ const DepartmentUserKPIDashboardPage: React.FC = () => {
               deptNo: pendingDeptNo,
               year: pendingYear,
             })
-          : await dashboardService.getDepartmentUserKPITicketsAssigned({
-              deptNo: pendingDeptNo,
-              year: pendingYear,
-            });
+          : pendingKPIType === 'assigned'
+            ? await dashboardService.getDepartmentUserKPITicketsAssigned({
+                deptNo: pendingDeptNo,
+                year: pendingYear,
+              })
+            : await dashboardService.getDepartmentUserKPIClosureRate({
+                deptNo: pendingDeptNo,
+                year: pendingYear,
+              });
 
         if (response.success) {
           setUserData(response.data.users);
@@ -230,9 +235,11 @@ const DepartmentUserKPIDashboardPage: React.FC = () => {
                     className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} 
                   />
                   <span className="text-sm text-muted-foreground">
-                    {selectedKPIType === 'created' 
-                      ? t('dashboard.departmentUserKPI.ticketsCreated') 
-                      : t('dashboard.departmentUserKPI.ticketsAssigned')
+                    {selectedKPIType === 'created'
+                      ? t('dashboard.departmentUserKPI.ticketsCreated')
+                      : selectedKPIType === 'assigned'
+                        ? t('dashboard.departmentUserKPI.ticketsAssigned')
+                        : t('dashboard.departmentUserKPI.closureRate')
                     }
                   </span>
                 </div>
@@ -244,7 +251,7 @@ const DepartmentUserKPIDashboardPage: React.FC = () => {
                     key={user.personno}
                     user={user}
                     selectedYear={selectedYear}
-                    kpiType={selectedKPIType}
+                    kpiType={selectedKPIType as 'created' | 'assigned' | 'closure'}
                   />
                 ))}
               </div>

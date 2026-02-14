@@ -20,7 +20,7 @@ import type { DepartmentUserKPIUserData } from "@/types/departmentUserKPI";
 export type UserKPICardProps = {
   user: DepartmentUserKPIUserData;
   selectedYear: number;
-  kpiType: 'created' | 'assigned';
+  kpiType: 'created' | 'assigned' | 'closure';
 };
 
 const UserKPICard: React.FC<UserKPICardProps> = ({
@@ -52,13 +52,17 @@ const UserKPICard: React.FC<UserKPICardProps> = ({
           <div className="space-y-1">
             <p className="text-sm">
               <span className="text-brand font-medium">
-                {kpiType === 'created' ? t("dashboard.departmentUserKPI.ticketsCreated") : t("dashboard.departmentUserKPI.ticketsAssigned")}:
+                {kpiType === 'closure'
+                  ? t("dashboard.departmentUserKPI.closureRate")
+                  : kpiType === 'created'
+                    ? t("dashboard.departmentUserKPI.ticketsCreated")
+                    : t("dashboard.departmentUserKPI.ticketsAssigned")}:
               </span>{" "}
-              {dataPoint.tickets}
+              {kpiType === 'closure' ? `${Number(dataPoint.tickets).toFixed(1)}%` : dataPoint.tickets}
             </p>
             <p className="text-sm">
-              <span className="text-destructive font-medium">Target:</span>{" "}
-              {dataPoint.target}
+              <span className="text-destructive font-medium">{t("dashboard.departmentUserKPI.target")}:</span>{" "}
+              {kpiType === 'closure' ? `${Number(dataPoint.target).toFixed(1)}%` : dataPoint.target}
             </p>
           </div>
         </div>
@@ -74,10 +78,10 @@ const UserKPICard: React.FC<UserKPICardProps> = ({
     return aNum - bNum;
   });
 
-  // Calculate summary stats
+  const isClosure = kpiType === 'closure';
   const totalTickets = user.periods.reduce((sum, period) => sum + period.tickets, 0);
   const totalTarget = user.periods.reduce((sum, period) => sum + period.target, 0);
-  const avgPerPeriod = totalTickets / 13;
+  const avgPerPeriod = isClosure ? totalTickets / 13 : totalTickets / 13;
   const targetAchievement = totalTarget > 0 ? (totalTickets / totalTarget) * 100 : 0;
 
   return (
@@ -99,16 +103,17 @@ const UserKPICard: React.FC<UserKPICardProps> = ({
                 fontSize={10}
                 tick={{ fontSize: 10 }}
               />
-              <YAxis 
+              <YAxis
                 fontSize={10}
                 tick={{ fontSize: 10 }}
+                domain={isClosure ? [0, 100] : undefined}
+                tickFormatter={isClosure ? (v) => `${v}%` : undefined}
               />
               <Tooltip content={<CustomTooltip />} />
-              {/* //<Legend /> */}
               <Bar
                 dataKey="tickets"
                 fill="hsl(var(--primary))"
-                name={kpiType === 'created' ? t("dashboard.departmentUserKPI.ticketsCreated") : t("dashboard.departmentUserKPI.ticketsAssigned")}
+                name={isClosure ? t("dashboard.departmentUserKPI.closureRate") : kpiType === 'created' ? t("dashboard.departmentUserKPI.ticketsCreated") : t("dashboard.departmentUserKPI.ticketsAssigned")}
                 radius={[2, 2, 0, 0]}
               />
               <Line
@@ -127,13 +132,15 @@ const UserKPICard: React.FC<UserKPICardProps> = ({
         <div className="grid grid-cols-2 gap-2 text-xs ml-10">
           <div className="flex items-center space-x-1">
             <TrendingUp className="h-3 w-3 text-muted-foreground" />
-            <span className="text-muted-foreground">{t("dashboard.departmentUserKPI.totalTickets")}:</span>
-            <span className="font-medium">{totalTickets}</span>
+            <span className="text-muted-foreground">
+              {isClosure ? t("dashboard.departmentUserKPI.avgClosureRate") : t("dashboard.departmentUserKPI.totalTickets")}:
+            </span>
+            <span className="font-medium">{isClosure ? `${avgPerPeriod.toFixed(1)}%` : totalTickets}</span>
           </div>
           <div className="flex items-center space-x-1">
             <Target className="h-3 w-3 text-muted-foreground" />
             <span className="text-muted-foreground">{t("dashboard.departmentUserKPI.avgPerPeriod")}:</span>
-            <span className="font-medium">{avgPerPeriod.toFixed(1)}</span>
+            <span className="font-medium">{isClosure ? `${avgPerPeriod.toFixed(1)}%` : avgPerPeriod.toFixed(1)}</span>
           </div>
           <div className="col-span-2 flex items-center space-x-1">
             <span className="text-muted-foreground">{t("dashboard.departmentUserKPI.targetAchievement")}:</span>
