@@ -367,7 +367,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.errorLoadingTickets': 'Error loading tickets',
     'ticket.searchTickets': 'Search tickets...',
     'ticket.filter': 'Filter',
-    'ticket.overdue': 'Overdue only',
+    'ticket.overdue': 'Overdue',
     'ticket.overdueLabel': 'Overdue',
     'ticket.day': 'day',
     'ticket.days': 'days',

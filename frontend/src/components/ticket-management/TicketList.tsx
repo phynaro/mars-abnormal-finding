@@ -60,6 +60,9 @@ import { StarRatingDisplay } from "@/components/ui/star-rating";
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+/** Plant codes for the quick filter toggle group (most used). "All" = no plant filter. */
+const QUICK_PLANT_OPTIONS = ['DP', 'DJ', 'SN', 'CT', 'PT', 'PP'] as const;
+
 interface HierarchyOption {
   code: string;
   name: string;
@@ -540,7 +543,38 @@ export const TicketList: React.FC = () => {
         <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           {t('nav.tickets')} ({totalTickets})
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Plant quick filter (toggle group) */}
+          <div className="flex rounded-md border overflow-hidden bg-muted/30">
+            <Button
+              variant={!filters.plant || !QUICK_PLANT_OPTIONS.includes(filters.plant as typeof QUICK_PLANT_OPTIONS[number]) ? "default" : "ghost"}
+              className="rounded-none flex-shrink-0"
+              size="sm"
+              onClick={() => handleFilterChange("plant", undefined)}
+            >
+              All
+            </Button>
+            {QUICK_PLANT_OPTIONS.map((code) => (
+              <Button
+                key={code}
+                variant={filters.plant === code ? "default" : "ghost"}
+                className="rounded-none flex-shrink-0"
+                size="sm"
+                onClick={() => handleFilterChange("plant", code)}
+              >
+                {code}
+              </Button>
+            ))}
+          </div>
+          {/* Overdue toggle */}
+          <Button
+            variant={filters.overdue ? "default" : "outline"}
+            size="sm"
+            onClick={() => handleFilterChange("overdue", !filters.overdue)}
+            title={t('ticket.overdue')}
+          >
+            {t('ticket.overdue')}
+          </Button>
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" title={t('ticket.filter')}>
@@ -712,7 +746,7 @@ export const TicketList: React.FC = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  {/* Overdue only: in_progress/planed with schedule_finish before now */}
+                  {/* Overdue: in_progress/planed with schedule_finish before now */}
                   <div className="space-y-2 flex items-end">
                     <div className="flex items-center space-x-2">
                       <Checkbox
@@ -759,6 +793,7 @@ export const TicketList: React.FC = () => {
             size="sm"
             onClick={handleExportTickets}
             title={t('ticket.exportTickets')}
+            className="hidden md:inline-flex"
           >
             <Download className="h-4 w-4 mr-2" />
             {t('ticket.export')}

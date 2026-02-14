@@ -2,6 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { UserPlus, Plus } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { cn } from '@/lib/utils';
 
 interface ActionButton {
   label: string;
@@ -17,6 +18,7 @@ interface PageHeaderProps {
   rightContent?: React.ReactNode;
   showBackButton?: boolean;
   onBack?: () => void;
+  className?: string;
 }
 
 const getIcon = (iconName: string) => {
@@ -36,12 +38,13 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
   actionButton,
   rightContent,
   showBackButton = false,
-  onBack
+  onBack,
+  className,
 }) => {
   const { t } = useLanguage();
   
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+    <div className={cn("flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between", className)}>
       <div className="flex items-center gap-2">
         {showBackButton && onBack && (
           <Button 

@@ -9,14 +9,13 @@ import { Plus } from "lucide-react";
 const TicketManagementPage: React.FC = () => {
   const { t } = useLanguage();
   return (
-    <div className="container mx-auto px-4 py-6">
+    <div className="container mx-auto px-4 py-0 md:py-6">
       <PageHeader
+        className="hidden md:block"
         title={t('ticketManagement.title')}
-        //description="Report and manage abnormal findings in machines, areas, and equipment"
         rightContent={
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-            {/* Hide Create Ticket button on mobile - using floating Plus button in BottomNavigation instead */}
-            <Button className="hidden md:inline-flex bg-red-600 hover:bg-red-700 text-white">
+            <Button className="bg-red-600 hover:bg-red-700 text-white">
               <Plus className="h-4 w-4 mr-2" />
               <Link to="/tickets/create">{t('ticketManagement.createTicket')}</Link>
             </Button>
