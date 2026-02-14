@@ -6453,6 +6453,104 @@ const getUserFinishedTicketCountPerPeriod = async (req, res) => {
   }
 };
 
+// Get user closure rate per period (on-time closed / total closed, grouped by schedule_finish period)
+const getUserClosureRatePerPeriod = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID not found in token",
+      });
+    }
+
+    const { year = new Date().getFullYear(), startDate, endDate } = req.query;
+
+    const pool = await sql.connect(dbConfig);
+
+    const l2CheckQuery = `
+      SELECT COUNT(*) as l2_count
+      FROM IgxTicketApproval ta
+      WHERE ta.personno = @userId
+      AND ta.approval_level >= 2
+      AND ta.is_active = 1
+    `;
+    const l2Result = await pool
+      .request()
+      .input("userId", sql.Int, userId)
+      .query(l2CheckQuery);
+
+    if (l2Result.recordset[0].l2_count === 0) {
+      return res.status(403).json({
+        success: false,
+        message: "Access denied. Requires L2+ approval level.",
+      });
+    }
+
+    const query = `
+      SELECT
+        'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
+        COUNT(*) as total,
+        SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) as on_time_count,
+        CASE WHEN COUNT(*) > 0 THEN CAST(SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) ELSE 0 END as rate
+      FROM IgxTickets t
+      JOIN IgxDateDim AS dd ON dd.DateKey = CAST(t.schedule_finish AS DATE)
+      WHERE t.assigned_to = @userId
+      AND t.status IN ('closed', 'finished')
+      AND t.schedule_finish IS NOT NULL
+      AND t.actual_finish_at IS NOT NULL
+      ${startDate && endDate
+        ? 'AND t.schedule_finish >= @startDate AND t.schedule_finish <= @endDate'
+        : 'AND dd.CompanyYear = @year'}
+      GROUP BY dd.PeriodNo
+      ORDER BY dd.PeriodNo
+    `;
+
+    let request = pool
+      .request()
+      .input("userId", sql.Int, userId)
+      .input("year", sql.Int, parseInt(year));
+
+    if (startDate && endDate) {
+      request = request
+        .input("startDate", sql.DateTime, new Date(startDate))
+        .input("endDate", sql.DateTime, new Date(endDate));
+    }
+
+    const result = await request.query(query);
+
+    const dataMap = {};
+    result.recordset.forEach((row) => {
+      dataMap[row.period] = {
+        total: row.total,
+        on_time_count: row.on_time_count,
+        rate: row.rate,
+      };
+    });
+
+    const allPeriods = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13"];
+    const responseData = allPeriods.map((period) => {
+      const row = dataMap[period];
+      return row
+        ? { period, total: row.total, on_time_count: row.on_time_count, rate: row.rate }
+        : { period, total: 0, on_time_count: 0, rate: 0 };
+    });
+
+    res.json({
+      success: true,
+      data: responseData,
+    });
+  } catch (error) {
+    console.error("Error in getUserClosureRatePerPeriod:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
+
 // Get personal KPI data for personal dashboard (role-specific)
 const getPersonalKPIData = async (req, res) => {
   try {
@@ -6953,6 +7051,7 @@ module.exports = {
   getUserPendingTickets,
   getUserTicketCountPerPeriod,
   getUserFinishedTicketCountPerPeriod,
+  getUserClosureRatePerPeriod,
   getPersonalKPIData,
   
   sendPendingTicketNotification,

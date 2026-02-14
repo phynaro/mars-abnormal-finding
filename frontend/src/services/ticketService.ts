@@ -815,6 +815,23 @@ class TicketService {
     return result;
   }
 
+  async getUserClosureRatePerPeriod(params: {
+    year: number;
+    startDate: string;
+    endDate: string;
+  }): Promise<{ success: boolean; data: Array<{ period: string; total: number; on_time_count: number; rate: number }> }> {
+    const headers = getAuthHeaders();
+    const queryParams = new URLSearchParams();
+    queryParams.set('year', params.year.toString());
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
+    const url = `${API_BASE_URL}/tickets/user/closure-rate-per-period?${queryParams.toString()}`;
+    const res = await fetch(url, { headers });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Failed to fetch user closure rate per period');
+    return result;
+  }
+
   async getPersonalKPIData(params: {
     startDate: string;
     endDate: string;

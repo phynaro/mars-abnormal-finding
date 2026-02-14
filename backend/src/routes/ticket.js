@@ -22,6 +22,9 @@ router.get('/user/count-per-period', requireFormPermission('TKT', 'view'), ticke
 // Get user Finished ticket count per period for personal dashboard (L2+ users only, requires TKT form view permission)
 router.get('/user/Finished-count-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserFinishedTicketCountPerPeriod);
 
+// Get user closure rate per period (on-time closed / total, requires TKT form view permission)
+router.get('/user/closure-rate-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserClosureRatePerPeriod);
+
 // Get personal KPI data for personal dashboard (requires TKT form view permission)
 router.get('/user/personal-kpi', requireFormPermission('TKT', 'view'), ticketController.getPersonalKPIData);
 

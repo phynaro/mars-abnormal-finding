@@ -1,20 +1,20 @@
 import React from "react";
 import PersonalKPITiles from "./PersonalKPITiles";
 import PersonalTicketCountChart from "./PersonalTicketCountChart";
-import PersonalFinishedTicketChart from "./PersonalFinishedTicketChart";
+import PersonalClosureRateChart from "./PersonalClosureRateChart";
 
 export type PersonalKPISectionProps = {
   personalTicketData: Array<{ period: string; tickets: number; target: number }>;
   personalTicketLoading: boolean;
   personalTicketError: string | null;
-  personalFinishedTicketData: Array<{ period: string; tickets: number; target: number }>;
-  personalFinishedTicketLoading: boolean;
-  personalFinishedTicketError: string | null;
+  personalClosureRateData: Array<{ period: string; rate: number; target?: number }>;
+  personalClosureRateLoading: boolean;
+  personalClosureRateError: string | null;
   personalKPIData: any;
   personalKPILoading: boolean;
   personalKPIError: string | null;
   selectedYear: number;
-  onKpiSetupClick: (type: "report" | "fix") => void;
+  onKpiSetupClick: (type: "report" | "closure") => void;
   dateRange?: { startDate: string; endDate: string };
   userId?: number;
 };
@@ -23,9 +23,9 @@ const PersonalKPISection: React.FC<PersonalKPISectionProps> = ({
   personalTicketData,
   personalTicketLoading,
   personalTicketError,
-  personalFinishedTicketData,
-  personalFinishedTicketLoading,
-  personalFinishedTicketError,
+  personalClosureRateData,
+  personalClosureRateLoading,
+  personalClosureRateError,
   personalKPIData,
   personalKPILoading,
   personalKPIError,
@@ -51,11 +51,11 @@ const PersonalKPISection: React.FC<PersonalKPISectionProps> = ({
         onKpiSetupClick={() => onKpiSetupClick("report")}
         selectedYear={selectedYear}
       />
-      <PersonalFinishedTicketChart
-        data={personalFinishedTicketData}
-        loading={personalFinishedTicketLoading}
-        error={personalFinishedTicketError}
-        onKpiSetupClick={() => onKpiSetupClick("fix")}
+      <PersonalClosureRateChart
+        data={personalClosureRateData}
+        loading={personalClosureRateLoading}
+        error={personalClosureRateError}
+        onKpiSetupClick={() => onKpiSetupClick("closure")}
         selectedYear={selectedYear}
       />
     </div>

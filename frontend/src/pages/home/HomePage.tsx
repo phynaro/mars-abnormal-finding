@@ -40,10 +40,10 @@ const HomePage: React.FC = () => {
   const [personalTicketLoading, setPersonalTicketLoading] = useState<boolean>(false);
   const [personalTicketError, setPersonalTicketError] = useState<string | null>(null);
 
-  // Personal Finished ticket data state (L2+ users only)
-  const [personalFinishedTicketData, setPersonalFinishedTicketData] = useState<Array<{ period: string; tickets: number; target: number }>>([]);
-  const [personalFinishedTicketLoading, setPersonalFinishedTicketLoading] = useState<boolean>(false);
-  const [personalFinishedTicketError, setPersonalFinishedTicketError] = useState<string | null>(null);
+  // Personal closure rate data state (L2+ users only)
+  const [personalClosureRateData, setPersonalClosureRateData] = useState<Array<{ period: string; rate: number; target: number }>>([]);
+  const [personalClosureRateLoading, setPersonalClosureRateLoading] = useState<boolean>(false);
+  const [personalClosureRateError, setPersonalClosureRateError] = useState<string | null>(null);
 
   // Personal KPI data state
   const [personalKPIData, setPersonalKPIData] = useState<any>(null);
@@ -52,7 +52,7 @@ const HomePage: React.FC = () => {
 
   // KPI Setup Modal state
   const [kpiSetupModalOpen, setKpiSetupModalOpen] = useState<boolean>(false);
-  const [kpiSetupModalType, setKpiSetupModalType] = useState<'report' | 'fix'>('report');
+  const [kpiSetupModalType, setKpiSetupModalType] = useState<'report' | 'closure'>('report');
 
   // Personal Filter Modal state
   const [personalFilterModalOpen, setPersonalFilterModalOpen] = useState<boolean>(false);
@@ -95,9 +95,9 @@ const HomePage: React.FC = () => {
     fetchPersonalTicketData();
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
-  // Fetch personal Finished ticket data when filters change (L2+ users only)
+  // Fetch personal closure rate data when filters change (L2+ users only)
   useEffect(() => {
-    fetchPersonalFinishedTicketData();
+    fetchPersonalClosureRateData();
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
   // Fetch personal KPI data when filters change
@@ -129,7 +129,7 @@ const HomePage: React.FC = () => {
   };
 
   // Handle KPI setup modal
-  const handleKpiSetupClick = (type: 'report' | 'fix') => {
+  const handleKpiSetupClick = (type: 'report' | 'closure') => {
     setKpiSetupModalType(type);
     setKpiSetupModalOpen(true);
   };
@@ -218,63 +218,60 @@ const HomePage: React.FC = () => {
     }
   };
 
-  // Fetch personal Finished ticket data (L2+ users only)
-  const fetchPersonalFinishedTicketData = async () => {
+  // Fetch personal closure rate data (L2+ users only)
+  const fetchPersonalClosureRateData = async () => {
     if (!isAuthenticated || !user) {
-      setPersonalFinishedTicketLoading(false);
+      setPersonalClosureRateLoading(false);
       return;
     }
 
     try {
-      setPersonalFinishedTicketLoading(true);
-      setPersonalFinishedTicketError(null);
+      setPersonalClosureRateLoading(true);
+      setPersonalClosureRateError(null);
 
       const dateRange = getDateRangeForFilter(personalTimeFilter, personalSelectedYear, personalSelectedPeriod);
       const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
-      
+
       const params = {
         year: yearFromDateRange,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate
       };
 
-      // Fetch both Finished ticket data and personal targets
-      const [ticketResponse, targetResponse] = await Promise.all([
-        ticketService.getUserFinishedTicketCountPerPeriod(params),
+      const [closureResponse, targetResponse] = await Promise.all([
+        ticketService.getUserClosureRatePerPeriod(params),
         personalTargetService.getPersonalTargets({
           personno: user.id,
           year: yearFromDateRange,
-          type: 'fix'
+          type: 'closure'
         })
       ]);
 
-      if (ticketResponse.success) {
-        // Get targets for the current year
+      if (closureResponse.success) {
         const targets = targetResponse.success ? targetResponse.data : [];
         const targetMap: { [period: string]: number } = {};
-        
-        targets.forEach(target => {
+        targets.forEach((target: { period: string; target_value: number }) => {
           targetMap[target.period] = target.target_value;
         });
 
-        // Add real target data
-        const dataWithTargets = ticketResponse.data.map(item => ({
-          ...item,
-          target: targetMap[item.period] || 0 // No fallback target
+        const dataWithTargets = closureResponse.data.map((item: { period: string; rate: number }) => ({
+          period: item.period,
+          rate: item.rate,
+          target: targetMap[item.period] ?? 0
         }));
-        setPersonalFinishedTicketData(dataWithTargets);
+        setPersonalClosureRateData(dataWithTargets);
       } else {
-        setPersonalFinishedTicketError(t('homepage.failedToFetchPersonalFinishedTicketData'));
+        setPersonalClosureRateError(t('homepage.failedToFetchPersonalClosureRateData'));
       }
     } catch (err) {
-      console.error('Error fetching personal Finished ticket data:', err);
-      setPersonalFinishedTicketError(
+      console.error('Error fetching personal closure rate data:', err);
+      setPersonalClosureRateError(
         err instanceof Error
           ? err.message
-          : t('homepage.failedToFetchPersonalFinishedTicketData')
+          : t('homepage.failedToFetchPersonalClosureRateData')
       );
     } finally {
-      setPersonalFinishedTicketLoading(false);
+      setPersonalClosureRateLoading(false);
     }
   };
 
@@ -416,9 +413,9 @@ const HomePage: React.FC = () => {
             personalTicketData={personalTicketData}
             personalTicketLoading={personalTicketLoading}
             personalTicketError={personalTicketError}
-            personalFinishedTicketData={personalFinishedTicketData}
-            personalFinishedTicketLoading={personalFinishedTicketLoading}
-            personalFinishedTicketError={personalFinishedTicketError}
+            personalClosureRateData={personalClosureRateData}
+            personalClosureRateLoading={personalClosureRateLoading}
+            personalClosureRateError={personalClosureRateError}
             personalKPIData={personalKPIData}
             personalKPILoading={personalKPILoading}
             personalKPIError={personalKPIError}
@@ -436,9 +433,8 @@ const HomePage: React.FC = () => {
         onOpenChange={setKpiSetupModalOpen}
         targetType={kpiSetupModalType}
         onTargetsUpdated={() => {
-          // Refresh personal ticket data when targets are updated
           fetchPersonalTicketData();
-          fetchPersonalFinishedTicketData();
+          fetchPersonalClosureRateData();
         }}
       />
 

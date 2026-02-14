@@ -10,10 +10,19 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+const defaultLanguageContext: LanguageContextType = {
+  language: 'en',
+  setLanguage: () => {},
+  t: (key: string) => key,
+};
+
 export const useLanguage = () => {
   const context = useContext(LanguageContext);
   if (context === undefined) {
-    throw new Error('useLanguage must be used within a LanguageProvider');
+    if (import.meta.env?.DEV) {
+      console.warn('useLanguage must be used within a LanguageProvider; using fallback.');
+    }
+    return defaultLanguageContext;
   }
   return context;
 };
@@ -261,6 +270,11 @@ const translations: Record<Language, Record<string, string>> = {
     'homepage.failedToFetchPendingTickets': 'Failed to fetch pending tickets',
     'homepage.failedToFetchPersonalTicketData': 'Failed to fetch personal ticket data',
     'homepage.failedToFetchPersonalFinishedTicketData': 'Failed to fetch personal Finished ticket data',
+    'homepage.myClosureRatePerPeriod': 'My Closure Rate Per Period',
+    'homepage.closureRate': 'Closure Rate',
+    'homepage.noClosureRateData': 'No closure rate data available',
+    'homepage.closeTicketsOnTime': 'Close tickets on time to see your closure rate.',
+    'homepage.failedToFetchPersonalClosureRateData': 'Failed to fetch personal closure rate data',
     'homepage.failedToFetchPersonalKPIData': 'Failed to fetch personal KPI data',
     // Relationship-based ticket section titles
     'homepage.escalatedTickets': 'Escalated Tickets',
@@ -1071,6 +1085,11 @@ const translations: Record<Language, Record<string, string>> = {
     'homepage.failedToFetchPendingTickets': 'ไม่สามารถดึงงานที่รอดำเนินการได้',
     'homepage.failedToFetchPersonalTicketData': 'ไม่สามารถดึงข้อมูลงานส่วนตัวได้',
     'homepage.failedToFetchPersonalFinishedTicketData': 'ไม่สามารถดึงข้อมูลงานที่เสร็จสิ้นส่วนตัวได้',
+    'homepage.myClosureRatePerPeriod': 'อัตราการปิดงานของฉันตามช่วงเวลา',
+    'homepage.closureRate': 'อัตราการปิด',
+    'homepage.noClosureRateData': 'ไม่มีข้อมูลอัตราการปิด',
+    'homepage.closeTicketsOnTime': 'ปิดงานให้ตรงเวลาเพื่อดูอัตราการปิด',
+    'homepage.failedToFetchPersonalClosureRateData': 'ไม่สามารถดึงข้อมูลอัตราการปิดส่วนตัวได้',
     'homepage.failedToFetchPersonalKPIData': 'ไม่สามารถดึงข้อมูล KPI ส่วนตัวได้',
     // Relationship-based ticket section titles
     'homepage.escalatedTickets': 'งานที่ถูกส่งต่อ',
