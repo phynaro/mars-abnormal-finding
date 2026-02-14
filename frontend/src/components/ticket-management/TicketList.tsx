@@ -46,6 +46,7 @@ import {
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
 import { formatTimelineTime } from "@/utils/timezone";
 import { getFileUrl } from "@/utils/url";
+import { LazyCardImage } from "@/components/ui/lazy-card-image";
 import {
   getTicketPriorityClass,
   getTicketSeverityClass,
@@ -105,7 +106,7 @@ export const TicketList: React.FC = () => {
   const initializeFiltersFromURL = (): TicketFilters => {
     const urlFilters: TicketFilters = {
       page: parseInt(searchParams.get('page') || '1'),
-      limit: parseInt(searchParams.get('limit') || '12'),
+      limit: parseInt(searchParams.get('limit') || '20'),
       status: searchParams.get('status') || "",
       pucriticalno: searchParams.get('pucriticalno') ? parseInt(searchParams.get('pucriticalno')!) : undefined,
       search: searchParams.get('search') || "",
@@ -532,6 +533,248 @@ export const TicketList: React.FC = () => {
             <Skeleton className="h-8 w-16" />
           </div>
         </div>
+      </div>
+    </div>
+  );
+
+  /** Status-based card content (shared by mobile and desktop card view). */
+  const renderCardStatusContent = (ticket: Ticket) => (
+    <div className="text-sm text-muted-foreground space-y-1 mt-auto">
+      <div className="flex items-center gap-2">
+        <User className="w-4 h-4 flex-shrink-0" />
+        <span className="truncate">{t('ticket.createdBy')}: {ticket.reporter_name || `${t('ticket.userId')} ${ticket.created_by}`}</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Clock className="w-4 h-4 flex-shrink-0" />
+        <span className="truncate">{t('ticket.created')} {formatDate(ticket.created_at)}</span>
+      </div>
+      {ticket.status === 'open' && (
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{formatDurationText(t('ticket.openDuration'), getOpenDurationDetail(ticket))}</span>
+        </div>
+      )}
+      {(ticket.status === 'accepted') && (
+        <>
+          {ticket.accepted_by != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.acceptedBy')}: {ticket.accepted_by_name || `${t('ticket.userId')} ${ticket.accepted_by}`}</span>
+            </div>
+          )}
+          {ticket.accepted_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.acceptedAt')}: {formatDate(ticket.accepted_at)}</span>
+            </div>
+          )}
+        </>
+      )}
+      {(ticket.status === 'planed') && (
+        <>
+          {ticket.assigned_to != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+            </div>
+          )}
+          {ticket.schedule_start && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
+            </div>
+          )}
+          {ticket.schedule_finish && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
+            </div>
+          )}
+          {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
+        </>
+      )}
+      {(ticket.status === 'in_progress' || ticket.status === 'reopened_in_progress') && (
+        <>
+          {ticket.assigned_to != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+            </div>
+          )}
+          {ticket.schedule_start && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
+            </div>
+          )}
+          {ticket.actual_start_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.actualStartTime')}: {formatDate(ticket.actual_start_at)}</span>
+            </div>
+          )}
+          {ticket.schedule_finish && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
+            </div>
+          )}
+          {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
+        </>
+      )}
+      {ticket.status === 'finished' && (
+        <>
+          {ticket.assigned_to != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+            </div>
+          )}
+          {ticket.schedule_finish && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
+            </div>
+          )}
+          {ticket.actual_finish_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
+            </div>
+          )}
+        </>
+      )}
+      {ticket.status === 'reviewed' && (
+        <>
+          {ticket.assigned_to != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+            </div>
+          )}
+          {ticket.satisfaction_rating != null && (
+            <div className="flex items-center gap-2">
+              <span className="truncate">{t('ticket.rating')}:</span>
+              <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
+            </div>
+          )}
+        </>
+      )}
+      {ticket.status === 'closed' && (
+        <>
+          {ticket.assigned_to != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+            </div>
+          )}
+          {ticket.actual_finish_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
+            </div>
+          )}
+          {ticket.satisfaction_rating != null && (
+            <div className="flex items-center gap-2">
+              <span className="truncate">{t('ticket.rating')}:</span>
+              <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
+            </div>
+          )}
+          {(() => { const d = getTimeToActionDetail(ticket); return d ? <div className="flex items-center gap-2"><Clock className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatDurationText(t('ticket.timeToAction'), d)}</span></div> : null; })()}
+        </>
+      )}
+      {ticket.status === 'escalated' && (
+        <>
+          {ticket.escalated_by != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.escalatedBy')}: {ticket.escalated_by_name || `${t('ticket.userId')} ${ticket.escalated_by}`}</span>
+            </div>
+          )}
+          {ticket.escalated_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.escalatedAt')}: {formatDate(ticket.escalated_at)}</span>
+            </div>
+          )}
+        </>
+      )}
+      {ticket.status === 'rejected_pending_l3_review' && (
+        <>
+          {ticket.rejected_by != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
+            </div>
+          )}
+          {ticket.rejected_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
+            </div>
+          )}
+        </>
+      )}
+      {ticket.status === 'rejected_final' && (
+        <>
+          {ticket.rejected_by != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
+            </div>
+          )}
+          {ticket.rejected_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
+            </div>
+          )}
+          {ticket.rejected_final_by != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.rejectedFinalBy')}: {ticket.rejected_final_by_name || `${t('ticket.userId')} ${ticket.rejected_final_by}`}</span>
+            </div>
+          )}
+          {ticket.rejected_final_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.rejectedFinalAt')}: {formatDate(ticket.rejected_final_at)}</span>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+
+  /** Single ticket card used for both mobile and desktop card view. */
+  const TicketListCard = ({ ticket, onView }: { ticket: Ticket; onView: (ticket: Ticket) => void }) => (
+    <div
+      className="border rounded-lg bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30 overflow-hidden flex flex-col"
+      onClick={() => onView(ticket)}
+    >
+      <LazyCardImage
+        src={ticket.first_image_url ? getFileUrl(ticket.first_image_url) : undefined}
+        alt={ticket.title}
+      />
+      <div className="p-4 flex-1 flex flex-col">
+        <div className="flex justify-between items-center gap-2 mb-2">
+          <span className="text-sm text-muted-foreground font-medium">#{ticket.ticket_number}</span>
+          <div className="flex gap-2 items-center flex-shrink-0">
+            <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
+              <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
+              <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
+            </div>
+            <div className={getTicketStatusClassModern(ticket.status)}>
+              <span>{ticket.status.replace("_", " ").replace(/\b\w/g, (l) => l.toUpperCase())}</span>
+            </div>
+          </div>
+        </div>
+        <div className="text-lg font-semibold mb-2 line-clamp-2">{ticket.title}</div>
+        <div className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-1">{ticket.description}</div>
+        <div className="mb-3">
+          <Badge variant="outline" className="text-xs">{ticket.pu_name || ticket.pucode || 'N/A'}</Badge>
+        </div>
+        {renderCardStatusContent(ticket)}
       </div>
     </div>
   );
@@ -963,533 +1206,15 @@ export const TicketList: React.FC = () => {
             {/* Mobile Cards - Always show on mobile */}
             <div className="block lg:hidden space-y-4">
               {tickets.map((ticket) => (
-                <div 
-                  key={ticket.id} 
-                  className="border rounded-lg bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30 overflow-hidden flex flex-col"
-                  onClick={() => handleViewTicket(ticket)}
-                >
-                  {/* Preview Image - 3:2 aspect ratio */}
-                  {ticket.first_image_url ? (
-                    <img 
-                      src={getFileUrl(ticket.first_image_url)} 
-                      alt={ticket.title}
-                      className="w-full aspect-[3/2] object-cover"
-                    />
-                  ) : (
-                    <div className="w-full aspect-[3/2] bg-muted flex items-center justify-center">
-                      <span className="text-muted-foreground text-sm">No image</span>
-                    </div>
-                  )}
-                  
-                  <div className="p-4 flex-1 flex flex-col">
-                    {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
-                    <div className="flex justify-between items-center gap-2 mb-2">
-                      <span className="text-sm text-muted-foreground font-medium">
-                        #{ticket.ticket_number}
-                      </span>
-                      <div className="flex gap-2 items-center flex-shrink-0">
-                        <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
-                          <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
-                          <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
-                        </div>
-                        <div className={getTicketStatusClassModern(ticket.status)}>
-                          <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* div2: Title */}
-                    <div className="text-lg font-semibold mb-2 line-clamp-2">
-                      {ticket.title}
-                    </div>
-
-                    {/* div3: Description */}
-                    <div className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-1">
-                      {ticket.description}
-                    </div>
-
-                    {/* div4: PU Name */}
-                    <div className="mb-3">
-                      <Badge variant="outline" className="text-xs">
-                        {ticket.pu_name || ticket.pucode || 'N/A'}
-                      </Badge>
-                    </div>
-
-                    {/* div5: Status-based key info (see requirement/card.md) */}
-                    <div className="text-sm text-muted-foreground space-y-1 mt-auto">
-                      <div className="flex items-center gap-2">
-                        <User className="w-4 h-4 flex-shrink-0" />
-                        <span className="truncate">{t('ticket.createdBy')}: {ticket.reporter_name || `${t('ticket.userId')} ${ticket.created_by}`}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-4 h-4 flex-shrink-0" />
-                        <span className="truncate">{t('ticket.created')} {formatDate(ticket.created_at)}</span>
-                      </div>
-                      {ticket.status === 'open' && (
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate">{formatDurationText(t('ticket.openDuration'), getOpenDurationDetail(ticket))}</span>
-                        </div>
-                      )}
-                      {(ticket.status === 'accepted') && (
-                        <>
-                          {ticket.accepted_by != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.acceptedBy')}: {ticket.accepted_by_name || `${t('ticket.userId')} ${ticket.accepted_by}`}</span>
-                            </div>
-                          )}
-                          {ticket.accepted_at && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.acceptedAt')}: {formatDate(ticket.accepted_at)}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {(ticket.status === 'planed') && (
-                        <>
-                          {ticket.assigned_to != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                            </div>
-                          )}
-                          {ticket.schedule_start && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
-                            </div>
-                          )}
-                          {ticket.schedule_finish && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
-                            </div>
-                          )}
-                          {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
-                        </>
-                      )}
-                      {(ticket.status === 'in_progress' || ticket.status === 'reopened_in_progress') && (
-                        <>
-                          {ticket.assigned_to != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                            </div>
-                          )}
-                          {ticket.schedule_start && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
-                            </div>
-                          )}
-                          {ticket.actual_start_at && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.actualStartTime')}: {formatDate(ticket.actual_start_at)}</span>
-                            </div>
-                          )}
-                          {ticket.schedule_finish && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
-                            </div>
-                          )}
-                          {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
-                        </>
-                      )}
-                      {ticket.status === 'finished' && (
-                        <>
-                          {ticket.assigned_to != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                            </div>
-                          )}
-                          {ticket.schedule_finish && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
-                            </div>
-                          )}
-                          {ticket.actual_finish_at && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {ticket.status === 'reviewed' && (
-                        <>
-                          {ticket.assigned_to != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                            </div>
-                          )}
-                          {ticket.satisfaction_rating != null && (
-                            <div className="flex items-center gap-2">
-                              <span className="truncate">{t('ticket.rating')}:</span>
-                              <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {ticket.status === 'closed' && (
-                        <>
-                          {ticket.assigned_to != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                            </div>
-                          )}
-                          {ticket.actual_finish_at && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
-                            </div>
-)}
-                          {ticket.satisfaction_rating != null && (
-                            <div className="flex items-center gap-2">
-                              <span className="truncate">{t('ticket.rating')}:</span>
-                              <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
-                            </div>
-                          )}
-                            {(() => { const d = getTimeToActionDetail(ticket); return d ? <div className="flex items-center gap-2"><Clock className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatDurationText(t('ticket.timeToAction'), d)}</span></div> : null; })()}
-                        </>
-                      )}
-                      {ticket.status === 'escalated' && (
-                        <>
-                          {ticket.escalated_by != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.escalatedBy')}: {ticket.escalated_by_name || `${t('ticket.userId')} ${ticket.escalated_by}`}</span>
-                            </div>
-                          )}
-                          {ticket.escalated_at && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.escalatedAt')}: {formatDate(ticket.escalated_at)}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {ticket.status === 'rejected_pending_l3_review' && (
-                        <>
-                          {ticket.rejected_by != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
-                            </div>
-                          )}
-                          {ticket.rejected_at && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {ticket.status === 'rejected_final' && (
-                        <>
-                          {ticket.rejected_by != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
-                            </div>
-                          )}
-                          {ticket.rejected_at && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
-                            </div>
-                          )}
-                          {ticket.rejected_final_by != null && (
-                            <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.rejectedFinalBy')}: {ticket.rejected_final_by_name || `${t('ticket.userId')} ${ticket.rejected_final_by}`}</span>
-                            </div>
-                          )}
-                          {ticket.rejected_final_at && (
-                            <div className="flex items-center gap-2">
-                              <Clock className="w-4 h-4 flex-shrink-0" />
-                              <span className="truncate">{t('ticket.rejectedFinalAt')}: {formatDate(ticket.rejected_final_at)}</span>
-                            </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                <TicketListCard key={ticket.id} ticket={ticket} onView={handleViewTicket} />
               ))}
             </div>
 
-            {/* Desktop Card View */}
+            {/* Desktop Card View - same card component, grid layout */}
             {viewMode === 'card' && (
               <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
                 {tickets.map((ticket) => (
-                  <div 
-                    key={ticket.id} 
-                    className="border rounded-lg bg-card cursor-pointer transition-colors hover:bg-muted/60 dark:hover:bg-muted/30 overflow-hidden flex flex-col"
-                    onClick={() => handleViewTicket(ticket)}
-                  >
-                    {/* Preview Image - 3:2 aspect ratio */}
-                    {ticket.first_image_url ? (
-                      <img 
-                        src={getFileUrl(ticket.first_image_url)} 
-                        alt={ticket.title}
-                        className="w-full aspect-[3/2] object-cover"
-                      />
-                    ) : (
-                      <div className="w-full aspect-[3/2] bg-muted flex items-center justify-center">
-                        <span className="text-muted-foreground text-sm">No image</span>
-                      </div>
-                    )}
-                    
-                    <div className="p-4 flex-1 flex flex-col">
-                      {/* div1: TicketNumber on left, CriticalLevel and Status badges on right */}
-                      <div className="flex justify-between items-center gap-2 mb-2">
-                        <span className="text-sm text-muted-foreground font-medium">
-                          #{ticket.ticket_number}
-                        </span>
-                        <div className="flex gap-2 items-center flex-shrink-0">
-                          <div className={getCriticalLevelClassModern(ticket.pucriticalno)}>
-                            <div className={getCriticalLevelIconClass(ticket.pucriticalno)}></div>
-                            <span>{getCriticalLevelText(ticket.pucriticalno, t)}</span>
-                          </div>
-                          <div className={getTicketStatusClassModern(ticket.status)}>
-                            <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* div2: Title */}
-                      <div className="text-lg font-semibold mb-2 line-clamp-2">
-                        {ticket.title}
-                      </div>
-
-                      {/* div3: Description */}
-                      <div className="text-sm text-muted-foreground line-clamp-2 mb-3 flex-1">
-                        {ticket.description}
-                      </div>
-
-                      {/* div4: PU Name */}
-                      <div className="mb-3">
-                        <Badge variant="outline" className="text-xs">
-                          {ticket.pu_name || ticket.pucode || 'N/A'}
-                        </Badge>
-                      </div>
-
-                      {/* div5: Status-based key info (see requirement/card.md) */}
-                      <div className="text-sm text-muted-foreground space-y-1 mt-auto">
-                        <div className="flex items-center gap-2">
-                          <User className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate">{t('ticket.createdBy')}: {ticket.reporter_name || `${t('ticket.userId')} ${ticket.created_by}`}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 flex-shrink-0" />
-                          <span className="truncate">{t('ticket.created')} {formatDate(ticket.created_at)}</span>
-                        </div>
-                        {ticket.status === 'open' && (
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 flex-shrink-0" />
-                            <span className="truncate">{formatDurationText(t('ticket.openDuration'), getOpenDurationDetail(ticket))}</span>
-                          </div>
-                        )}
-                        {(ticket.status === 'accepted') && (
-                          <>
-                            {ticket.accepted_by != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.acceptedBy')}: {ticket.accepted_by_name || `${t('ticket.userId')} ${ticket.accepted_by}`}</span>
-                              </div>
-                            )}
-                            {ticket.accepted_at && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.acceptedAt')}: {formatDate(ticket.accepted_at)}</span>
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {(ticket.status === 'planed') && (
-                          <>
-                            {ticket.assigned_to != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                              </div>
-                            )}
-                            {ticket.schedule_start && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
-                              </div>
-                            )}
-                            {ticket.schedule_finish && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
-                              </div>
-                            )}
-                            {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
-                          </>
-                        )}
-                        {(ticket.status === 'in_progress' || ticket.status === 'reopened_in_progress') && (
-                          <>
-                            {ticket.assigned_to != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                              </div>
-                            )}
-                            {ticket.schedule_start && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.scheduleStart')}: {formatDate(ticket.schedule_start)}</span>
-                              </div>
-                            )}
-                            {ticket.actual_start_at && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.actualStartTime')}: {formatDate(ticket.actual_start_at)}</span>
-                              </div>
-                            )}
-                            {ticket.schedule_finish && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
-                              </div>
-                            )}
-                            {(() => { const d = getOverdueDetail(ticket); return d ? <div className="flex items-center gap-2 text-amber-600 dark:text-amber-500 font-medium"><AlertTriangle className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatOverdueText(d)}</span></div> : null; })()}
-                          </>
-                        )}
-                        {ticket.status === 'finished' && (
-                          <>
-                            {ticket.assigned_to != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                              </div>
-                            )}
-                            {ticket.schedule_finish && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.scheduleFinish')}: {formatDate(ticket.schedule_finish)}</span>
-                              </div>
-                            )}
-                            {ticket.actual_finish_at && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {ticket.status === 'reviewed' && (
-                          <>
-                            {ticket.assigned_to != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                              </div>
-                            )}
-                            {ticket.satisfaction_rating != null && (
-                              <div className="flex items-center gap-2">
-                                <span className="truncate">{t('ticket.rating')}:</span>
-                                <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {ticket.status === 'closed' && (
-                          <>
-                            {ticket.assigned_to != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
-                              </div>
-                            )}
-                            {ticket.actual_finish_at && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
-                              </div>
-                            )}
-                            {ticket.satisfaction_rating != null && (
-                              <div className="flex items-center gap-2">
-                                <span className="truncate">{t('ticket.rating')}:</span>
-                                <StarRatingDisplay value={ticket.satisfaction_rating} size="sm" />
-                              </div>
-                            )}
-                            {(() => { const d = getTimeToActionDetail(ticket); return d ? <div className="flex items-center gap-2"><Clock className="w-4 h-4 flex-shrink-0" /><span className="truncate">{formatDurationText(t('ticket.timeToAction'), d)}</span></div> : null; })()}
-                          </>
-                        )}
-                        {ticket.status === 'escalated' && (
-                          <>
-                            {ticket.escalated_by != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.escalatedBy')}: {ticket.escalated_by_name || `${t('ticket.userId')} ${ticket.escalated_by}`}</span>
-                              </div>
-                            )}
-                            {ticket.escalated_at && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.escalatedAt')}: {formatDate(ticket.escalated_at)}</span>
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {ticket.status === 'rejected_pending_l3_review' && (
-                          <>
-                            {ticket.rejected_by != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
-                              </div>
-                            )}
-                            {ticket.rejected_at && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
-                              </div>
-                            )}
-                          </>
-                        )}
-                        {ticket.status === 'rejected_final' && (
-                          <>
-                            {ticket.rejected_by != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.rejectedBy')}: {ticket.rejected_by_name || `${t('ticket.userId')} ${ticket.rejected_by}`}</span>
-                              </div>
-                            )}
-                            {ticket.rejected_at && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.rejectedAt')}: {formatDate(ticket.rejected_at)}</span>
-                              </div>
-                            )}
-                            {ticket.rejected_final_by != null && (
-                              <div className="flex items-center gap-2">
-                                <User className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.rejectedFinalBy')}: {ticket.rejected_final_by_name || `${t('ticket.userId')} ${ticket.rejected_final_by}`}</span>
-                              </div>
-                            )}
-                            {ticket.rejected_final_at && (
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 flex-shrink-0" />
-                                <span className="truncate">{t('ticket.rejectedFinalAt')}: {formatDate(ticket.rejected_final_at)}</span>
-                              </div>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
+                  <TicketListCard key={ticket.id} ticket={ticket} onView={handleViewTicket} />
                 ))}
               </div>
             )}
