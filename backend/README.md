@@ -63,7 +63,7 @@ This is the backend API for the EDEN Abnormality Handling with Line Login integr
 PORT=3001
 NODE_ENV=development
 JWT_SECRET=your_jwt_secret_key_here
-JWT_EXPIRES_IN=24h
+JWT_EXPIRES_IN=7d
 LINE_CHANNEL_ID=your_line_channel_id
 LINE_CHANNEL_SECRET=your_line_channel_secret
 LINE_REDIRECT_URI=http://localhost:3001/api/auth/line/callback

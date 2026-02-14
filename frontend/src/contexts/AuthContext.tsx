@@ -213,6 +213,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     initializeApp();
   }, []);
 
+  // Sliding session: periodically refresh user data so backend can issue a new JWT when in renewal window
+  const REFRESH_INTERVAL_MS = 60 * 60 * 1000; // 60 minutes
+  useEffect(() => {
+    if (!user) return;
+    const intervalId = setInterval(async () => {
+      try {
+        await authService.refreshUserData();
+        setUser(authService.getCurrentUser());
+      } catch {
+        // Ignore; token may have expired, next request will redirect to login
+      }
+    }, REFRESH_INTERVAL_MS);
+    return () => clearInterval(intervalId);
+  }, [user]);
+
   const storeRedirectUrl = (url: string) => {
     setRedirectUrl(url);
   };

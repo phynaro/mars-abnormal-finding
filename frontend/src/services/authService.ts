@@ -311,6 +311,9 @@ class AuthService {
       if (result.success && result.user) {
         this.user = result.user;
         localStorage.setItem('user', JSON.stringify(result.user));
+        if (result.token) {
+          this.setAuth(result.token, result.user);
+        }
       }
 
       return result;

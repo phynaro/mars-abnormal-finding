@@ -12,7 +12,33 @@ const { compressAvatar, getSizeReductionInfo } = require('../utils/imageCompress
 
 // JWT secret key (in production, use environment variable)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-production';
-const JWT_EXPIRES_IN = '24h';
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '7d';
+
+// Renew token when remaining lifetime is in the last 25% (sliding session)
+const JWT_RENEW_FRACTION = parseFloat(process.env.JWT_RENEW_FRACTION || '0.25', 10) || 0.25;
+
+function shouldRenewToken(decoded) {
+  if (!decoded || typeof decoded.exp !== 'number') return false;
+  const now = Math.floor(Date.now() / 1000);
+  const remaining = decoded.exp - now;
+  const total = decoded.iat ? decoded.exp - decoded.iat : 7 * 24 * 3600; // fallback 7d in seconds
+  return total > 0 && remaining > 0 && remaining < total * JWT_RENEW_FRACTION;
+}
+
+function createTokenFromUser(user) {
+  return jwt.sign(
+    {
+      userId: user.userId,
+      personNo: user.id,
+      username: user.userId,
+      groupNo: user.groupNo,
+      groupCode: user.groupCode,
+      groupName: user.groupName
+    },
+    JWT_SECRET,
+    { expiresIn: JWT_EXPIRES_IN }
+  );
+}
 
 // Helper function to get database connection
 async function getConnection() {
@@ -546,7 +572,7 @@ const getProfile = async (req, res) => {
     // Get user permissions (fetch separately when needed)
     // const permissions = await getUserPermissions(user.UserID, user.GroupNo);
 
-    res.json({
+    const responsePayload = {
       success: true,
       user: {
         id: user.PersonNo,
@@ -580,7 +606,24 @@ const getProfile = async (req, res) => {
         createdAt: user.CreatedAt
         // Permissions removed to reduce response size
       }
-    });
+    };
+
+    // Sliding session: issue new token when current one is in renewal window
+    const authHeader = req.headers.authorization;
+    const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.slice(7) : null;
+    if (token) {
+      try {
+        const decoded = jwt.decode(token);
+        if (shouldRenewToken(decoded)) {
+          const reqUser = req.user;
+          responsePayload.token = createTokenFromUser(reqUser);
+        }
+      } catch (e) {
+        // Ignore decode errors; response stays without new token
+      }
+    }
+
+    res.json(responsePayload);
 
   } catch (error) {
     console.error('Get profile error:', error);
