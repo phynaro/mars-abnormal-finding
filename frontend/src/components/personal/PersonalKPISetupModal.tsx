@@ -18,44 +18,60 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const PERIODS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13'];
-const TARGET_TYPES = ['report', 'fix'] as const;
+const TARGET_TYPES = ['report', 'fix', 'closure'] as const;
 const UNITS = ['case', 'THB', 'percent'] as const;
 
 interface PersonalKPISetupModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onTargetsUpdated?: () => void;
-  targetType: 'report' | 'fix';
+  targetType: 'report' | 'fix' | 'closure';
+  /** When set (admin flow), use this person instead of current user */
+  personno?: number;
+  /** Display name for the person when personno is set */
+  personDisplayName?: string;
 }
 
 const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
   open,
   onOpenChange,
   onTargetsUpdated,
-  targetType
+  targetType,
+  personno: adminPersonno,
+  personDisplayName: adminPersonDisplayName
 }) => {
   const { toast } = useToast();
   const { user } = useAuth();
   const { t } = useLanguage();
+
+  const isAdminMode = adminPersonno != null;
+  const effectivePersonno = isAdminMode ? adminPersonno : user?.id ?? null;
+  const displayName = isAdminMode ? (adminPersonDisplayName ?? `#${adminPersonno}`) : (user ? `${user.firstName} ${user.lastName}` : '');
   
   // State
   const [existingTargets, setExistingTargets] = useState<PersonalTarget[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   
-  // Form states
+  // Form states: for closure, unit is locked to percent
+  const isClosure = targetType === 'closure';
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedUnit, setSelectedUnit] = useState<'case' | 'THB' | 'percent'>('case');
+  const [selectedUnit, setSelectedUnit] = useState<'case' | 'THB' | 'percent'>(isClosure ? 'percent' : 'case');
   const [periodValues, setPeriodValues] = useState<{ [period: string]: number }>({});
 
-  // Fetch existing targets for the current user
+  // When opening as closure type, lock unit to percent
+  useEffect(() => {
+    if (open && isClosure) setSelectedUnit('percent');
+  }, [open, isClosure]);
+
+  // Fetch existing targets for the current user or selected person (admin)
   const fetchExistingTargets = async () => {
-    if (!user?.id) return;
+    if (effectivePersonno == null) return;
 
     try {
       setLoading(true);
       const response = await personalTargetService.getPersonalTargets({
-        personno: user.id,
+        personno: effectivePersonno,
         year: selectedYear
       });
       
@@ -70,7 +86,7 @@ const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
             values[target.period] = target.target_value;
           });
           setPeriodValues(values);
-          setSelectedUnit(existingForType[0].unit);
+          setSelectedUnit(isClosure ? 'percent' : existingForType[0].unit);
         } else {
           setPeriodValues({});
         }
@@ -89,14 +105,14 @@ const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
 
   // Initialize data when modal opens
   useEffect(() => {
-    if (open && user?.id) {
+    if (open && effectivePersonno != null) {
       fetchExistingTargets();
     }
-  }, [open, selectedYear, targetType, user?.id]);
+  }, [open, selectedYear, targetType, effectivePersonno]);
 
   // Handle save targets
   const handleSaveTargets = async () => {
-    if (!user?.id) {
+    if (effectivePersonno == null) {
       toast({
         title: t('personalKPI.error'),
         description: t('personalKPI.userInformationNotAvailable'),
@@ -125,28 +141,29 @@ const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
       if (existingForType.length > 0) {
         // Delete existing targets first
         await personalTargetService.deletePersonalTargets({
-          PERSONNO: user.id,
+          PERSONNO: effectivePersonno,
           type: targetType,
           year: selectedYear
         });
       }
 
-      // Create new targets
+      const createdBy = user ? `${user.firstName} ${user.lastName}` : 'admin';
       const createRequest: CreatePersonalTargetRequest = {
-        PERSONNO: user.id,
+        PERSONNO: effectivePersonno,
         type: targetType,
         year: selectedYear,
         target_values: periodValues,
-        unit: selectedUnit,
-        created_by: user.firstName + ' ' + user.lastName
+        unit: isClosure ? 'percent' : selectedUnit,
+        created_by: createdBy
       };
 
       await personalTargetService.createPersonalTargets(createRequest);
 
+      const typeLabel = targetType === 'report' ? t('personalKPI.report') : targetType === 'fix' ? t('personalKPI.fix') : t('personalKPI.closure');
       toast({
         title: t('personalKPI.success'),
         description: t('personalKPI.targetsSavedSuccess', { 
-          type: targetType === 'report' ? t('personalKPI.report') : t('personalKPI.fix'),
+          type: typeLabel,
           year: selectedYear 
         }),
       });
@@ -180,7 +197,7 @@ const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
   // Reset form
   const resetForm = () => {
     setSelectedYear(new Date().getFullYear());
-    setSelectedUnit('case');
+    setSelectedUnit(isClosure ? 'percent' : 'case');
     setPeriodValues({});
   };
 
@@ -192,7 +209,7 @@ const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Settings className="h-5 w-5" />
-            {t('personalKPI.title')} - {targetType === 'report' ? t('personalKPI.reportCases') : t('personalKPI.fixCases')}
+            {t('personalKPI.title')} - {targetType === 'report' ? t('personalKPI.reportCases') : targetType === 'fix' ? t('personalKPI.fixCases') : t('personalKPI.closureCases')}
           </DialogTitle>
         </DialogHeader>
         
@@ -201,8 +218,7 @@ const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
           <Card>
             <CardContent className="p-4">
               <div className="text-sm text-muted-foreground">
-                <p><strong>{t('personalKPI.user')}:</strong> {user?.firstName} {user?.lastName}</p>
-                {/* <p><strong>{t('personalKPI.personNo')}:</strong> {user?.id}</p> */}
+                <p><strong>{t('personalKPI.user')}:</strong> {displayName}</p>
               </div>
             </CardContent>
           </Card>
@@ -225,22 +241,30 @@ const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
               />
             </div>
             
-            <div className="space-y-2">
-              <Label htmlFor="unit">{t('personalKPI.unit')}</Label>
-              <Select 
-                value={selectedUnit} 
-                onValueChange={(value) => setSelectedUnit(value as 'case' | 'THB' | 'percent')}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="case">{t('personalKPI.case')}</SelectItem>
-                  <SelectItem value="THB">{t('personalKPI.thb')}</SelectItem>
-                  <SelectItem value="percent">{t('personalKPI.percent')}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            {!isClosure && (
+              <div className="space-y-2">
+                <Label htmlFor="unit">{t('personalKPI.unit')}</Label>
+                <Select 
+                  value={selectedUnit} 
+                  onValueChange={(value) => setSelectedUnit(value as 'case' | 'THB' | 'percent')}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="case">{t('personalKPI.case')}</SelectItem>
+                    <SelectItem value="THB">{t('personalKPI.thb')}</SelectItem>
+                    <SelectItem value="percent">{t('personalKPI.percent')}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {isClosure && (
+              <div className="space-y-2">
+                <Label htmlFor="unit">{t('personalKPI.unit')}</Label>
+                <Input id="unit" value={t('personalKPI.percent')} readOnly className="bg-muted" />
+              </div>
+            )}
           </div>
 
           {/* Existing Targets Warning */}
@@ -248,7 +272,7 @@ const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
             <Alert>
               <AlertDescription>
                 {t('personalKPI.existingTargetsWarning', { 
-                  type: targetType === 'report' ? t('personalKPI.report') : t('personalKPI.fix'),
+                  type: targetType === 'report' ? t('personalKPI.report') : targetType === 'fix' ? t('personalKPI.fix') : t('personalKPI.closure'),
                   year: selectedYear 
                 })}
               </AlertDescription>

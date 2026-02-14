@@ -133,10 +133,10 @@ const createPersonalTargets = async (req, res) => {
     }
     
     // Validate type
-    if (!['report', 'fix'].includes(type)) {
+    if (!['report', 'fix', 'closure'].includes(type)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid type. Must be "report" or "fix"'
+        message: 'Invalid type. Must be "report", "fix", or "closure"'
       });
     }
     

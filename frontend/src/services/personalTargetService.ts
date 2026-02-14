@@ -3,7 +3,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 export interface PersonalTarget {
   id: number;
   PERSONNO: number;
-  type: 'report' | 'fix';
+  type: 'report' | 'fix' | 'closure';
   period: string;
   year: number;
   target_value: number;
@@ -18,7 +18,7 @@ export interface PersonalTarget {
 
 export interface CreatePersonalTargetRequest {
   PERSONNO: number;
-  type: 'report' | 'fix';
+  type: 'report' | 'fix' | 'closure';
   year: number;
   target_values: { [period: string]: number };
   unit: 'case' | 'THB' | 'percent';
@@ -34,7 +34,7 @@ export interface UpdatePersonalTargetRequest {
 export interface PersonalTargetFilters {
   personno?: number;
   year?: number;
-  type?: 'report' | 'fix';
+  type?: 'report' | 'fix' | 'closure';
 }
 
 class PersonalTargetService {
@@ -98,7 +98,7 @@ class PersonalTargetService {
     });
   }
 
-  async deletePersonalTargets(data: { PERSONNO: number; type: 'report' | 'fix'; year: number }): Promise<{ success: boolean; message: string; deletedCount?: number }> {
+  async deletePersonalTargets(data: { PERSONNO: number; type: 'report' | 'fix' | 'closure'; year: number }): Promise<{ success: boolean; message: string; deletedCount?: number }> {
     return this.request<{ success: boolean; message: string; deletedCount?: number }>('', {
       method: 'DELETE',
       body: JSON.stringify(data),
