@@ -895,6 +895,9 @@ const TicketDetailsPage: React.FC = () => {
           if (!scheduleStart || !scheduleFinish) {
             throw new Error("Schedule start and schedule finish are required");
           }
+          if (new Date(scheduleStart) >= new Date(scheduleFinish)) {
+            throw new Error("Schedule start must be before schedule finish");
+          }
           // For L2 users, automatically assign to themselves
           const assigneeId = (isL2Plus && !isL3Plus) ? user?.id : parseInt(actionExtraId, 10);
           if (!assigneeId) {
@@ -998,6 +1001,9 @@ const TicketDetailsPage: React.FC = () => {
         case "reassign": {
           if (!scheduleStart || !scheduleFinish || !actionExtraId) {
             throw new Error("Schedule start, schedule finish, and assigned user are required for reassignment");
+          }
+          if (new Date(scheduleStart) >= new Date(scheduleFinish)) {
+            throw new Error("Schedule start must be before schedule finish");
           }
           const toId = parseInt(actionExtraId || "0", 10);
           if (!toId)
@@ -2323,7 +2329,13 @@ const TicketDetailsPage: React.FC = () => {
                   <Input
                     type="datetime-local"
                     value={scheduleStart}
-                    onChange={(e) => setScheduleStart(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setScheduleStart(v);
+                      if (v && scheduleFinish && new Date(v) >= new Date(scheduleFinish)) {
+                        setScheduleFinish("");
+                      }
+                    }}
                     required
                     className="w-full max-w-full min-w-0 box-border"
                   />
@@ -2361,9 +2373,13 @@ const TicketDetailsPage: React.FC = () => {
                     type="datetime-local"
                     value={scheduleFinish}
                     onChange={(e) => setScheduleFinish(e.target.value)}
+                    min={scheduleStart || undefined}
                     required
                     className="w-full max-w-full min-w-0 box-border"
                   />
+                  {scheduleStart && scheduleFinish && new Date(scheduleStart) >= new Date(scheduleFinish) && (
+                    <p className="text-xs text-red-500">Schedule start must be before schedule finish</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>{t('ticket.assignTo')}</Label>
@@ -2589,7 +2605,13 @@ const TicketDetailsPage: React.FC = () => {
                   <Input
                     type="datetime-local"
                     value={scheduleStart}
-                    onChange={(e) => setScheduleStart(e.target.value)}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setScheduleStart(v);
+                      if (v && scheduleFinish && new Date(v) >= new Date(scheduleFinish)) {
+                        setScheduleFinish("");
+                      }
+                    }}
                     required
                     className="w-full max-w-full min-w-0 box-border"
                   />
@@ -2600,9 +2622,13 @@ const TicketDetailsPage: React.FC = () => {
                     type="datetime-local"
                     value={scheduleFinish}
                     onChange={(e) => setScheduleFinish(e.target.value)}
+                    min={scheduleStart || undefined}
                     required
                     className="w-full max-w-full min-w-0 box-border"
                   />
+                  {scheduleStart && scheduleFinish && new Date(scheduleStart) >= new Date(scheduleFinish) && (
+                    <p className="text-xs text-red-500">Schedule start must be before schedule finish</p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>{t('ticket.newAssignee')}</Label>
@@ -2731,7 +2757,7 @@ const TicketDetailsPage: React.FC = () => {
                 onClick={performAction}
                 disabled={
                   acting ||
-                  (actionType === "plan" && (!scheduleStart || !scheduleFinish || (!actionExtraId && !(isL2Plus && !isL3Plus)))) ||
+                  (actionType === "plan" && (!scheduleStart || !scheduleFinish || (scheduleStart && scheduleFinish && new Date(scheduleStart) >= new Date(scheduleFinish)) || (!actionExtraId && !(isL2Plus && !isL3Plus)))) ||
                   (actionType === "start" && !actualStartAt) ||
                   (actionType === "finish" && (
                     !downtimeAvoidance || 
@@ -2751,7 +2777,7 @@ const TicketDetailsPage: React.FC = () => {
                     })()
                   )) ||
                   (actionType === "reject" && (!actionComment || actionComment.trim() === "")) ||
-                  (actionType === "reassign" && (!scheduleStart || !scheduleFinish || !actionExtraId)) ||
+                  (actionType === "reassign" && (!scheduleStart || !scheduleFinish || (scheduleStart && scheduleFinish && new Date(scheduleStart) >= new Date(scheduleFinish)) || !actionExtraId)) ||
                   (actionType === "escalate" && !actionExtraId)
                 }
               >
