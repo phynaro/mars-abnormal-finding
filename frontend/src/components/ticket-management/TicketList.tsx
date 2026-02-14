@@ -61,7 +61,7 @@ import { StarRatingDisplay } from "@/components/ui/star-rating";
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 /** Plant codes for the quick filter toggle group (most used). "All" = no plant filter. */
-const QUICK_PLANT_OPTIONS = ['DP', 'DJ', 'SN', 'CT', 'PT', 'PP'] as const;
+const QUICK_PLANT_OPTIONS = ['DP', 'DJ', 'SN', 'ST', 'PS', 'PP'] as const;
 
 interface HierarchyOption {
   code: string;
