@@ -1,7 +1,6 @@
 const sql = require("mssql");
 const dbConfig = require("../config/dbConfig");
-const emailService = require("../services/emailService");
-const abnFlexService = require("../services/abnormalFindingFlexService");
+const notificationQueue = require("../queues/notificationQueue");
 const cedarIntegrationService = require("../services/cedarIntegrationService");
 const { getCriticalLevelText } = require("../utils/criticalMapping");
 const fs = require("fs");
@@ -21,11 +20,10 @@ const {
   getUserMaxApprovalLevelForPU,
   getAvailableAssigneesForPU,
   insertStatusHistory,
-  mapImagesToLinePayload,
+
   mapRecordset,
   safeSendNotifications,
-  safeSendLineNotification,
-  sendEmailsSequentially,
+ 
   runQuery,
 } = require("./ticketController/helpers");
 
@@ -388,20 +386,10 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                     });
                 }
 
-                // Send email notifications
-                if (emailRecipients.length > 0) {
-                    console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-                    await emailService.sendNewTicketNotification(ticketDataForNotifications, reporterName, emailRecipients);
-                    console.log(`✅ Email notifications sent successfully for ticket ${ticket_number} إلى ${emailRecipients.length} recipients`);
-                } else {
-                    console.log(`\n⚠️  Skipping email notifications - no email-capable recipients`);
-                }
-
-                // Send LINE notifications
+                // Build LINE payload if we have LINE recipients (for inline send and queue job)
+                let linePayload = null;
                 if (lineRecipients.length > 0) {
-
-                     // Get ticket images for FLEX message (after images for completion)
-                     const imagesResult = await runQuery(pool, `
+                    const imagesResult = await runQuery(pool, `
                         SELECT image_url, image_name, image_type
                         FROM IgxTicketImages
                         WHERE ticket_id = @ticket_id
@@ -409,60 +397,36 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                     `, [
                         { name: 'ticket_id', type: sql.Int, value: ticketId }
                     ]);
-
-                    console.log(`🔍 DEBUG: Found ${imagesResult.recordset.length} images for ticket ${ticketId}`);
-                    imagesResult.recordset.forEach((img, index) => {
-                        console.log(`  Image ${index + 1}: ${img.image_url} (type: ${img.image_type})`);
-                    });
-
-                     // Get hero image from "after" images, fallback to any image
-                    const beforeImages = imagesResult.recordset.filter(img => img.image_type === 'before');
-                    const heroImageUrl = getHeroImageUrl(beforeImages.length > 0 ? beforeImages : imagesResult.recordset);
-                    console.log(`🎯 DEBUG: heroImageUrl = ${heroImageUrl}`);
-                    // Prepare flexible message for LINE
+                    const beforeImages = (imagesResult.recordset || []).filter(img => img.image_type === 'before');
+                    const heroImageUrl = getHeroImageUrl(beforeImages.length > 0 ? beforeImages : (imagesResult.recordset || []));
                     const extraKVs = [
-                        // { label: 'Severity', value: (severityLevel || 'medium').toUpperCase() },
-                        // { label: 'Priority', value: (priorityLevel || 'normal').toUpperCase() },
                         { label: 'Critical Level', value: (getCriticalLevelText(ticketData.pucriticalno)).toUpperCase() }
                     ];
-                    
-                    // Add ticket class if present
                     if (ticketData.ticket_class_th || ticketData.ticket_class_en) {
-                        extraKVs.push({ 
-                            label: 'Ticket Class', 
-                            value: ticketData.ticket_class_th || ticketData.ticket_class_en 
-                        });
+                        extraKVs.push({ label: 'Ticket Class', value: ticketData.ticket_class_th || ticketData.ticket_class_en });
                     }
-                    
                     extraKVs.push({ label: 'Reported by', value: reporterName });
-                    
-                    const linePayload = {
+                    linePayload = {
                         caseNo: ticket_number,
                         assetName: ticketData.equipment_name || ticketData.pudescription || 'Unknown Asset',
                         problem: title,
                         actionBy: reporterName,
                         comment: description,
                         heroImageUrl: heroImageUrl,
-                        detailUrl: `${process.env.LIFF_URL}/tickets/${ticketId}`,  
+                        detailUrl: `${process.env.LIFF_URL}/tickets/${ticketId}`,
                         extraKVs: extraKVs
                     };
-              
-                    const linePromises = lineRecipients.map(user => {
-                        return abnFlexService.sendToUser(user.LineID, [
-                            abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.OPEN, linePayload)
-                        ]);
-                    });
-
-                    const lineResults = await Promise.all(linePromises);
-                    const successfulLines = lineResults.filter(result => result.success).length;
-
-                    console.log(`LINE notifications sent successfully for ticket ${ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
-                } else {
-                    console.log(`\n⚠️  Skipping LINE notifications - no LINE-capable recipients`);
                 }
 
+                await notificationQueue.addCreateTicketNotificationJob({
+                    ticketData: ticketDataForNotifications,
+                    reporterName,
+                    emailRecipients,
+                    lineRecipients,
+                    linePayload
+                });
                 console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
-                console.log(`📊 Final Summary: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE messages`);
+                console.log(`📊 Enqueued: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE (create-ticket)`);
                 console.log(`=== END NOTIFICATION SUMMARY ===\n`);
 
              } catch (error) {
@@ -1084,78 +1048,33 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       const reporter = detailResult.recordsets[1]?.[0];
       const changedByName = getUserDisplayNameFromRequest(req);
 
-      await safeSendNotifications("send ticket status update email", async () => {
-        if (reporter?.EMAIL) {
-          await emailService.sendTicketStatusUpdateNotification(
-            ticketData,
-            oldStatus,
-            updateData.status,
-            changedByName,
-            reporter.EMAIL
-          );
-        }
-      });
-
-      await safeSendLineNotification(
-        "send LINE status update notification",
-        async () => {
-          if (reporter?.LineID) {
-            const imagesResult = await runQuery(
-              pool,
-              `
-                        SELECT image_url, image_name 
-                        FROM IgxTicketImages 
-                        WHERE ticket_id = @ticket_id 
-                        ORDER BY uploaded_at ASC
-                    `,
-              [{ name: "ticket_id", type: sql.Int, value: id }]
-            );
-
-            let abnState;
-            switch (updateData.status) {
-              case "accepted":
-              case "in_progress":
-                abnState = abnFlexService.TicketState.ACCEPTED;
-                break;
-              case "Finished":
-                abnState = abnFlexService.TicketState.Finished;
-                break;
-              case "rejected_final":
-                abnState = abnFlexService.TicketState.REJECT_FINAL;
-                break;
-              case "rejected_pending_l3_review":
-                abnState = abnFlexService.TicketState.REJECT_TO_MANAGER;
-                break;
-              case "escalated":
-                abnState = abnFlexService.TicketState.ESCALATED;
-                break;
-              case "closed":
-                abnState = abnFlexService.TicketState.CLOSED;
-                break;
-              case "reopened_in_progress":
-                abnState = abnFlexService.TicketState.REOPENED;
-                break;
-              default:
-                abnState = abnFlexService.TicketState.CREATED;
-            }
-
-            const flexMsg = abnFlexService.buildTicketFlexMessage(abnState, {
-              caseNo: ticketData.ticket_number,
-              assetName:
-                ticketData.PUNAME ||
-                ticketData.machine_number ||
-                "Unknown Asset",
-              problem: ticketData.title || "No description",
-              actionBy: changedByName,
-              comment:
-                updateData.status_notes ||
-                `สถานะเปลี่ยนจาก ${oldStatus} เป็น ${updateData.status}`,
-              detailUrl: getTicketDetailUrl(ticketData.id),
-            });
-            await abnFlexService.sendToUser(reporter.LineID, flexMsg);
-          }
-        }
-      );
+      const reporterForQueue =
+        (reporter?.EMAIL || reporter?.LineID) ?
+          { EMAIL: reporter?.EMAIL || null, LineID: reporter?.LineID || null } :
+          null;
+      if (reporterForQueue) {
+        const linePayload = {
+          caseNo: ticketData.ticket_number,
+          assetName:
+            ticketData.PUNAME ||
+            ticketData.machine_number ||
+            "Unknown Asset",
+          problem: ticketData.title || "No description",
+          actionBy: changedByName,
+          comment:
+            updateData.status_notes ||
+            `สถานะเปลี่ยนจาก ${oldStatus} เป็น ${updateData.status}`,
+          detailUrl: getTicketDetailUrl(ticketData.id),
+        };
+        await notificationQueue.addStatusUpdateTicketNotificationJob({
+          ticketData,
+          oldStatus,
+          newStatus: updateData.status,
+          changedByName,
+          reporter: reporterForQueue,
+          linePayload,
+        });
+      }
     }
 
     res.json({
@@ -1270,56 +1189,25 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     const assignee = detailResult.recordsets[1]?.[0];
     const assigneeDisplayName = formatPersonName(assignee, "Assignee");
 
-    await safeSendNotifications(
-      "send ticket assignment email notification",
-      async () => {
-        if (assignee?.EMAIL) {
-          await emailService.sendTicketAssignmentNotification(
-            ticketData,
-            assigneeDisplayName,
-            assignee.EMAIL
-          );
-        }
-      }
-    );
-
-    await safeSendLineNotification(
-      "send LINE assignment notification",
-      async () => {
-        if (assignee?.LineID) {
-          const imagesResult = await runQuery(
-            pool,
-            `
-                    SELECT image_url, image_name 
-                    FROM IgxTicketImages 
-                    WHERE ticket_id = @ticket_id 
-                    ORDER BY uploaded_at ASC
-                `,
-            [{ name: "ticket_id", type: sql.Int, value: id }]
-          );
-
-          const ticketImages = mapImagesToLinePayload(
-            mapRecordset(imagesResult)
-          );
-
-          const flexMsg = abnFlexService.buildTicketFlexMessage(
-            abnFlexService.TicketState.REASSIGNED,
-            {
-              caseNo: ticketData.ticket_number,
-              assetName:
-                ticketData.PUNAME ||
-                ticketData.machine_number ||
-                "Unknown Asset",
-              problem: ticketData.title || "No description",
-              actionBy: assigneeDisplayName,
-              comment: notes || "งานได้รับการมอบหมายให้คุณแล้ว",
-              detailUrl: getTicketDetailUrl(ticketData.id),
-            }
-          );
-          await abnFlexService.sendToUser(assignee.LineID, flexMsg);
-        }
-      }
-    );
+    if (assignee?.EMAIL || assignee?.LineID) {
+      const linePayload = {
+        caseNo: ticketData.ticket_number,
+        assetName:
+          ticketData.PUNAME ||
+          ticketData.machine_number ||
+          "Unknown Asset",
+        problem: ticketData.title || "No description",
+        actionBy: assigneeDisplayName,
+        comment: notes || "งานได้รับการมอบหมายให้คุณแล้ว",
+        detailUrl: getTicketDetailUrl(ticketData.id),
+      };
+      await notificationQueue.addAssignmentTicketNotificationJob({
+        ticketData,
+        assigneeDisplayName,
+        assignee: { EMAIL: assignee?.EMAIL || null, LineID: assignee?.LineID || null },
+        linePayload,
+      });
+    }
 
     res.json({
       success: true,
@@ -1488,205 +1376,6 @@ const uploadTicketImage = async (req, res) => {
       .json({
         success: false,
         message: "Failed to upload image",
-        error: error.message,
-      });
-  }
-};
-
-// Upload multiple ticket images
-const uploadTicketImages = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { image_type = "other" } = req.body; // single type applied to all
-    const user_id = req.user.id;
-
-    const files = Array.isArray(req.files) ? req.files : [];
-    if (!files.length) {
-      return res
-        .status(400)
-        .json({ success: false, message: "No image files uploaded" });
-    }
-
-    const pool = await sql.connect(dbConfig);
-
-    // Ensure ticket exists and get ticket number
-    const ticketResult = await pool
-      .request()
-      .input("id", sql.Int, id)
-      .query("SELECT id, ticket_number FROM IgxTickets WHERE id = @id");
-    if (ticketResult.recordset.length === 0) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Ticket not found" });
-    }
-    
-    const ticket = ticketResult.recordset[0];
-    const ticketNumber = ticket.ticket_number;
-
-    const inserted = [];
-    for (let i = 0; i < files.length; i++) {
-      const file = files[i];
-      const timestamp = Date.now();
-      const sequence = i + 1;
-      
-      // Use ticket number for easier search and identification
-      const ext = path.extname(file.originalname) || '.jpg';
-      let newFileName = `${ticketNumber}_${image_type}_${sequence}_${timestamp}${ext.toLowerCase()}`;
-      
-      // Rename the uploaded file to use ticket number-based naming
-      const uploadDir = path.join(__dirname, '..', '..', 'uploads', 'tickets', String(id));
-      const oldPath = path.join(uploadDir, file.filename);
-      const newPath = path.join(uploadDir, newFileName);
-      
-      try {
-        await fs.promises.rename(oldPath, newPath);
-      } catch (renameError) {
-        console.error('Error renaming file:', renameError);
-        // If rename fails, use the original filename
-        newFileName = file.filename;
-      }
-      
-      const relativePath = `/uploads/tickets/${id}/${newFileName}`;
-      const result = await pool
-        .request()
-        .input("ticket_id", sql.Int, id)
-        .input("image_type", sql.VarChar(20), image_type)
-        .input("image_url", sql.NVarChar(500), relativePath)
-        .input("image_name", sql.NVarChar(255), newFileName)
-        .input("uploaded_by", sql.Int, user_id).query(`
-                    INSERT INTO IgxTicketImages (ticket_id, image_type, image_url, image_name, uploaded_by, uploaded_at)
-                    VALUES (@ticket_id, @image_type, @image_url, @image_name, @uploaded_by, GETDATE());
-                    SELECT SCOPE_IDENTITY() as id;
-                `);
-      inserted.push({
-        id: result.recordset[0].id,
-        ticket_id: parseInt(id, 10),
-        image_type,
-        image_url: relativePath,
-        image_name: newFileName,
-        uploaded_at: new Date().toISOString(),
-        uploaded_by: user_id,
-      });
-    }
-
-    // Send notifications after images are uploaded (for two-step process only)
-    await safeSendNotifications('send ticket creation notifications after image upload', async () => {
-      try {
-        console.log(`📧 Sending notifications after ${files.length} images uploaded for ticket ${id} (two-step process)...`);
-        
-        // Get ticket details
-        const ticketResult = await runQuery(pool, `
-          SELECT t.*, pe.pucode, pe.plant as plant_code, pe.area as area_code, 
-                 pe.line as line_code, pe.machine as machine_code, pe.number as machine_number,
-                 pe.pudescription as pudescription, pu.PUCODE as pu_pucode, pu.PUNAME as pu_name
-          FROM IgxTickets t
-          LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-          LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-          WHERE t.id = @ticket_id
-        `, [
-          { name: 'ticket_id', type: sql.Int, value: id }
-        ]);
-
-        const ticketData = firstRecord(ticketResult);
-        if (!ticketData) {
-          console.log(`⚠️  Ticket ${id} not found, skipping notifications`);
-          return;
-        }
-
-        // Get notification users using the new workflow system
-        const notificationUsers = await getTicketNotificationRecipients(id, 'create', user_id);
-        console.log(`📋 Found ${notificationUsers.length} notification users for ticket ${id}`);
-
-        if (notificationUsers.length === 0) {
-          console.log(`⚠️  No notification users found for ticket ${id}`);
-          return;
-        }
-
-        // Get all images for this ticket (including the ones just uploaded)
-        const imagesResult = await runQuery(pool, `
-          SELECT image_url, image_name, image_type
-          FROM IgxTicketImages 
-          WHERE ticket_id = @ticket_id 
-          ORDER BY uploaded_at ASC
-        `, [
-          { name: 'ticket_id', type: sql.Int, value: id }
-        ]);
-
-        console.log(`🔍 DEBUG: Found ${imagesResult.recordset.length} total images for ticket ${id}`);
-        imagesResult.recordset.forEach((img, index) => {
-          console.log(`  Image ${index + 1}: ${img.image_url} (type: ${img.image_type})`);
-        });
-
-        // Get hero image from "before" images, fallback to any image
-        const beforeImages = imagesResult.recordset.filter(img => img.image_type === 'before');
-        const heroImageUrl = getHeroImageUrl(beforeImages.length > 0 ? beforeImages : imagesResult.recordset);
-        console.log(`🎯 DEBUG: heroImageUrl = ${heroImageUrl}`);
-
-        // Filter recipients for each notification type
-        const emailRecipients = notificationUsers.filter(user => user.EMAIL && user.EMAIL.trim() !== '');
-        const lineRecipients = notificationUsers.filter(user => user.LineID && user.LineID.trim() !== '');
-
-        console.log(`📧 Email recipients: ${emailRecipients.length}, 💬 LINE recipients: ${lineRecipients.length}`);
-
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`📧 SENDING EMAIL NOTIFICATIONS...`);
-          await emailService.sendNewTicketNotification(ticketData, 'Ticket Creator', emailRecipients);
-          console.log(`✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} to ${emailRecipients.length} recipients`);
-        }
-
-        // Send LINE notifications
-        if (lineRecipients.length > 0) {
-          console.log(`💬 SENDING LINE NOTIFICATIONS...`);
-          
-          // Prepare flexible message for LINE
-          const linePayload = {
-            caseNo: ticketData.ticket_number,
-            assetName: ticketData.equipment_name || ticketData.pudescription || 'Unknown Asset',
-            problem: ticketData.title,
-            actionBy: 'Ticket Creator',
-            comment: ticketData.description,
-            heroImageUrl: heroImageUrl,
-            detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-            extraKVs: [
-              { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-              { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-              { label: 'Reported by', value: 'Ticket Creator' }
-            ]
-          };
-
-          const linePromises = lineRecipients.map(user => {
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.OPEN, linePayload)
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(result => result.success).length;
-          
-          console.log(`✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`);
-        }
-
-        console.log(`🎉 Notifications completed for ticket ${id} after image upload (two-step process)`);
-
-      } catch (error) {
-        console.error('Error sending notifications after image upload:', error);
-        // Don't throw error - we don't want to fail the image upload if notifications fail
-      }
-    });
-
-    res.status(201).json({
-      success: true,
-      message: "Images uploaded successfully",
-      data: inserted,
-    });
-  } catch (error) {
-    console.error("Error uploading ticket images:", error);
-    res
-      .status(500)
-      .json({
-        success: false,
-        message: "Failed to upload images",
         error: error.message,
       });
   }
@@ -2231,72 +1920,29 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
           });
         }
 
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-          await emailService.sendTicketAcceptedNotification(
-            ticketDataForNotifications,
-            acceptorName,
-            emailRecipients
-          );
-          console.log(
-            `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping email notifications - no email-capable recipients`
-          );
-        }
+        const linePayload = {
+          caseNo: ticketData.ticket_number,
+          assetName:
+            ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+          problem: ticketData.title || "No description",
+          detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+          comment: notes || `งานได้รับการยอมรับแล้ว โดย ${acceptorName}`,
+          extraKVs: [
+            { label: "Status", value: "ACCEPTED" },
+            { label: "Accepted by", value: acceptorName },
+          ],
+        };
 
-        // Send LINE notifications
-        if (lineRecipients.length > 0) {
-          console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-          // Prepare flexible message for LINE
-          const linePayload = {
-            caseNo: ticketData.ticket_number,
-            assetName:
-              ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-            problem: ticketData.title || "No description",
-            //actionBy: acceptorName,
-            detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-            comment: notes || `งานได้รับการยอมรับแล้ว โดย ${acceptorName}`,
-            extraKVs: [
-              // { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-              // { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-              // { label: 'Scheduled Finish', value: schedule_finish ? new Date(schedule_finish).toLocaleDateString('th-TH') : 'TBD (Planning Phase)' },
-              { label: "Status", value: "ACCEPTED" },
-              { label: "Accepted by", value: acceptorName },
-            ],
-          };
-
-          const linePromises = lineRecipients.map((user) => {
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(
-                abnFlexService.TicketState.ACCEPTED,
-                linePayload
-              ),
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(
-            (result) => result.success
-          ).length;
-
-          console.log(
-            `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
-          );
-        }
-
+        await notificationQueue.addAcceptTicketNotificationJob({
+          ticketData: ticketDataForNotifications,
+          acceptorName,
+          emailRecipients,
+          lineRecipients,
+          linePayload,
+        });
         console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
         console.log(
-          `📊 Final Summary: ${emailRecipients.length || 0} emails, ${
-            lineRecipients.length || 0
-          } LINE messages`
+          `📊 Enqueued: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE (accept-ticket)`
         );
         console.log(`=== END NOTIFICATION SUMMARY ===\n`);
       } catch (error) {
@@ -2544,7 +2190,7 @@ const planTicket = async (req, res) => {
         const ticketDetailResult = await runQuery(
           pool,
           `
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
+                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno, t.pucriticalno,
                            pu.PUCODE, pu.PUNAME,
                            pe.plant as plant_code,
                            pe.area as area_code,
@@ -2613,104 +2259,42 @@ const planTicket = async (req, res) => {
           });
         }
 
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-          // Send individual emails to each recipient sequentially to avoid rate limits
-          const emailPromises = emailRecipients.map(
-            (user) => () =>
-              emailService.sendTicketStatusUpdateNotification(
-                ticketDataForNotifications,
-                "accepted",
-                "planed",
-                plannerName,
-                user.EMAIL
-              )
-          );
-          await sendEmailsSequentially(emailPromises);
-          console.log(
-            `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} to ${emailRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping email notifications - no email-capable recipients`
-          );
-        }
+        const linePayload = {
+          caseNo: ticketData.ticket_number,
+          assetName:
+            ticketData.PUNAME ||
+            ticketData.machine_number ||
+            "Unknown Asset",
+          problem: ticketData.title || "No description",
+          actionBy: plannerName,
+          comment: notes || "งานได้รับการวางแผนและกำหนดตารางเวลาแล้ว",
+          detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+          extraKVs: [
+            { label: "Assigned to", value: validAssignee.PERSON_NAME },
+            { label: "Critical Level", value: (getCriticalLevelText(ticketData.pucriticalno) || "").toUpperCase() },
+            {
+              label: "Schedule Start",
+              value: new Date(schedule_start).toLocaleDateString("th-TH"),
+            },
+            {
+              label: "Schedule Finish",
+              value: new Date(schedule_finish).toLocaleDateString("th-TH"),
+            },
+            { label: "Status", value: "PLANED" },
+            { label: "Planned by", value: plannerName },
+          ],
+        };
 
-        // Send LINE notifications
-        if (lineRecipients.length > 0) {
-          console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-          // Get ticket images for FLEX message
-          const imagesResult = await runQuery(
-            pool,
-            `
-                        SELECT image_url, image_name 
-                        FROM IgxTicketImages 
-                        WHERE ticket_id = @ticket_id 
-                        ORDER BY uploaded_at ASC
-                    `,
-            [{ name: "ticket_id", type: sql.Int, value: id }]
-          );
-
-          // Get hero image from before images
-          // const heroImageUrl = getHeroImageUrl(imagesResult.recordset || []);
-
-          const linePromises = lineRecipients.map((user) => {
-            // Prepare flexible message for LINE
-            const linePayload = {
-              caseNo: ticketData.ticket_number,
-              assetName:
-                ticketData.PUNAME ||
-                ticketData.machine_number ||
-                "Unknown Asset",
-              problem: ticketData.title || "No description",
-              actionBy: plannerName,
-              comment: notes || "งานได้รับการวางแผนและกำหนดตารางเวลาแล้ว",
-              //  heroImageUrl: heroImageUrl,
-              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-              extraKVs: [
-                { label: "Assigned to", value: validAssignee.PERSON_NAME },
-                { label: "Critical Level", value: (getCriticalLevelText(ticketData.pucriticalno)).toUpperCase() },
-                {
-                  label: "Schedule Start",
-                  value: new Date(schedule_start).toLocaleDateString("th-TH"),
-                },
-                {
-                  label: "Schedule Finish",
-                  value: new Date(schedule_finish).toLocaleDateString("th-TH"),
-                },
-                { label: "Status", value: "PLANED" },
-                { label: "Planned by", value: plannerName },
-              ],
-            };
-
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(
-                abnFlexService.TicketState.PLANED,
-                linePayload
-              ),
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(
-            (result) => result.success
-          ).length;
-
-          console.log(
-            `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
-          );
-        }
-
+        await notificationQueue.addPlanTicketNotificationJob({
+          ticketData: ticketDataForNotifications,
+          plannerName,
+          emailRecipients,
+          lineRecipients,
+          linePayload,
+        });
         console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
         console.log(
-          `📊 Final Summary: ${emailRecipients.length || 0} emails, ${
-            lineRecipients.length || 0
-          } LINE messages`
+          `📊 Enqueued: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE (plan-ticket)`
         );
         console.log(`=== END NOTIFICATION SUMMARY ===\n`);
       } catch (error) {
@@ -3012,100 +2596,36 @@ const startTicket = async (req, res) => {
           });
         }
 
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-          // Send individual emails to each recipient sequentially to avoid rate limits
-          const emailPromises = emailRecipients.map(
-            (user) => () =>
-              emailService.sendTicketStatusUpdateNotification(
-                ticketDataForNotifications,
-                "planed",
-                "in_progress",
-                starterName,
-                user.EMAIL
-              )
-          );
-          await sendEmailsSequentially(emailPromises);
-          console.log(
-            `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} to ${emailRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping email notifications - no email-capable recipients`
-          );
-        }
+        const linePayload = {
+          caseNo: ticketData.ticket_number,
+          assetName:
+            ticketData.PUNAME ||
+            ticketData.machine_number ||
+            "Unknown Asset",
+          problem: ticketData.title || "No description",
+          actionBy: starterName,
+          comment: notes || "งานเริ่มดำเนินการแล้ว",
+          detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+          extraKVs: [
+            {
+              label: "Actual Start",
+              value: new Date(actual_start_at).toLocaleString("th-TH"),
+            },
+            { label: "Status", value: "IN PROGRESS" },
+            { label: "Started by", value: starterName },
+          ],
+        };
 
-        // Send LINE notifications
-        if (lineRecipients.length > 0) {
-          console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-          // Get ticket images for FLEX message
-          const imagesResult = await runQuery(
-            pool,
-            `
-                        SELECT image_url, image_name 
-                        FROM IgxTicketImages 
-                        WHERE ticket_id = @ticket_id 
-                        ORDER BY uploaded_at ASC
-                    `,
-            [{ name: "ticket_id", type: sql.Int, value: id }]
-          );
-
-          // Get hero image from before images
-          //  const heroImageUrl = getHeroImageUrl(imagesResult.recordset || []);
-
-          const linePromises = lineRecipients.map((user) => {
-            // Prepare flexible message for LINE
-            const linePayload = {
-              caseNo: ticketData.ticket_number,
-              assetName:
-                ticketData.PUNAME ||
-                ticketData.machine_number ||
-                "Unknown Asset",
-              problem: ticketData.title || "No description",
-              actionBy: starterName,
-              comment: notes || "งานเริ่มดำเนินการแล้ว",
-              // heroImageUrl: heroImageUrl,
-              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-              extraKVs: [
-                // { label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                // { label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-                {
-                  label: "Actual Start",
-                  value: new Date(actual_start_at).toLocaleString("th-TH"),
-                },
-                { label: "Status", value: "IN PROGRESS" },
-                { label: "Started by", value: starterName },
-              ],
-            };
-
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(
-                abnFlexService.TicketState.IN_PROGRESS,
-                linePayload
-              ),
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(
-            (result) => result.success
-          ).length;
-
-          console.log(
-            `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
-          );
-        }
-
+        await notificationQueue.addStartTicketNotificationJob({
+          ticketData: ticketDataForNotifications,
+          starterName,
+          emailRecipients,
+          lineRecipients,
+          linePayload,
+        });
         console.log(`\n=== NOTIFICATION SUMMARY COMPLETED ===`);
         console.log(
-          `📊 Final Summary: ${emailRecipients.length || 0} emails, ${
-            lineRecipients.length || 0
-          } LINE messages`
+          `📊 Enqueued: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE (start-ticket)`
         );
         console.log(`=== END NOTIFICATION SUMMARY ===\n`);
       } catch (error) {
@@ -3305,230 +2825,59 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ticketData.assignee_name = assigneeDisplayName;
     }
 
-    // Send notifications according to new workflow logic: requester + L3ForPU + actor (rejector)
+    // Send notifications via queue: requester + L3ForPU + actor (rejector)
     await safeSendNotifications("send ticket rejection notifications", async () => {
-      try {
-        // Get notification users using the new workflow system (single call)
-        const notificationUsers = await getTicketNotificationRecipients(
-          id,
-          "reject",
-          rejected_by
-        );
-        console.log(`\n=== TICKET REJECTION NOTIFICATIONS SUMMARY ===`);
-        console.log(`Ticket: ${ticketData.ticket_number} (ID: ${id})`);
-        console.log(`Action: REJECT`);
-        console.log(
-          `Rejected by: ${rejected_by} (${rejectorName}) - Level: ${
-            ticket.user_approval_level || 0
-          }`
-        );
-        console.log(`New Status: ${newStatus}`);
-        console.log(
-          `Total notification users from SP: ${notificationUsers.length}`
-        );
+      const notificationUsers = await getTicketNotificationRecipients(id, "reject", rejected_by);
+      if (notificationUsers.length === 0) return;
 
-        if (notificationUsers.length === 0) {
-          console.log(`⚠️  No notification users found for reject action`);
-          console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-          return;
-        }
+      const ticketDataForNotifications = {
+        id: id,
+        ticket_number: ticketData.ticket_number,
+        title: ticketData.title,
+        description: ticketData.title,
+        pucode: ticketData.PUCODE,
+        plant_code: ticketData.plant_code,
+        area_code: ticketData.area_code,
+        line_code: ticketData.line_code,
+        machine_code: ticketData.machine_code,
+        machine_number: ticketData.machine_number,
+        plant_name: ticketData.PUNAME,
+        PUNAME: ticketData.PUNAME,
+        severity_level: ticketData.severity_level,
+        priority: ticketData.priority,
+        created_by: ticket.created_by,
+        assigned_to: ticketData.assigned_to,
+        rejection_reason: rejection_reason,
+        new_status: newStatus,
+        created_at: new Date().toISOString(),
+      };
 
-        // LOG ALL NOTIFICATION USERS BEFORE FILTERING
-        console.log("\n📋 ALL NOTIFICATION USERS (Before Filtering):");
-        notificationUsers.forEach((user, index) => {
-          const hasEmail = user.EMAIL && user.EMAIL.trim() !== "";
-          const hasLineID = user.LineID && user.LineID.trim() !== "";
-          const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : "❌ No Email";
-          const lineStatus = hasLineID ? `✅ ${user.LineID}` : "❌ No LineID";
+      const emailRecipients = notificationUsers.filter((u) => u.EMAIL && u.EMAIL.trim() !== "");
+      const lineRecipients = notificationUsers.filter((u) => u.LineID && u.LineID.trim() !== "");
+      const rejectionStateKey = newStatus === "rejected_final" ? "REJECT_FINAL" : "REJECT_TO_MANAGER";
+      const linePayload = {
+        caseNo: ticketData.ticket_number,
+        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+        problem: ticketData.title || "No description",
+        actionBy: rejectorName,
+        comment: rejection_reason || "งานถูกปฏิเสธ",
+        detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+        extraKVs: [
+          { label: "Status", value: newStatus.toUpperCase() },
+          { label: "Rejected by", value: rejectorName },
+        ],
+      };
 
-          console.log(
-            `  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`
-          );
-          console.log(`     └─ Reason: ${user.notification_reason}`);
-          console.log(`     └─ Type: ${user.recipient_type}`);
-          console.log(`     └─ Email: ${emailStatus}`);
-          console.log(`     └─ LineID: ${lineStatus}`);
-        });
-
-        // COUNT USERS BY RECIPIENT TYPE
-        const userCounts = notificationUsers.reduce((counts, user) => {
-          const type = user.recipient_type || "Unknown";
-          counts[type] = (counts[type] || 0) + 1;
-          return counts;
-        }, {});
-
-        console.log("\n📊 RECIPIENT TYPE BREAKDOWN:");
-        Object.entries(userCounts).forEach(([type, count]) => {
-          console.log(`  • ${type}: ${count} user(s)`);
-        });
-
-        // COUNT USERS BY NOTIFICATION CAPABILITY
-        const emailCapable = notificationUsers.filter(
-          (u) => u.EMAIL && u.EMAIL.trim() !== ""
-        ).length;
-        const lineCapable = notificationUsers.filter(
-          (u) => u.LineID && u.LineID.trim() !== ""
-        ).length;
-        const bothCapable = notificationUsers.filter(
-          (u) =>
-            u.EMAIL &&
-            u.EMAIL.trim() !== "" &&
-            u.LineID &&
-            u.LineID.trim() !== ""
-        ).length;
-        const noContactInfo = notificationUsers.filter(
-          (u) =>
-            (!u.EMAIL || u.EMAIL.trim() === "") &&
-            (!u.LineID || u.LineID.trim() === "")
-        ).length;
-
-        console.log("\n📞 NOTIFICATION CAPABILITY:");
-        console.log(`  • Email capable: ${emailCapable} user(s)`);
-        console.log(`  • LINE capable: ${lineCapable} user(s)`);
-        console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
-        console.log(`  • No contact info: ${noContactInfo} user(s)`);
-
-        // Determine rejection state based on rejector level
-        const rejectionState =
-          (ticket.user_approval_level || 0) >= 3
-            ? abnFlexService.TicketState.REJECT_FINAL
-            : abnFlexService.TicketState.REJECT_TO_MANAGER;
-
-        // Prepare ticket data<｜tool▁call▁begin｜>for notifications
-        const ticketDataForNotifications = {
-          id: id,
-          ticket_number: ticketData.ticket_number,
-          title: ticketData.title,
-          description: ticketData.title, // Using title as description for reject notifications
-          pucode: ticketData.PUCODE,
-          plant_code: ticketData.plant_code,
-          area_code: ticketData.area_code,
-          line_code: ticketData.line_code,
-          machine_code: ticketData.machine_code,
-          machine_number: ticketData.machine_number,
-          plant_name: ticketData.PUNAME,
-          PUNAME: ticketData.PUNAME, // For email template compatibility
-          severity_level: ticketData.severity_level,
-          priority: ticketData.priority,
-          created_by: ticket.created_by,
-          assigned_to: ticketData.assigned_to,
-          rejection_reason: rejection_reason,
-          new_status: newStatus,
-          created_at: new Date().toISOString(),
-        };
-
-        // Filter recipients for each notification type
-        const emailRecipients = notificationUsers.filter(
-          (user) => user.EMAIL && user.EMAIL.trim() !== ""
-        );
-        const lineRecipients = notificationUsers.filter(
-          (user) => user.LineID && user.LineID.trim() !== ""
-        );
-
-        console.log("\n📧 EMAIL RECIPIENTS (After Filtering):");
-        if (emailRecipients.length === 0) {
-          console.log("  ⚠️  No email-capable recipients found");
-        } else {
-          emailRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        console.log("\n💬 LINE RECIPIENTS (After Filtering):");
-        if (lineRecipients.length === 0) {
-          console.log("  ⚠️  No LINE-capable recipients found");
-        } else {
-          lineRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-          await emailService.sendTicketRejectedNotification(
-            ticketDataForNotifications,
-            rejectorName,
-            rejection_reason,
-            newStatus,
-            emailRecipients
-          );
-          console.log(
-            `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping email notifications - no email-capable recipients`
-          );
-        }
-
-        // Send LINE notifications
-        if (lineRecipients.length > 0) {
-          console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-          // Prepare flexible message for LINE
-          const linePayload = {
-            caseNo: ticketData.ticket_number,
-            assetName:
-              ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-            problem: ticketData.title || "No description",
-            actionBy: rejectorName,
-            comment: rejection_reason || "งานถูกปฏิเสธ",
-            detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-            extraKVs: [
-              //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-              //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-
-              { label: "Status", value: newStatus.toUpperCase() },
-              { label: "Rejected by", value: rejectorName },
-            ],
-          };
-
-          let rejectionState;
-          if (newStatus === "rejected_final") {
-            rejectionState = abnFlexService.TicketState.REJECT_FINAL;
-          } else {
-            rejectionState = abnFlexService.TicketState.REJECT_TO_MANAGER;
-          }
-
-          const linePromises = lineRecipients.map((user) => {
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(
-                rejectionState,
-                linePayload
-              ),
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(
-            (result) => result.success
-          ).length;
-
-          console.log(
-            `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
-          );
-        }
-
-        console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
-        console.log(
-          `📊 Final Summary: ${emailRecipients.length || 0} emails, ${
-            lineRecipients.length || 0
-          } LINE messages`
-        );
-        console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-      } catch (error) {
-        console.error(
-          "Error sending notifications for ticket rejection:",
-          error
-        );
-        throw error;
-      }
+      await notificationQueue.addRejectTicketNotificationJob({
+        ticketData: ticketDataForNotifications,
+        rejectorName,
+        rejection_reason,
+        newStatus,
+        emailRecipients,
+        lineRecipients,
+        linePayload,
+        rejectionStateKey,
+      });
     });
 
     res.json({
@@ -3865,125 +3214,83 @@ const finishTicket = async (req, res) => {
           });
         }
 
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-          await emailService.sendJobFinishedNotification(
-            ticketDataForNotifications,
-            finishrName,
-            completion_notes,
-            downtime_avoidance_hours,
-            cost_avoidance,
-            emailRecipients
-          );
-          console.log(
-            `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping email notifications - no email-capable recipients`
-          );
-        }
-
-        // Send LINE notifications
+        let heroImageUrl = null;
         if (lineRecipients.length > 0) {
-          console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-          // Get ticket images for FLEX message (after images for completion)
           const imagesResult = await runQuery(
             pool,
             `
-                        SELECT image_url, image_name, image_type
-                        FROM IgxTicketImages 
-                        WHERE ticket_id = @ticket_id 
-                        ORDER BY uploaded_at ASC
-                    `,
+            SELECT image_url, image_name, image_type
+            FROM IgxTicketImages
+            WHERE ticket_id = @ticket_id
+            ORDER BY uploaded_at ASC
+          `,
             [{ name: "ticket_id", type: sql.Int, value: id }]
           );
-
-          // Get hero image from "after" images, fallback to any image
-          const afterImages = imagesResult.recordset.filter(
+          const afterImages = (imagesResult.recordset || []).filter(
             (img) => img.image_type === "after"
           );
-          const heroImageUrl = getHeroImageUrl(
-            afterImages.length > 0 ? afterImages : imagesResult.recordset
-          );
-
-          const linePromises = lineRecipients.map((user) => {
-            // Prepare flexible message for LINE
-            const linePayload = {
-              caseNo: ticketData.ticket_number,
-              assetName:
-                ticketData.PUNAME ||
-                ticketData.machine_number ||
-                "Unknown Asset",
-              problem: ticketData.title || "No description",
-              //actionBy: finishrName,
-              comment: completion_notes || "งานเสร็จสมบูรณ์แล้ว",
-              heroImageUrl: heroImageUrl,
-              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-              extraKVs: [
-                //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-                {
-                  label: "Actual Start",
-                  value: actual_start_at
-                    ? new Date(actual_start_at).toLocaleString("th-TH")
-                    : "-",
-                },
-                {
-                  label: "Actual Finish",
-                  value: actual_finish_at
-                    ? new Date(actual_finish_at).toLocaleString("th-TH")
-                    : "-",
-                },
-                {
-                  label: "Cost Avoidance",
-                  value: cost_avoidance
-                    ? `${cost_avoidance.toLocaleString()} บาท`
-                    : "-",
-                },
-                {
-                  label: "Downtime Avoidance",
-                  value: downtime_avoidance_hours
-                    ? `${downtime_avoidance_hours} ชั่วโมง`
-                    : "-",
-                },
-                {
-                  label: "Failure Mode",
-                  value: ticketData.FailureModeName || "-",
-                },
-                { label: "Status", value: "Finished" },
-                { label: "Finished by", value: finishrName },
-              ],
-            };
-
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(
-                abnFlexService.TicketState.Finished,
-                linePayload
-              ),
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(
-            (result) => result.success
-          ).length;
-
-          console.log(
-            `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
+          heroImageUrl = getHeroImageUrl(
+            afterImages.length > 0 ? afterImages : (imagesResult.recordset || [])
           );
         }
 
+        const linePayload = {
+          caseNo: ticketData.ticket_number,
+          assetName:
+            ticketData.PUNAME ||
+            ticketData.machine_number ||
+            "Unknown Asset",
+          problem: ticketData.title || "No description",
+          comment: completion_notes || "งานเสร็จสมบูรณ์แล้ว",
+          heroImageUrl: heroImageUrl,
+          detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+          extraKVs: [
+            {
+              label: "Actual Start",
+              value: actual_start_at
+                ? new Date(actual_start_at).toLocaleString("th-TH")
+                : "-",
+            },
+            {
+              label: "Actual Finish",
+              value: actual_finish_at
+                ? new Date(actual_finish_at).toLocaleString("th-TH")
+                : "-",
+            },
+            {
+              label: "Cost Avoidance",
+              value: cost_avoidance
+                ? `${cost_avoidance.toLocaleString()} บาท`
+                : "-",
+            },
+            {
+              label: "Downtime Avoidance",
+              value: downtime_avoidance_hours
+                ? `${downtime_avoidance_hours} ชั่วโมง`
+                : "-",
+            },
+            {
+              label: "Failure Mode",
+              value: ticketData.FailureModeName || "-",
+            },
+            { label: "Status", value: "Finished" },
+            { label: "Finished by", value: finishrName },
+          ],
+        };
+
+        await notificationQueue.addFinishTicketNotificationJob({
+          ticketData: ticketDataForNotifications,
+          finishrName,
+          completion_notes,
+          downtime_avoidance_hours,
+          cost_avoidance,
+          emailRecipients,
+          lineRecipients,
+          linePayload,
+        });
         console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
         console.log(
-          `📊 Final Summary: ${emailRecipients.length || 0} emails, ${
-            lineRecipients.length || 0
-          } LINE messages`
+          `📊 Enqueued: ${emailRecipients.length || 0} emails, ${lineRecipients.length || 0} LINE (finish-ticket)`
         );
         console.log(`=== END NOTIFICATION SUMMARY ===\n`);
       } catch (error) {
@@ -4110,263 +3417,86 @@ const escalateTicket = async (req, res) => {
       // Don't fail the escalate action if Cedar fails
     }
 
-    // Send notifications according to new workflow logic: requester + L3ForPU + L4ForPU + actor (escalator)
+    // Send notifications via queue: requester + L3ForPU + L4ForPU + actor (escalator)
     await safeSendNotifications("send ticket escalation notifications", async () => {
-      try {
-        // Get notification users using the new workflow system (single call)
-        const notificationUsers = await getTicketNotificationRecipients(
-          id,
-          "escalate",
-          escalated_by
-        );
-        console.log(`\n=== TICKET ESCALATION NOTIFICATIONS SUMMARY ===`);
-        console.log(`Ticket: ${id} (ID: ${id})`);
-        console.log(`Action: ESCALATE`);
-        console.log(
-          `Escalated by: ${escalated_by} (${getUserDisplayNameFromRequest(
-            req
-          )})`
-        );
-        console.log(`Escalated to: ${escalated_to}`);
-        console.log(`Escalation reason: ${escalation_reason}`);
-        console.log(
-          `Total notification users from SP: ${notificationUsers.length}`
-        );
+      const notificationUsers = await getTicketNotificationRecipients(id, "escalate", escalated_by);
+      if (notificationUsers.length === 0) return;
 
-        if (notificationUsers.length === 0) {
-          console.log(`⚠️  No notification users found for escalate action`);
-          console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-          return;
-        }
+      const ticketDetailResult = await runQuery(
+        pool,
+        `
+          SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
+                 pu.PUCODE, pu.PUNAME,
+                 pe.plant as plant_code, pe.area as area_code, pe.line as line_code,
+                 pe.machine as machine_code, pe.number as machine_number
+          FROM IgxTickets t
+          LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+          LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+          WHERE t.id = @ticket_id
+        `,
+        [{ name: "ticket_id", type: sql.Int, value: id }]
+      );
+      const ticketData = firstRecord(ticketDetailResult);
+      const escalatorName = getUserDisplayNameFromRequest(req);
 
-        // LOG ALL NOTIFICATION USERS BEFORE FILTERING
-        console.log("\n📋 ALL NOTIFICATION USERS (Before Filtering):");
-        notificationUsers.forEach((user, index) => {
-          const hasEmail = user.EMAIL && user.EMAIL.trim() !== "";
-          const hasLineID = user.LineID && user.LineID.trim() !== "";
-          const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : "❌ No Email";
-          const lineStatus = hasLineID ? `✅ ${user.LineID}` : "❌ No LineID";
+      const ticketDataForNotifications = {
+        id: id,
+        ticket_number: ticketData.ticket_number,
+        title: ticketData.title,
+        description: ticketData.title,
+        pucode: ticketData.PUCODE,
+        plant_code: ticketData.plant_code,
+        area_code: ticketData.area_code,
+        line_code: ticketData.line_code,
+        machine_code: ticketData.machine_code,
+        machine_number: ticketData.machine_number,
+        plant_name: ticketData.PUNAME,
+        PUNAME: ticketData.PUNAME,
+        severity_level: ticketData.severity_level,
+        priority: ticketData.priority,
+        created_by: ticket.created_by,
+        assigned_to: escalated_by,
+        escalated_to: escalated_to,
+        escalation_reason: escalation_reason,
+        created_at: new Date().toISOString(),
+      };
 
-          console.log(
-            `  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`
-          );
-          console.log(`     └─ Reason: ${user.notification_reason}`);
-          console.log(`     └─ Type: ${user.recipient_type}`);
-          console.log(`     └─ Email: ${emailStatus}`);
-          console.log(`     └─ LineID: ${lineStatus}`);
-        });
+      const emailRecipients = notificationUsers.filter((u) => u.EMAIL && u.EMAIL.trim() !== "");
+      const lineRecipients = notificationUsers.filter((u) => u.LineID && u.LineID.trim() !== "");
 
-        // COUNT USERS BY RECIPIENT TYPE
-        const userCounts = notificationUsers.reduce((counts, user) => {
-          const type = user.recipient_type || "Unknown";
-          counts[type] = (counts[type] || 0) + 1;
-          return counts;
-        }, {});
+      let heroImageUrl = null;
+      const imagesResult = await runQuery(
+        pool,
+        `SELECT image_name as filename, image_url as url, uploaded_at, uploaded_by FROM IgxTicketImages WHERE ticket_id = @ticket_id ORDER BY uploaded_at ASC`,
+        [{ name: "ticket_id", type: sql.Int, value: id }]
+      );
+      heroImageUrl = getHeroImageUrl(imagesResult.recordset || []);
 
-        console.log("\n📊 RECIPIENT TYPE BREAKDOWN:");
-        Object.entries(userCounts).forEach(([type, count]) => {
-          console.log(`  • ${type}: ${count} user(s)`);
-        });
+      const linePayload = {
+        caseNo: ticketData.ticket_number,
+        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+        problem: ticketData.title || "No description",
+        actionBy: escalatorName,
+        comment: escalation_reason || "งานถูกส่งต่อให้หัวหน้างานพิจารณา",
+        heroImageUrl: heroImageUrl,
+        detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+        extraKVs: [
+          { label: "Severity", value: (ticketData.severity_level || "medium").toUpperCase() },
+          { label: "Priority", value: (ticketData.priority || "normal").toUpperCase() },
+          { label: "Escalated to", value: escalated_to },
+          { label: "Status", value: "ESCALATED" },
+          { label: "Escalated by", value: escalatorName },
+        ],
+      };
 
-        // COUNT USERS BY NOTIFICATION CAPABILITY
-        const emailCapable = notificationUsers.filter(
-          (u) => u.EMAIL && u.EMAIL.trim() !== ""
-        ).length;
-        const lineCapable = notificationUsers.filter(
-          (u) => u.LineID && u.LineID.trim() !== ""
-        ).length;
-        const bothCapable = notificationUsers.filter(
-          (u) =>
-            u.EMAIL &&
-            u.EMAIL.trim() !== "" &&
-            u.LineID &&
-            u.LineID.trim() !== ""
-        ).length;
-        const noContactInfo = notificationUsers.filter(
-          (u) =>
-            (!u.EMAIL || u.EMAIL.trim() === "") &&
-            (!u.LineID || u.LineID.trim() === "")
-        ).length;
-
-        console.log("\n📞 NOTIFICATION CAPABILITY:");
-        console.log(`  • Email capable: ${emailCapable} user(s)`);
-        console.log(`  • LINE capable: ${lineCapable} user(s)`);
-        console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
-        console.log(`  • No contact info: ${noContactInfo} user(s)`);
-
-        // Get ticket details for notification data
-        const ticketDetailResult = await runQuery(
-          pool,
-          `
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
-                           pu.PUCODE, pu.PUNAME,
-                           pe.plant as plant_code,
-                           pe.area as area_code,
-                           pe.line as line_code,
-                           pe.machine as machine_code,
-                           pe.number as machine_number
-                    FROM IgxTickets t
-                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id
-                `,
-          [{ name: "ticket_id", type: sql.Int, value: id }]
-        );
-
-        const ticketData = firstRecord(ticketDetailResult);
-        const escalatorName = getUserDisplayNameFromRequest(req);
-
-        // Prepare ticket data for notifications
-        const ticketDataForNotifications = {
-          id: id,
-          ticket_number: ticketData.ticket_number,
-          title: ticketData.title,
-          description: ticketData.title, // Using title as description for escalate notifications
-          pucode: ticketData.PUCODE,
-          plant_code: ticketData.plant_code,
-          area_code: ticketData.area_code,
-          line_code: ticketData.line_code,
-          machine_code: ticketData.machine_code,
-          machine_number: ticketData.machine_number,
-          plant_name: ticketData.PUNAME,
-          PUNAME: ticketData.PUNAME, // For email template compatibility
-          severity_level: ticketData.severity_level,
-          priority: ticketData.priority,
-          created_by: ticket.created_by,
-          assigned_to: escalated_by,
-          escalated_to: escalated_to,
-          escalation_reason: escalation_reason,
-          created_at: new Date().toISOString(),
-        };
-
-        // Filter recipients for each notification type
-        const emailRecipients = notificationUsers.filter(
-          (user) => user.EMAIL && user.EMAIL.trim() !== ""
-        );
-        const lineRecipients = notificationUsers.filter(
-          (user) => user.LineID && user.LineID.trim() !== ""
-        );
-
-        console.log("\n📧 EMAIL RECIPIENTS (After Filtering):");
-        if (emailRecipients.length === 0) {
-          console.log("  ⚠️  No email-capable recipients found");
-        } else {
-          emailRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        console.log("\n💬 LINE RECIPIENTS (After Filtering):");
-        if (lineRecipients.length === 0) {
-          console.log("  ⚠️  No LINE-capable recipients found");
-        } else {
-          lineRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-          await emailService.sendTicketEscalatedNotification(
-            ticketDataForNotifications,
-            escalatorName,
-            escalation_reason,
-            emailRecipients
-          );
-          console.log(
-            `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping email notifications - no email-capable recipients`
-          );
-        }
-
-        // Send LINE notifications
-        if (lineRecipients.length > 0) {
-          console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-          // Get ticket images for FLEX message
-          const imagesResult = await runQuery(
-            pool,
-            `
-                        SELECT image_name as filename, image_url as url, uploaded_at, uploaded_by
-                        FROM IgxTicketImages 
-                        WHERE ticket_id = @ticket_id
-                        ORDER BY uploaded_at ASC
-                    `,
-            [{ name: "ticket_id", type: sql.Int, value: id }]
-          );
-
-          // Get hero image from before images
-          const heroImageUrl = getHeroImageUrl(imagesResult.recordset || []);
-
-          const linePromises = lineRecipients.map((user) => {
-            // Prepare flexible message for LINE
-            const linePayload = {
-              caseNo: ticketData.ticket_number,
-              assetName:
-                ticketData.PUNAME ||
-                ticketData.machine_number ||
-                "Unknown Asset",
-              problem: ticketData.title || "No description",
-              actionBy: escalatorName,
-              comment: escalation_reason || "งานถูกส่งต่อให้หัวหน้างานพิจารณา",
-              heroImageUrl: heroImageUrl,
-              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-              extraKVs: [
-                {
-                  label: "Severity",
-                  value: (ticketData.severity_level || "medium").toUpperCase(),
-                },
-                {
-                  label: "Priority",
-                  value: (ticketData.priority || "normal").toUpperCase(),
-                },
-                { label: "Escalated to", value: escalated_to },
-                { label: "Status", value: "ESCALATED" },
-                { label: "Escalated by", value: escalatorName },
-              ],
-            };
-
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(
-                abnFlexService.TicketState.ESCALATED,
-                linePayload
-              ),
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(
-            (result) => result.success
-          ).length;
-
-          console.log(
-            `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
-          );
-        }
-
-        console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
-        console.log(
-          `📊 Final Summary: ${emailRecipients.length || 0} emails, ${
-            lineRecipients.length || 0
-          } LINE messages`
-        );
-        console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-      } catch (error) {
-        console.error(
-          "Error sending notifications for ticket escalation:",
-          error
-        );
-        throw error;
-      }
+      await notificationQueue.addEscalateTicketNotificationJob({
+        ticketData: ticketDataForNotifications,
+        escalatorName,
+        escalation_reason,
+        emailRecipients,
+        lineRecipients,
+        linePayload,
+      });
     });
 
     res.json({
@@ -4479,263 +3609,73 @@ const approveReview = async (req, res) => {
       // Don't fail the approve review action if Cedar fails
     }
 
-    // Send notifications according to new workflow logic: assignee + L4ForPU + actor (reviewer)
+    // Send notifications via queue: assignee + L4ForPU + actor (reviewer)
     await safeSendNotifications(
       "send ticket review approval notifications",
       async () => {
-        try {
-          // Get notification users using the new workflow system (single call)
-          const notificationUsers = await getTicketNotificationRecipients(
-            id,
-            "approve_review",
-            reviewed_by
-          );
-          console.log(`\n=== TICKET REVIEW APPROVAL NOTIFICATIONS SUMMARY ===`);
-          console.log(`Ticket: ${id} (ID: ${id})`);
-          console.log(`Action: APPROVE_REVIEW`);
-          console.log(
-            `Reviewed by: ${reviewed_by} (${getUserDisplayNameFromRequest(
-              req
-            )})`
-          );
-          console.log(`Review reason: ${review_reason || "N/A"}`);
-          console.log(
-            `Satisfaction rating: ${
-              satisfaction_rating ? `${satisfaction_rating}/5 ⭐` : "ไม่ระบุ"
-            }`
-          );
-          console.log(`New status: reviewed`);
-          console.log(
-            `Total notification users from SP: ${notificationUsers.length}`
-          );
+        const notificationUsers = await getTicketNotificationRecipients(id, "approve_review", reviewed_by);
+        if (notificationUsers.length === 0) return;
 
-          if (notificationUsers.length === 0) {
-            console.log(
-              `⚠️  No notification users found for approve_review action`
-            );
-            console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-            return;
-          }
+        const ticketDetailResult = await runQuery(
+          pool,
+          `SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
+                 pu.PUCODE, pu.PUNAME, pe.plant as plant_code, pe.area as area_code, pe.line as line_code,
+                 pe.machine as machine_code, pe.number as machine_number
+           FROM IgxTickets t
+           LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+           LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+           WHERE t.id = @ticket_id`,
+          [{ name: "ticket_id", type: sql.Int, value: id }]
+        );
+        const ticketData = firstRecord(ticketDetailResult);
+        const reviewerName = getUserDisplayNameFromRequest(req);
 
-          // LOG ALL NOTIFICATION USERS BEFORE FILTERING
-          console.log("\n📋 ALL NOTIFICATION USERS (Before Filtering):");
-          notificationUsers.forEach((user, index) => {
-            const hasEmail = user.EMAIL && user.EMAIL.trim() !== "";
-            const hasLineID = user.LineID && user.LineID.trim() !== "";
-            const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : "❌ No Email";
-            const lineStatus = hasLineID ? `✅ ${user.LineID}` : "❌ No LineID";
+        const ticketDataForNotifications = {
+          id: id,
+          ticket_number: ticketData.ticket_number,
+          title: ticketData.title,
+          description: ticketData.title,
+          pucode: ticketData.PUCODE,
+          plant_code: ticketData.plant_code,
+          area_code: ticketData.area_code,
+          line_code: ticketData.line_code,
+          machine_code: ticketData.machine_code,
+          machine_number: ticketData.machine_number,
+          plant_name: ticketData.PUNAME,
+          PUNAME: ticketData.PUNAME,
+          severity_level: ticketData.severity_level,
+          priority: ticketData.priority,
+          created_by: ticket.created_by,
+          assigned_to: ticket.assigned_to,
+          review_reason: review_reason,
+          satisfaction_rating: satisfaction_rating,
+          created_at: new Date().toISOString(),
+        };
 
-            console.log(
-              `  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`
-            );
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-            console.log(`     └─ Type: ${user.recipient_type}`);
-            console.log(`     └─ Email: ${emailStatus}`);
-            console.log(`     └─ LineID: ${lineStatus}`);
-          });
+        const emailRecipients = notificationUsers.filter((u) => u.EMAIL && u.EMAIL.trim() !== "");
+        const lineRecipients = notificationUsers.filter((u) => u.LineID && u.LineID.trim() !== "");
+        const linePayload = {
+          caseNo: ticketData.ticket_number,
+          assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+          problem: ticketData.title || "No description",
+          comment: review_reason || "งานได้รับการตรวจสอบและอนุมัติโดยผู้ร้องขอ",
+          detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+          extraKVs: [
+            { label: "Satisfaction Rating", value: satisfaction_rating ? `${satisfaction_rating}/5 ⭐` : "ไม่ระบุ" },
+            { label: "Status", value: "REVIEWED" },
+            { label: "Reviewed by", value: reviewerName },
+          ],
+        };
 
-          // COUNT USERS BY RECIPIENT TYPE
-          const userCounts = notificationUsers.reduce((counts, user) => {
-            const type = user.recipient_type || "Unknown";
-            counts[type] = (counts[type] || 0) + 1;
-            return counts;
-          }, {});
-
-          console.log("\n📊 RECIPIENT TYPE BREAKDOWN:");
-          Object.entries(userCounts).forEach(([type, count]) => {
-            console.log(`  • ${type}: ${count} user(s)`);
-          });
-
-          // COUNT USERS BY NOTIFICATION CAPABILITY
-          const emailCapable = notificationUsers.filter(
-            (u) => u.EMAIL && u.EMAIL.trim() !== ""
-          ).length;
-          const lineCapable = notificationUsers.filter(
-            (u) => u.LineID && u.LineID.trim() !== ""
-          ).length;
-          const bothCapable = notificationUsers.filter(
-            (u) =>
-              u.EMAIL &&
-              u.EMAIL.trim() !== "" &&
-              u.LineID &&
-              u.LineID.trim() !== ""
-          ).length;
-          const noContactInfo = notificationUsers.filter(
-            (u) =>
-              (!u.EMAIL || u.EMAIL.trim() === "") &&
-              (!u.LineID || u.LineID.trim() === "")
-          ).length;
-
-          console.log("\n📞 NOTIFICATION CAPABILITY:");
-          console.log(`  • Email capable: ${emailCapable} user(s)`);
-          console.log(`  • LINE capable: ${lineCapable} user(s)`);
-          console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
-          console.log(`  • No contact info: ${noContactInfo} user(s)`);
-
-          // Get ticket details for notification data
-          const ticketDetailResult = await runQuery(
-            pool,
-            `
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
-                           pu.PUCODE, pu.PUNAME,
-                           pe.plant as plant_code,
-                           pe.area as area_code,
-                           pe.line as line_code,
-                           pe.machine as machine_code,
-                           pe.number as machine_number
-                    FROM IgxTickets t
-                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id
-                `,
-            [{ name: "ticket_id", type: sql.Int, value: id }]
-          );
-
-          const ticketData = firstRecord(ticketDetailResult);
-          const reviewerName = getUserDisplayNameFromRequest(req);
-
-          // Prepare ticket data for notifications
-          const ticketDataForNotifications = {
-            id: id,
-            ticket_number: ticketData.ticket_number,
-            title: ticketData.title,
-            description: ticketData.title, // Using title as description for review notifications
-            pucode: ticketData.PUCODE,
-            plant_code: ticketData.plant_code,
-            area_code: ticketData.area_code,
-            line_code: ticketData.line_code,
-            machine_code: ticketData.machine_code,
-            machine_number: ticketData.machine_number,
-            plant_name: ticketData.PUNAME,
-            PUNAME: ticketData.PUNAME, // For email template compatibility
-            severity_level: ticketData.severity_level,
-            priority: ticketData.priority,
-            created_by: ticket.created_by,
-            assigned_to: ticket.assigned_to,
-            review_reason: review_reason,
-            satisfaction_rating: satisfaction_rating,
-            created_at: new Date().toISOString(),
-          };
-
-          // Filter recipients for each notification type
-          const emailRecipients = notificationUsers.filter(
-            (user) => user.EMAIL && user.EMAIL.trim() !== ""
-          );
-          const lineRecipients = notificationUsers.filter(
-            (user) => user.LineID && user.LineID.trim() !== ""
-          );
-
-          console.log("\n📧 EMAIL RECIPIENTS (After Filtering):");
-          if (emailRecipients.length === 0) {
-            console.log("  ⚠️  No email-capable recipients found");
-          } else {
-            emailRecipients.forEach((user, index) => {
-              console.log(
-                `  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`
-              );
-              console.log(`     └─ Reason: ${user.notification_reason}`);
-            });
-          }
-
-          console.log("\n💬 LINE RECIPIENTS (After Filtering):");
-          if (lineRecipients.length === 0) {
-            console.log("  ⚠️  No LINE-capable recipients found");
-          } else {
-            lineRecipients.forEach((user, index) => {
-              console.log(
-                `  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`
-              );
-              console.log(`     └─ Reason: ${user.notification_reason}`);
-            });
-          }
-
-          // Send email notifications
-          if (emailRecipients.length > 0) {
-            console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-            await emailService.sendTicketReviewedNotification(
-              ticketDataForNotifications,
-              reviewerName,
-              review_reason,
-              satisfaction_rating,
-              emailRecipients
-            );
-            console.log(
-              `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`
-            );
-          } else {
-            console.log(
-              `\n⚠️  Skipping email notifications - no email-capable recipients`
-            );
-          }
-
-          // Send LINE notifications
-          if (lineRecipients.length > 0) {
-            console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-
-            const linePromises = lineRecipients.map((user) => {
-              // Prepare flexible message for LINE
-              const linePayload = {
-                caseNo: ticketData.ticket_number,
-                assetName:
-                  ticketData.PUNAME ||
-                  ticketData.machine_number ||
-                  "Unknown Asset",
-                problem: ticketData.title || "No description",
-                // actionBy: reviewerName,
-                comment:
-                  review_reason || "งานได้รับการตรวจสอบและอนุมัติโดยผู้ร้องขอ",
-                detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-                extraKVs: [
-                  //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                  //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-
-                  {
-                    label: "Satisfaction Rating",
-                    value: satisfaction_rating
-                      ? `${satisfaction_rating}/5 ⭐`
-                      : "ไม่ระบุ",
-                  },
-                  { label: "Status", value: "REVIEWED" },
-                  { label: "Reviewed by", value: reviewerName },
-                ],
-              };
-
-              return abnFlexService.sendToUser(user.LineID, [
-                abnFlexService.buildTicketFlexMessage(
-                  abnFlexService.TicketState.REVIEWED,
-                  linePayload
-                ),
-              ]);
-            });
-
-            const lineResults = await Promise.all(linePromises);
-            const successfulLines = lineResults.filter(
-              (result) => result.success
-            ).length;
-
-            console.log(
-              `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-            );
-          } else {
-            console.log(
-              `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
-            );
-          }
-
-          console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
-          console.log(
-            `📊 Final Summary: ${emailRecipients.length || 0} emails, ${
-              lineRecipients.length || 0
-            } LINE messages`
-          );
-          console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-        } catch (error) {
-          console.error(
-            "Error sending notifications for ticket review approval:",
-            error
-          );
-          throw error;
-        }
+        await notificationQueue.addReviewedTicketNotificationJob({
+          ticketData: ticketDataForNotifications,
+          reviewerName,
+          review_reason,
+          satisfaction_rating,
+          emailRecipients,
+          lineRecipients,
+          linePayload,
+        });
       }
     );
 
@@ -4855,242 +3795,70 @@ const approveClose = async (req, res) => {
       // Don't fail the close action if Cedar fails
     }
 
-    // Send notifications according to new workflow logic: requester + assignee + actor (closer)
+    // Send notifications via queue: requester + assignee + actor (closer)
     await safeSendNotifications("send ticket closure notifications", async () => {
-      try {
-        // Get notification users using the new workflow system (single call)
-        const notificationUsers = await getTicketNotificationRecipients(
-          id,
-          "approve_close",
-          approved_by
-        );
-        console.log(`\n=== TICKET CLOSURE NOTIFICATIONS SUMMARY ===`);
-        console.log(`Ticket: ${id} (ID: ${id})`);
-        console.log(`Action: APPROVE_CLOSE`);
-        console.log(
-          `Closed by: ${approved_by} (${getUserDisplayNameFromRequest(
-            req
-          )}) - Level: ${ticket.user_approval_level || 0}`
-        );
-        console.log(`Close reason: ${close_reason || "N/A"}`);
-        console.log(`Previous status: reviewed`);
-        console.log(`New status: closed`);
-        console.log(
-          `Total notification users from SP: ${notificationUsers.length}`
-        );
+      const notificationUsers = await getTicketNotificationRecipients(id, "approve_close", approved_by);
+      if (notificationUsers.length === 0) return;
 
-        if (notificationUsers.length === 0) {
-          console.log(
-            `⚠️  No notification users found for approve_close action`
-          );
-          console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-          return;
-        }
+      const ticketDetailResult = await runQuery(
+        pool,
+        `SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
+               pu.PUCODE, pu.PUNAME, pe.plant as plant_code, pe.area as area_code, pe.line as line_code,
+               pe.machine as machine_code, pe.number as machine_number
+           FROM IgxTickets t
+           LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+           LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+           WHERE t.id = @ticket_id`,
+        [{ name: "ticket_id", type: sql.Int, value: id }]
+      );
+      const ticketData = firstRecord(ticketDetailResult);
+      const closerName = getUserDisplayNameFromRequest(req);
 
-        // LOG ALL NOTIFICATION USERS BEFORE FILTERING
-        console.log("\n📋 ALL NOTIFICATION USERS (Before Filtering):");
-        notificationUsers.forEach((user, index) => {
-          const hasEmail = user.EMAIL && user.EMAIL.trim() !== "";
-          const hasLineID = user.LineID && user.LineID.trim() !== "";
-          const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : "❌ No Email";
-          const lineStatus = hasLineID ? `✅ ${user.LineID}` : "❌ No LineID";
+      const ticketDataForNotifications = {
+        id: id,
+        ticket_number: ticketData.ticket_number,
+        title: ticketData.title,
+        description: ticketData.title,
+        pucode: ticketData.PUCODE,
+        plant_code: ticketData.plant_code,
+        area_code: ticketData.area_code,
+        line_code: ticketData.line_code,
+        machine_code: ticketData.machine_code,
+        machine_number: ticketData.machine_number,
+        plant_name: ticketData.PUNAME,
+        PUNAME: ticketData.PUNAME,
+        severity_level: ticketData.severity_level,
+        priority: ticketData.priority,
+        created_by: ticket.created_by,
+        assigned_to: ticketData.assigned_to,
+        close_reason: close_reason,
+        created_at: new Date().toISOString(),
+      };
 
-          console.log(
-            `  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`
-          );
-          console.log(`     └─ Reason: ${user.notification_reason}`);
-          console.log(`     └─ Type: ${user.recipient_type}`);
-          console.log(`     └─ Email: ${emailStatus}`);
-          console.log(`     └─ LineID: ${lineStatus}`);
-        });
+      const emailRecipients = notificationUsers.filter((u) => u.EMAIL && u.EMAIL.trim() !== "");
+      const lineRecipients = notificationUsers.filter((u) => u.LineID && u.LineID.trim() !== "");
+      const linePayload = {
+        caseNo: ticketData.ticket_number,
+        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+        problem: ticketData.title || "No description",
+        actionBy: closerName,
+        detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+        comment: close_reason || "เคสถูกปิดโดยผู้จัดการ",
+        extraKVs: [
+          { label: "Status", value: "CLOSED" },
+          { label: "Closed by", value: closerName },
+        ],
+      };
 
-        // COUNT USERS BY RECIPIENT TYPE
-        const userCounts = notificationUsers.reduce((counts, user) => {
-          const type = user.recipient_type || "Unknown";
-          counts[type] = (counts[type] || 0) + 1;
-          return counts;
-        }, {});
-
-        console.log("\n📊 RECIPIENT TYPE BREAKDOWN:");
-        Object.entries(userCounts).forEach(([type, count]) => {
-          console.log(`  • ${type}: ${count} user(s)`);
-        });
-
-        // COUNT USERS BY NOTIFICATION CAPABILITY
-        const emailCapable = notificationUsers.filter(
-          (u) => u.EMAIL && u.EMAIL.trim() !== ""
-        ).length;
-        const lineCapable = notificationUsers.filter(
-          (u) => u.LineID && u.LineID.trim() !== ""
-        ).length;
-        const bothCapable = notificationUsers.filter(
-          (u) =>
-            u.EMAIL &&
-            u.EMAIL.trim() !== "" &&
-            u.LineID &&
-            u.LineID.trim() !== ""
-        ).length;
-        const noContactInfo = notificationUsers.filter(
-          (u) =>
-            (!u.EMAIL || u.EMAIL.trim() === "") &&
-            (!u.LineID || u.LineID.trim() === "")
-        ).length;
-
-        console.log("\n📞 NOTIFICATION CAPABILITY:");
-        console.log(`  • Email capable: ${emailCapable} user(s)`);
-        console.log(`  • LINE capable: ${lineCapable} user(s)`);
-        console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
-        console.log(`  • No contact info: ${noContactInfo} user(s)`);
-
-        // Get ticket details for notification data
-        const ticketDetailResult = await runQuery(
-          pool,
-          `
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
-                           pu.PUCODE, pu.PUNAME,
-                           pe.plant as plant_code,
-                           pe.area as area_code,
-                           pe.line as line_code,
-                           pe.machine as machine_code,
-                           pe.number as machine_number
-                    FROM IgxTickets t
-                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id
-                `,
-          [{ name: "ticket_id", type: sql.Int, value: id }]
-        );
-
-        const ticketData = firstRecord(ticketDetailResult);
-        const closerName = getUserDisplayNameFromRequest(req);
-
-        // Prepare ticket data for notifications
-        const ticketDataForNotifications = {
-          id: id,
-          ticket_number: ticketData.ticket_number,
-          title: ticketData.title,
-          description: ticketData.title, // Using title as description for close notifications
-          pucode: ticketData.PUCODE,
-          plant_code: ticketData.plant_code,
-          area_code: ticketData.area_code,
-          line_code: ticketData.line_code,
-          machine_code: ticketData.machine_code,
-          machine_number: ticketData.machine_number,
-          plant_name: ticketData.PUNAME,
-          PUNAME: ticketData.PUNAME, // For email template compatibility
-          severity_level: ticketData.severity_level,
-          priority: ticketData.priority,
-          created_by: ticket.created_by,
-          assigned_to: ticketData.assigned_to,
-          close_reason: close_reason,
-          created_at: new Date().toISOString(),
-        };
-
-        // Filter recipients for each notification type
-        const emailRecipients = notificationUsers.filter(
-          (user) => user.EMAIL && user.EMAIL.trim() !== ""
-        );
-        const lineRecipients = notificationUsers.filter(
-          (user) => user.LineID && user.LineID.trim() !== ""
-        );
-
-        console.log("\n📧 EMAIL RECIPIENTS (After Filtering):");
-        if (emailRecipients.length === 0) {
-          console.log("  ⚠️  No email-capable recipients found");
-        } else {
-          emailRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        console.log("\n💬 LINE RECIPIENTS (After Filtering):");
-        if (lineRecipients.length === 0) {
-          console.log("  ⚠️  No LINE-capable recipients found");
-        } else {
-          lineRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-          await emailService.sendTicketClosedNotification(
-            ticketDataForNotifications,
-            closerName,
-            close_reason,
-            null,
-            emailRecipients
-          );
-          console.log(
-            `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping email notifications - no email-capable recipients`
-          );
-        }
-
-        // Send LINE notifications
-        if (lineRecipients.length > 0) {
-          console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-
-          const linePromises = lineRecipients.map((user) => {
-            // Prepare flexible message for LINE
-            const linePayload = {
-              caseNo: ticketData.ticket_number,
-              assetName:
-                ticketData.PUNAME ||
-                ticketData.machine_number ||
-                "Unknown Asset",
-              problem: ticketData.title || "No description",
-              actionBy: closerName,
-              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-              comment: close_reason || "เคสถูกปิดโดยผู้จัดการ",
-              extraKVs: [
-                //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-
-                { label: "Status", value: "CLOSED" },
-                { label: "Closed by", value: closerName },
-              ],
-            };
-
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(
-                abnFlexService.TicketState.CLOSED,
-                linePayload
-              ),
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(
-            (result) => result.success
-          ).length;
-
-          console.log(
-            `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
-          );
-        }
-
-        console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
-        console.log(
-          `📊 Final Summary: ${emailRecipients.length || 0} emails, ${
-            lineRecipients.length || 0
-          } LINE messages`
-        );
-        console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-      } catch (error) {
-        console.error("Error sending notifications for ticket closure:", error);
-        throw error;
-      }
+      await notificationQueue.addCloseTicketNotificationJob({
+        ticketData: ticketDataForNotifications,
+        closerName,
+        close_reason,
+        satisfaction_rating: null,
+        emailRecipients,
+        lineRecipients,
+        linePayload,
+      });
     });
 
     res.json({
@@ -5258,280 +4026,78 @@ const reassignTicket = async (req, res) => {
       // Don't fail the reassign action if Cedar fails
     }
 
-    // Send notifications according to new workflow logic: requester + assignee + actor (reassigner)
+    // Send notifications via queue: requester + assignee + actor (reassigner)
     await safeSendNotifications("send ticket reassignment notifications", async () => {
-      try {
-        // Get notification users using the new workflow system (single call)
-        const notificationUsers = await getTicketNotificationRecipients(
-          id,
-          "reassign",
-          reassigned_by
-        );
-        console.log(`\n=== TICKET REASSIGNMENT NOTIFICATIONS SUMMARY ===`);
-        console.log(`Ticket: ${id} (ID: ${id})`);
-        console.log(`Action: REASSIGN`);
-        console.log(
-          `Reassigned by: ${reassigned_by} (${getUserDisplayNameFromRequest(
-            req
-          )})`
-        );
-        console.log(`From assignee: ${ticket.assigned_to}`);
-        console.log(
-          `To assignee: ${new_assignee_id} (${validAssignee.PERSON_NAME})`
-        );
-        console.log(`Schedule: ${schedule_start} to ${schedule_finish}`);
-        console.log(`Reassignment reason: ${notes || "N/A"}`);
-        console.log(
-          `Total notification users from SP: ${notificationUsers.length}`
-        );
+      const notificationUsers = await getTicketNotificationRecipients(id, "reassign", reassigned_by);
+      if (notificationUsers.length === 0) return;
 
-        if (notificationUsers.length === 0) {
-          console.log(`⚠️  No notification users found for reassign action`);
-          console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-          return;
-        }
+      const ticketDetailResult = await runQuery(
+        pool,
+        `SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
+               pe.plant as plant_code, pe.area as area_code, pe.line as line_code,
+               pe.machine as machine_code, pe.number as machine_number, pe.puname as PUNAME
+           FROM IgxTickets t
+           LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+           LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+           WHERE t.id = @ticket_id`,
+        [{ name: "ticket_id", type: sql.Int, value: id }]
+      );
+      const ticketData = firstRecord(ticketDetailResult);
+      const reassignerName = getUserDisplayNameFromRequest(req);
 
-        // LOG ALL NOTIFICATION USERS BEFORE FILTERING
-        console.log("\n📋 ALL NOTIFICATION USERS (Before Filtering):");
-        notificationUsers.forEach((user, index) => {
-          const hasEmail = user.EMAIL && user.EMAIL.trim() !== "";
-          const hasLineID = user.LineID && user.LineID.trim() !== "";
-          const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : "❌ No Email";
-          const lineStatus = hasLineID ? `✅ ${user.LineID}` : "❌ No LineID";
+      const ticketDataForNotifications = {
+        id: id,
+        ticket_number: ticketData.ticket_number,
+        title: ticketData.title,
+        description: ticketData.title,
+        pucode: ticketData.PUCODE,
+        plant_code: ticketData.plant_code,
+        area_code: ticketData.area_code,
+        line_code: ticketData.line_code,
+        machine_code: ticketData.machine_code,
+        machine_number: ticketData.machine_number,
+        plant_name: ticketData.PUNAME,
+        PUNAME: ticketData.PUNAME,
+        severity_level: ticketData.severity_level,
+        priority: ticketData.priority,
+        created_by: ticket.created_by,
+        assigned_to: new_assignee_id,
+        previous_assignee: ticket.assigned_to,
+        schedule_start: schedule_start,
+        schedule_finish: schedule_finish,
+        created_at: new Date().toISOString(),
+      };
 
-          console.log(
-            `  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`
-          );
-          console.log(`     └─ Reason: ${user.notification_reason}`);
-          console.log(`     └─ Type: ${user.recipient_type}`);
-          console.log(`     └─ Email: ${emailStatus}`);
-          console.log(`     └─ LineID: ${lineStatus}`);
-        });
+      const emailRecipients = notificationUsers.filter((u) => u.EMAIL && u.EMAIL.trim() !== "");
+      const lineRecipients = notificationUsers.filter((u) => u.LineID && u.LineID.trim() !== "");
+      const linePayload = {
+        caseNo: ticketData.ticket_number,
+        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+        problem: ticketData.title || "No description",
+        actionBy: reassignerName,
+        comment: notes || "งานได้รับการมอบหมายและกำหนดตารางเวลาใหม่",
+        detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+        extraKVs: [
+          { label: "Severity", value: (ticketData.severity_level || "medium").toUpperCase() },
+          { label: "Priority", value: (ticketData.priority || "normal").toUpperCase() },
+          { label: "New Assignee", value: validAssignee.PERSON_NAME },
+          { label: "Schedule Start", value: new Date(schedule_start).toLocaleDateString("th-TH") },
+          { label: "Schedule Finish", value: new Date(schedule_finish).toLocaleDateString("th-TH") },
+          { label: "Status", value: "PLANED" },
+          { label: "Reassigned by", value: reassignerName },
+        ],
+      };
 
-        // COUNT USERS BY RECIPIENT TYPE
-        const userCounts = notificationUsers.reduce((counts, user) => {
-          const type = user.recipient_type || "Unknown";
-          counts[type] = (counts[type] || 0) + 1;
-          return counts;
-        }, {});
-
-        console.log("\n📊 RECIPIENT TYPE BREAKDOWN:");
-        Object.entries(userCounts).forEach(([type, count]) => {
-          console.log(`  • ${type}: ${count} user(s)`);
-        });
-
-        // COUNT USERS BY NOTIFICATION CAPABILITY
-        const emailCapable = notificationUsers.filter(
-          (u) => u.EMAIL && u.EMAIL.trim() !== ""
-        ).length;
-        const lineCapable = notificationUsers.filter(
-          (u) => u.LineID && u.LineID.trim() !== ""
-        ).length;
-        const bothCapable = notificationUsers.filter(
-          (u) =>
-            u.EMAIL &&
-            u.EMAIL.trim() !== "" &&
-            u.LineID &&
-            u.LineID.trim() !== ""
-        ).length;
-        const noContactInfo = notificationUsers.filter(
-          (u) =>
-            (!u.EMAIL || u.EMAIL.trim() === "") &&
-            (!u.LineID || u.LineID.trim() === "")
-        ).length;
-
-        console.log("\n📞 NOTIFICATION CAPABILITY:");
-        console.log(`  • Email capable: ${emailCapable} user(s)`);
-        console.log(`  • LINE capable: ${lineCapable} user(s)`);
-        console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
-        console.log(`  • No contact info: ${noContactInfo} user(s)`);
-
-        // Get ticket details for notification data
-        const ticketDetailResult = await runQuery(
-          pool,
-          `
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
-                           pe.plant as plant_code,
-                           pe.area as area_code,
-                           pe.line as line_code,
-                           pe.machine as machine_code,
-                           pe.number as machine_number,
-                           pe.puname as PUNAME
-                    FROM IgxTickets t
-                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id
-                `,
-          [{ name: "ticket_id", type: sql.Int, value: id }]
-        );
-
-        const ticketData = firstRecord(ticketDetailResult);
-        const reassignerName = getUserDisplayNameFromRequest(req);
-
-        // Prepare ticket data for notifications
-        const ticketDataForNotifications = {
-          id: id,
-          ticket_number: ticketData.ticket_number,
-          title: ticketData.title,
-          description: ticketData.title, // Using title as description for reassign notifications
-          pucode: ticketData.PUCODE,
-          plant_code: ticketData.plant_code,
-          area_code: ticketData.area_code,
-          line_code: ticketData.line_code,
-          machine_code: ticketData.machine_code,
-          machine_number: ticketData.machine_number,
-          plant_name: ticketData.PUNAME,
-          PUNAME: ticketData.PUNAME, // For email template compatibility
-          severity_level: ticketData.severity_level,
-          priority: ticketData.priority,
-          created_by: ticket.created_by,
-          assigned_to: new_assignee_id,
-          previous_assignee: ticket.assigned_to,
-          schedule_start: schedule_start,
-          schedule_finish: schedule_finish,
-          created_at: new Date().toISOString(),
-        };
-
-        // Filter recipients for each notification type
-        const emailRecipients = notificationUsers.filter(
-          (user) => user.EMAIL && user.EMAIL.trim() !== ""
-        );
-        const lineRecipients = notificationUsers.filter(
-          (user) => user.LineID && user.LineID.trim() !== ""
-        );
-
-        console.log("\n📧 EMAIL RECIPIENTS (After Filtering):");
-        if (emailRecipients.length === 0) {
-          console.log("  ⚠️  No email-capable recipients found");
-        } else {
-          emailRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        console.log("\n💬 LINE RECIPIENTS (After Filtering):");
-        if (lineRecipients.length === 0) {
-          console.log("  ⚠️  No LINE-capable recipients found");
-        } else {
-          lineRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-          // Send individual emails to each recipient sequentially to avoid rate limits
-          const emailPromises = emailRecipients.map(
-            (user) => () =>
-              emailService.sendTicketStatusUpdateNotification(
-                ticketDataForNotifications,
-                ticket.status,
-                "planed",
-                reassignerName,
-                user.EMAIL
-              )
-          );
-          await sendEmailsSequentially(emailPromises);
-          console.log(
-            `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} to ${emailRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping email notifications - no email-capable recipients`
-          );
-        }
-
-        // Send LINE notifications
-        if (lineRecipients.length > 0) {
-          console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-          // Get ticket images for FLEX message
-          const imagesResult = await runQuery(
-            pool,
-            `
-                        SELECT image_url, image_name 
-                        FROM IgxTicketImages 
-                        WHERE ticket_id = @ticket_id 
-                        ORDER BY uploaded_at ASC
-                    `,
-            [{ name: "ticket_id", type: sql.Int, value: id }]
-          );
-
-          const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
-
-          const linePromises = lineRecipients.map((user) => {
-            // Prepare flexible message for LINE
-            const linePayload = {
-              caseNo: ticketData.ticket_number,
-              assetName:
-                ticketData.PUNAME ||
-                ticketData.machine_number ||
-                "Unknown Asset",
-              problem: ticketData.title || "No description",
-              actionBy: reassignerName,
-              comment: notes || "งานได้รับการมอบหมายและกำหนดตารางเวลาใหม่",
-              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-              extraKVs: [
-                {
-                  label: "Severity",
-                  value: (ticketData.severity_level || "medium").toUpperCase(),
-                },
-                {
-                  label: "Priority",
-                  value: (ticketData.priority || "normal").toUpperCase(),
-                },
-                { label: "New Assignee", value: validAssignee.PERSON_NAME },
-                {
-                  label: "Schedule Start",
-                  value: new Date(schedule_start).toLocaleDateString("th-TH"),
-                },
-                {
-                  label: "Schedule Finish",
-                  value: new Date(schedule_finish).toLocaleDateString("th-TH"),
-                },
-                { label: "Status", value: "PLANED" },
-                { label: "Reassigned by", value: reassignerName },
-              ],
-            };
-
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(
-                abnFlexService.TicketState.PLANED,
-                linePayload
-              ),
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(
-            (result) => result.success
-          ).length;
-
-          console.log(
-            `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
-          );
-        }
-
-        console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
-        console.log(
-          `📊 Final Summary: ${emailRecipients.length || 0} emails, ${
-            lineRecipients.length || 0
-          } LINE messages`
-        );
-        console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-      } catch (error) {
-        console.error(
-          "Error sending notifications for ticket reassignment:",
-          error
-        );
-        throw error;
-      }
+      await notificationQueue.addReassignTicketNotificationJob({
+        ticketData: ticketDataForNotifications,
+        plannerName: reassignerName,
+        oldStatus: ticket.status,
+        newStatus: "planed",
+        emailRecipients,
+        lineRecipients,
+        linePayload,
+        lineStateKey: "PLANED",
+      });
     });
 
     res.json({
@@ -5796,252 +4362,68 @@ const reopenTicket = async (req, res) => {
       // Don't fail the reopen action if Cedar fails
     }
 
-    // Send notifications according to new workflow logic: assignee + actor (reopener)
+    // Send notifications via queue: assignee + actor (reopener)
     await safeSendNotifications("send ticket reopen notifications", async () => {
-      try {
-        // Get notification users using the new workflow system (single call)
-        const notificationUsers = await getTicketNotificationRecipients(
-          id,
-          "reopen",
-          reopened_by
-        );
-        console.log(`\n=== TICKET REOPEN NOTIFICATIONS SUMMARY ===`);
-        console.log(`Ticket: ${id} (ID: ${id})`);
-        console.log(`Action: REOPEN`);
-        console.log(
-          `Reopened by: ${reopened_by} (${getUserDisplayNameFromRequest(req)})`
-        );
-        console.log(`Reopen reason: ${reopen_reason || "N/A"}`);
-        console.log(`Previous status: Finished`);
-        console.log(`New status: reopened_in_progress`);
-        console.log(
-          `Total notification users from SP: ${notificationUsers.length}`
-        );
+      const notificationUsers = await getTicketNotificationRecipients(id, "reopen", reopened_by);
+      if (notificationUsers.length === 0) return;
 
-        if (notificationUsers.length === 0) {
-          console.log(`⚠️  No notification users found for reopen action`);
-          console.log(`=== END NOTIFICATION SUMMARY ===\n`);
-          return;
-        }
+      const ticketDetailResult = await runQuery(
+        pool,
+        `SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
+               pe.plant as plant_code, pe.area as area_code, pe.line as line_code,
+               pe.machine as machine_code, pe.number as machine_number, pe.puname as PUNAME
+           FROM IgxTickets t
+           LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+           LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+           WHERE t.id = @ticket_id`,
+        [{ name: "ticket_id", type: sql.Int, value: id }]
+      );
+      const ticketData = firstRecord(ticketDetailResult);
+      const reopenerName = getUserDisplayNameFromRequest(req);
 
-        // LOG ALL RECIPIENTS BEFORE FILTERING
-        console.log("\n📋 ALL NOTIFICATION USERS (Before Filtering):");
-        notificationUsers.forEach((user, index) => {
-          const hasEmail = user.EMAIL && user.EMAIL.trim() !== "";
-          const hasLineID = user.LineID && user.LineID.trim() !== "";
-          const emailStatus = hasEmail ? `✅ ${user.EMAIL}` : "❌ No Email";
-          const lineStatus = hasLineID ? `✅ ${user.LineID}` : "❌ No LineID";
+      const ticketDataForNotifications = {
+        id: id,
+        ticket_number: ticketData.ticket_number,
+        title: ticketData.title,
+        description: ticketData.title,
+        pucode: ticketData.PUCODE,
+        plant_code: ticketData.plant_code,
+        area_code: ticketData.area_code,
+        line_code: ticketData.line_code,
+        machine_code: ticketData.machine_code,
+        machine_number: ticketData.machine_number,
+        plant_name: ticketData.PUNAME,
+        PUNAME: ticketData.PUNAME,
+        severity_level: ticketData.severity_level,
+        priority: ticketData.priority,
+        created_by: ticket.created_by,
+        assigned_to: ticket.assigned_to,
+        reopen_reason: reopen_reason,
+        created_at: new Date().toISOString(),
+      };
 
-          console.log(
-            `  ${index + 1}. ${user.PERSON_NAME} (ID: ${user.PERSONNO})`
-          );
-          console.log(`     └─ Reason: ${user.notification_reason}`);
-          console.log(`     └─ Type: ${user.recipient_type}`);
-          console.log(`     └─ Email: ${emailStatus}`);
-          console.log(`     └─ LineID: ${lineStatus}`);
-        });
+      const emailRecipients = notificationUsers.filter((u) => u.EMAIL && u.EMAIL.trim() !== "");
+      const lineRecipients = notificationUsers.filter((u) => u.LineID && u.LineID.trim() !== "");
+      const linePayload = {
+        caseNo: ticketData.ticket_number,
+        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+        problem: ticketData.title || "No description",
+        comment: reopen_reason || "งานถูกเปิดใหม่ กรุณาดำเนินการต่อ",
+        detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
+        extraKVs: [
+          { label: "Status", value: "REOPENED_IN_PROGRESS" },
+          { label: "Reopened by", value: reopenerName },
+        ],
+      };
 
-        // COUNT USERS BY RECIPIENT TYPE
-        const userCounts = notificationUsers.reduce((counts, user) => {
-          const type = user.recipient_type || "Unknown";
-          counts[type] = (counts[type] || 0) + 1;
-          return counts;
-        }, {});
-
-        console.log("\n📊 RECIPIENT TYPE BREAKDOWN:");
-        Object.entries(userCounts).forEach(([type, count]) => {
-          console.log(`  • ${type}: ${count} user(s)`);
-        });
-
-        // COUNT USERS BY NOTIFICATION CAPABILITY
-        const emailCapable = notificationUsers.filter(
-          (u) => u.EMAIL && u.EMAIL.trim() !== ""
-        ).length;
-        const lineCapable = notificationUsers.filter(
-          (u) => u.LineID && u.LineID.trim() !== ""
-        ).length;
-        const bothCapable = notificationUsers.filter(
-          (u) =>
-            u.EMAIL &&
-            u.EMAIL.trim() !== "" &&
-            u.LineID &&
-            u.LineID.trim() !== ""
-        ).length;
-        const noContactInfo = notificationUsers.filter(
-          (u) =>
-            (!u.EMAIL || u.EMAIL.trim() === "") &&
-            (!u.LineID || u.LineID.trim() === "")
-        ).length;
-
-        console.log("\n📞 NOTIFICATION CAPABILITY:");
-        console.log(`  • Email capable: ${emailCapable} user(s)`);
-        console.log(`  • LINE capable: ${lineCapable} user(s)`);
-        console.log(`  • Both email + LINE: ${bothCapable} user(s)`);
-        console.log(`  • No contact info: ${noContactInfo} user(s)`);
-
-        // Get ticket details for notification data
-        const ticketDetailResult = await runQuery(
-          pool,
-          `
-                    SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.puno,
-                           pe.plant as plant_code,
-                           pe.area as area_code,
-                           pe.line as line_code,
-                           pe.machine as machine_code,
-                           pe.number as machine_number,
-                           pe.puname as PUNAME
-                    FROM IgxTickets t
-                    LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-                    LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-                    WHERE t.id = @ticket_id
-                `,
-          [{ name: "ticket_id", type: sql.Int, value: id }]
-        );
-
-        const ticketData = firstRecord(ticketDetailResult);
-        const reopenerName = getUserDisplayNameFromRequest(req);
-
-        // Prepare ticket data for notifications
-        const ticketDataForNotifications = {
-          id: id,
-          ticket_number: ticketData.ticket_number,
-          title: ticketData.title,
-          description: ticketData.title, // Using title as description for reopen notifications
-          pucode: ticketData.PUCODE,
-          plant_code: ticketData.plant_code,
-          area_code: ticketData.area_code,
-          line_code: ticketData.line_code,
-          machine_code: ticketData.machine_code,
-          machine_number: ticketData.machine_number,
-          plant_name: ticketData.PUNAME,
-          PUNAME: ticketData.PUNAME, // For email template compatibility
-          severity_level: ticketData.severity_level,
-          priority: ticketData.priority,
-          created_by: ticket.created_by,
-          assigned_to: ticket.assigned_to,
-          reopen_reason: reopen_reason,
-          created_at: new Date().toISOString(),
-        };
-
-        // Filter recipients for each notification type
-        const emailRecipients = notificationUsers.filter(
-          (user) => user.EMAIL && user.EMAIL.trim() !== ""
-        );
-        const lineRecipients = notificationUsers.filter(
-          (user) => user.LineID && user.LineID.trim() !== ""
-        );
-
-        console.log("\n📧 EMAIL RECIPIENTS (After Filtering):");
-        if (emailRecipients.length === 0) {
-          console.log("  ⚠️  No email-capable recipients found");
-        } else {
-          emailRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.EMAIL})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        console.log("\n💬 LINE RECIPIENTS (After Filtering):");
-        if (lineRecipients.length === 0) {
-          console.log("  ⚠️  No LINE-capable recipients found");
-        } else {
-          lineRecipients.forEach((user, index) => {
-            console.log(`  ${index + 1}. ${user.PERSON_NAME} (${user.LineID})`);
-            console.log(`     └─ Reason: ${user.notification_reason}`);
-          });
-        }
-
-        // Send email notifications
-        if (emailRecipients.length > 0) {
-          console.log(`\n📧 SENDING EMAIL NOTIFICATIONS...`);
-          await emailService.sendTicketReopenedNotification(
-            ticketDataForNotifications,
-            reopenerName,
-            reopen_reason,
-            emailRecipients
-          );
-          console.log(
-            `✅ Email notifications sent successfully for ticket ${ticketData.ticket_number} إلى ${emailRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping email notifications - no email-capable recipients`
-          );
-        }
-
-        // Send LINE notifications
-        if (lineRecipients.length > 0) {
-          console.log(`\n💬 SENDING LINE NOTIFICATIONS...`);
-          // Get ticket images for FLEX message
-          const imagesResult = await runQuery(
-            pool,
-            `
-                        SELECT image_url, image_name 
-                        FROM IgxTicketImages 
-                        WHERE ticket_id = @ticket_id 
-                        ORDER BY uploaded_at ASC
-                    `,
-            [{ name: "ticket_id", type: sql.Int, value: id }]
-          );
-
-          const ticketImages = mapImagesToLinePayload(imagesResult.recordset);
-
-          const linePromises = lineRecipients.map((user) => {
-            // Prepare flexible message for LINE
-            const linePayload = {
-              caseNo: ticketData.ticket_number,
-              assetName:
-                ticketData.PUNAME ||
-                ticketData.machine_number ||
-                "Unknown Asset",
-              problem: ticketData.title || "No description",
-              // actionBy: reopenerName,
-              comment: reopen_reason || "งานถูกเปิดใหม่ กรุณาดำเนินการต่อ",
-              detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-              extraKVs: [
-                //{ label: 'Severity', value: (ticketData.severity_level || 'medium').toUpperCase() },
-                //{ label: 'Priority', value: (ticketData.priority || 'normal').toUpperCase() },
-                { label: "Status", value: "REOPENED_IN_PROGRESS" },
-                { label: "Reopened by", value: reopenerName },
-              ],
-            };
-
-            return abnFlexService.sendToUser(user.LineID, [
-              abnFlexService.buildTicketFlexMessage(
-                abnFlexService.TicketState.REOPENED,
-                linePayload
-              ),
-            ]);
-          });
-
-          const lineResults = await Promise.all(linePromises);
-          const successfulLines = lineResults.filter(
-            (result) => result.success
-          ).length;
-
-          console.log(
-            `✅ LINE notifications sent successfully for ticket ${ticketData.ticket_number} to ${successfulLines}/${lineRecipients.length} recipients`
-          );
-        } else {
-          console.log(
-            `\n⚠️  Skipping LINE notifications - no LINE-capable recipients`
-          );
-        }
-
-        console.log(`\n=== NOTIFICATION SUMMARY Finished ===`);
-        console.log(
-          `📊 RECIPIENTS SENT TO: ${emailRecipients.length || 0} emails, ${
-            lineRecipients.length || 0
-          } LINE messages`
-        );
-        console.log(
-          `🎉 FINAL ACTION OF TICKET WORKFLOW NOTIFICATION STANDARDIZATION!`
-        );
-        console.log(`=== END OF REOPEN TASK COMPLETION SUMMARY ===\n`);
-      } catch (error) {
-        console.error("Error sending notifications for ticket reopen:", error);
-        throw error;
-      }
+      await notificationQueue.addReopenTicketNotificationJob({
+        ticketData: ticketDataForNotifications,
+        reopenerName,
+        reopen_reason,
+        emailRecipients,
+        lineRecipients,
+        linePayload,
+      });
     });
 
     res.json({
@@ -7054,7 +5436,6 @@ module.exports = {
   assignTicket,
   deleteTicket,
   uploadTicketImage,
-  uploadTicketImages,
   deleteTicketImage,
   acceptTicket,
   planTicket,

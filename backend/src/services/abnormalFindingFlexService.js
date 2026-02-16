@@ -45,7 +45,7 @@ const TicketState = Object.freeze({
  * Uses professional color palette for better UX
  */
 const STATE_COLORS = Object.freeze({
-  [TicketState.OPEN]: "#0EA5E9",          // Professional blue
+  [TicketState.CREATED]: "#0EA5E9",      // Professional blue (new ticket)
   [TicketState.ACCEPTED]: "#22C55E",           // Success green
   [TicketState.PLANED]: "#3B82F6",             // Planning blue
   [TicketState.IN_PROGRESS]: "#F59E0B",        // Work in progress amber
@@ -66,7 +66,7 @@ const STATE_COLORS = Object.freeze({
  * Provides localized user experience
  */
 const STATE_LABELS_TH = Object.freeze({
-  [TicketState.OPEN]: "สร้างเคสใหม่",
+  [TicketState.CREATED]: "สร้างเคสใหม่",
   [TicketState.ACCEPTED]: "รับงาน",
   [TicketState.PLANED]: "วางแผนและกำหนดตารางเวลา",
   [TicketState.IN_PROGRESS]: "เริ่มดำเนินการ",
@@ -87,7 +87,7 @@ const STATE_LABELS_TH = Object.freeze({
  * Fallback for international users
  */
 const STATE_LABELS_EN = Object.freeze({
-  [TicketState.OPEN]: "New Ticket Created",
+  [TicketState.CREATED]: "New Ticket Created",
   [TicketState.ACCEPTED]: "Ticket Accepted",
   [TicketState.PLANED]: "Planned and Scheduled",
   [TicketState.IN_PROGRESS]: "Work In Progress",
@@ -175,6 +175,7 @@ function buildTicketFlexMessage(state, payload, options = {}) {
 
   const statusColor = STATE_COLORS[state] || "#6B7280";
   const statusLabel = getStateLabel(state, language);
+  const viewDetailsLabel = language === 'en' ? 'View details' : 'ดูรายละเอียด';
 
   const contents = {
     type: "bubble",
@@ -289,13 +290,13 @@ function buildTicketFlexMessage(state, payload, options = {}) {
                 margin: "md",
                 action: {
                   type: "uri",
-                  label: "View details",
+                  label: viewDetailsLabel,
                   uri: payload.detailUrl || "https://example.com"
                 },
                 contents: [
                   {
                     type: "text",
-                    text: "View details",
+                    text: viewDetailsLabel,
                     size: "sm",
                     align: "center",
                     color: "#FFFFFF",

@@ -542,28 +542,6 @@ class TicketService {
     return result;
   }
 
-  async uploadTicketImages(
-    ticketId: number,
-    files: File[],
-    imageType: 'before' | 'after' | 'other' = 'other',
-  ): Promise<{ success: boolean; message: string; data: any[] }> {
-    if (!files.length) throw new Error('No files selected');
-    const headers = getAuthHeadersNoContentType();
-    const form = new FormData();
-    for (const file of files) form.append('images', file);
-    form.append('image_type', imageType);
-    const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}/images/batch`, {
-      method: 'POST',
-      headers,
-      body: form,
-    });
-    const result = await res.json();
-    if (!res.ok) {
-      throw new Error(result.message || 'Failed to upload images');
-    }
-    return result;
-  }
-
   async deleteTicketImage(ticketId: number, imageId: number): Promise<{ success: boolean; message: string }> {
     const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${ticketId}/images/${imageId}`, {

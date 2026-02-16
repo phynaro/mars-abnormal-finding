@@ -96,9 +96,6 @@ router.post('/:id/images', requireFormPermission('TKT', 'save'), upload.single('
 // Delete ticket image (requires TKT form save permission)
 router.delete('/:id/images/:imageId', requireFormPermission('TKT', 'save'), ticketController.deleteTicketImage);
 
-// Upload multiple images (requires TKT form save permission)
-router.post('/:id/images/batch', requireFormPermission('TKT', 'save'), upload.array('images', 10), ticketController.uploadTicketImages);
-
 // Test email notification (for development/testing)
 router.post('/test-email', async (req, res) => {
     try {

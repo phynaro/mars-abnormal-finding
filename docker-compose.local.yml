@@ -11,6 +11,9 @@ services:
       - ./backend/.env
     environment:
       - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
     volumes:
       # Mount source code for development (hot reload)
       - ./backend/src:/app/src
@@ -31,6 +34,28 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  # Notification worker (BullMQ consumer for create-ticket etc.)
+  notification-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: mars-backend:local
+    container_name: mars-notification-worker-local
+    command: node src/workers/notificationWorker.js
+    env_file:
+      - ./backend/.env
+    environment:
+      - NODE_ENV=development
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend/src:/app/src
+      - /app/node_modules
+    networks:
+      - mars-network
+    depends_on:
+      - redis
+    restart: unless-stopped
 
   # Frontend service with Vite dev server and hot reload
   frontend:
@@ -106,29 +131,28 @@ services:
   #     - mars-network
   #   restart: unless-stopped
 
-  # Optional: Redis for caching (if needed)
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: mars-redis-local
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - mars_redis_data:/data
-  #   networks:
-  #     - mars-network
-  #   restart: unless-stopped
-  #   command: redis-server --appendonly yes
+  # Redis for BullMQ notification queue
+  redis:
+    image: redis:7-alpine
+    container_name: mars-redis-local
+    ports:
+      - "6379:6379"
+    volumes:
+      - mars_redis_data:/data
+    networks:
+      - mars-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
 
 networks:
   mars-network:
     driver: bridge
     name: mars-local-network
 
+volumes:
   # Uncomment if using database
   # mars_db_data:
   #   driver: local
   #   name: mars-db-data-local
-  # Uncomment if using Redis
-  # mars_redis_data:
-  #   driver: local
-  #   name: mars-redis-data-local
+  mars_redis_data:
+    name: mars-redis-data-local
