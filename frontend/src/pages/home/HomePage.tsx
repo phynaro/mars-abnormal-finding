@@ -41,7 +41,7 @@ const HomePage: React.FC = () => {
   const [personalTicketError, setPersonalTicketError] = useState<string | null>(null);
 
   // Personal closure rate data state (L2+ users only)
-  const [personalClosureRateData, setPersonalClosureRateData] = useState<Array<{ period: string; rate: number; target: number }>>([]);
+  const [personalClosureRateData, setPersonalClosureRateData] = useState<Array<{ period: string; rate: number; target: number; total?: number; onTime?: number; closedLate?: number; open?: number }>>([]);
   const [personalClosureRateLoading, setPersonalClosureRateLoading] = useState<boolean>(false);
   const [personalClosureRateError, setPersonalClosureRateError] = useState<string | null>(null);
 
@@ -254,11 +254,21 @@ const HomePage: React.FC = () => {
           targetMap[target.period] = target.target_value;
         });
 
-        const dataWithTargets = closureResponse.data.map((item: { period: string; rate: number }) => ({
-          period: item.period,
-          rate: item.rate,
-          target: targetMap[item.period] ?? 0
-        }));
+        const dataWithTargets = closureResponse.data.map((item: { period: string; rate: number; total?: number; on_time_count?: number; closed_late_count?: number }) => {
+          const total = item.total ?? 0;
+          const onTime = item.on_time_count ?? 0;
+          const closedLate = item.closed_late_count ?? 0;
+          const open = Math.max(0, total - onTime - closedLate);
+          return {
+            period: item.period,
+            rate: item.rate,
+            target: targetMap[item.period] ?? 0,
+            total,
+            onTime,
+            closedLate,
+            open
+          };
+        });
         setPersonalClosureRateData(dataWithTargets);
       } else {
         setPersonalClosureRateError(t('homepage.failedToFetchPersonalClosureRateData'));

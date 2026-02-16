@@ -215,7 +215,7 @@ class PersonnelController {
         ) AS paginated_results
         WHERE row_num > @offset AND row_num <= @offset + @limit
       `;
-      console.log(dataQuery);
+     
       const dataRequest = pool.request();
       params.forEach(param => dataRequest.input(param.name, param.type, param.value));
       dataRequest.input('offset', sql.Int, offset);

@@ -14,10 +14,11 @@ import { checkPermission } from '@/utils/permissionChecker';
 
 interface IconRailProps {
   activeId: string | null;
+  submenuCollapsed?: boolean;
   onSelect: (id: string) => void;
 }
 
-export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
+export const IconRail: React.FC<IconRailProps> = ({ activeId, submenuCollapsed = false, onSelect }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -35,10 +36,10 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
     return true;
   };
 
-  // If user clicked an icon that has submenu but hasn't navigated yet,
-  // highlight only that icon (not the previous route's icon)
+  // If user clicked an icon that has submenu but hasn't navigated yet (and submenu is expanded),
+  // highlight only that icon. When submenu is collapsed, highlight by current path instead.
   const activeMenu = menuItems.find(m => m.id === activeId);
-  const forceHighlightById = !!activeMenu?.children?.length && !location.pathname.startsWith(activeMenu.path);
+  const forceHighlightById = !!activeMenu?.children?.length && !location.pathname.startsWith(activeMenu.path) && !submenuCollapsed;
 
   return (
     <div className="sticky top-0 self-start flex h-[100dvh] flex-col justify-between bg-primary text-primary-foreground w-10 min-w-[48px] flex-none z-50">
@@ -58,10 +59,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, onSelect }) => {
                     className={`relative flex h-10 w-10 items-center justify-center rounded-md transition-colors ${isActive ? 'bg-primary-foreground/20' : 'hover:bg-primary-foreground/10'}`}
                     onClick={() => {
                       onSelect(item.id);
-                      if (item.children && item.children.length > 0) {
-                        const first = item.children[0];
-                        navigate(first.path);
-                      } else {
+                      if (!item.children?.length) {
                         navigate(item.path);
                       }
                     }}

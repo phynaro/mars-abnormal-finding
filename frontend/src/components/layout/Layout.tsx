@@ -60,6 +60,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       {/* Desktop: Icon rail + optional submenu */}
       <IconRail
         activeId={activeId}
+        submenuCollapsed={submenuCollapsed}
         onSelect={(id) => {
           setActiveId(id);
           // Auto-expand submenu when selecting a main menu item that has children

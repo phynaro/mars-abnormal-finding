@@ -819,7 +819,7 @@ class TicketService {
     year: number;
     startDate: string;
     endDate: string;
-  }): Promise<{ success: boolean; data: Array<{ period: string; total: number; on_time_count: number; rate: number }> }> {
+  }): Promise<{ success: boolean; data: Array<{ period: string; total: number; on_time_count: number; closed_late_count: number; rate: number }> }> {
     const headers = getAuthHeaders();
     const queryParams = new URLSearchParams();
     queryParams.set('year', params.year.toString());

@@ -4491,7 +4491,8 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
 
 /**
  * Get Department User KPI - Closure Rate
- * Returns closure rate (on-time closed / total closed) per user per period, grouped by schedule_finish
+ * total = all tickets with schedule_finish in period and assigned_to set (any status).
+ * on_time_count and rate from closed tickets only (rate = on_time / total_closed * 100).
  */
 const getDepartmentUserKPIClosureRate = async (req, res) => {
   try {
@@ -4507,16 +4508,20 @@ const getDepartmentUserKPIClosureRate = async (req, res) => {
     const pool = await sql.connect(dbConfig);
 
     const query = `
-      WITH ClosureByUserPeriod AS (
+      WITH AssignedByUserPeriod AS (
+        SELECT t.assigned_to AS PERSONNO, dd.PeriodNo, COUNT(*) AS total
+        FROM IgxTickets t
+        INNER JOIN Person p ON p.PERSONNO = t.assigned_to AND p.DEPTNO = @deptNo AND p.FLAGDEL != 'Y'
+        INNER JOIN IgxDateDim dd ON dd.DateKey = CAST(t.schedule_finish AS DATE) AND dd.CompanyYear = @year
+        WHERE t.assigned_to IS NOT NULL AND t.schedule_finish IS NOT NULL
+        GROUP BY t.assigned_to, dd.PeriodNo
+      ),
+      ClosureByUserPeriod AS (
         SELECT
           t.assigned_to AS PERSONNO,
           dd.PeriodNo,
-          COUNT(*) AS total,
           SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) AS on_time_count,
-          CASE WHEN COUNT(*) > 0
-            THEN CAST(SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) * 100
-            ELSE 0
-          END AS rate_pct
+          SUM(CASE WHEN t.actual_finish_at >= t.schedule_finish THEN 1 ELSE 0 END) AS closed_late_count
         FROM IgxTickets t
         INNER JOIN Person p ON p.PERSONNO = t.assigned_to AND p.DEPTNO = @deptNo AND p.FLAGDEL != 'Y'
         INNER JOIN IgxDateDim dd ON dd.DateKey = CAST(t.schedule_finish AS DATE) AND dd.CompanyYear = @year
@@ -4549,11 +4554,18 @@ const getDepartmentUserKPIClosureRate = async (req, res) => {
           aup.DEPTNO,
           aup.DEPTNAME,
           'P' + CAST(aup.PeriodNo AS VARCHAR(10)) AS period,
-          ISNULL(cup.rate_pct, 0) AS tickets,
+          ISNULL(assigned.total, 0) AS total,
+          ISNULL(cup.on_time_count, 0) AS on_time_count,
+          ISNULL(cup.closed_late_count, 0) AS closed_late_count,
+          CASE
+            WHEN ISNULL(assigned.total, 0) > 0
+            THEN CAST(ISNULL(cup.on_time_count, 0) + ISNULL(cup.closed_late_count, 0) AS FLOAT) / assigned.total * 100
+            ELSE 0
+          END AS tickets,
           ISNULL(tpt.target_value, 0) AS target
         FROM AllUserPeriods aup
-        LEFT JOIN ClosureByUserPeriod cup
-          ON aup.PERSONNO = cup.PERSONNO AND aup.PeriodNo = cup.PeriodNo
+        LEFT JOIN AssignedByUserPeriod assigned ON aup.PERSONNO = assigned.PERSONNO AND aup.PeriodNo = assigned.PeriodNo
+        LEFT JOIN ClosureByUserPeriod cup ON aup.PERSONNO = cup.PERSONNO AND aup.PeriodNo = cup.PeriodNo
         LEFT JOIN IgxTicketPersonTarget tpt
           ON tpt.PERSONNO = aup.PERSONNO
           AND tpt.period = 'P' + CAST(aup.PeriodNo AS VARCHAR(10))
@@ -4583,7 +4595,10 @@ const getDepartmentUserKPIClosureRate = async (req, res) => {
       userMap[row.PERSONNO].periods.push({
         period: row.period,
         tickets: Math.round(row.tickets * 10) / 10,
-        target: row.target
+        target: row.target,
+        total: row.total,
+        on_time_count: row.on_time_count,
+        closed_late_count: row.closed_late_count
       });
     });
 

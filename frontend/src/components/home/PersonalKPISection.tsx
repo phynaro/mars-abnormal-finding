@@ -7,7 +7,7 @@ export type PersonalKPISectionProps = {
   personalTicketData: Array<{ period: string; tickets: number; target: number }>;
   personalTicketLoading: boolean;
   personalTicketError: string | null;
-  personalClosureRateData: Array<{ period: string; rate: number; target?: number }>;
+  personalClosureRateData: Array<{ period: string; rate: number; target?: number; total?: number; onTime?: number; closedLate?: number; open?: number }>;
   personalClosureRateLoading: boolean;
   personalClosureRateError: string | null;
   personalKPIData: any;

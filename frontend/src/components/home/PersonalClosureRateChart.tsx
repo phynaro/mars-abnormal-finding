@@ -16,8 +16,18 @@ import { BarChart3, Settings } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getPeriodDateRange } from "@/utils/periodCalculations";
 
+export type PersonalClosureRateChartDataPoint = {
+  period: string;
+  rate: number;
+  target?: number;
+  total?: number;
+  onTime?: number;
+  closedLate?: number;
+  open?: number;
+};
+
 export type PersonalClosureRateChartProps = {
-  data: Array<{ period: string; rate: number; target?: number }>;
+  data: PersonalClosureRateChartDataPoint[];
   loading: boolean;
   error: string | null;
   onKpiSetupClick: () => void;
@@ -37,15 +47,16 @@ const PersonalClosureRateChart: React.FC<PersonalClosureRateChartProps> = ({
     if (active && payload && payload.length) {
       const dataPoint = payload[0].payload;
       const period = dataPoint.period;
-
       const periodNumber = parseInt(period.replace("P", ""), 10);
       const { startDate, endDate } = getPeriodDateRange(selectedYear, periodNumber);
-
       const dateRange = {
         startDate: startDate.toLocaleDateString(),
         endDate: endDate.toLocaleDateString(),
       };
-
+      const onTime = dataPoint.onTime ?? 0;
+      const closedLate = dataPoint.closedLate ?? 0;
+      const open = dataPoint.open ?? 0;
+      const total = dataPoint.total ?? 0;
       const ratePct = typeof dataPoint.rate === "number" ? (dataPoint.rate <= 1 ? dataPoint.rate * 100 : dataPoint.rate) : 0;
       const targetPct = typeof dataPoint.target === "number" ? (dataPoint.target <= 1 ? dataPoint.target * 100 : dataPoint.target) : null;
 
@@ -57,15 +68,23 @@ const PersonalClosureRateChart: React.FC<PersonalClosureRateChartProps> = ({
           </p>
           <div className="space-y-1">
             <p className="text-sm">
-              <span className="text-success font-medium">
-                {t("homepage.closureRate")}:
-              </span>{" "}
-              {ratePct.toFixed(1)}%
+              <span className="text-success font-medium">{t("homepage.closedOnTime")}:</span> {onTime}
+            </p>
+            <p className="text-sm">
+              <span className="text-destructive font-medium">{t("homepage.closedLate")}:</span> {closedLate}
+            </p>
+            <p className="text-sm">
+              <span className="text-muted-foreground font-medium">{t("homepage.open")}:</span> {open}
+            </p>
+            <p className="text-sm">
+              <span className="font-medium">{t("homepage.totalAssigned")}:</span> {total}
+            </p>
+            <p className="text-sm">
+              <span className="text-foreground font-medium">{t("homepage.closureRate")}:</span> {ratePct.toFixed(1)}%
             </p>
             {targetPct != null && (
               <p className="text-sm">
-                <span className="text-destructive font-medium">{t("homepage.target")}:</span>{" "}
-                {targetPct.toFixed(1)}%
+                <span className="text-destructive font-medium">{t("homepage.target")}:</span> {targetPct.toFixed(1)}%
               </p>
             )}
           </div>
@@ -77,9 +96,15 @@ const PersonalClosureRateChart: React.FC<PersonalClosureRateChartProps> = ({
 
   const chartData = data.map((d) => ({
     ...d,
+    onTime: d.onTime ?? 0,
+    closedLate: d.closedLate ?? 0,
+    open: d.open ?? 0,
+    total: d.total ?? 0,
     ratePct: typeof d.rate === "number" ? (d.rate <= 1 ? d.rate * 100 : d.rate) : 0,
     targetPct: typeof d.target === "number" ? (d.target <= 1 ? d.target * 100 : d.target) : undefined,
   }));
+
+  const maxCount = chartData.length > 0 ? Math.max(...chartData.map((d) => d.total ?? 0), 1) : 1;
 
   return (
     <Card>
@@ -119,19 +144,49 @@ const PersonalClosureRateChart: React.FC<PersonalClosureRateChartProps> = ({
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="period" />
-              <YAxis domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
+              <YAxis yAxisId="left" domain={[0, maxCount]} allowDecimals={false} />
+              <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tickFormatter={(v) => `${v}%`} />
               <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Bar
-                dataKey="ratePct"
-                fill="hsl(var(--accent))"
-                name={t("homepage.closureRate")}
+                yAxisId="left"
+                dataKey="onTime"
+                stackId="closure"
+                fill="hsl(var(--success))"
+                name={t("homepage.closedOnTime")}
+              />
+              <Bar
+                yAxisId="left"
+                dataKey="closedLate"
+                stackId="closure"
+                fill="hsl(var(--destructive))"
+                name={t("homepage.closedLate")}
+                radius={[0, 0, 0, 0]}
+              />
+              <Bar
+                yAxisId="left"
+                dataKey="open"
+                stackId="closure"
+                fill="hsl(var(--muted-foreground))"
+                name={t("homepage.open")}
+                radius={[0, 2, 2, 0]}
               />
               <Line
+                yAxisId="right"
+                type="monotone"
+                dataKey="ratePct"
+                stroke="hsl(var(--accent))"
+                strokeWidth={2}
+                name={t("homepage.closureRate")}
+                dot={false}
+              />
+              <Line
+                yAxisId="right"
                 type="monotone"
                 dataKey="targetPct"
                 stroke="hsl(var(--destructive))"
                 strokeWidth={2}
+                strokeDasharray="4 4"
                 name={t("homepage.target")}
                 dot={false}
               />

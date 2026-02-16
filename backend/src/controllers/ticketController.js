@@ -6453,7 +6453,8 @@ const getUserFinishedTicketCountPerPeriod = async (req, res) => {
   }
 };
 
-// Get user closure rate per period (on-time closed / total closed, grouped by schedule_finish period)
+// Get user closure rate per period: total = all assigned in period (schedule_finish in period);
+// on_time_count and rate from closed tickets only (rate = on_time / total_closed).
 const getUserClosureRatePerPeriod = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -6488,23 +6489,51 @@ const getUserClosureRatePerPeriod = async (req, res) => {
       });
     }
 
+    const dateFilter = startDate && endDate
+      ? 'AND t.schedule_finish >= @startDate AND t.schedule_finish <= @endDate'
+      : 'AND dd.CompanyYear = @year';
+
     const query = `
+      WITH AssignedInPeriod AS (
+        SELECT dd.PeriodNo, COUNT(*) AS total
+        FROM IgxTickets t
+        INNER JOIN IgxDateDim dd ON dd.DateKey = CAST(t.schedule_finish AS DATE)
+        WHERE t.assigned_to = @userId AND t.schedule_finish IS NOT NULL
+        ${dateFilter}
+        GROUP BY dd.PeriodNo
+      ),
+      ClosedInPeriod AS (
+        SELECT
+          dd.PeriodNo,
+          SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) AS on_time_count,
+          SUM(CASE WHEN t.actual_finish_at >= t.schedule_finish THEN 1 ELSE 0 END) AS closed_late_count
+        FROM IgxTickets t
+        INNER JOIN IgxDateDim dd ON dd.DateKey = CAST(t.schedule_finish AS DATE)
+        WHERE t.assigned_to = @userId
+          AND t.status IN ('closed', 'finished')
+          AND t.schedule_finish IS NOT NULL
+          AND t.actual_finish_at IS NOT NULL
+        ${dateFilter}
+        GROUP BY dd.PeriodNo
+      ),
+      Periods AS (
+        SELECT 1 AS PeriodNo UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6
+        UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION SELECT 12 UNION SELECT 13
+      )
       SELECT
-        'P' + CAST(dd.PeriodNo AS VARCHAR(10)) as period,
-        COUNT(*) as total,
-        SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) as on_time_count,
-        CASE WHEN COUNT(*) > 0 THEN CAST(SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) ELSE 0 END as rate
-      FROM IgxTickets t
-      JOIN IgxDateDim AS dd ON dd.DateKey = CAST(t.schedule_finish AS DATE)
-      WHERE t.assigned_to = @userId
-      AND t.status IN ('closed', 'finished')
-      AND t.schedule_finish IS NOT NULL
-      AND t.actual_finish_at IS NOT NULL
-      ${startDate && endDate
-        ? 'AND t.schedule_finish >= @startDate AND t.schedule_finish <= @endDate'
-        : 'AND dd.CompanyYear = @year'}
-      GROUP BY dd.PeriodNo
-      ORDER BY dd.PeriodNo
+        'P' + CAST(p.PeriodNo AS VARCHAR(10)) AS period,
+        ISNULL(a.total, 0) AS total,
+        ISNULL(c.on_time_count, 0) AS on_time_count,
+        ISNULL(c.closed_late_count, 0) AS closed_late_count,
+        CASE
+          WHEN ISNULL(a.total, 0) > 0
+          THEN CAST(ISNULL(c.on_time_count, 0) + ISNULL(c.closed_late_count, 0) AS FLOAT) / ISNULL(a.total, 0)
+          ELSE 0
+        END AS rate
+      FROM Periods p
+      LEFT JOIN AssignedInPeriod a ON a.PeriodNo = p.PeriodNo
+      LEFT JOIN ClosedInPeriod c ON c.PeriodNo = p.PeriodNo
+      ORDER BY p.PeriodNo
     `;
 
     let request = pool
@@ -6520,22 +6549,13 @@ const getUserClosureRatePerPeriod = async (req, res) => {
 
     const result = await request.query(query);
 
-    const dataMap = {};
-    result.recordset.forEach((row) => {
-      dataMap[row.period] = {
-        total: row.total,
-        on_time_count: row.on_time_count,
-        rate: row.rate,
-      };
-    });
-
-    const allPeriods = ["P1", "P2", "P3", "P4", "P5", "P6", "P7", "P8", "P9", "P10", "P11", "P12", "P13"];
-    const responseData = allPeriods.map((period) => {
-      const row = dataMap[period];
-      return row
-        ? { period, total: row.total, on_time_count: row.on_time_count, rate: row.rate }
-        : { period, total: 0, on_time_count: 0, rate: 0 };
-    });
+    const responseData = result.recordset.map((row) => ({
+      period: row.period,
+      total: row.total,
+      on_time_count: row.on_time_count,
+      closed_late_count: row.closed_late_count,
+      rate: row.rate,
+    }));
 
     res.json({
       success: true,
