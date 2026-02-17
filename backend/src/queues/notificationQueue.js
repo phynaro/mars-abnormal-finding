@@ -19,6 +19,9 @@ const JOB_NAME_REASSIGN_TICKET = 'reassign-ticket';
 const JOB_NAME_REOPEN_TICKET = 'reopen-ticket';
 const JOB_NAME_STATUS_UPDATE_TICKET = 'status-update-ticket';
 const JOB_NAME_ASSIGNMENT_TICKET = 'assignment-ticket';
+const JOB_NAME_SCHEDULE_PENDING_TICKETS = 'schedule-pending-tickets';
+const JOB_NAME_SCHEDULE_DUE_DATE = 'schedule-due-date';
+const JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS = 'schedule-old-open-tickets';
 
 let queue = null;
 let connectionFailed = false;
@@ -196,6 +199,55 @@ async function addAssignmentTicketNotificationJob(payload) {
   return addNotificationJob(JOB_NAME_ASSIGNMENT_TICKET, payload, 'assignment-ticket');
 }
 
+async function addSchedulePendingTicketsJob(payload) {
+  const q = getQueue();
+  if (!q) return null;
+  try {
+    const job = await q.add(JOB_NAME_SCHEDULE_PENDING_TICKETS, payload || { notification_type: 'pending_tickets' }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: { count: 1000 },
+    });
+    console.log(`📬 Enqueued schedule job ${job.id} (schedule-pending-tickets)`);
+    return job.id;
+  } catch (err) {
+    console.error('Failed to enqueue schedule-pending-tickets:', err.message);
+    return null;
+  }
+}
+async function addScheduleDueDateJob(payload) {
+  const q = getQueue();
+  if (!q) return null;
+  try {
+    const job = await q.add(JOB_NAME_SCHEDULE_DUE_DATE, payload || { notification_type: 'due_date_reminder' }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: { count: 1000 },
+    });
+    console.log(`📬 Enqueued schedule job ${job.id} (schedule-due-date)`);
+    return job.id;
+  } catch (err) {
+    console.error('Failed to enqueue schedule-due-date:', err.message);
+    return null;
+  }
+}
+async function addScheduleOldOpenTicketsJob(payload) {
+  const q = getQueue();
+  if (!q) return null;
+  try {
+    const job = await q.add(JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS, payload || { notification_type: 'old_open_tickets' }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: { count: 1000 },
+    });
+    console.log(`📬 Enqueued schedule job ${job.id} (schedule-old-open-tickets)`);
+    return job.id;
+  } catch (err) {
+    console.error('Failed to enqueue schedule-old-open-tickets:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   addCreateTicketNotificationJob,
   addAcceptTicketNotificationJob,
@@ -210,6 +262,9 @@ module.exports = {
   addReopenTicketNotificationJob,
   addStatusUpdateTicketNotificationJob,
   addAssignmentTicketNotificationJob,
+  addSchedulePendingTicketsJob,
+  addScheduleDueDateJob,
+  addScheduleOldOpenTicketsJob,
   QUEUE_NAME,
   JOB_NAME_CREATE_TICKET,
   JOB_NAME_ACCEPT_TICKET,
@@ -224,4 +279,7 @@ module.exports = {
   JOB_NAME_REOPEN_TICKET,
   JOB_NAME_STATUS_UPDATE_TICKET,
   JOB_NAME_ASSIGNMENT_TICKET,
+  JOB_NAME_SCHEDULE_PENDING_TICKETS,
+  JOB_NAME_SCHEDULE_DUE_DATE,
+  JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS,
 };

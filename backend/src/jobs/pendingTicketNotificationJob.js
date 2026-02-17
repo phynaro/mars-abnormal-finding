@@ -6,7 +6,7 @@
 const cron = require('node-cron');
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
-const pendingNotificationService = require('../services/pendingTicketNotificationService');
+const notificationQueue = require('../queues/notificationQueue');
 
 class PendingTicketNotificationJob {
   constructor() {
@@ -87,46 +87,20 @@ class PendingTicketNotificationJob {
         cronHour = '9';
       }
 
-      // Create new scheduled task
+      // Create new scheduled task: on tick, enqueue one job; worker runs the notification and updates last_run/next_run
       this.currentTask = cron.schedule(cronExpression, async () => {
         if (this.isRunning) {
-          console.log('⚠️  Previous notification job still running, skipping this run');
+          console.log('⚠️  Previous schedule tick still in progress, skipping enqueue');
           return;
         }
 
         this.isRunning = true;
-        console.log('⏰ Running scheduled pending ticket notification job...');
+        console.log('⏰ Enqueueing scheduled pending ticket notification job...');
 
         try {
-          // Update last_run
-          await pool.request().query(`
-            UPDATE IgxNotificationSchedule
-            SET last_run = GETDATE()
-            WHERE notification_type = 'pending_tickets'
-          `);
-
-          // Run the notification service
-          const result = await pendingNotificationService.sendToAllUsers();
-          
-          console.log('✅ Scheduled notification job completed:', result);
-
-          // Update next_run (calculate next occurrence)
-          // This is for display purposes only - cron handles the actual scheduling
-          // Calculate next run using the hour and minute from the cron expression
-          const hour = parseInt(cronHour, 10);
-          const minute = parseInt(cronMinute, 10);
-          const timeStr = `${hour.toString().padStart(2, '0')}:${minute.toString().padStart(2, '0')}:00`;
-          
-          await pool.request()
-            .input('timeStr', sql.VarChar(8), timeStr)
-            .query(`
-              UPDATE IgxNotificationSchedule
-              SET next_run = DATEADD(day, 1, CAST(CAST(GETDATE() AS DATE) AS DATETIME) + CAST(@timeStr AS TIME))
-              WHERE notification_type = 'pending_tickets'
-            `);
-
+          await notificationQueue.addSchedulePendingTicketsJob({ notification_type: 'pending_tickets' });
         } catch (error) {
-          console.error('❌ Error in scheduled notification job:', error);
+          console.error('❌ Error enqueueing schedule job:', error);
         } finally {
           this.isRunning = false;
         }

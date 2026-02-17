@@ -12,12 +12,16 @@ services:
     environment:
       - NODE_ENV=development
       - REDIS_URL=redis://redis:6379
+      # Ensure file watcher uses polling (needed for bind mounts on Windows)
+      - CHOKIDAR_USEPOLLING=true
     depends_on:
       - redis
     volumes:
       # Mount source code for development (hot reload)
       - ./backend/src:/app/src
       - ./backend/swagger:/app/swagger
+      # Nodemon config (polling) so file changes are detected in Docker on Windows
+      - ./backend/nodemon.json:/app/nodemon.json
       # Persistent uploads directory
       - ./backend/uploads:/app/uploads
       # Mount logs directory for debugging

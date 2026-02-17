@@ -1,8 +1,6 @@
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
-const pendingNotificationService = require('../services/pendingTicketNotificationService');
-const oldOpenTicketNotificationService = require('../services/oldOpenTicketNotificationService');
-const dueDateNotificationService = require('../services/dueDateNotificationService');
+const notificationQueue = require('../queues/notificationQueue');
 
 /**
  * Get all notification schedules
@@ -117,17 +115,18 @@ const updateNotificationSchedule = async (req, res) => {
 };
 
 /**
- * Map notification_type to service runner
+ * Map notification_type to queue adder (enqueue schedule job; worker runs the notification).
  */
-const NOTIFICATION_TEST_HANDLERS = {
-  pending_tickets: () => pendingNotificationService.sendToAllUsers(),
-  old_open_tickets: () => oldOpenTicketNotificationService.sendNotifications(),
-  due_date_reminder: () => dueDateNotificationService.sendToAllUsers()
+const NOTIFICATION_TEST_ENQUEUERS = {
+  pending_tickets: (payload) => notificationQueue.addSchedulePendingTicketsJob(payload),
+  old_open_tickets: (payload) => notificationQueue.addScheduleOldOpenTicketsJob(payload),
+  due_date_reminder: (payload) => notificationQueue.addScheduleDueDateJob(payload)
 };
 
 /**
- * Test notification by triggering it manually for a given schedule type.
+ * Test notification by enqueueing the schedule job for the given type.
  * Body: { notification_type: 'pending_tickets' | 'old_open_tickets' | 'due_date_reminder' }
+ * Returns 202 with job id when enqueued; worker will process and run the notification.
  */
 const testNotification = async (req, res) => {
   try {
@@ -140,26 +139,33 @@ const testNotification = async (req, res) => {
       });
     }
 
-    const handler = NOTIFICATION_TEST_HANDLERS[notification_type];
-    if (!handler) {
+    const enqueuer = NOTIFICATION_TEST_ENQUEUERS[notification_type];
+    if (!enqueuer) {
       return res.status(400).json({
         success: false,
         message: `Unknown notification_type: ${notification_type}. Supported: pending_tickets, old_open_tickets, due_date_reminder`
       });
     }
 
-    const result = await handler();
+    const jobId = await enqueuer({ notification_type });
 
-    res.json({
-      success: true,
-      message: `Test notification (${notification_type}) triggered successfully`,
-      data: result
+    if (jobId) {
+      return res.status(202).json({
+        success: true,
+        message: `Test notification (${notification_type}) enqueued; worker will process it shortly`,
+        data: { jobId }
+      });
+    }
+
+    res.status(503).json({
+      success: false,
+      message: 'Queue unavailable; test notification was not enqueued'
     });
   } catch (error) {
-    console.error('Error testing notification:', error);
+    console.error('Error enqueueing test notification:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to trigger test notification',
+      message: 'Failed to enqueue test notification',
       error: error.message
     });
   }
