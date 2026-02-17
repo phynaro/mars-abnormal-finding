@@ -692,6 +692,7 @@ const getTickets = async (req, res) => {
                     a.EMAIL as assignee_email,
                     a.PHONE as assignee_phone,
                     accepted_user.PERSON_NAME as accepted_by_name,
+                    rejected_user.PERSON_NAME as rejected_by_name,
                     -- Hierarchy information from IgxPUExtension
                     pe.pucode,
                     pe.plant as plant_code,
@@ -742,6 +743,7 @@ const getTickets = async (req, res) => {
                 LEFT JOIN Person r ON t.created_by = r.PERSONNO
                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
                 LEFT JOIN Person accepted_user ON t.accepted_by = accepted_user.PERSONNO
+                LEFT JOIN Person rejected_user ON t.rejected_by = rejected_user.PERSONNO
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                 LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                 LEFT JOIN IgxTicketClass tc ON t.ticketClass = tc.id
