@@ -262,7 +262,7 @@ async function processFinishTicketNotification(job) {
       const language = (job.data.language !== undefined) ? job.data.language : 'th';
       const linePromises = lineRecipients.map((user) =>
         abnFlexService.sendToUser(user.LineID, [
-          abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.Finished, linePayload, { language }),
+          abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.FINISHED, linePayload, { language }),
         ])
       );
       const lineResults = await Promise.all(linePromises);
@@ -282,7 +282,7 @@ function statusToTicketState(status) {
     case 'in_progress':
       return abnFlexService.TicketState.ACCEPTED;
     case 'finished':
-      return abnFlexService.TicketState.Finished;
+      return abnFlexService.TicketState.FINISHED;
     case 'rejected_final':
       return abnFlexService.TicketState.REJECT_FINAL;
     case 'rejected_pending_l3_review':

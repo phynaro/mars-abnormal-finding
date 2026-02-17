@@ -30,7 +30,7 @@ const TicketState = Object.freeze({
   IN_PROGRESS: "IN_PROGRESS", 
   REJECT_TO_MANAGER: "REJECT_TO_MANAGER",
   REJECT_FINAL: "REJECT_FINAL",
-  Finished: "FINISHED",
+  FINISHED: "FINISHED",
   REVIEWED: "REVIEWED",
   REASSIGNED: "REASSIGNED",
   ESCALATED: "ESCALATED",
@@ -51,7 +51,7 @@ const STATE_COLORS = Object.freeze({
   [TicketState.IN_PROGRESS]: "#F59E0B",        // Work in progress amber
   [TicketState.REJECT_TO_MANAGER]: "#F59E0B",  // Warning amber
   [TicketState.REJECT_FINAL]: "#EF4444",       // Error red
-  [TicketState.Finished]: "#10B981",          // Emerald green
+  [TicketState.FINISHED]: "#10B981",          // Emerald green
   [TicketState.REVIEWED]: "#8B5CF6",           // Purple
   [TicketState.REASSIGNED]: "#A855F7",         // Violet
   [TicketState.ESCALATED]: "#FB7185",          // Rose
@@ -72,7 +72,7 @@ const STATE_LABELS_TH = Object.freeze({
   [TicketState.IN_PROGRESS]: "เริ่มดำเนินการ",
   [TicketState.REJECT_TO_MANAGER]: "ปฏิเสธ รอการอนุมัติจากหัวหน้างาน",
   [TicketState.REJECT_FINAL]: "ปฏิเสธขั้นสุดท้าย",
-  [TicketState.Finished]: "เสร็จสิ้น",
+  [TicketState.FINISHED]: "เสร็จสิ้น",
   [TicketState.REVIEWED]: "ตรวจสอบแล้ว รอการปิด",
   [TicketState.REASSIGNED]: "มอบหมาย",
   [TicketState.ESCALATED]: "ส่งต่อให้หัวหน้างาน",
@@ -93,7 +93,7 @@ const STATE_LABELS_EN = Object.freeze({
   [TicketState.IN_PROGRESS]: "Work In Progress",
   [TicketState.REJECT_TO_MANAGER]: "Rejected - Pending Manager Review",
   [TicketState.REJECT_FINAL]: "Rejected - Final Decision",
-  [TicketState.Finished]: "Work Finished",
+  [TicketState.FINISHED]: "Work Finished",
   [TicketState.REVIEWED]: "Reviewed - Pending Closure",
   [TicketState.REASSIGNED]: "Reassigned",
   [TicketState.ESCALATED]: "Escalated to Manager",
