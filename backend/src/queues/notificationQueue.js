@@ -22,6 +22,7 @@ const JOB_NAME_ASSIGNMENT_TICKET = 'assignment-ticket';
 const JOB_NAME_SCHEDULE_PENDING_TICKETS = 'schedule-pending-tickets';
 const JOB_NAME_SCHEDULE_DUE_DATE = 'schedule-due-date';
 const JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS = 'schedule-old-open-tickets';
+const JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW = 'schedule-finished-ticket-review';
 
 let queue = null;
 let connectionFailed = false;
@@ -247,6 +248,22 @@ async function addScheduleOldOpenTicketsJob(payload) {
     return null;
   }
 }
+async function addScheduleFinishedTicketReviewJob(payload) {
+  const q = getQueue();
+  if (!q) return null;
+  try {
+    const job = await q.add(JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW, payload || { notification_type: 'finished_ticket_review' }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: { count: 1000 },
+    });
+    console.log(`📬 Enqueued schedule job ${job.id} (schedule-finished-ticket-review)`);
+    return job.id;
+  } catch (err) {
+    console.error('Failed to enqueue schedule-finished-ticket-review:', err.message);
+    return null;
+  }
+}
 
 module.exports = {
   addCreateTicketNotificationJob,
@@ -265,6 +282,7 @@ module.exports = {
   addSchedulePendingTicketsJob,
   addScheduleDueDateJob,
   addScheduleOldOpenTicketsJob,
+  addScheduleFinishedTicketReviewJob,
   QUEUE_NAME,
   JOB_NAME_CREATE_TICKET,
   JOB_NAME_ACCEPT_TICKET,
@@ -282,4 +300,5 @@ module.exports = {
   JOB_NAME_SCHEDULE_PENDING_TICKETS,
   JOB_NAME_SCHEDULE_DUE_DATE,
   JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS,
+  JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW,
 };

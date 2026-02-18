@@ -16,6 +16,7 @@ const abnFlexService = require('../services/abnormalFindingFlexService');
 const pendingTicketNotificationService = require('../services/pendingTicketNotificationService');
 const dueDateNotificationService = require('../services/dueDateNotificationService');
 const oldOpenTicketNotificationService = require('../services/oldOpenTicketNotificationService');
+const finishedTicketReviewNotificationService = require('../services/finishedTicketReviewNotificationService');
 
 /** Timestamped log helpers */
 const ts = () => new Date().toISOString();
@@ -40,6 +41,7 @@ const JOB_NAME_ASSIGNMENT_TICKET = notificationQueue.JOB_NAME_ASSIGNMENT_TICKET;
 const JOB_NAME_SCHEDULE_PENDING_TICKETS = notificationQueue.JOB_NAME_SCHEDULE_PENDING_TICKETS;
 const JOB_NAME_SCHEDULE_DUE_DATE = notificationQueue.JOB_NAME_SCHEDULE_DUE_DATE;
 const JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS = notificationQueue.JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS;
+const JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW = notificationQueue.JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW;
 
 const connection = process.env.REDIS_URL
   ? { url: process.env.REDIS_URL }
@@ -647,6 +649,16 @@ async function processScheduleOldOpenTickets(job) {
   return result;
 }
 
+async function processScheduleFinishedTicketReview(job) {
+  const { notification_type = 'finished_ticket_review' } = job.data;
+  log(`⏰ [Worker] Running schedule job: ${notification_type}`);
+  const result = await runScheduleNotification(notification_type, () =>
+    finishedTicketReviewNotificationService.sendToAllUsers()
+  );
+  log(`✅ [Worker] Schedule finished-ticket-review completed:`, result);
+  return result;
+}
+
 async function processor(job) {
   if (job.name === JOB_NAME_CREATE_TICKET) {
     await processCreateTicketNotification(job);
@@ -710,6 +722,10 @@ async function processor(job) {
   }
   if (job.name === JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS) {
     await processScheduleOldOpenTickets(job);
+    return;
+  }
+  if (job.name === JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW) {
+    await processScheduleFinishedTicketReview(job);
     return;
   }
   warn(`[Worker] Unknown job name: ${job.name}`);

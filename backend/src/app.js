@@ -227,6 +227,7 @@ app.use('*', (req, res) => {
 const pendingTicketNotificationJob = require('./jobs/pendingTicketNotificationJob');
 const oldOpenTicketNotificationJob = require('./jobs/oldOpenTicketNotificationJob');
 const dueDateNotificationJob = require('./jobs/dueDateNotificationJob');
+const finishedTicketReviewNotificationJob = require('./jobs/finishedTicketReviewNotificationJob');
 
 // Start server
 app.listen(PORT, async () => {
@@ -253,6 +254,12 @@ app.listen(PORT, async () => {
     await dueDateNotificationJob.initialize();
   } else {
     console.log('⚠️  Due-date notifications are disabled via environment variable');
+  }
+
+  if (process.env.ENABLE_FINISHED_TICKET_REVIEW_NOTIFICATIONS !== 'false') {
+    await finishedTicketReviewNotificationJob.initialize();
+  } else {
+    console.log('⚠️  Finished ticket review notifications are disabled via environment variable');
   }
 });
 

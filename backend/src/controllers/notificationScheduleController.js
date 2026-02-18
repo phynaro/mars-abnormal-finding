@@ -120,12 +120,13 @@ const updateNotificationSchedule = async (req, res) => {
 const NOTIFICATION_TEST_ENQUEUERS = {
   pending_tickets: (payload) => notificationQueue.addSchedulePendingTicketsJob(payload),
   old_open_tickets: (payload) => notificationQueue.addScheduleOldOpenTicketsJob(payload),
-  due_date_reminder: (payload) => notificationQueue.addScheduleDueDateJob(payload)
+  due_date_reminder: (payload) => notificationQueue.addScheduleDueDateJob(payload),
+  finished_ticket_review: (payload) => notificationQueue.addScheduleFinishedTicketReviewJob(payload)
 };
 
 /**
  * Test notification by enqueueing the schedule job for the given type.
- * Body: { notification_type: 'pending_tickets' | 'old_open_tickets' | 'due_date_reminder' }
+ * Body: { notification_type: 'pending_tickets' | 'old_open_tickets' | 'due_date_reminder' | 'finished_ticket_review' }
  * Returns 202 with job id when enqueued; worker will process and run the notification.
  */
 const testNotification = async (req, res) => {
@@ -135,7 +136,7 @@ const testNotification = async (req, res) => {
     if (!notification_type) {
       return res.status(400).json({
         success: false,
-        message: 'Missing notification_type. Send body: { "notification_type": "pending_tickets" | "old_open_tickets" | "due_date_reminder" }'
+        message: 'Missing notification_type. Send body: { "notification_type": "pending_tickets" | "old_open_tickets" | "due_date_reminder" | "finished_ticket_review" }'
       });
     }
 
@@ -143,7 +144,7 @@ const testNotification = async (req, res) => {
     if (!enqueuer) {
       return res.status(400).json({
         success: false,
-        message: `Unknown notification_type: ${notification_type}. Supported: pending_tickets, old_open_tickets, due_date_reminder`
+        message: `Unknown notification_type: ${notification_type}. Supported: pending_tickets, old_open_tickets, due_date_reminder, finished_ticket_review`
       });
     }
 
