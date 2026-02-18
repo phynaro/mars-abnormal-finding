@@ -273,8 +273,8 @@ const TicketDetailsPage: React.FC = () => {
   const [actualStartAt, setActualStartAt] = useState("");
 
   // Additional state for finish action
-  const [downtimeAvoidance, setDowntimeAvoidance] = useState("1");
-  const [costAvoidance, setCostAvoidance] = useState("10000");
+  const [downtimeAvoidance, setDowntimeAvoidance] = useState("0");
+  const [costAvoidance, setCostAvoidance] = useState("0");
   const [failureModeId, setFailureModeId] = useState("");
   const [actualFinishAt, setActualFinishAt] = useState("");
   const [actualStartAtEdit, setActualStartAtEdit] = useState("");
@@ -797,8 +797,8 @@ const TicketDetailsPage: React.FC = () => {
       setActualStartAt("");
     }
     // Reset finish action fields to defaults
-    setDowntimeAvoidance("1");
-    setCostAvoidance("10000");
+    setDowntimeAvoidance("0");
+    setCostAvoidance("0");
     setFailureModeId("");
     if (type === "finish") {
       // Set current datetime as default for actual finish time
