@@ -116,7 +116,7 @@ class LineWebhookService {
       return { 
         success: true, 
         status: response.status,
-        messageId: response.data?.messageId 
+        messageId: response.data?.sentMessageId 
       };
 
     } catch (error) {
@@ -172,7 +172,7 @@ class LineWebhookService {
       return { 
         success: true, 
         status: response.status,
-        messageId: response.data?.messageId 
+        messageId: response.data?.sentMessageId 
       };
 
     } catch (error) {

@@ -396,7 +396,7 @@ class TicketNotificationService {
       return { 
         success: true, 
         status: response.status,
-        messageId: response.data?.messageId 
+        messageId: response.data?.sentMessageId 
       };
 
     } catch (error) {
@@ -452,7 +452,7 @@ class TicketNotificationService {
       return { 
         success: true, 
         status: response.status,
-        messageId: response.data?.messageId 
+        messageId: response.data?.sentMessageId 
       };
 
     } catch (error) {
