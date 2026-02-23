@@ -535,19 +535,13 @@ async function getFilterOptions(pool) {
 
 /**
  * Get Current Company Year
- * Returns the current company year based on today's date using the database function
+ * Returns the current company year (calendar year when fn_CompanyYearOfDate is not available)
  */
 exports.getCurrentCompanyYear = async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
-    
-    // Use the database function to get current company year
-    const query = `
-      SELECT dbo.fn_CompanyYearOfDate(GETDATE()) as currentCompanyYear
-    `;
-
+    const query = `SELECT YEAR(GETDATE()) AS currentCompanyYear`;
     const result = await pool.request().query(query);
-    
     const currentCompanyYear = result.recordset[0]?.currentCompanyYear;
 
     res.json({

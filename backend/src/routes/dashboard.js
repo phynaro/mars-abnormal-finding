@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const dashboardController = require('../controllers/dashboardController');
+const calibrationController = require('../controllers/calibrationController');
 const { authenticateToken, requireFormPermission } = require('../middleware/auth');
 
 // Public endpoints (before authentication middleware)
@@ -104,5 +105,14 @@ router.get('/department-user-kpi/closure-rate', requireFormPermission('TKT', 'vi
 
 // Get Case Count by PU (requires TKT form view permission)
 router.get('/case-count-by-pu', requireFormPermission('TKT', 'view'), dashboardController.getCaseCountByPU);
+
+// Calibration dashboard (WOTypeNo = 5) - requires WO form view permission
+router.get('/calibration/person-period-summary', requireFormPermission('WO', 'view'), calibrationController.getPersonPeriodSummary);
+router.get('/calibration/incoming', requireFormPermission('WO', 'view'), calibrationController.getIncoming);
+router.get('/calibration/late', requireFormPermission('WO', 'view'), calibrationController.getLate);
+router.get('/calibration/due-soon', requireFormPermission('WO', 'view'), calibrationController.getDueSoon);
+router.get('/calibration/overdue', requireFormPermission('WO', 'view'), calibrationController.getOverdue);
+router.get('/calibration/jobs', requireFormPermission('WO', 'view'), calibrationController.getJobs);
+router.get('/calibration/pm-plans', requireFormPermission('WO', 'view'), calibrationController.getPmPlans);
 
 module.exports = router;

@@ -26,10 +26,12 @@ export default defineConfig({
       usePolling: true,
       interval: 1000
     },
-    hmr: {
-      host: 'pch.trazor.cloud',
-      protocol: 'wss'
-    }
+    // Temporarily disable HMR (hot update) to avoid unexpected full reloads
+    hmr: false
+    // hmr: {
+    //   host: 'pch.trazor.cloud',
+    //   protocol: 'wss'
+    // }
   },
   build: {
     // Ensure proper handling of canvas and blob operations in production

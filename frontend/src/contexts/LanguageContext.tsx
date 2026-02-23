@@ -849,6 +849,16 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.departmentUserKPI.totalAssigned': 'Total Assigned',
     'dashboard.departmentUserKPI.avgPerUser': 'Avg per User',
     'dashboard.departmentUserKPI.target': 'Target',
+
+    // Calibration Dashboard
+    'dashboard.calibration.title': 'Calibration',
+    'dashboard.calibration.description': 'Person KPI and history tracking for calibration work (WOType 5)',
+    'dashboard.calibration.personYearOverview': 'Per-person year overview',
+    'dashboard.calibration.incoming': 'Incoming calibration',
+    'dashboard.calibration.dueSoon': 'Due soon (7–14 days)',
+    'dashboard.calibration.overdue': 'Overdue (>7 days)',
+    'dashboard.calibration.jobs': 'Calibration jobs',
+    'dashboard.calibration.pmPlans': 'Calibration PM plans',
   },
   th: {
     // Common
@@ -1674,6 +1684,16 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.departmentUserKPI.totalAssigned': 'รับผิดชอบทั้งหมด',
     'dashboard.departmentUserKPI.avgPerUser': 'เฉลี่ยต่อผู้ใช้',
     'dashboard.departmentUserKPI.target': 'เป้าหมาย',
+
+    // Calibration Dashboard
+    'dashboard.calibration.title': 'สอบเทียบ',
+    'dashboard.calibration.description': 'KPI และประวัติตามบุคคลสำหรับงานสอบเทียบ (WOType 5)',
+    'dashboard.calibration.personYearOverview': 'ภาพรวมตามบุคคลต่อปี',
+    'dashboard.calibration.incoming': 'งานสอบเทียบที่กำลังจะถึง',
+    'dashboard.calibration.dueSoon': 'ใกล้ครบกำหนด (7–14 วัน)',
+    'dashboard.calibration.overdue': 'เกินกำหนด (>7 วัน)',
+    'dashboard.calibration.jobs': 'งานสอบเทียบ',
+    'dashboard.calibration.pmPlans': 'แผน PM สอบเทียบ',
   }
 };
 
