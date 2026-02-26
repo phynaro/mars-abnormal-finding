@@ -77,6 +77,29 @@ export interface AuthResponse {
   user?: User;
 }
 
+/** Decode JWT payload without verification (client-side exp check only; server always verifies). */
+function decodeJwtPayload(token: string): { exp?: number } | null {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64.padEnd(base64.length + ((4 - base64.length % 4) % 4), '=');
+    const json = atob(padded);
+    return JSON.parse(json) as { exp?: number };
+  } catch {
+    return null;
+  }
+}
+
+/** True if token is expired (with 60s buffer). Used only for UX; server is the source of truth. */
+function isTokenExpired(token: string): boolean {
+  const payload = decodeJwtPayload(token);
+  if (!payload || typeof payload.exp !== 'number') return true;
+  const now = Math.floor(Date.now() / 1000);
+  const bufferSeconds = 60;
+  return payload.exp < now + bufferSeconds;
+}
+
 class AuthService {
   private token: string | null = localStorage.getItem('token');
   private user: User | null = JSON.parse(localStorage.getItem('user') || 'null');
@@ -91,9 +114,14 @@ class AuthService {
     return this.user;
   }
 
-  // Check if user is authenticated
+  // Check if user is authenticated (token present, user present, and token not expired client-side)
   isAuthenticated(): boolean {
-    return !!this.token && !!this.user;
+    if (!this.token || !this.user) return false;
+    if (isTokenExpired(this.token)) {
+      this.clearAuth();
+      return false;
+    }
+    return true;
   }
 
   // Check if user has specific role
@@ -287,24 +315,17 @@ class AuthService {
       const result = await response.json();
 
       if (!response.ok) {
-        // If we get 401 or 403, the token is invalid/expired/malformed
+        // Only treat 401/403 as auth failure (invalid/expired token or user inactive)
         if (response.status === 401 || response.status === 403) {
-          // Check if it's a malformed JWT
-          const isMalformed = result.code === 'JWT_MALFORMED' || 
-                             result.message?.toLowerCase().includes('jwt malformed') ||
-                             result.message?.toLowerCase().includes('malformed');
-          
-          if (isMalformed || result.requireLogin) {
-            // Clear auth and redirect to login
-            this.clearAuth();
-            if (!window.location.pathname.includes('/login')) {
-              window.location.href = '/login';
-            }
-          } else {
-            // Just clear auth for other invalid tokens
-            this.clearAuth();
+          this.clearAuth();
+          const err = new Error(result.message || 'Failed to get profile') as Error & { isAuthError?: boolean };
+          err.isAuthError = true;
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = '/login';
           }
+          throw err;
         }
+        // 500, 404, etc. — do not clear auth; treat as temporary/server issue
         throw new Error(result.message || 'Failed to get profile');
       }
 
@@ -318,19 +339,23 @@ class AuthService {
 
       return result;
     } catch (error) {
+      // Re-throw with isAuthError preserved; network/parse errors are not auth failures
+      if (error && typeof (error as Error & { isAuthError?: boolean }).isAuthError === 'boolean') {
+        throw error;
+      }
       throw new Error(error instanceof Error ? error.message : 'Failed to get profile');
     }
   }
 
-  // Refresh user data (useful after profile updates)
+  // Refresh user data (useful after profile updates).
+  // Only 401/403 from getProfile clear auth; network/5xx do not log the user out.
   async refreshUserData(): Promise<void> {
     try {
       await this.getProfile();
     } catch (error) {
       console.error('Failed to refresh user data:', error);
-      // Clear auth data if profile fetch fails (token expired/invalid)
-      this.clearAuth();
-      throw error; // Re-throw to let the caller handle it
+      // Do not clear auth here — getProfile already clears on 401/403 and sets isAuthError
+      throw error;
     }
   }
 

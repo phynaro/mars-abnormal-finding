@@ -59,11 +59,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (currentUser && authService.isAuthenticated()) {
         setUser(currentUser);
         setIsLoading(false);
-        // Refresh token/user in background; if token expired, we'll clear and show login
+        // Refresh token/user in background; only clear session on real auth failure (401/403), not on network/server errors
         authService.refreshUserData().then(() => {
           setUser(authService.getCurrentUser());
-        }).catch(() => {
-          setUser(null);
+        }).catch((err: unknown) => {
+          const isAuthFailure = err && typeof (err as Error & { isAuthError?: boolean }).isAuthError === 'boolean' && (err as Error & { isAuthError: boolean }).isAuthError;
+          if (isAuthFailure) setUser(null);
         });
         // Init LIFF in background so liffObject/LINE state are available for LINE features (non-blocking)
         liff.init({ liffId: import.meta.env.VITE_LIFF_ID })
