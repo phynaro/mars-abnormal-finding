@@ -1093,6 +1093,235 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
   }
 };
 
+// Update ticket detail (L3/L4 with PU right, any status)
+const updateTicketDetail = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const rawBody = req.body ? { ...req.body } : {};
+    const pool = await sql.connect(dbConfig);
+
+    const ticketResult = await runQuery(
+      pool,
+      `
+        SELECT id, puno
+        FROM IgxTickets
+        WHERE id = @id
+      `,
+      [{ name: "id", type: sql.Int, value: id }]
+    );
+
+    const ticket = firstRecord(ticketResult);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: "Ticket not found",
+      });
+    }
+
+    const approvalLevel = await getUserMaxApprovalLevelForPU(req.user.id, ticket.puno);
+    if (approvalLevel < 3) {
+      return res.status(403).json({
+        success: false,
+        message: "Only L3/L4 users with permission on this PU can edit ticket details",
+      });
+    }
+
+    const parseOptionalInt = (value) => {
+      if (value === undefined) return undefined;
+      if (value === null || value === "") return null;
+      if (typeof value === "number") {
+        return Number.isNaN(value) ? null : Math.trunc(value);
+      }
+      const parsed = parseInt(value, 10);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const parseOptionalDecimal = (value) => {
+      if (value === undefined) return undefined;
+      if (value === null || value === "") return null;
+      if (typeof value === "number") {
+        return Number.isNaN(value) ? null : value;
+      }
+      const parsed = parseFloat(value);
+      return Number.isNaN(parsed) ? null : parsed;
+    };
+
+    const parseOptionalString = (value, { trim = true, emptyAsNull = true } = {}) => {
+      if (value === undefined) return undefined;
+      if (value === null) return null;
+      const str = String(value);
+      const normalized = trim ? str.trim() : str;
+      if (emptyAsNull && normalized === "") return null;
+      return normalized;
+    };
+
+    const parseOptionalDate = (value, label) => {
+      if (value === undefined) return undefined;
+      if (value === null || value === "") return null;
+      const parsed = new Date(value);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new Error(`${label} is invalid`);
+      }
+      return parsed;
+    };
+
+    let title;
+    let description;
+    let pucriticalno;
+    let schedule_start;
+    let schedule_finish;
+    let actual_start_at;
+    let actual_finish_at;
+    let satisfaction_rating;
+    let cost_avoidance;
+    let downtime_avoidance_hours;
+    let failure_mode_id;
+    let ticketClass;
+
+    try {
+      title = parseOptionalString(rawBody.title, { emptyAsNull: false });
+      description = parseOptionalString(rawBody.description);
+      pucriticalno = parseOptionalInt(rawBody.pucriticalno);
+      schedule_start = parseOptionalDate(rawBody.schedule_start, "Schedule start");
+      schedule_finish = parseOptionalDate(rawBody.schedule_finish, "Schedule finish");
+      actual_start_at = parseOptionalDate(rawBody.actual_start_at, "Actual start");
+      actual_finish_at = parseOptionalDate(rawBody.actual_finish_at, "Actual finish");
+      satisfaction_rating = parseOptionalInt(rawBody.satisfaction_rating);
+      cost_avoidance = parseOptionalDecimal(rawBody.cost_avoidance);
+      downtime_avoidance_hours = parseOptionalDecimal(rawBody.downtime_avoidance_hours);
+      failure_mode_id = parseOptionalInt(rawBody.failure_mode_id);
+      ticketClass = parseOptionalInt(rawBody.ticketClass);
+    } catch (parseError) {
+      return res.status(400).json({
+        success: false,
+        message: parseError.message || "Invalid ticket detail payload",
+      });
+    }
+
+    if (title !== undefined && title.trim() === "") {
+      return res.status(400).json({
+        success: false,
+        message: "Title is required",
+      });
+    }
+
+    if (satisfaction_rating !== undefined && satisfaction_rating !== null) {
+      if (satisfaction_rating < 1 || satisfaction_rating > 5) {
+        return res.status(400).json({
+          success: false,
+          message: "Satisfaction rating must be between 1 and 5",
+        });
+      }
+    }
+
+    if (schedule_start && schedule_finish && schedule_start > schedule_finish) {
+      return res.status(400).json({
+        success: false,
+        message: "Schedule finish must be later than schedule start",
+      });
+    }
+
+    if (actual_start_at && actual_finish_at && actual_start_at > actual_finish_at) {
+      return res.status(400).json({
+        success: false,
+        message: "Actual finish must be later than actual start",
+      });
+    }
+
+    if (ticketClass !== undefined && ticketClass !== null) {
+      const ticketClassCheck = await runQuery(
+        pool,
+        `
+          SELECT id
+          FROM IgxTicketClass
+          WHERE id = @ticketClass
+        `,
+        [{ name: "ticketClass", type: sql.Int, value: ticketClass }]
+      );
+
+      if (mapRecordset(ticketClassCheck).length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid ticket class",
+        });
+      }
+    }
+
+    if (failure_mode_id !== undefined && failure_mode_id !== null) {
+      const failureModeCheck = await runQuery(
+        pool,
+        `
+          SELECT FailureModeNo
+          FROM FailureModes
+          WHERE FailureModeNo = @failure_mode_id
+            AND FlagDel != 'Y'
+        `,
+        [{ name: "failure_mode_id", type: sql.Int, value: failure_mode_id }]
+      );
+
+      if (mapRecordset(failureModeCheck).length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid failure mode",
+        });
+      }
+    }
+
+    const updates = [
+      { key: "title", value: title, type: sql.NVarChar(255) },
+      { key: "description", value: description, type: sql.NVarChar(sql.MAX) },
+      { key: "pucriticalno", value: pucriticalno, type: sql.Int },
+      { key: "schedule_start", value: schedule_start, type: sql.DateTime2 },
+      { key: "schedule_finish", value: schedule_finish, type: sql.DateTime2 },
+      { key: "actual_start_at", value: actual_start_at, type: sql.DateTime2 },
+      { key: "actual_finish_at", value: actual_finish_at, type: sql.DateTime2 },
+      { key: "satisfaction_rating", value: satisfaction_rating, type: sql.Int },
+      { key: "cost_avoidance", value: cost_avoidance, type: sql.Decimal(15, 2) },
+      {
+        key: "downtime_avoidance_hours",
+        value: downtime_avoidance_hours,
+        type: sql.Decimal(8, 2),
+      },
+      { key: "failure_mode_id", value: failure_mode_id, type: sql.Int },
+      { key: "ticketClass", value: ticketClass, type: sql.Int },
+    ].filter((field) => field.value !== undefined);
+
+    if (updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No valid fields to update",
+      });
+    }
+
+    const request = pool.request().input("id", sql.Int, id);
+    const updateFields = [];
+
+    updates.forEach(({ key, value, type }) => {
+      request.input(key, type, value);
+      updateFields.push(`${key} = @${key}`);
+    });
+
+    await request.query(`
+      UPDATE IgxTickets
+      SET ${updateFields.join(", ")},
+          updated_at = GETDATE()
+      WHERE id = @id
+    `);
+
+    return res.json({
+      success: true,
+      message: "Ticket details updated successfully",
+    });
+  } catch (error) {
+    console.error("Error updating ticket details:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to update ticket details",
+      error: error.message,
+    });
+  }
+};
+
 // Add comment to ticket
 const addComment = async (req, res) => {
   try {
@@ -5434,6 +5663,7 @@ module.exports = {
   getTicketById,
   getFailureModes,
   updateTicket,
+  updateTicketDetail,
   addComment,
   assignTicket,
   deleteTicket,

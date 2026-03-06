@@ -173,6 +173,21 @@ export interface UpdateTicketRequest {
   status_notes?: string;
 }
 
+export interface UpdateTicketDetailRequest {
+  title?: string;
+  description?: string | null;
+  pucriticalno?: number | null;
+  schedule_start?: string | null;
+  schedule_finish?: string | null;
+  actual_start_at?: string | null;
+  actual_finish_at?: string | null;
+  satisfaction_rating?: number | null;
+  cost_avoidance?: number | null;
+  downtime_avoidance_hours?: number | null;
+  failure_mode_id?: number | null;
+  ticketClass?: number | null;
+}
+
 export interface TicketFilters {
   page?: number;
   limit?: number;
@@ -461,6 +476,22 @@ class TicketService {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.message || 'Failed to update ticket');
+    }
+
+    return response.json();
+  }
+
+  async updateTicketDetail(id: number, updateData: UpdateTicketDetailRequest): Promise<{ success: boolean; message: string }> {
+    const headers = getAuthHeaders();
+    const response = await fetch(`${API_BASE_URL}/tickets/${id}/detail`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(updateData)
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to update ticket details');
     }
 
     return response.json();

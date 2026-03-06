@@ -468,7 +468,7 @@ const ProfilePage: React.FC = () => {
               <div className="space-y-2">
                 <Label>{t('profile.department')}</Label>
                 <Select
-                  value={deptNo !== undefined ? deptNo.toString() : undefined}
+                  value={deptNo !== null ? deptNo.toString() : undefined}
                   onValueChange={(value) => {
                     if (value === 'none') {
                       setDeptNo(undefined);

@@ -1,13 +1,16 @@
-import React, { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import React, { useEffect, useState } from 'react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import { ticketClassService, type TicketClass } from '@/services/ticketClassService';
 import { ticketService } from '@/services/ticketService';
-import type { Ticket, UpdateTicketRequest } from '@/services/ticketService';
+import type { FailureMode, Ticket, UpdateTicketDetailRequest } from '@/services/ticketService';
 import { useToast } from '@/hooks/useToast';
+import { useLanguage } from '@/contexts/LanguageContext';
+import { timestampToDatetimeLocal } from '@/utils/timezone';
 
 interface EditTicketModalProps {
   ticket: Ticket;
@@ -23,15 +26,25 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
   onTicketUpdated
 }) => {
   const [loading, setLoading] = useState(false);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  const [failureModes, setFailureModes] = useState<FailureMode[]>([]);
+  const [ticketClasses, setTicketClasses] = useState<TicketClass[]>([]);
   const { toast } = useToast();
+  const { language } = useLanguage();
 
-  const [formData, setFormData] = useState<UpdateTicketRequest>({
-    title: ticket.title,
-    description: ticket.description,
-    severity_level: ticket.severity_level,
-    priority: ticket.priority,
-    assigned_to: ticket.assigned_to,
-    status_notes: ''
+  const [formData, setFormData] = useState({
+    title: ticket.title ?? '',
+    description: ticket.description ?? '',
+    pucriticalno: ticket.pucriticalno?.toString() ?? '',
+    schedule_start: ticket.schedule_start ? timestampToDatetimeLocal(ticket.schedule_start) : '',
+    schedule_finish: ticket.schedule_finish ? timestampToDatetimeLocal(ticket.schedule_finish) : '',
+    actual_start_at: ticket.actual_start_at ? timestampToDatetimeLocal(ticket.actual_start_at) : '',
+    actual_finish_at: ticket.actual_finish_at ? timestampToDatetimeLocal(ticket.actual_finish_at) : '',
+    satisfaction_rating: ticket.satisfaction_rating?.toString() ?? '',
+    cost_avoidance: ticket.cost_avoidance?.toString() ?? '',
+    downtime_avoidance_hours: ticket.downtime_avoidance_hours?.toString() ?? '',
+    failure_mode_id: ticket.failure_mode_id?.toString() ?? 'none',
+    ticketClass: ticket.ticketClass?.toString() ?? 'none',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -39,33 +52,81 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
   // Update form data when ticket changes
   useEffect(() => {
     setFormData({
-      title: ticket.title,
-      description: ticket.description,
-      severity_level: ticket.severity_level,
-      priority: ticket.priority,
-      assigned_to: ticket.assigned_to,
-      status_notes: ''
+      title: ticket.title ?? '',
+      description: ticket.description ?? '',
+      pucriticalno: ticket.pucriticalno?.toString() ?? '',
+      schedule_start: ticket.schedule_start ? timestampToDatetimeLocal(ticket.schedule_start) : '',
+      schedule_finish: ticket.schedule_finish ? timestampToDatetimeLocal(ticket.schedule_finish) : '',
+      actual_start_at: ticket.actual_start_at ? timestampToDatetimeLocal(ticket.actual_start_at) : '',
+      actual_finish_at: ticket.actual_finish_at ? timestampToDatetimeLocal(ticket.actual_finish_at) : '',
+      satisfaction_rating: ticket.satisfaction_rating?.toString() ?? '',
+      cost_avoidance: ticket.cost_avoidance?.toString() ?? '',
+      downtime_avoidance_hours: ticket.downtime_avoidance_hours?.toString() ?? '',
+      failure_mode_id: ticket.failure_mode_id?.toString() ?? 'none',
+      ticketClass: ticket.ticketClass?.toString() ?? 'none',
     });
     setErrors({});
   }, [ticket]);
 
+  useEffect(() => {
+    if (!open) return;
+
+    let isActive = true;
+    const loadOptions = async () => {
+      setOptionsLoading(true);
+      try {
+        const [failureModeResponse, ticketClassResponse] = await Promise.all([
+          ticketService.getFailureModes(),
+          ticketClassService.getTicketClasses(),
+        ]);
+
+        if (!isActive) return;
+        setFailureModes(failureModeResponse.data || []);
+        setTicketClasses(ticketClassResponse || []);
+      } catch (error) {
+        if (!isActive) return;
+        toast({
+          title: 'Error',
+          description: error instanceof Error ? error.message : 'Failed to load edit options',
+          variant: 'destructive'
+        });
+      } finally {
+        if (isActive) {
+          setOptionsLoading(false);
+        }
+      }
+    };
+
+    loadOptions();
+    return () => {
+      isActive = false;
+    };
+  }, [open, toast]);
+
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {};
 
-    if (!formData.title?.trim()) {
+    if (!formData.title.trim()) {
       newErrors.title = 'Title is required';
     }
 
-    if (!formData.description?.trim()) {
+    if (!formData.description.trim()) {
       newErrors.description = 'Description is required';
     }
 
-    if (formData.estimated_downtime_hours !== undefined && formData.estimated_downtime_hours < 0) {
-      newErrors.estimated_downtime_hours = 'Estimated downtime cannot be negative';
+    if (formData.schedule_start && formData.schedule_finish && new Date(formData.schedule_start) > new Date(formData.schedule_finish)) {
+      newErrors.schedule_finish = 'Schedule finish must be later than schedule start';
     }
 
-    if (formData.actual_downtime_hours !== undefined && formData.actual_downtime_hours < 0) {
-      newErrors.actual_downtime_hours = 'Actual downtime cannot be negative';
+    if (formData.actual_start_at && formData.actual_finish_at && new Date(formData.actual_start_at) > new Date(formData.actual_finish_at)) {
+      newErrors.actual_finish_at = 'Actual finish must be later than actual start';
+    }
+
+    if (formData.satisfaction_rating) {
+      const rating = Number(formData.satisfaction_rating);
+      if (Number.isNaN(rating) || rating < 1 || rating > 5) {
+        newErrors.satisfaction_rating = 'Satisfaction rating must be between 1 and 5';
+      }
     }
 
     setErrors(newErrors);
@@ -81,10 +142,30 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
 
     setLoading(true);
     try {
-      await ticketService.updateTicket(ticket.id, formData);
+      const parseNullableInt = (value: string): number | null =>
+        value === '' || value === 'none' ? null : parseInt(value, 10);
+      const parseNullableNumber = (value: string): number | null =>
+        value === '' ? null : Number(value);
+
+      const payload: UpdateTicketDetailRequest = {
+        title: formData.title.trim(),
+        description: formData.description.trim(),
+        pucriticalno: parseNullableInt(formData.pucriticalno),
+        schedule_start: formData.schedule_start || null,
+        schedule_finish: formData.schedule_finish || null,
+        actual_start_at: formData.actual_start_at || null,
+        actual_finish_at: formData.actual_finish_at || null,
+        satisfaction_rating: parseNullableInt(formData.satisfaction_rating),
+        cost_avoidance: parseNullableNumber(formData.cost_avoidance),
+        downtime_avoidance_hours: parseNullableNumber(formData.downtime_avoidance_hours),
+        failure_mode_id: parseNullableInt(formData.failure_mode_id),
+        ticketClass: parseNullableInt(formData.ticketClass),
+      };
+
+      await ticketService.updateTicketDetail(ticket.id, payload);
       toast({
         title: 'Success',
-        description: 'Ticket updated successfully',
+        description: 'Ticket details updated successfully',
         variant: 'default'
       });
       
@@ -93,7 +174,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
     } catch (error) {
       toast({
         title: 'Error',
-        description: error instanceof Error ? error.message : 'Failed to update ticket',
+        description: error instanceof Error ? error.message : 'Failed to update ticket details',
         variant: 'destructive'
       });
     } finally {
@@ -101,17 +182,12 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
     }
   };
 
-  const handleInputChange = (field: keyof UpdateTicketRequest, value: any) => {
+  const handleInputChange = (field: keyof typeof formData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     // Clear error when user starts typing
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }));
     }
-  };
-
-  const handleNumberInput = (field: keyof UpdateTicketRequest, value: string) => {
-    const numValue = value === '' ? undefined : parseFloat(value);
-    handleInputChange(field, numValue);
   };
 
   const handleClose = () => {
@@ -121,13 +197,15 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Edit Ticket #{ticket.ticket_number}</DialogTitle>
+          <DialogDescription>
+            L3/L4 users with permission on this PU can edit ticket details at any status.
+          </DialogDescription>
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Title */}
           <div className="space-y-2">
             <Label htmlFor="title">Title *</Label>
             <Input
@@ -140,7 +218,6 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
             {errors.title && <p className="text-sm text-red-500">{errors.title}</p>}
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
             <Label htmlFor="description">Description *</Label>
             <Textarea
@@ -154,124 +231,152 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
             {errors.description && <p className="text-sm text-red-500">{errors.description}</p>}
           </div>
 
-          {/* Status and Priority */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select
-                value={formData.status || ''}
-                onValueChange={(value) => handleInputChange('status', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="open">Open</SelectItem>
-                  <SelectItem value="assigned">Assigned</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="resolved">Resolved</SelectItem>
-                  <SelectItem value="closed">Closed</SelectItem>
-                </SelectContent>
-              </Select>
+              <Label htmlFor="pucriticalno">Critical Level</Label>
+              <Input
+                id="pucriticalno"
+                type="number"
+                min="1"
+                value={formData.pucriticalno}
+                onChange={(e) => handleInputChange('pucriticalno', e.target.value)}
+                placeholder="Enter critical level"
+              />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="priority">Priority</Label>
+              <Label htmlFor="ticketClass">Ticket Class</Label>
               <Select
-                value={formData.priority || ''}
-                onValueChange={(value) => handleInputChange('priority', value)}
+                value={formData.ticketClass}
+                onValueChange={(value) => handleInputChange('ticketClass', value)}
+                disabled={optionsLoading}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder={optionsLoading ? 'Loading ticket classes...' : 'Select ticket class'} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="normal">Normal</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="urgent">Urgent</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
+                  {ticketClasses.map((ticketClass) => (
+                    <SelectItem key={ticketClass.id} value={ticketClass.id.toString()}>
+                      {language === 'en' ? ticketClass.name_en : ticketClass.name_th}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
 
-          {/* Severity and Assigned To */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="severity_level">Severity Level</Label>
+              <Label htmlFor="schedule_start">Schedule Start</Label>
+              <Input
+                id="schedule_start"
+                type="datetime-local"
+                value={formData.schedule_start}
+                onChange={(e) => handleInputChange('schedule_start', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="schedule_finish">Schedule Finish</Label>
+              <Input
+                id="schedule_finish"
+                type="datetime-local"
+                value={formData.schedule_finish}
+                min={formData.schedule_start || undefined}
+                onChange={(e) => handleInputChange('schedule_finish', e.target.value)}
+              />
+              {errors.schedule_finish && <p className="text-sm text-red-500">{errors.schedule_finish}</p>}
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="actual_start_at">Actual Start</Label>
+              <Input
+                id="actual_start_at"
+                type="datetime-local"
+                value={formData.actual_start_at}
+                onChange={(e) => handleInputChange('actual_start_at', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="actual_finish_at">Actual Finish</Label>
+              <Input
+                id="actual_finish_at"
+                type="datetime-local"
+                value={formData.actual_finish_at}
+                min={formData.actual_start_at || undefined}
+                onChange={(e) => handleInputChange('actual_finish_at', e.target.value)}
+              />
+              {errors.actual_finish_at && <p className="text-sm text-red-500">{errors.actual_finish_at}</p>}
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="satisfaction_rating">Satisfaction Rating</Label>
+              <Input
+                id="satisfaction_rating"
+                type="number"
+                min="1"
+                max="5"
+                value={formData.satisfaction_rating}
+                onChange={(e) => handleInputChange('satisfaction_rating', e.target.value)}
+                placeholder="1 - 5"
+              />
+              {errors.satisfaction_rating && <p className="text-sm text-red-500">{errors.satisfaction_rating}</p>}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="failure_mode_id">Failure Mode</Label>
               <Select
-                value={formData.severity_level || ''}
-                onValueChange={(value) => handleInputChange('severity_level', value)}
+                value={formData.failure_mode_id}
+                onValueChange={(value) => handleInputChange('failure_mode_id', value)}
+                disabled={optionsLoading}
               >
                 <SelectTrigger>
-                  <SelectValue />
+                  <SelectValue placeholder={optionsLoading ? 'Loading failure modes...' : 'Select failure mode'} />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">Low</SelectItem>
-                  <SelectItem value="medium">Medium</SelectItem>
-                  <SelectItem value="high">High</SelectItem>
-                  <SelectItem value="critical">Critical</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
+                  {failureModes.map((mode) => (
+                    <SelectItem key={mode.id} value={mode.id.toString()}>
+                      {mode.code} - {mode.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="cost_avoidance">Cost Avoidance</Label>
+              <Input
+                id="cost_avoidance"
+                type="number"
+                step="0.01"
+                value={formData.cost_avoidance}
+                onChange={(e) => handleInputChange('cost_avoidance', e.target.value)}
+                placeholder="Amount"
+              />
+            </div>
 
             <div className="space-y-2">
-              <Label htmlFor="assigned_to">Assigned To (User ID)</Label>
+              <Label htmlFor="downtime_avoidance_hours">Downtime Avoidance Hours</Label>
               <Input
-                id="assigned_to"
+                id="downtime_avoidance_hours"
                 type="number"
-                value={formData.assigned_to || ''}
-                onChange={(e) => handleInputChange('assigned_to', e.target.value ? parseInt(e.target.value) : undefined)}
-                placeholder="User ID to assign ticket to"
+                step="0.01"
+                value={formData.downtime_avoidance_hours}
+                onChange={(e) => handleInputChange('downtime_avoidance_hours', e.target.value)}
+                placeholder="Hours"
               />
             </div>
           </div>
 
-          {/* Downtime Fields */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="estimated_downtime_hours">Estimated Downtime (hours)</Label>
-              <Input
-                id="estimated_downtime_hours"
-                type="number"
-                step="0.5"
-                min="0"
-                value={formData.estimated_downtime_hours || ''}
-                onChange={(e) => handleNumberInput('estimated_downtime_hours', e.target.value)}
-                placeholder="Estimated time to resolve"
-                className={errors.estimated_downtime_hours ? 'border-red-500' : ''}
-              />
-              {errors.estimated_downtime_hours && <p className="text-sm text-red-500">{errors.estimated_downtime_hours}</p>}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="actual_downtime_hours">Actual Downtime (hours)</Label>
-              <Input
-                id="actual_downtime_hours"
-                type="number"
-                step="0.5"
-                min="0"
-                value={formData.actual_downtime_hours || ''}
-                onChange={(e) => handleNumberInput('actual_downtime_hours', e.target.value)}
-                placeholder="Actual time taken to resolve"
-                className={errors.actual_downtime_hours ? 'border-red-500' : ''}
-              />
-              {errors.actual_downtime_hours && <p className="text-sm text-red-500">{errors.actual_downtime_hours}</p>}
-            </div>
-          </div>
-
-          {/* Status Notes */}
-          <div className="space-y-2">
-            <Label htmlFor="status_notes">Status Change Notes</Label>
-            <Textarea
-              id="status_notes"
-              value={formData.status_notes || ''}
-              onChange={(e) => handleInputChange('status_notes', e.target.value)}
-              placeholder="Notes about status change (optional)"
-              rows={3}
-            />
-          </div>
-
-          {/* Form Actions */}
           <div className="flex justify-end space-x-3 pt-4">
             <Button
               type="button"
@@ -281,8 +386,8 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading}>
-              {loading ? 'Updating...' : 'Update Ticket'}
+            <Button type="submit" disabled={loading || optionsLoading}>
+              {loading ? 'Updating...' : 'Update Ticket Details'}
             </Button>
           </div>
         </form>

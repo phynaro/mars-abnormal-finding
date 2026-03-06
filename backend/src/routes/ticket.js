@@ -40,6 +40,9 @@ router.post('/notifications/pending', requireFormPermission('TKT', 'save'), tick
 // Get ticket by ID (requires TKT form view permission)
 router.get('/:id', requireFormPermission('TKT', 'view'), ticketController.getTicketById);
 
+// Update ticket detail (L3/L4 with PU right, any status)
+router.patch('/:id/detail', requireFormPermission('TKT', 'save'), ticketController.updateTicketDetail);
+
 // Update ticket (requires TKT form save permission)
 router.put('/:id', requireFormPermission('TKT', 'save'), ticketController.updateTicket);
 

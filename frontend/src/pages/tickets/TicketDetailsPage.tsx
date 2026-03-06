@@ -33,6 +33,7 @@ import {
   RotateCw,
   AlertCircle,
   Star,
+  Pencil,
 } from "lucide-react";
 import { getApiBaseUrl, getFileUrl } from "@/utils/url";
 import { Input } from "@/components/ui/input";
@@ -74,6 +75,7 @@ import HierarchicalMachineSelector from "@/components/tickets/HierarchicalMachin
 import { compressTicketImage, formatFileSize, compressImage } from "@/utils/imageCompression";
 import { StarRating, StarRatingDisplay } from "@/components/ui/star-rating";
 import { cn } from "@/lib/utils";
+import { EditTicketModal } from "@/components/ticket-management/EditTicketModal";
 
 type TicketCacheEntry = { data: Ticket; timestamp: number };
 
@@ -251,6 +253,7 @@ const TicketDetailsPage: React.FC = () => {
   const [actionNumber, setActionNumber] = useState("");
   const [actionExtraId, setActionExtraId] = useState("");
   const [acting, setActing] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteComment, setDeleteComment] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -289,6 +292,7 @@ const TicketDetailsPage: React.FC = () => {
   const isL2Plus = userApprovalLevel >= 2;
   const isL3Plus = userApprovalLevel >= 3;
   const isL4Plus = userApprovalLevel >= 4;
+  const canEditTicketDetail = userApprovalLevel >= 3;
 
   // Check if current user is the assigned person for this ticket
   const isAssignedUser = ticket?.assigned_to === user?.id;
@@ -387,6 +391,14 @@ const TicketDetailsPage: React.FC = () => {
       }
     }
   }, [ticketId, t]);
+
+  const refreshTicketDetails = useCallback(async () => {
+    if (!ticketId) return;
+    const numericId = parseInt(ticketId, 10);
+    ticketDataCache.delete(numericId);
+    pendingTicketRequests.delete(numericId);
+    await fetchTicketDetails();
+  }, [ticketId, fetchTicketDetails]);
 
   useEffect(() => {
     console.log('🚀 TicketDetailsPage useEffect triggered with ticketId:', ticketId);
@@ -1118,6 +1130,11 @@ const TicketDetailsPage: React.FC = () => {
                 {t('ticket.approveClose')}
               </Button>
             )}
+            {canEditTicketDetail && (
+              <Button variant="outline" onClick={() => setEditOpen(true)}>
+                <Pencil className="mr-2 h-4 w-4" /> Edit
+              </Button>
+            )}
             {/* L3 Reassign button - L3 can reassign tickets in any status except rejected_final and closed */}
             {isL3Plus &&
               ticket.status !== "rejected_final" &&
@@ -1829,7 +1846,7 @@ const TicketDetailsPage: React.FC = () => {
                     </dd>
                   </div>
                 )}
-                {ticket.cost_avoidance && (
+                {ticket.cost_avoidance !== null && ticket.cost_avoidance !== undefined && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                       {t('ticket.costAvoidance')}
@@ -1839,7 +1856,7 @@ const TicketDetailsPage: React.FC = () => {
                     </dd>
                   </div>
                 )}
-                {ticket.downtime_avoidance_hours && (
+                {ticket.downtime_avoidance_hours !== null && ticket.downtime_avoidance_hours !== undefined && (
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                       {t('ticket.downtimeAvoidance')}
@@ -2898,7 +2915,24 @@ const TicketDetailsPage: React.FC = () => {
         </DialogContent>
       </Dialog>
 
+      <EditTicketModal
+        ticket={ticket}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onTicketUpdated={refreshTicketDetails}
+      />
+
       {/* Mobile Floating Action Buttons */}
+      {canEditTicketDetail && (
+        <Button
+          type="button"
+          size="icon"
+          className="fixed bottom-36 right-4 sm:hidden z-50 h-14 w-14 rounded-full shadow-lg"
+          onClick={() => setEditOpen(true)}
+        >
+          <Pencil className="h-6 w-6" />
+        </Button>
+      )}
       <div className="fixed bottom-20 right-4 sm:hidden z-50" ref={actionPaneRef}>
         <div className="flex flex-col items-end gap-2">
           {/* Expanded Action Pane */}
@@ -2998,6 +3032,16 @@ const TicketDetailsPage: React.FC = () => {
             {isL4Plus && ticket.status === "reviewed" && (
               <Button onClick={() => openAction("approve-close")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
                 <CheckCircle className="mr-2 h-4 w-4" /> {t('ticket.approveClose')}
+              </Button>
+            )}
+            {canEditTicketDetail && (
+              <Button
+                variant="outline"
+                onClick={() => setEditOpen(true)}
+                size="sm"
+                className="shadow-lg w-auto whitespace-nowrap"
+              >
+                <Pencil className="mr-2 h-4 w-4" /> Edit
               </Button>
             )}
             {/* L3 Reassign button - L3 can reassign tickets in any status except rejected_final and closed */}
