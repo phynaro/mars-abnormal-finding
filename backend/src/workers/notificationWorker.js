@@ -569,11 +569,13 @@ async function processAssignmentTicketNotification(job) {
 
 /**
  * Run a scheduled notification: update last_run, call service, update next_run.
+ * Retries once on "Connection is closed" with a fresh DB connection.
  * @param {string} notificationType - IgxNotificationSchedule.notification_type
  * @param {Function} serviceMethod - async () => result
+ * @param {boolean} [isRetry] - internal: true when retrying after connection closed
  * @returns {Promise<Object>} - Service result
  */
-async function runScheduleNotification(notificationType, serviceMethod) {
+async function runScheduleNotification(notificationType, serviceMethod, isRetry = false) {
   const pool = await sql.connect(dbConfig);
   try {
     await pool.request()
@@ -614,6 +616,15 @@ async function runScheduleNotification(notificationType, serviceMethod) {
     }
 
     return result;
+  } catch (err) {
+    if (!isRetry && err && err.message && String(err.message).includes('Connection is closed')) {
+      try {
+        await pool.close();
+      } catch (_) {}
+      log('[Worker] Schedule job got Connection is closed, retrying once with fresh DB connection');
+      return runScheduleNotification(notificationType, serviceMethod, true);
+    }
+    throw err;
   } finally {
     await pool.close();
   }
