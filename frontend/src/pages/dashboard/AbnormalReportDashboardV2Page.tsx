@@ -2809,87 +2809,113 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           </Card>
         </div>
 
-        {/* Case Count by PU - Full Width Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('dashboard.caseCountByPU')}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {caseCountByPULoading ? (
-              <div className="flex items-center justify-center h-[400px]">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
-              </div>
-            ) : caseCountByPUData.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
-                <AlertTriangle className="h-8 w-8 mb-2" />
-                <p className="text-sm font-medium">No Data Available</p>
-                <p className="text-xs text-center mt-1">
-                  Unable to load case count by PU data.<br />
-                  Please check your connection or contact support.
-                </p>
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height={Math.max(450, caseCountByPUData.length *30 + 60)}>
-                <BarChart 
-                  data={caseCountByPUData} 
-                  layout="vertical" 
-                  margin={{ top: 20, right: 30, left: 20, bottom: 15 }}
-                  barCategoryGap={0}
-                  barSize={18}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis 
-                    type="number" 
-                    allowDecimals={false}
-                    label={{ value: t('dashboard.caseCount'), position: 'insideBottom', offset: -10 }}
-                  />
-                  <YAxis 
-                    dataKey="puName" 
-                    type="category" 
-                    width={300}
-                  />
-                  <RechartsTooltip 
-                    formatter={(value) => [`${value} ${t('dashboard.tickets')}`, t('dashboard.caseCount')]}
-                    labelFormatter={(label) => `PU: ${label}`}
-                  />
-                  <Bar 
-                    dataKey="caseCount" 
-                    fill="hsl(var(--primary))"
-                    shape={(props: any) => {
-                      const { payload, ...barProps } = props;
-                      return (
-                        <g>
-                          <rect
-                            {...barProps}
-                            style={{ cursor: 'pointer' }}
-                            onClick={() => {
-                              if (payload) {
-                                const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
-                                const params = new URLSearchParams({
-                                  startDate: dateRange.startDate,
-                                  endDate: dateRange.endDate,
-                                  puno: payload.puno.toString()
-                                });
-                                window.open(`/tickets?${params.toString()}`, '_blank');
-                              }
-                            }}
-                          />
-                        </g>
-                      );
-                    }}
+        {/* Case Count by PU - Top 10 with See more */}
+        {(() => {
+          const CASE_COUNT_BY_PU_TOP = 10;
+          const caseCountByPUTop10 = caseCountByPUData.slice(0, CASE_COUNT_BY_PU_TOP);
+          const caseCountByPUHasMore = caseCountByPUData.length > CASE_COUNT_BY_PU_TOP;
+          const caseCountByPUFullUrl = (() => {
+            const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+            const params = new URLSearchParams({
+              startDate: dateRange.startDate,
+              endDate: dateRange.endDate
+            });
+            if (plantFilter !== 'all') params.set('plant', plantFilter);
+            if (areaFilter !== 'all') params.set('area', areaFilter);
+            return `${window.location.pathname.replace(/\/[^/]*$/, '')}/case-count-by-pu?${params.toString()}`;
+          })();
+          return (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>{t('dashboard.caseCountByPU')}</CardTitle>
+                {!caseCountByPULoading && caseCountByPUData.length > 0 && caseCountByPUHasMore && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.open(caseCountByPUFullUrl, '_blank')}
                   >
-                    {caseCountByPUData.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`}
-                        style={{ cursor: 'pointer' }}
+                    {t('common.seeMore')}
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {caseCountByPULoading ? (
+                  <div className="flex items-center justify-center h-[400px]">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                  </div>
+                ) : caseCountByPUData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                    <AlertTriangle className="h-8 w-8 mb-2" />
+                    <p className="text-sm font-medium">No Data Available</p>
+                    <p className="text-xs text-center mt-1">
+                      Unable to load case count by PU data.<br />
+                      Please check your connection or contact support.
+                    </p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={Math.max(450, caseCountByPUTop10.length * 30 + 60)}>
+                    <BarChart
+                      data={caseCountByPUTop10}
+                      layout="vertical"
+                      margin={{ top: 20, right: 30, left: 20, bottom: 15 }}
+                      barCategoryGap={0}
+                      barSize={18}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        type="number"
+                        allowDecimals={false}
+                        label={{ value: t('dashboard.caseCount'), position: 'insideBottom', offset: -10 }}
                       />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </CardContent>
-        </Card>
+                      <YAxis
+                        dataKey="puName"
+                        type="category"
+                        width={300}
+                      />
+                      <RechartsTooltip
+                        formatter={(value) => [`${value} ${t('dashboard.tickets')}`, t('dashboard.caseCount')]}
+                        labelFormatter={(label) => `PU: ${label}`}
+                      />
+                      <Bar
+                        dataKey="caseCount"
+                        fill="hsl(var(--primary))"
+                        shape={(props: any) => {
+                          const { payload, ...barProps } = props;
+                          return (
+                            <g>
+                              <rect
+                                {...barProps}
+                                style={{ cursor: 'pointer' }}
+                                onClick={() => {
+                                  if (payload) {
+                                    const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+                                    const params = new URLSearchParams({
+                                      startDate: dateRange.startDate,
+                                      endDate: dateRange.endDate,
+                                      puno: payload.puno.toString()
+                                    });
+                                    window.open(`/tickets?${params.toString()}`, '_blank');
+                                  }
+                                }}
+                              />
+                            </g>
+                          );
+                        }}
+                      >
+                        {caseCountByPUTop10.map((entry, index) => (
+                          <Cell
+                            key={`cell-${index}`}
+                            style={{ cursor: 'pointer' }}
+                          />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
       </div>
 
       {/* Speed Charts */}
