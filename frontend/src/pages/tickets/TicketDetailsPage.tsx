@@ -1132,7 +1132,7 @@ const TicketDetailsPage: React.FC = () => {
             )}
             {canEditTicketDetail && (
               <Button variant="outline" onClick={() => setEditOpen(true)}>
-                <Pencil className="mr-2 h-4 w-4" /> Edit
+                <Pencil className="mr-2 h-4 w-4" /> {t('common.edit')}
               </Button>
             )}
             {/* L3 Reassign button - L3 can reassign tickets in any status except rejected_final and closed */}
@@ -3041,7 +3041,7 @@ const TicketDetailsPage: React.FC = () => {
                 size="sm"
                 className="shadow-lg w-auto whitespace-nowrap"
               >
-                <Pencil className="mr-2 h-4 w-4" /> Edit
+                <Pencil className="mr-2 h-4 w-4" /> {t('common.edit')}
               </Button>
             )}
             {/* L3 Reassign button - L3 can reassign tickets in any status except rejected_final and closed */}
