@@ -86,6 +86,10 @@ export const TicketList: React.FC = () => {
   const [users, setUsers] = useState<Array<{id: number; name: string; email?: string}>>([]);
   const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [exportFilters, setExportFilters] = useState<TicketFilters | null>(null);
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportDateError, setExportDateError] = useState<string | null>(null);
   const { toast } = useToast();
 
   // View mode state - default to 'card', persist in localStorage
@@ -313,6 +317,35 @@ export const TicketList: React.FC = () => {
     return !!(filters.status || filters.pucriticalno || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
   };
 
+  const getEffectiveExportFilters = (): TicketFilters => {
+    if (exportFilters) {
+      return exportFilters;
+    }
+    return { ...filters };
+  };
+
+  const handleExportFilterChange = (key: keyof TicketFilters, value: any) => {
+    setExportFilters((prev) => {
+      const base: TicketFilters = prev ? { ...prev } : { ...filters };
+      // When plant changes, reset area filter
+      if (key === "plant") {
+        return { ...base, [key]: value, area: undefined };
+      }
+      return { ...base, [key]: value };
+    });
+  };
+
+  const openExportDialog = () => {
+    setExportDateError(null);
+    setExportFilters({
+      ...filters,
+      page: 1,
+      // Use a larger default limit for export; pagination will still be handled on the backend.
+      limit: 100,
+    });
+    setExportDialogOpen(true);
+  };
+
   const handlePageChange = (page: number) => {
     const updatedFilters = { ...filters, page };
     setFilters(updatedFilters);
@@ -411,73 +444,163 @@ export const TicketList: React.FC = () => {
     return { days, hours };
   };
 
-  const handleExportTickets = () => {
-    if (tickets.length === 0) {
-      toast({
-        title: t('common.warning'),
-        description: t('ticket.noTicketsToExport'),
-        variant: "destructive",
-      });
+  const handleExportTickets = async () => {
+    const effectiveFilters = getEffectiveExportFilters();
+
+    // Validate created date range (startDate / endDate)
+    if ((effectiveFilters.startDate && !effectiveFilters.endDate) || (!effectiveFilters.startDate && effectiveFilters.endDate)) {
+      setExportDateError('Both From and To dates are required when filtering by created date.');
       return;
     }
 
-    // Prepare CSV data
-    const csvHeaders = [
-      t('ticket.ticketNumber'),
-      t('ticket.title'),
-      t('ticket.description'),
-      t('ticket.status'),
-      t('ticket.priority'),
-      t('ticket.severity'),
-      'PU Name',
-      t('ticket.createdBy'),
-      t('ticket.assignedTo'),
-      t('ticket.created'),
-    ];
+    if (effectiveFilters.startDate && effectiveFilters.endDate) {
+      const from = new Date(effectiveFilters.startDate);
+      const to = new Date(effectiveFilters.endDate);
+      if (from > to) {
+        setExportDateError('From date must be before or equal to To date.');
+        return;
+      }
+    }
 
-    const csvData = tickets.map(ticket => [
-      ticket.ticket_number,
-      ticket.title,
-      ticket.description?.replace(/\n/g, ' ') || '', // Replace newlines with spaces
-      ticket.status.replace('_', ' ').toUpperCase(),
-      ticket.priority?.toUpperCase() || '',
-      ticket.severity_level?.toUpperCase() || '',
-      ticket.pu_name || ticket.pucode || 'N/A',
-      ticket.reporter_name || `User ${ticket.created_by}`,
-      ticket.assignee_name || `User ${ticket.assigned_to}` || t('ticket.unassigned'),
-      formatDate(ticket.created_at),
-    ]);
+    setExportDateError(null);
+    setExportLoading(true);
 
-    // Convert to CSV string
-    const csvContent = [
-      csvHeaders.join(','),
-      ...csvData.map(row => row.map(field => `"${field}"`).join(','))
-    ].join('\n');
+    try {
+      const EXPORT_PAGE_LIMIT = 1000;
+      const allTickets: Ticket[] = [];
+      let page = 1;
+      let totalPages = 1;
 
-    // Create and download file
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const link = document.createElement('a');
-    const url = URL.createObjectURL(blob);
-    link.setAttribute('href', url);
-    
-    // Generate filename with current date and filters
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const filterStr = filters.status ? `_${filters.status}` : '';
-    const plantStr = filters.plant ? `_${filters.plant}` : '';
-    const areaStr = filters.area ? `_${filters.area}` : '';
-    link.setAttribute('download', `tickets_${dateStr}${filterStr}${plantStr}${areaStr}.csv`);
-    
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      do {
+        const response = await ticketService.getTickets({
+          ...effectiveFilters,
+          page,
+          limit: EXPORT_PAGE_LIMIT,
+        });
 
-    toast({
-      title: t('common.success'),
-      description: t('ticket.exportSuccess'),
-      variant: "default",
-    });
+        const { tickets: pageTickets, pagination } = response.data;
+        allTickets.push(...pageTickets);
+        totalPages = pagination.pages;
+        page += 1;
+      } while (page <= totalPages);
+
+      if (allTickets.length === 0) {
+        toast({
+          title: t('common.warning'),
+          description: t('ticket.noTicketsToExport'),
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Prepare CSV headers based on igxTickets / Ticket schema
+      const csvHeaders = [
+        t('ticket.ticketNumber'),
+        t('ticket.title'),
+        t('ticket.description'),
+        t('ticket.status'),
+        'PU Code',
+        'PU Name',
+        'PU Description',
+        'Plant Code',
+        'Area Code',
+        'Line Code',
+        'Machine Code',
+        t('ticket.criticalLevel'),
+        'Ticket Class (EN)',
+        'Ticket Class (TH)',
+        'Failure Mode Code',
+        'Failure Mode Name',
+        'Cost Avoidance',
+        'Downtime Avoidance (hours)',
+        'Satisfaction Rating',
+        t('ticket.createdBy'),
+        t('ticket.assignedTo'),
+        t('ticket.created'),
+        'Updated At',
+        'Schedule Start',
+        'Schedule Finish',
+        'Actual Start',
+        'Actual Finish',
+      ];
+
+      const csvData = allTickets.map((ticket) => [
+        ticket.ticket_number,
+        ticket.title,
+        ticket.description?.replace(/\n/g, ' ') || '',
+        ticket.status?.replace(/_/g, ' ').toUpperCase() || '',
+        ticket.pu_pucode || ticket.pucode || '',
+        ticket.pu_name || ticket.PUNAME || '',
+        ticket.pudescription || '',
+        ticket.plant_code || '',
+        ticket.area_code || '',
+        ticket.line_code || '',
+        ticket.machine_code || '',
+        ticket.pucriticalno != null ? String(ticket.pucriticalno) : '',
+        ticket.ticket_class_en || '',
+        ticket.ticket_class_th || '',
+        ticket.failure_mode_code || '',
+        ticket.failure_mode_name || '',
+        ticket.cost_avoidance != null ? String(ticket.cost_avoidance) : '',
+        ticket.downtime_avoidance_hours != null ? String(ticket.downtime_avoidance_hours) : '',
+        ticket.satisfaction_rating != null ? String(ticket.satisfaction_rating) : '',
+        ticket.reporter_name || `User ${ticket.created_by}`,
+        ticket.assignee_name || (ticket.assigned_to ? `User ${ticket.assigned_to}` : t('ticket.unassigned')),
+        ticket.created_at ? formatDate(ticket.created_at) : '',
+        ticket.updated_at ? formatDate(ticket.updated_at) : '',
+        ticket.schedule_start ? formatDate(ticket.schedule_start) : '',
+        ticket.schedule_finish ? formatDate(ticket.schedule_finish) : '',
+        ticket.actual_start_at ? formatDate(ticket.actual_start_at) : '',
+        ticket.actual_finish_at ? formatDate(ticket.actual_finish_at) : '',
+      ]);
+
+      // Escape CSV field: wrap in quotes and escape internal double quotes (for Thai/Unicode and Excel)
+      const escapeCsvField = (val: string | number | boolean | null | undefined) =>
+        `"${String(val ?? '').replace(/"/g, '""')}"`;
+
+      // Convert to CSV string; prepend UTF-8 BOM so Excel displays Thai (and other Unicode) correctly
+      const BOM = '\uFEFF';
+      const csvContent = BOM + [
+        csvHeaders.map(escapeCsvField).join(','),
+        ...csvData.map((row) => row.map(escapeCsvField).join(',')),
+      ].join('\n');
+
+      // Create and download file
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+
+      // Generate filename with current date and filters
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const filterStr = effectiveFilters.status ? `_${effectiveFilters.status}` : '';
+      const plantStr = effectiveFilters.plant ? `_${effectiveFilters.plant}` : '';
+      const areaStr = effectiveFilters.area ? `_${effectiveFilters.area}` : '';
+      link.setAttribute('download', `tickets_${dateStr}${filterStr}${plantStr}${areaStr}.csv`);
+
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast({
+        title: t('common.success'),
+        description: t('ticket.exportSuccess'),
+        variant: "default",
+      });
+
+      setExportDialogOpen(false);
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description:
+          error instanceof Error ? error.message : t('ticket.failedToFetchTickets'),
+        variant: "destructive",
+      });
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   const getStatusIcon = (status: string) => {
@@ -1031,16 +1154,248 @@ export const TicketList: React.FC = () => {
               <span className="hidden sm:inline">Table</span>
             </Button>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportTickets}
-            title={t('ticket.exportTickets')}
-            className="hidden md:inline-flex"
-          >
-            <Download className="h-4 w-4 mr-2" />
-            {t('ticket.export')}
-          </Button>
+          <Dialog open={exportDialogOpen} onOpenChange={(open) => {
+            setExportDialogOpen(open);
+            if (!open) {
+              setExportDateError(null);
+              setExportFilters(null);
+            }
+          }}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={openExportDialog}
+                title={t('ticket.exportTickets')}
+                className="hidden md:inline-flex"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                {t('ticket.export')}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-3xl max-h-[90vh] lg:max-h-none dark:text-gray-100 flex flex-col">
+              <DialogHeader className="flex-shrink-0">
+                <DialogTitle>{t('ticket.exportTickets')}</DialogTitle>
+              </DialogHeader>
+              <div className="overflow-y-auto lg:overflow-visible flex-1 min-h-0 pr-2 -mr-2 space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Search */}
+                  <div className="space-y-2">
+                    <Label htmlFor="export_search">{t('common.search')}</Label>
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
+                      <Input
+                        id="export_search"
+                        placeholder={t('ticket.searchTickets')}
+                        value={getEffectiveExportFilters().search || ""}
+                        onChange={(e) =>
+                          handleExportFilterChange("search", e.target.value)
+                        }
+                        className="pl-10"
+                      />
+                    </div>
+                  </div>
+                  {/* Created By */}
+                  <div className="space-y-2">
+                    <Label htmlFor="export_created_by">{t('ticket.createdBy')}</Label>
+                    <SearchableCombobox
+                      options={[
+                        { value: "all", label: t('ticket.allUsers') },
+                        ...users.map((user) => ({
+                          value: user.id.toString(),
+                          label: user.name,
+                        })),
+                      ]}
+                      value={getEffectiveExportFilters().created_by ? getEffectiveExportFilters().created_by!.toString() : "all"}
+                      onValueChange={(v) =>
+                        handleExportFilterChange("created_by", v === "all" ? undefined : parseInt(v))
+                      }
+                      placeholder={t('ticket.allUsers')}
+                      searchPlaceholder={t('ticket.searchUsers')}
+                    />
+                  </div>
+                  {/* Assigned To */}
+                  <div className="space-y-2">
+                    <Label htmlFor="export_assigned_to">{t('ticket.assignedTo')}</Label>
+                    <SearchableCombobox
+                      options={[
+                        { value: "all", label: t('ticket.allUsers') },
+                        ...users.map((user) => ({
+                          value: user.id.toString(),
+                          label: user.name,
+                        })),
+                      ]}
+                      value={getEffectiveExportFilters().assigned_to ? getEffectiveExportFilters().assigned_to!.toString() : "all"}
+                      onValueChange={(v) =>
+                        handleExportFilterChange("assigned_to", v === "all" ? undefined : parseInt(v))
+                      }
+                      placeholder={t('ticket.allUsers')}
+                      searchPlaceholder={t('ticket.searchUsers')}
+                    />
+                  </div>
+                  {/* Plant */}
+                  <div className="space-y-2">
+                    <Label htmlFor="export_plant">Plant</Label>
+                    <Select
+                      value={getEffectiveExportFilters().plant || "all"}
+                      onValueChange={(v) =>
+                        handleExportFilterChange("plant", v === "all" ? undefined : v)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="All Plants" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Plants</SelectItem>
+                        {plants.map((plant) => (
+                          <SelectItem key={plant.code} value={plant.code}>
+                            {plant.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Area */}
+                  <div className="space-y-2">
+                    <Label htmlFor="export_area">{t('ticket.area')}</Label>
+                    <Select
+                      value={getEffectiveExportFilters().area || "all"}
+                      onValueChange={(v) =>
+                        handleExportFilterChange("area", v === "all" ? undefined : v)
+                      }
+                      disabled={!getEffectiveExportFilters().plant}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            !getEffectiveExportFilters().plant
+                              ? 'Select plant first'
+                              : t('ticket.allAreas')
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('ticket.allAreas')}</SelectItem>
+                        {areas.map((area) => (
+                          <SelectItem key={area.code} value={area.code}>
+                            {area.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Status */}
+                  <div className="space-y-2">
+                    <Label htmlFor="export_status">{t('ticket.status')}</Label>
+                    <Select
+                      value={getEffectiveExportFilters().status || "all"}
+                      onValueChange={(v) =>
+                        handleExportFilterChange("status", v === "all" ? "" : v)
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('ticket.allStatuses')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('ticket.allStatuses')}</SelectItem>
+                        <SelectItem value="open">{t('ticket.open')}</SelectItem>
+                        <SelectItem value="accepted">{t('ticket.accepted')}</SelectItem>
+                        <SelectItem value="planed">{t('ticket.planed')}</SelectItem>
+                        <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
+                        <SelectItem value="reviewed">{t('ticket.reviewed')}</SelectItem>
+                        <SelectItem value="closed">{t('ticket.closed')}</SelectItem>
+                        <SelectItem value="rejected_pending_l3_review">
+                          {t('ticket.rejectedPendingL3Review')}
+                        </SelectItem>
+                        <SelectItem value="rejected_final">
+                          {t('ticket.rejectedFinal')}
+                        </SelectItem>
+                        <SelectItem value="finished">{t('ticket.finished')}</SelectItem>
+                        <SelectItem value="escalated">{t('ticket.escalated')}</SelectItem>
+                        <SelectItem value="reopened_in_progress">
+                          {t('ticket.reopenedInProgress')}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Critical Level */}
+                  <div className="space-y-2">
+                    <Label htmlFor="export_critical">{t('ticket.criticalLevel')}</Label>
+                    <Select
+                      value={getEffectiveExportFilters().pucriticalno ? getEffectiveExportFilters().pucriticalno!.toString() : "all"}
+                      onValueChange={(v) =>
+                        handleExportFilterChange("pucriticalno", v === "all" ? undefined : parseInt(v))
+                      }
+                      disabled={criticalLevelsLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            criticalLevelsLoading
+                              ? t('common.loading')
+                              : t('ticket.allCriticalLevels')
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('ticket.allCriticalLevels')}</SelectItem>
+                        {criticalLevels.map((level) => (
+                          <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
+                            {level.PUCRITICALNAME}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* Created date range (From / To) */}
+                  <div className="space-y-2">
+                    <Label>{t('ticket.created')}</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="date"
+                        value={getEffectiveExportFilters().startDate || ""}
+                        onChange={(e) =>
+                          handleExportFilterChange("startDate", e.target.value || undefined)
+                        }
+                      />
+                      <span className="text-sm text-muted-foreground">to</span>
+                      <Input
+                        type="date"
+                        value={getEffectiveExportFilters().endDate || ""}
+                        onChange={(e) =>
+                          handleExportFilterChange("endDate", e.target.value || undefined)
+                        }
+                      />
+                    </div>
+                    {exportDateError && (
+                      <p className="text-xs text-destructive mt-1">
+                        {exportDateError}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-4 border-t mt-4">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setExportDialogOpen(false);
+                    setExportDateError(null);
+                    setExportFilters(null);
+                  }}
+                  disabled={exportLoading}
+                >
+                  {t('common.cancel')}
+                </Button>
+                <Button
+                  onClick={handleExportTickets}
+                  disabled={exportLoading}
+                >
+                  {exportLoading ? t('common.loading') : t('ticket.export')}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
