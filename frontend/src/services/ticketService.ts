@@ -31,7 +31,7 @@ export interface Ticket {
   failure_mode_code?: string;
   failure_mode_name?: string;
   severity_level: 'low' | 'medium' | 'high' | 'critical';
-  status: 'open' | 'accepted' | 'planed' | 'in_progress' | 'rejected_pending_l3_review' | 'rejected_final' | 'finished' | 'reviewed' | 'escalated' | 'closed' | 'reopened_in_progress';
+  status: 'open' | 'accepted' | 'planed' | 'in_progress' | 'rejected_pending_l3_review' | 'rejected_final' | 'finished' | 'reviewed' | 'review_escalated' | 'escalated' | 'closed' | 'reopened_in_progress';
   priority: 'low' | 'normal' | 'high' | 'urgent';
   created_by: number;
   assigned_to?: number;
@@ -216,7 +216,7 @@ export interface PendingTicket {
   ticket_number: string;
   title: string;
   description: string;
-  status: 'open' | 'in_progress' | 'pending_approval' | 'pending_assignment' | 'accepted' | 'planed' | 'rejected_pending_l3_review' | 'rejected_final' | 'finished' | 'reviewed' | 'escalated' | 'closed' | 'reopened_in_progress';
+  status: 'open' | 'in_progress' | 'pending_approval' | 'pending_assignment' | 'accepted' | 'planed' | 'rejected_pending_l3_review' | 'rejected_final' | 'finished' | 'reviewed' | 'review_escalated' | 'escalated' | 'closed' | 'reopened_in_progress';
   priority: 'urgent' | 'high' | 'medium' | 'low' | 'normal';
   severity_level: 'critical' | 'high' | 'medium' | 'low';
   created_at: string;
@@ -733,6 +733,23 @@ class TicketService {
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to approve close');
+    return result;
+  }
+
+  async reviewAndClose(
+    id: number,
+    review_reason: string,
+    close_reason: string,
+    satisfaction_rating?: number
+  ): Promise<{ success: boolean; message: string }> {
+    const headers = getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/tickets/${id}/review-and-close`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ review_reason, close_reason, satisfaction_rating })
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Failed to review and close ticket');
     return result;
   }
 

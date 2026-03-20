@@ -197,7 +197,7 @@ interface ApiResponse<T> {
 
 // ==================== TYPES ====================
 
-export type ActionType = 'create' | 'approve-review' | 'reopen' | 'accept' | 'reject' | 'escalate' | 'finish' | 'reassign' | 'approve-close';
+export type ActionType = 'create' | 'approve-review' | 'reopen' | 'accept' | 'reject' | 'escalate' | 'finish' | 'reassign' | 'approve-close' | 'review-and-close';
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -210,7 +210,7 @@ export const getApprovalLevelName = (level: number): string => {
     case 3:
       return 'L3 - Reassign/Reject Final';
     case 4:
-      return 'L4 - Approve Close';
+      return 'L4 - Approve Close / Review & Close';
     default:
       return 'Unknown Level';
   }
@@ -225,7 +225,7 @@ export const getActionsForLevel = (level: number): ActionType[] => {
     case 3:
       return ['reassign', 'reject'];
     case 4:
-      return ['approve-close'];
+      return ['approve-close', 'review-and-close'];
     default:
       return [];
   }

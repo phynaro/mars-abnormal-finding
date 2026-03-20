@@ -228,6 +228,7 @@ const pendingTicketNotificationJob = require('./jobs/pendingTicketNotificationJo
 const oldOpenTicketNotificationJob = require('./jobs/oldOpenTicketNotificationJob');
 const dueDateNotificationJob = require('./jobs/dueDateNotificationJob');
 const finishedTicketReviewNotificationJob = require('./jobs/finishedTicketReviewNotificationJob');
+const reviewEscalationNotificationJob = require('./jobs/reviewEscalationNotificationJob');
 
 // Start server
 app.listen(PORT, async () => {
@@ -260,6 +261,12 @@ app.listen(PORT, async () => {
     await finishedTicketReviewNotificationJob.initialize();
   } else {
     console.log('⚠️  Finished ticket review notifications are disabled via environment variable');
+  }
+
+  if (process.env.ENABLE_REVIEW_ESCALATION_NOTIFICATIONS !== 'false') {
+    await reviewEscalationNotificationJob.initialize();
+  } else {
+    console.log('⚠️  Review escalation notifications are disabled via environment variable');
   }
 });
 

@@ -8,7 +8,7 @@ const ACTION_MAPPING = {
     L1: ['create', 'approve_review', 'reopen'],
     L2: ['accept', 'reject', 'escalate', 'finish'],
     L3: ['reassign', 'reject_final'],
-    L4: ['approve_close']
+    L4: ['approve_close', 'review_and_close']
 };
 
 //const getBackendBaseUrl = () => process.env.BACKEND_URL || process.env.FRONTEND_URL || DEFAULT_BACKEND_BASE_URL;
@@ -383,6 +383,7 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
                 break;
                 
             case 'approve_close':
+            case 'review_and_close':
                 // Get requester
                 const requester_close = await getUserById(pool, created_by);
                 if (requester_close) {
@@ -687,6 +688,7 @@ const getNotificationRecipientsForPU = async (puno, actionType, createdBy = null
                 break;
                 
             case 'approve_close':
+            case 'review_and_close':
                 // Get requester
                 if (createdBy) {
                     const requester_close = await getUserByIdWithAvatar(pool, createdBy);

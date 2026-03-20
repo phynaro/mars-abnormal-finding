@@ -23,6 +23,7 @@ const JOB_NAME_SCHEDULE_PENDING_TICKETS = 'schedule-pending-tickets';
 const JOB_NAME_SCHEDULE_DUE_DATE = 'schedule-due-date';
 const JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS = 'schedule-old-open-tickets';
 const JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW = 'schedule-finished-ticket-review';
+const JOB_NAME_SCHEDULE_REVIEW_ESCALATION = 'schedule-review-escalation';
 
 let queue = null;
 let connectionFailed = false;
@@ -265,6 +266,23 @@ async function addScheduleFinishedTicketReviewJob(payload) {
   }
 }
 
+async function addScheduleReviewEscalationJob(payload) {
+  const q = getQueue();
+  if (!q) return null;
+  try {
+    const job = await q.add(JOB_NAME_SCHEDULE_REVIEW_ESCALATION, payload || { notification_type: 'review_escalation' }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: { count: 1000 },
+    });
+    console.log(`📬 Enqueued schedule job ${job.id} (schedule-review-escalation)`);
+    return job.id;
+  } catch (err) {
+    console.error('Failed to enqueue schedule-review-escalation:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   addCreateTicketNotificationJob,
   addAcceptTicketNotificationJob,
@@ -283,6 +301,7 @@ module.exports = {
   addScheduleDueDateJob,
   addScheduleOldOpenTicketsJob,
   addScheduleFinishedTicketReviewJob,
+  addScheduleReviewEscalationJob,
   QUEUE_NAME,
   JOB_NAME_CREATE_TICKET,
   JOB_NAME_ACCEPT_TICKET,
@@ -301,4 +320,5 @@ module.exports = {
   JOB_NAME_SCHEDULE_DUE_DATE,
   JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS,
   JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW,
+  JOB_NAME_SCHEDULE_REVIEW_ESCALATION,
 };

@@ -11,6 +11,7 @@ const STATUS_CLASSES_MODERN: Record<string, string> = {
   rejected_final: "bg-white dark:bg-gray-900/20 border border-red-200 dark:border-red-600 text-red-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
   finished: "bg-white dark:bg-gray-900/20 border border-green-200 dark:border-green-600 text-green-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
   reviewed: "bg-white dark:bg-gray-900/20 border border-purple-200 dark:border-purple-600 text-purple-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
+  review_escalated: "bg-white dark:bg-gray-900/20 border border-fuchsia-200 dark:border-fuchsia-600 text-fuchsia-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
   escalated: "bg-white dark:bg-gray-900/20 border border-red-200 dark:border-red-600 text-red-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
   reopened_in_progress: "bg-white dark:bg-gray-900/20 border border-amber-200 dark:border-amber-600 text-amber-700 dark:text-white rounded-full px-2 py-1 text-xs font-medium shadow-sm inline-flex items-center gap-1",
 };
@@ -26,6 +27,7 @@ const STATUS_ICON_CLASSES: Record<string, string> = {
   rejected_final: "w-2 h-2 rounded-full bg-red-500 shadow-sm text-xs",
   Finished: "w-2 h-2 rounded-full bg-green-500 shadow-sm text-xs",
   reviewed: "w-2 h-2 rounded-full bg-purple-500 shadow-sm text-xs",
+  review_escalated: "w-2 h-2 rounded-full bg-fuchsia-500 shadow-sm text-xs",
   escalated: "w-2 h-2 rounded-full bg-red-500 shadow-sm text-xs",
   reopened_in_progress: "w-2 h-2 rounded-full bg-blue-500 shadow-sm text-xs",
 };
@@ -41,6 +43,7 @@ const STATUS_CLASSES: Record<string, string> = {
   rejected_final: "border-red-200 bg-white text-red-700",
   Finished: "border-emerald-200 bg-white text-emerald-700",
   reviewed: "border-purple-200 bg-white text-purple-700",
+  review_escalated: "border-fuchsia-200 bg-white text-fuchsia-700",
   escalated: "border-red-200 bg-white text-red-700",
   reopened_in_progress: "border-blue-200 bg-white text-blue-700",
 };

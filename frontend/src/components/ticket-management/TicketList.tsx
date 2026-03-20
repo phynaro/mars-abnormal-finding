@@ -783,6 +783,28 @@ export const TicketList: React.FC = () => {
           )}
         </>
       )}
+      {ticket.status === 'review_escalated' && (
+        <>
+          {ticket.assigned_to != null && (
+            <div className="flex items-center gap-2">
+              <User className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.assignedTo')}: {ticket.assignee_name || `${t('ticket.userId')} ${ticket.assigned_to}`}</span>
+            </div>
+          )}
+          {ticket.finished_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.finished')}: {formatDate(ticket.finished_at)}</span>
+            </div>
+          )}
+          {ticket.actual_finish_at && (
+            <div className="flex items-center gap-2">
+              <Clock className="w-4 h-4 flex-shrink-0" />
+              <span className="truncate">{t('ticket.actualFinishTime')}: {formatDate(ticket.actual_finish_at)}</span>
+            </div>
+          )}
+        </>
+      )}
       {ticket.status === 'closed' && (
         <>
           {ticket.assigned_to != null && (
@@ -1074,6 +1096,7 @@ export const TicketList: React.FC = () => {
                         <SelectItem value="planed">{t('ticket.planed')}</SelectItem>
                         <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
                         <SelectItem value="reviewed">{t('ticket.reviewed')}</SelectItem>
+                        <SelectItem value="review_escalated">{t('ticket.reviewEscalated')}</SelectItem>
                         <SelectItem value="closed">{t('ticket.closed')}</SelectItem>
                         <SelectItem value="rejected_pending_l3_review">
                           {t('ticket.rejectedPendingL3Review')}
@@ -1303,6 +1326,7 @@ export const TicketList: React.FC = () => {
                         <SelectItem value="planed">{t('ticket.planed')}</SelectItem>
                         <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
                         <SelectItem value="reviewed">{t('ticket.reviewed')}</SelectItem>
+                        <SelectItem value="review_escalated">{t('ticket.reviewEscalated')}</SelectItem>
                         <SelectItem value="closed">{t('ticket.closed')}</SelectItem>
                         <SelectItem value="rejected_pending_l3_review">
                           {t('ticket.rejectedPendingL3Review')}

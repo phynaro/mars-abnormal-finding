@@ -774,6 +774,24 @@ const renderStatusBasedCardContent = (ticket: APIPendingTicket, t: (key: string)
       );
     }
   }
+  if (ticket.status === "review_escalated") {
+    if (ticket.assigned_to != null) {
+      nodes.push(
+        <div key="assigned_to" className="flex items-center gap-2">
+          <User className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.assignedTo")}: {ticket.assignee_name || `${t("ticket.userId")} ${ticket.assigned_to}`}</span>
+        </div>
+      );
+    }
+    if (ticket.finished_at) {
+      nodes.push(
+        <div key="finished_at" className="flex items-center gap-2">
+          <Clock className="w-4 h-4 flex-shrink-0" />
+          <span className="truncate">{t("ticket.finished")}: {formatDate(ticket.finished_at)}</span>
+        </div>
+      );
+    }
+  }
   if (ticket.status === "closed") {
     if (ticket.assigned_to != null) {
       nodes.push(

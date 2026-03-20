@@ -244,11 +244,13 @@ const TicketDetailsPage: React.FC = () => {
     | "escalate"
     | "approve-review"
     | "approve-close"
+    | "review-and-close"
     | "reopen"
     | "reassign";
   const [actionOpen, setActionOpen] = useState(false);
   const [actionType, setActionType] = useState<ActionType>("accept");
   const [actionComment, setActionComment] = useState("");
+  const [actionSecondaryComment, setActionSecondaryComment] = useState("");
   const [commentText, setCommentText] = useState("");
   const [actionNumber, setActionNumber] = useState("");
   const [actionExtraId, setActionExtraId] = useState("");
@@ -768,6 +770,7 @@ const TicketDetailsPage: React.FC = () => {
   const openAction = (type: ActionType) => {
     setActionType(type);
     setActionComment("");
+    setActionSecondaryComment("");
     setActionNumber("");
     setActionExtraId("");
     setIsActionPaneExpanded(false);
@@ -1004,6 +1007,17 @@ const TicketDetailsPage: React.FC = () => {
           );
           break;
         }
+        case "review-and-close": {
+          const rating =
+            actionNumber !== "" ? parseInt(actionNumber, 10) : undefined;
+          await ticketService.reviewAndClose(
+            ticket.id,
+            actionComment || "Escalated review completed by L4",
+            actionSecondaryComment || "Escalated review ticket closed by L4",
+            rating,
+          );
+          break;
+        }
         case "reopen":
           await ticketService.reopenTicket(
             ticket.id,
@@ -1128,6 +1142,11 @@ const TicketDetailsPage: React.FC = () => {
             {isL4Plus && ticket.status === "reviewed" && (
               <Button onClick={() => openAction("approve-close")}>
                 {t('ticket.approveClose')}
+              </Button>
+            )}
+            {isL4Plus && ticket.status === "review_escalated" && (
+              <Button onClick={() => openAction("review-and-close")}>
+                <CheckCircle className="mr-2 h-4 w-4" /> {t('ticket.reviewAndClose')}
               </Button>
             )}
             {canEditTicketDetail && (
@@ -2163,7 +2182,9 @@ const TicketDetailsPage: React.FC = () => {
         }`}>
           <div className="space-y-4 min-w-0">
             <h3 className="text-lg font-semibold capitalize">
-              {actionType.replace("_", " ")}
+              {actionType === "review-and-close"
+                ? t('ticket.reviewAndClose')
+                : actionType.replace("_", " ")}
             </h3>
             <div className="space-y-2">
               <Label>
@@ -2171,6 +2192,8 @@ const TicketDetailsPage: React.FC = () => {
                   ? t('ticket.rejectionReason')
                   : actionType === "approve-review"
                     ? t('ticket.reviewReason')
+                    : actionType === "review-and-close"
+                      ? t('ticket.reviewReason')
                     : actionType === "approve-close"
                       ? t('ticket.closeReason')
                     : actionType === "reopen"
@@ -2615,6 +2638,29 @@ const TicketDetailsPage: React.FC = () => {
                 </div>
               </div>
             )}
+            {actionType === "review-and-close" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>{t('ticket.closeReason')}</Label>
+                  <Textarea
+                    rows={3}
+                    value={actionSecondaryComment}
+                    onChange={(e) => setActionSecondaryComment(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>{t('ticket.satisfactionRating')}</Label>
+                  <div className="flex items-center gap-4">
+                    <StarRating
+                      value={actionNumber ? parseInt(actionNumber) : 0}
+                      onChange={(value) => setActionNumber(value.toString())}
+                      max={5}
+                      size="lg"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
             {actionType === "reassign" && (
               <div className="space-y-4 min-w-0 w-full">
                 <div className="space-y-2 min-w-0 w-full">
@@ -3032,6 +3078,11 @@ const TicketDetailsPage: React.FC = () => {
             {isL4Plus && ticket.status === "reviewed" && (
               <Button onClick={() => openAction("approve-close")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
                 <CheckCircle className="mr-2 h-4 w-4" /> {t('ticket.approveClose')}
+              </Button>
+            )}
+            {isL4Plus && ticket.status === "review_escalated" && (
+              <Button onClick={() => openAction("review-and-close")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
+                <CheckCircle className="mr-2 h-4 w-4" /> {t('ticket.reviewAndClose')}
               </Button>
             )}
             {canEditTicketDetail && (

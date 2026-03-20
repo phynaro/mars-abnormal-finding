@@ -77,6 +77,9 @@ router.post('/:id/approve-review', requireFormPermission('TKT', 'save'), ticketC
 // Approve close ticket (L4+ Managers only, requires TKT form save permission)
 router.post('/:id/approve-close', requireFormPermission('TKT', 'save'), ticketController.approveClose);
 
+// Review and close escalated review ticket (L4+ Managers only, requires TKT form save permission)
+router.post('/:id/review-and-close', requireFormPermission('TKT', 'save'), ticketController.reviewAndClose);
+
 // Reopen ticket (requires TKT form save permission)
 router.post('/:id/reopen', requireFormPermission('TKT', 'save'), ticketController.reopenTicket);
 

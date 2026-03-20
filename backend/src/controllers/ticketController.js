@@ -3925,6 +3925,82 @@ const approveReview = async (req, res) => {
   }
 };
 
+const enqueueCloseNotifications = async ({
+  pool,
+  req,
+  ticketId,
+  ticket,
+  closerId,
+  closeReason,
+  satisfactionRating = null,
+  actionType = "approve_close",
+}) => {
+  await safeSendNotifications("send ticket closure notifications", async () => {
+    const notificationUsers = await getTicketNotificationRecipients(ticketId, actionType, closerId);
+    if (notificationUsers.length === 0) return;
+
+    const ticketDetailResult = await runQuery(
+      pool,
+      `SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno, t.assigned_to,
+             pu.PUCODE, pu.PUNAME, pe.plant as plant_code, pe.area as area_code, pe.line as line_code,
+             pe.machine as machine_code, pe.number as machine_number
+         FROM IgxTickets t
+         LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+         LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+         WHERE t.id = @ticket_id`,
+      [{ name: "ticket_id", type: sql.Int, value: ticketId }]
+    );
+    const ticketData = firstRecord(ticketDetailResult);
+    const closerName = getUserDisplayNameFromRequest(req);
+
+    const ticketDataForNotifications = {
+      id: ticketId,
+      ticket_number: ticketData.ticket_number,
+      title: ticketData.title,
+      description: ticketData.title,
+      pucode: ticketData.PUCODE,
+      plant_code: ticketData.plant_code,
+      area_code: ticketData.area_code,
+      line_code: ticketData.line_code,
+      machine_code: ticketData.machine_code,
+      machine_number: ticketData.machine_number,
+      plant_name: ticketData.PUNAME,
+      PUNAME: ticketData.PUNAME,
+      severity_level: ticketData.severity_level,
+      priority: ticketData.priority,
+      created_by: ticket.created_by,
+      assigned_to: ticket.assigned_to,
+      close_reason: closeReason,
+      created_at: new Date().toISOString(),
+    };
+
+    const emailRecipients = notificationUsers.filter((u) => u.EMAIL && u.EMAIL.trim() !== "");
+    const lineRecipients = notificationUsers.filter((u) => u.LineID && u.LineID.trim() !== "");
+    const linePayload = {
+      caseNo: ticketData.ticket_number,
+      assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
+      problem: ticketData.title || "No description",
+      actionBy: closerName,
+      detailUrl: `${process.env.LIFF_URL}/tickets/${ticketId}`,
+      comment: closeReason || "เคสถูกปิดโดยผู้จัดการ",
+      extraKVs: [
+        { label: "Status", value: "CLOSED" },
+        { label: "Closed by", value: closerName },
+      ],
+    };
+
+    await notificationQueue.addCloseTicketNotificationJob({
+      ticketData: ticketDataForNotifications,
+      closerName,
+      close_reason: closeReason,
+      satisfaction_rating: satisfactionRating,
+      emailRecipients,
+      lineRecipients,
+      linePayload,
+    });
+  });
+};
+
 // Approve close ticket (L4 only)
 const approveClose = async (req, res) => {
   try {
@@ -4026,70 +4102,15 @@ const approveClose = async (req, res) => {
       // Don't fail the close action if Cedar fails
     }
 
-    // Send notifications via queue: requester + assignee + actor (closer)
-    await safeSendNotifications("send ticket closure notifications", async () => {
-      const notificationUsers = await getTicketNotificationRecipients(id, "approve_close", approved_by);
-      if (notificationUsers.length === 0) return;
-
-      const ticketDetailResult = await runQuery(
-        pool,
-        `SELECT t.id, t.ticket_number, t.title, t.severity_level, t.priority, t.status, t.puno,
-               pu.PUCODE, pu.PUNAME, pe.plant as plant_code, pe.area as area_code, pe.line as line_code,
-               pe.machine as machine_code, pe.number as machine_number
-           FROM IgxTickets t
-           LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
-           LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
-           WHERE t.id = @ticket_id`,
-        [{ name: "ticket_id", type: sql.Int, value: id }]
-      );
-      const ticketData = firstRecord(ticketDetailResult);
-      const closerName = getUserDisplayNameFromRequest(req);
-
-      const ticketDataForNotifications = {
-        id: id,
-        ticket_number: ticketData.ticket_number,
-        title: ticketData.title,
-        description: ticketData.title,
-        pucode: ticketData.PUCODE,
-        plant_code: ticketData.plant_code,
-        area_code: ticketData.area_code,
-        line_code: ticketData.line_code,
-        machine_code: ticketData.machine_code,
-        machine_number: ticketData.machine_number,
-        plant_name: ticketData.PUNAME,
-        PUNAME: ticketData.PUNAME,
-        severity_level: ticketData.severity_level,
-        priority: ticketData.priority,
-        created_by: ticket.created_by,
-        assigned_to: ticketData.assigned_to,
-        close_reason: close_reason,
-        created_at: new Date().toISOString(),
-      };
-
-      const emailRecipients = notificationUsers.filter((u) => u.EMAIL && u.EMAIL.trim() !== "");
-      const lineRecipients = notificationUsers.filter((u) => u.LineID && u.LineID.trim() !== "");
-      const linePayload = {
-        caseNo: ticketData.ticket_number,
-        assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
-        problem: ticketData.title || "No description",
-        actionBy: closerName,
-        detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
-        comment: close_reason || "เคสถูกปิดโดยผู้จัดการ",
-        extraKVs: [
-          { label: "Status", value: "CLOSED" },
-          { label: "Closed by", value: closerName },
-        ],
-      };
-
-      await notificationQueue.addCloseTicketNotificationJob({
-        ticketData: ticketDataForNotifications,
-        closerName,
-        close_reason,
-        satisfaction_rating: null,
-        emailRecipients,
-        lineRecipients,
-        linePayload,
-      });
+    await enqueueCloseNotifications({
+      pool,
+      req,
+      ticketId: id,
+      ticket,
+      closerId: approved_by,
+      closeReason: close_reason,
+      satisfactionRating: null,
+      actionType: "approve_close",
     });
 
     res.json({
@@ -4102,6 +4123,139 @@ const approveClose = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to close ticket",
+      error: error.message,
+    });
+  }
+};
+
+const reviewAndClose = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { review_reason, close_reason, satisfaction_rating } = req.body;
+    const reviewedAndClosedBy = req.user.id;
+    const pool = await sql.connect(dbConfig);
+
+    const currentTicketResult = await runQuery(
+      pool,
+      `
+        SELECT
+          t.status,
+          t.created_by,
+          t.assigned_to,
+          t.puno
+        FROM IgxTickets t
+        WHERE t.id = @id
+      `,
+      [{ name: "id", type: sql.Int, value: id }]
+    );
+
+    const ticket = firstRecord(currentTicketResult);
+    if (!ticket) {
+      return res.status(404).json({
+        success: false,
+        message: "Ticket not found",
+      });
+    }
+
+    const permissionCheck = await checkUserActionPermission(
+      reviewedAndClosedBy,
+      ticket.puno,
+      "review_and_close"
+    );
+    if (!permissionCheck.hasPermission) {
+      return res.status(403).json({
+        success: false,
+        message: "Only L4+ managers can review and close escalated review tickets in this area",
+      });
+    }
+
+    if (ticket.status !== "review_escalated") {
+      return res.status(400).json({
+        success: false,
+        message: "Only review escalated tickets can be reviewed and closed",
+      });
+    }
+
+    await pool
+      .request()
+      .input("id", sql.Int, id)
+      .input("status", sql.VarChar(50), "closed")
+      .input("reviewed_by", sql.Int, reviewedAndClosedBy)
+      .input("approved_by", sql.Int, reviewedAndClosedBy)
+      .input("satisfaction_rating", sql.Int, satisfaction_rating ?? null)
+      .query(`
+        UPDATE IgxTickets
+        SET status = @status,
+            reviewed_at = GETDATE(),
+            reviewed_by = @reviewed_by,
+            approved_at = GETDATE(),
+            approved_by = @approved_by,
+            satisfaction_rating = @satisfaction_rating,
+            updated_at = GETDATE()
+        WHERE id = @id
+      `);
+
+    const combinedNote = [review_reason, close_reason]
+      .filter((note) => typeof note === "string" && note.trim() !== "")
+      .join(" | ") || "Escalated review ticket reviewed and closed by L4 manager";
+
+    await insertStatusHistory(pool, {
+      ticketId: id,
+      oldStatus: ticket.status,
+      newStatus: "closed",
+      changedBy: reviewedAndClosedBy,
+      notes: combinedNote,
+    });
+
+    await addStatusChangeComment(
+      pool,
+      id,
+      reviewedAndClosedBy,
+      ticket.status,
+      "closed",
+      combinedNote
+    );
+
+    try {
+      console.log(`🔄 Updating Cedar WO status for ticket ${id} to closed via review-and-close`);
+
+      await cedarIntegrationService.syncTicketToCedar(id, "review_and_close", {
+        newStatus: "closed",
+        changedBy: reviewedAndClosedBy,
+        notes: combinedNote,
+        satisfactionRating: satisfaction_rating ?? null,
+      });
+
+      console.log(`✅ Cedar WO status updated for ticket ${id}`);
+    } catch (cedarError) {
+      console.error("❌ Cedar integration failed:", cedarError.message);
+    }
+
+    await enqueueCloseNotifications({
+      pool,
+      req,
+      ticketId: id,
+      ticket,
+      closerId: reviewedAndClosedBy,
+      closeReason: close_reason || review_reason,
+      satisfactionRating: satisfaction_rating ?? null,
+      actionType: "review_and_close",
+    });
+
+    res.json({
+      success: true,
+      message: "Ticket reviewed and closed successfully",
+      data: {
+        status: "closed",
+        reviewed_at: new Date().toISOString(),
+        approved_at: new Date().toISOString(),
+      },
+    });
+  } catch (error) {
+    console.error("Error reviewing and closing ticket:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to review and close ticket",
       error: error.message,
     });
   }
@@ -4744,6 +4898,7 @@ const getUserPendingTickets = async (req, res) => {
                     CASE 
                         WHEN t.status = 'escalated' AND ta.approval_level >= 3 THEN 'escalate_approver'
                         WHEN t.status = 'reviewed' AND ta.approval_level = 4 THEN 'close_approver'
+                        WHEN t.status = 'review_escalated' AND ta.approval_level = 4 THEN 'close_approver'
                         WHEN t.status = 'finished' AND t.created_by = @userId THEN 'review_approver'
                         WHEN t.status = 'in_progress' AND t.assigned_to = @userId THEN 'assignee'
                         WHEN t.status = 'reopened_in_progress' AND t.assigned_to = @userId THEN 'assignee'
@@ -5623,7 +5778,7 @@ const testNotificationRecipients = async (req, res) => {
     // Validate action type
     const validActionTypes = [
       'create', 'accept', 'start', 'finish', 'reject', 'escalate',
-      'plan', 'reassign', 'reopen', 'approve_review', 'approve_close'
+      'plan', 'reassign', 'reopen', 'approve_review', 'approve_close', 'review_and_close'
     ];
     
     if (!validActionTypes.includes(actionType)) {
@@ -5677,6 +5832,7 @@ module.exports = {
   escalateTicket,
   approveReview,
   approveClose,
+  reviewAndClose,
   reopenTicket,
   reassignTicket,
   getAvailableAssignees,

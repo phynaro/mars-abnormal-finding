@@ -17,6 +17,7 @@ const pendingTicketNotificationService = require('../services/pendingTicketNotif
 const dueDateNotificationService = require('../services/dueDateNotificationService');
 const oldOpenTicketNotificationService = require('../services/oldOpenTicketNotificationService');
 const finishedTicketReviewNotificationService = require('../services/finishedTicketReviewNotificationService');
+const reviewEscalationNotificationService = require('../services/reviewEscalationNotificationService');
 
 /** Timestamped log helpers */
 const ts = () => new Date().toISOString();
@@ -42,6 +43,7 @@ const JOB_NAME_SCHEDULE_PENDING_TICKETS = notificationQueue.JOB_NAME_SCHEDULE_PE
 const JOB_NAME_SCHEDULE_DUE_DATE = notificationQueue.JOB_NAME_SCHEDULE_DUE_DATE;
 const JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS = notificationQueue.JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS;
 const JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW = notificationQueue.JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW;
+const JOB_NAME_SCHEDULE_REVIEW_ESCALATION = notificationQueue.JOB_NAME_SCHEDULE_REVIEW_ESCALATION;
 
 const connection = process.env.REDIS_URL
   ? { url: process.env.REDIS_URL }
@@ -290,6 +292,7 @@ function statusToTicketState(status) {
     case 'rejected_pending_l3_review':
       return abnFlexService.TicketState.REJECT_TO_MANAGER;
     case 'escalated':
+    case 'review_escalated':
       return abnFlexService.TicketState.ESCALATED;
     case 'closed':
       return abnFlexService.TicketState.CLOSED;
@@ -670,6 +673,16 @@ async function processScheduleFinishedTicketReview(job) {
   return result;
 }
 
+async function processScheduleReviewEscalation(job) {
+  const { notification_type = 'review_escalation' } = job.data;
+  log(`⏰ [Worker] Running schedule job: ${notification_type}`);
+  const result = await runScheduleNotification(notification_type, () =>
+    reviewEscalationNotificationService.sendNotifications()
+  );
+  log(`✅ [Worker] Schedule review-escalation completed:`, result);
+  return result;
+}
+
 async function processor(job) {
   if (job.name === JOB_NAME_CREATE_TICKET) {
     await processCreateTicketNotification(job);
@@ -737,6 +750,10 @@ async function processor(job) {
   }
   if (job.name === JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW) {
     await processScheduleFinishedTicketReview(job);
+    return;
+  }
+  if (job.name === JOB_NAME_SCHEDULE_REVIEW_ESCALATION) {
+    await processScheduleReviewEscalation(job);
     return;
   }
   warn(`[Worker] Unknown job name: ${job.name}`);
