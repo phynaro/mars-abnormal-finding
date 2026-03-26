@@ -485,6 +485,7 @@ const getTickets = async (req, res) => {
       limit = 10,
       status,
       pucriticalno,
+      ticketClass,
       assigned_to,
       created_by,
       search,
@@ -618,6 +619,15 @@ const getTickets = async (req, res) => {
       params.push({
         name: "pucriticalno",
         value: parseInt(pucriticalno),
+        type: sql.Int,
+      });
+    }
+
+    if (ticketClass) {
+      whereClause += " AND t.ticketClass = @ticketClass";
+      params.push({
+        name: "ticketClass",
+        value: parseInt(ticketClass),
         type: sql.Int,
       });
     }

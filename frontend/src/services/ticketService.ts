@@ -193,6 +193,7 @@ export interface TicketFilters {
   limit?: number;
   status?: string;
   pucriticalno?: number;  // Critical Level (replaces priority and severity_level)
+  ticketClass?: number | null; // Ticket Class ID
   assigned_to?: number;
   created_by?: number;
   search?: string;

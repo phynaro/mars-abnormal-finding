@@ -30,6 +30,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, TicketFilters } from "@/services/ticketService";
+import { ticketClassService, type TicketClass } from "@/services/ticketClassService";
 import { hierarchyService, type PUCritical } from "@/services/hierarchyService";
 import authService from "@/services/authService";
 import { useToast } from "@/hooks/useToast";
@@ -74,7 +75,7 @@ export const TicketList: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { user } = useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +87,8 @@ export const TicketList: React.FC = () => {
   const [users, setUsers] = useState<Array<{id: number; name: string; email?: string}>>([]);
   const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
+  const [ticketClasses, setTicketClasses] = useState<TicketClass[]>([]);
+  const [ticketClassesLoading, setTicketClassesLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFilters, setExportFilters] = useState<TicketFilters | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
@@ -113,6 +116,7 @@ export const TicketList: React.FC = () => {
       limit: parseInt(searchParams.get('limit') || '20'),
       status: searchParams.get('status') || "",
       pucriticalno: searchParams.get('pucriticalno') ? parseInt(searchParams.get('pucriticalno')!) : undefined,
+      ticketClass: searchParams.get('ticketClass') ? parseInt(searchParams.get('ticketClass')!) : undefined,
       search: searchParams.get('search') || "",
       plant: searchParams.get('plant') || undefined,
       area: searchParams.get('area') || undefined,
@@ -205,6 +209,19 @@ export const TicketList: React.FC = () => {
     }
   };
 
+  const fetchTicketClasses = async () => {
+    try {
+      setTicketClassesLoading(true);
+      const response = await ticketClassService.getTicketClasses();
+      setTicketClasses(response);
+    } catch (error) {
+      console.error('Failed to fetch ticket classes:', error);
+      setTicketClasses([]);
+    } finally {
+      setTicketClassesLoading(false);
+    }
+  };
+
   // Initialize filters from URL on mount
   useEffect(() => {
     const urlFilters = initializeFiltersFromURL();
@@ -236,6 +253,7 @@ export const TicketList: React.FC = () => {
     // Don't fetch areas on mount - wait for plant selection
     fetchUsers();
     fetchCriticalLevels();
+    fetchTicketClasses();
   }, []);
 
   // Refetch areas when plant filter changes
@@ -267,7 +285,7 @@ export const TicketList: React.FC = () => {
     setSearchParams(params, { replace: true });
   };
 
-  const handleFilterChange = (key: keyof TicketFilters, value: any) => {
+  const handleFilterChange = (key: keyof TicketFilters, value: unknown) => {
     let updatedFilters: TicketFilters;
     
     // When plant changes, reset area filter
@@ -297,6 +315,7 @@ export const TicketList: React.FC = () => {
       limit: 12,
       status: "",
       pucriticalno: undefined,
+      ticketClass: undefined,
       search: "",
       plant: undefined,
       area: undefined,
@@ -314,7 +333,14 @@ export const TicketList: React.FC = () => {
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.pucriticalno || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
+    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
+  };
+
+  const getTicketClassLabel = (ticketClassId?: number | null) => {
+    if (!ticketClassId) return '';
+    const selectedClass = ticketClasses.find((ticketClass) => ticketClass.id === ticketClassId);
+    if (!selectedClass) return `Class ${ticketClassId}`;
+    return language === 'en' ? selectedClass.name_en : selectedClass.name_th;
   };
 
   const getEffectiveExportFilters = (): TicketFilters => {
@@ -324,7 +350,7 @@ export const TicketList: React.FC = () => {
     return { ...filters };
   };
 
-  const handleExportFilterChange = (key: keyof TicketFilters, value: any) => {
+  const handleExportFilterChange = (key: keyof TicketFilters, value: unknown) => {
     setExportFilters((prev) => {
       const base: TicketFilters = prev ? { ...prev } : { ...filters };
       // When plant changes, reset area filter
@@ -1112,7 +1138,34 @@ export const TicketList: React.FC = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  {/* 7. Critical Level */}
+                  {/* 7. Ticket Class */}
+                  <div className="space-y-2">
+                    <Label htmlFor="ticketClass">{t('ticket.ticketClass')}</Label>
+                    <Select
+                      value={filters.ticketClass ? filters.ticketClass.toString() : "all"}
+                      onValueChange={(v) =>
+                        handleFilterChange("ticketClass", v === "all" ? undefined : parseInt(v))
+                      }
+                      disabled={ticketClassesLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            ticketClassesLoading ? t('common.loading') : t('ticket.ticketClass')
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {ticketClasses.map((ticketClass) => (
+                          <SelectItem key={ticketClass.id} value={ticketClass.id.toString()}>
+                            {language === 'en' ? ticketClass.name_en : ticketClass.name_th}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {/* 8. Critical Level */}
                   <div className="space-y-2">
                     <Label htmlFor="critical">{t('ticket.criticalLevel')}</Label>
                     <Select
@@ -1342,6 +1395,33 @@ export const TicketList: React.FC = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* Ticket Class */}
+                  <div className="space-y-2">
+                    <Label htmlFor="export_ticketClass">{t('ticket.ticketClass')}</Label>
+                    <Select
+                      value={getEffectiveExportFilters().ticketClass ? getEffectiveExportFilters().ticketClass!.toString() : "all"}
+                      onValueChange={(v) =>
+                        handleExportFilterChange("ticketClass", v === "all" ? undefined : parseInt(v))
+                      }
+                      disabled={ticketClassesLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            ticketClassesLoading ? t('common.loading') : t('ticket.ticketClass')
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        {ticketClasses.map((ticketClass) => (
+                          <SelectItem key={ticketClass.id} value={ticketClass.id.toString()}>
+                            {language === 'en' ? ticketClass.name_en : ticketClass.name_th}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   {/* Critical Level */}
                   <div className="space-y-2">
                     <Label htmlFor="export_critical">{t('ticket.criticalLevel')}</Label>
@@ -1444,6 +1524,15 @@ export const TicketList: React.FC = () => {
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("pucriticalno")}
+              />
+            </Badge>
+          )}
+          {filters.ticketClass && (
+            <Badge variant="secondary" className="gap-1">
+              {t('ticket.ticketClass')}: {getTicketClassLabel(filters.ticketClass)}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("ticketClass")}
               />
             </Badge>
           )}
