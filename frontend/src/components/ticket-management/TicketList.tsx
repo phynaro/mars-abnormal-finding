@@ -285,7 +285,7 @@ export const TicketList: React.FC = () => {
     setSearchParams(params, { replace: true });
   };
 
-  const handleFilterChange = (key: keyof TicketFilters, value: unknown) => {
+  const handleFilterChange = <K extends keyof TicketFilters>(key: K, value: TicketFilters[K]) => {
     let updatedFilters: TicketFilters;
     
     // When plant changes, reset area filter
@@ -350,7 +350,7 @@ export const TicketList: React.FC = () => {
     return { ...filters };
   };
 
-  const handleExportFilterChange = (key: keyof TicketFilters, value: unknown) => {
+  const handleExportFilterChange = <K extends keyof TicketFilters>(key: K, value: TicketFilters[K]) => {
     setExportFilters((prev) => {
       const base: TicketFilters = prev ? { ...prev } : { ...filters };
       // When plant changes, reset area filter
