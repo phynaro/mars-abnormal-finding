@@ -192,10 +192,10 @@ export interface TicketFilters {
   page?: number;
   limit?: number;
   status?: string;
-  pucriticalno?: number;  // Critical Level (replaces priority and severity_level)
-  ticketClass?: number | null; // Ticket Class ID
-  assigned_to?: number;
-  created_by?: number;
+  pucriticalno?: number | string;  // Critical Level (supports comma-separated values)
+  ticketClass?: number | string | null; // Ticket Class ID (supports comma-separated values)
+  assigned_to?: number | string;
+  created_by?: number | string;
   search?: string;
   plant?: string;  // Plant code from PUExtension
   area?: string;   // Area code from PUExtension

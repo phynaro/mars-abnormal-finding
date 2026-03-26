@@ -16,6 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   Search,
   Filter,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Trash2,
@@ -45,6 +46,14 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { SearchableCombobox } from "@/components/ui/searchable-combobox";
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { formatTimelineTime } from "@/utils/timezone";
 import { getFileUrl } from "@/utils/url";
 import { LazyCardImage } from "@/components/ui/lazy-card-image";
@@ -64,6 +73,20 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api'
 
 /** Plant codes for the quick filter toggle group (most used). "All" = no plant filter. */
 const QUICK_PLANT_OPTIONS = ['DP', 'DJ', 'SN', 'ST', 'PS', 'PP'] as const;
+const STATUS_FILTER_OPTIONS = [
+  { value: "open", labelKey: "ticket.open" },
+  { value: "accepted", labelKey: "ticket.accepted" },
+  { value: "planed", labelKey: "ticket.planed" },
+  { value: "in_progress", labelKey: "ticket.inProgress" },
+  { value: "reviewed", labelKey: "ticket.reviewed" },
+  { value: "review_escalated", labelKey: "ticket.reviewEscalated" },
+  { value: "closed", labelKey: "ticket.closed" },
+  { value: "rejected_pending_l3_review", labelKey: "ticket.rejectedPendingL3Review" },
+  { value: "rejected_final", labelKey: "ticket.rejectedFinal" },
+  { value: "finished", labelKey: "ticket.finished" },
+  { value: "escalated", labelKey: "ticket.escalated" },
+  { value: "reopened_in_progress", labelKey: "ticket.reopenedInProgress" },
+] as const;
 
 interface HierarchyOption {
   code: string;
@@ -115,13 +138,13 @@ export const TicketList: React.FC = () => {
       page: parseInt(searchParams.get('page') || '1'),
       limit: parseInt(searchParams.get('limit') || '20'),
       status: searchParams.get('status') || "",
-      pucriticalno: searchParams.get('pucriticalno') ? parseInt(searchParams.get('pucriticalno')!) : undefined,
-      ticketClass: searchParams.get('ticketClass') ? parseInt(searchParams.get('ticketClass')!) : undefined,
+      pucriticalno: (searchParams.get('pucriticalno') || undefined) as TicketFilters["pucriticalno"],
+      ticketClass: (searchParams.get('ticketClass') || undefined) as TicketFilters["ticketClass"],
       search: searchParams.get('search') || "",
       plant: searchParams.get('plant') || undefined,
       area: searchParams.get('area') || undefined,
-      created_by: searchParams.get('created_by') ? parseInt(searchParams.get('created_by')!) : undefined,
-      assigned_to: searchParams.get('assigned_to') ? parseInt(searchParams.get('assigned_to')!) : undefined,
+      created_by: (searchParams.get('created_by') || undefined) as TicketFilters["created_by"],
+      assigned_to: (searchParams.get('assigned_to') || undefined) as TicketFilters["assigned_to"],
       startDate: searchParams.get('startDate') || undefined,
       endDate: searchParams.get('endDate') || undefined,
       finishedStartDate: searchParams.get('finishedStartDate') || undefined,
@@ -136,6 +159,132 @@ export const TicketList: React.FC = () => {
 
   // Filters
   const [filters, setFilters] = useState<TicketFilters>(initializeFiltersFromURL());
+
+  const parseStatusFilter = (status?: string): string[] => {
+    if (!status) return [];
+    return status
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+
+  const serializeStatusFilter = (statuses: string[]): string => {
+    if (!statuses.length) return "";
+    return statuses.join(",");
+  };
+
+  const getStatusFilterLabel = (statusValue: string): string => {
+    const option = STATUS_FILTER_OPTIONS.find((item) => item.value === statusValue);
+    if (option) {
+      return t(option.labelKey);
+    }
+    return statusValue.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  };
+
+  const selectedStatuses = parseStatusFilter(filters.status);
+
+  const parsePlantFilter = (plant?: string): string[] => {
+    if (!plant) return [];
+    return plant
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const serializePlantFilter = (plants: string[]): string => {
+    if (!plants.length) return "";
+    return plants.join(",");
+  };
+
+  const getPlantFilterLabel = (plantCode: string): string => {
+    const plant = plants.find((item) => item.code === plantCode);
+    return plant ? plant.name : plantCode;
+  };
+
+  const selectedPlants = parsePlantFilter(filters.plant);
+
+  const parseAreaFilter = (area?: string): string[] => {
+    if (!area) return [];
+    return area
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const serializeAreaFilter = (areaCodes: string[]): string => {
+    if (!areaCodes.length) return "";
+    return areaCodes.join(",");
+  };
+
+  const getAreaFilterLabel = (areaCode: string): string => {
+    const area = areas.find((item) => item.code === areaCode);
+    return area ? area.name : areaCode;
+  };
+
+  const selectedAreas = parseAreaFilter(filters.area);
+
+  const parseTicketClassFilter = (ticketClass?: number | string | null): string[] => {
+    if (ticketClass === undefined || ticketClass === null || ticketClass === "") return [];
+    return String(ticketClass)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const serializeTicketClassFilter = (classIds: string[]): string => {
+    if (!classIds.length) return "";
+    return classIds.join(",");
+  };
+
+  const getTicketClassFilterLabel = (classId: string): string => {
+    const selectedClass = ticketClasses.find((ticketClass) => String(ticketClass.id) === classId);
+    if (!selectedClass) return `Class ${classId}`;
+    return language === 'en' ? selectedClass.name_en : selectedClass.name_th;
+  };
+
+  const selectedTicketClasses = parseTicketClassFilter(filters.ticketClass);
+
+  const parseUserFilter = (userValue?: number | string): string[] => {
+    if (userValue === undefined || userValue === null || userValue === "") return [];
+    return String(userValue)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const serializeUserFilter = (userIds: string[]): string => {
+    if (!userIds.length) return "";
+    return userIds.join(",");
+  };
+
+  const getUserFilterLabel = (userId: string): string => {
+    const selectedUser = users.find((user) => String(user.id) === userId);
+    return selectedUser?.name || `User ${userId}`;
+  };
+
+  const selectedCreatedByUsers = parseUserFilter(filters.created_by);
+  const selectedAssignedToUsers = parseUserFilter(filters.assigned_to);
+
+  const parseCriticalFilter = (critical?: number | string): string[] => {
+    if (critical === undefined || critical === null || critical === "") return [];
+    return String(critical)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  };
+
+  const serializeCriticalFilter = (levels: string[]): string => {
+    if (!levels.length) return "";
+    return levels.join(",");
+  };
+
+  const getCriticalFilterLabel = (criticalValue: string): string => {
+    const selectedLevel = criticalLevels.find((level) => String(level.PUCRITICALNO) === criticalValue);
+    if (selectedLevel) return selectedLevel.PUCRITICALNAME;
+    return criticalValue;
+  };
+
+  const selectedCriticalLevels = parseCriticalFilter(filters.pucriticalno);
 
   const fetchTickets = async () => {
     try {
@@ -169,14 +318,25 @@ export const TicketList: React.FC = () => {
     }
   };
 
-  const fetchAreas = async (plantCode: string) => {
+  const fetchAreas = async (plantCodes: string[]) => {
     try {
-      const result = await hierarchyService.getDistinctAreas(plantCode);
-      if (result.success) {
-        setAreas(result.data);
-      }
+      const areaResults = await Promise.all(
+        plantCodes.map(async (plantCode) => {
+          const result = await hierarchyService.getDistinctAreas(plantCode);
+          return result.success ? result.data : [];
+        })
+      );
+      const mergedAreas = areaResults.flat();
+      const uniqueAreasMap = new Map<string, HierarchyOption>();
+      mergedAreas.forEach((area) => {
+        if (!uniqueAreasMap.has(area.code)) {
+          uniqueAreasMap.set(area.code, area);
+        }
+      });
+      setAreas(Array.from(uniqueAreasMap.values()));
     } catch (error) {
       console.error('Failed to fetch areas:', error);
+      setAreas([]);
     }
   };
 
@@ -258,8 +418,9 @@ export const TicketList: React.FC = () => {
 
   // Refetch areas when plant filter changes
   useEffect(() => {
-    if (filters.plant) {
-      fetchAreas(filters.plant);
+    const selectedPlantCodes = parsePlantFilter(filters.plant);
+    if (selectedPlantCodes.length > 0) {
+      fetchAreas(selectedPlantCodes);
     } else {
       // Clear areas when no plant is selected
       setAreas([]);
@@ -336,9 +497,9 @@ export const TicketList: React.FC = () => {
     return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
   };
 
-  const getTicketClassLabel = (ticketClassId?: number | null) => {
+  const getTicketClassLabel = (ticketClassId?: number | string | null) => {
     if (!ticketClassId) return '';
-    const selectedClass = ticketClasses.find((ticketClass) => ticketClass.id === ticketClassId);
+    const selectedClass = ticketClasses.find((ticketClass) => String(ticketClass.id) === String(ticketClassId));
     if (!selectedClass) return `Class ${ticketClassId}`;
     return language === 'en' ? selectedClass.name_en : selectedClass.name_th;
   };
@@ -961,7 +1122,7 @@ export const TicketList: React.FC = () => {
           {/* Plant quick filter (toggle group) */}
           <div className="flex rounded-md border overflow-hidden bg-muted/30">
             <Button
-              variant={!filters.plant || !QUICK_PLANT_OPTIONS.includes(filters.plant as typeof QUICK_PLANT_OPTIONS[number]) ? "default" : "ghost"}
+              variant={selectedPlants.length === 0 ? "default" : "ghost"}
               className="rounded-none flex-shrink-0"
               size="sm"
               onClick={() => handleFilterChange("plant", undefined)}
@@ -971,10 +1132,18 @@ export const TicketList: React.FC = () => {
             {QUICK_PLANT_OPTIONS.map((code) => (
               <Button
                 key={code}
-                variant={filters.plant === code ? "default" : "ghost"}
+                variant={selectedPlants.includes(code) ? "default" : "ghost"}
                 className="rounded-none flex-shrink-0"
                 size="sm"
-                onClick={() => handleFilterChange("plant", code)}
+                onClick={() => {
+                  const plantSet = new Set(selectedPlants);
+                  if (plantSet.has(code)) {
+                    plantSet.delete(code);
+                  } else {
+                    plantSet.add(code);
+                  }
+                  handleFilterChange("plant", serializePlantFilter(Array.from(plantSet)));
+                }}
               >
                 {code}
               </Button>
@@ -1021,172 +1190,332 @@ export const TicketList: React.FC = () => {
                   {/* 2. Created By */}
                   <div className="space-y-2">
                     <Label htmlFor="created_by">{t('ticket.createdBy')}</Label>
-                    <SearchableCombobox
-                      options={[
-                        { value: "all", label: t('ticket.allUsers') },
-                        ...users.map((user) => ({
-                          value: user.id.toString(),
-                          label: user.name,
-                        })),
-                      ]}
-                      value={filters.created_by ? filters.created_by.toString() : "all"}
-                      onValueChange={(v) =>
-                        handleFilterChange("created_by", v === "all" ? undefined : parseInt(v))
-                      }
-                      placeholder={t('ticket.allUsers')}
-                      searchPlaceholder={t('ticket.searchUsers')}
-                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button id="created_by" variant="outline" className="w-full justify-between">
+                          <span className="truncate">
+                            {selectedCreatedByUsers.length === 0
+                              ? t("ticket.allUsers")
+                              : selectedCreatedByUsers.length <= 2
+                                ? selectedCreatedByUsers.map(getUserFilterLabel).join(", ")
+                                : `${selectedCreatedByUsers.length} ${language === "th" ? "ผู้สร้างที่เลือก" : "creators selected"}`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+                        <DropdownMenuLabel>{t("ticket.createdBy")}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {users.map((user) => {
+                          const value = user.id.toString();
+                          const checked = selectedCreatedByUsers.includes(value);
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={user.id}
+                              checked={checked}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={(nextChecked) => {
+                                const userSet = new Set(selectedCreatedByUsers);
+                                if (nextChecked) {
+                                  userSet.add(value);
+                                } else {
+                                  userSet.delete(value);
+                                }
+                                handleFilterChange("created_by", serializeUserFilter(Array.from(userSet)) as TicketFilters["created_by"]);
+                              }}
+                            >
+                              {user.name}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   {/* 3. Assigned To */}
                   <div className="space-y-2">
                     <Label htmlFor="assigned_to">{t('ticket.assignedTo')}</Label>
-                    <SearchableCombobox
-                      options={[
-                        { value: "all", label: t('ticket.allUsers') },
-                        ...users.map((user) => ({
-                          value: user.id.toString(),
-                          label: user.name,
-                        })),
-                      ]}
-                      value={filters.assigned_to ? filters.assigned_to.toString() : "all"}
-                      onValueChange={(v) =>
-                        handleFilterChange("assigned_to", v === "all" ? undefined : parseInt(v))
-                      }
-                      placeholder={t('ticket.allUsers')}
-                      searchPlaceholder={t('ticket.searchUsers')}
-                    />
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button id="assigned_to" variant="outline" className="w-full justify-between">
+                          <span className="truncate">
+                            {selectedAssignedToUsers.length === 0
+                              ? t("ticket.allUsers")
+                              : selectedAssignedToUsers.length <= 2
+                                ? selectedAssignedToUsers.map(getUserFilterLabel).join(", ")
+                                : `${selectedAssignedToUsers.length} ${language === "th" ? "ผู้รับผิดชอบที่เลือก" : "assignees selected"}`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+                        <DropdownMenuLabel>{t("ticket.assignedTo")}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {users.map((user) => {
+                          const value = user.id.toString();
+                          const checked = selectedAssignedToUsers.includes(value);
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={user.id}
+                              checked={checked}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={(nextChecked) => {
+                                const userSet = new Set(selectedAssignedToUsers);
+                                if (nextChecked) {
+                                  userSet.add(value);
+                                } else {
+                                  userSet.delete(value);
+                                }
+                                handleFilterChange("assigned_to", serializeUserFilter(Array.from(userSet)) as TicketFilters["assigned_to"]);
+                              }}
+                            >
+                              {user.name}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   {/* 4. Plant */}
                   <div className="space-y-2">
                     <Label htmlFor="plant">Plant</Label>
-                    <Select
-                      value={filters.plant || "all"}
-                      onValueChange={(v) =>
-                        handleFilterChange("plant", v === "all" ? undefined : v)
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="All Plants" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Plants</SelectItem>
-                        {plants.map((plant) => (
-                          <SelectItem key={plant.code} value={plant.code}>
-                            {plant.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button id="plant" variant="outline" className="w-full justify-between">
+                          <span className="truncate">
+                            {selectedPlants.length === 0
+                              ? "All Plants"
+                              : selectedPlants.length <= 2
+                                ? selectedPlants.map(getPlantFilterLabel).join(", ")
+                                : `${selectedPlants.length} ${language === "th" ? "โรงงานที่เลือก" : "plants selected"}`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+                        <DropdownMenuLabel>Plant</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {plants.map((plant) => {
+                          const checked = selectedPlants.includes(plant.code);
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={plant.code}
+                              checked={checked}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={(nextChecked) => {
+                                const plantSet = new Set(selectedPlants);
+                                if (nextChecked) {
+                                  plantSet.add(plant.code);
+                                } else {
+                                  plantSet.delete(plant.code);
+                                }
+                                handleFilterChange("plant", serializePlantFilter(Array.from(plantSet)));
+                              }}
+                            >
+                              {plant.name}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   {/* 5. Area */}
                   <div className="space-y-2">
                     <Label htmlFor="area">{t('ticket.area')}</Label>
-                    <Select
-                      value={filters.area || "all"}
-                      onValueChange={(v) =>
-                        handleFilterChange("area", v === "all" ? undefined : v)
-                      }
-                      disabled={!filters.plant}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={
-                          !filters.plant 
-                            ? 'Select plant first' 
-                            : t('ticket.allAreas')
-                        } />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">{t('ticket.allAreas')}</SelectItem>
-                        {areas.map((area) => (
-                          <SelectItem key={area.code} value={area.code}>
-                            {area.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          id="area"
+                          variant="outline"
+                          className="w-full justify-between"
+                          disabled={selectedPlants.length === 0}
+                        >
+                          <span className="truncate">
+                            {selectedPlants.length === 0
+                              ? "Select plant first"
+                              : selectedAreas.length === 0
+                                ? t("ticket.allAreas")
+                                : selectedAreas.length <= 2
+                                  ? selectedAreas.map(getAreaFilterLabel).join(", ")
+                                  : `${selectedAreas.length} ${language === "th" ? "พื้นที่ที่เลือก" : "areas selected"}`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+                        <DropdownMenuLabel>{t("ticket.area")}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {areas.map((area) => {
+                          const checked = selectedAreas.includes(area.code);
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={area.code}
+                              checked={checked}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={(nextChecked) => {
+                                const areaSet = new Set(selectedAreas);
+                                if (nextChecked) {
+                                  areaSet.add(area.code);
+                                } else {
+                                  areaSet.delete(area.code);
+                                }
+                                handleFilterChange("area", serializeAreaFilter(Array.from(areaSet)));
+                              }}
+                            >
+                              {area.name}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   {/* 6. Status */}
                   <div className="space-y-2">
                     <Label htmlFor="status">{t('ticket.status')}</Label>
-                    <Select
-                      value={filters.status || "all"}
-                      onValueChange={(v) => handleFilterChange("status", v === "all" ? "" : v)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={t('ticket.allStatuses')} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">{t('ticket.allStatuses')}</SelectItem>
-                        <SelectItem value="open">{t('ticket.open')}</SelectItem>
-                        <SelectItem value="accepted">{t('ticket.accepted')}</SelectItem>
-                        <SelectItem value="planed">{t('ticket.planed')}</SelectItem>
-                        <SelectItem value="in_progress">{t('ticket.inProgress')}</SelectItem>
-                        <SelectItem value="reviewed">{t('ticket.reviewed')}</SelectItem>
-                        <SelectItem value="review_escalated">{t('ticket.reviewEscalated')}</SelectItem>
-                        <SelectItem value="closed">{t('ticket.closed')}</SelectItem>
-                        <SelectItem value="rejected_pending_l3_review">
-                          {t('ticket.rejectedPendingL3Review')}
-                        </SelectItem>
-                        <SelectItem value="rejected_final">
-                          {t('ticket.rejectedFinal')}
-                        </SelectItem>
-                        <SelectItem value="finished">{t('ticket.finished')}</SelectItem>
-                        <SelectItem value="escalated">{t('ticket.escalated')}</SelectItem>
-                        <SelectItem value="reopened_in_progress">
-                          {t('ticket.reopenedInProgress')}
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          id="status"
+                          variant="outline"
+                          className="w-full justify-between"
+                        >
+                          <span className="truncate">
+                            {selectedStatuses.length === 0
+                              ? t("ticket.allStatuses")
+                              : selectedStatuses.length <= 2
+                                ? selectedStatuses.map(getStatusFilterLabel).join(", ")
+                                : `${selectedStatuses.length} ${language === "th" ? "สถานะที่เลือก" : "statuses selected"}`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+                        <DropdownMenuLabel>{t("ticket.status")}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {STATUS_FILTER_OPTIONS.map((option) => {
+                          const checked = selectedStatuses.includes(option.value);
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={option.value}
+                              checked={checked}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={(nextChecked) => {
+                                const statusSet = new Set(selectedStatuses);
+                                if (nextChecked) {
+                                  statusSet.add(option.value);
+                                } else {
+                                  statusSet.delete(option.value);
+                                }
+                                handleFilterChange("status", serializeStatusFilter(Array.from(statusSet)));
+                              }}
+                            >
+                              {t(option.labelKey)}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   {/* 7. Ticket Class */}
                   <div className="space-y-2">
                     <Label htmlFor="ticketClass">{t('ticket.ticketClass')}</Label>
-                    <Select
-                      value={filters.ticketClass ? filters.ticketClass.toString() : "all"}
-                      onValueChange={(v) =>
-                        handleFilterChange("ticketClass", v === "all" ? undefined : parseInt(v))
-                      }
-                      disabled={ticketClassesLoading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue
-                          placeholder={
-                            ticketClassesLoading ? t('common.loading') : t('ticket.ticketClass')
-                          }
-                        />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All</SelectItem>
-                        {ticketClasses.map((ticketClass) => (
-                          <SelectItem key={ticketClass.id} value={ticketClass.id.toString()}>
-                            {language === 'en' ? ticketClass.name_en : ticketClass.name_th}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          id="ticketClass"
+                          variant="outline"
+                          className="w-full justify-between"
+                          disabled={ticketClassesLoading}
+                        >
+                          <span className="truncate">
+                            {ticketClassesLoading
+                              ? t("common.loading")
+                              : selectedTicketClasses.length === 0
+                                ? t("ticket.ticketClass")
+                                : selectedTicketClasses.length <= 2
+                                  ? selectedTicketClasses.map(getTicketClassFilterLabel).join(", ")
+                                  : `${selectedTicketClasses.length} ${language === "th" ? "คลาสที่เลือก" : "classes selected"}`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+                        <DropdownMenuLabel>{t("ticket.ticketClass")}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {ticketClasses.map((ticketClass) => {
+                          const value = ticketClass.id.toString();
+                          const checked = selectedTicketClasses.includes(value);
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={ticketClass.id}
+                              checked={checked}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={(nextChecked) => {
+                                const classSet = new Set(selectedTicketClasses);
+                                if (nextChecked) {
+                                  classSet.add(value);
+                                } else {
+                                  classSet.delete(value);
+                                }
+                                handleFilterChange("ticketClass", serializeTicketClassFilter(Array.from(classSet)) as TicketFilters["ticketClass"]);
+                              }}
+                            >
+                              {language === 'en' ? ticketClass.name_en : ticketClass.name_th}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   {/* 8. Critical Level */}
                   <div className="space-y-2">
                     <Label htmlFor="critical">{t('ticket.criticalLevel')}</Label>
-                    <Select
-                      value={filters.pucriticalno ? filters.pucriticalno.toString() : "all"}
-                      onValueChange={(v) =>
-                        handleFilterChange("pucriticalno", v === "all" ? undefined : parseInt(v))
-                      }
-                      disabled={criticalLevelsLoading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={criticalLevelsLoading ? t('common.loading') : t('ticket.allCriticalLevels')} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">{t('ticket.allCriticalLevels')}</SelectItem>
-                        {criticalLevels.map((level) => (
-                          <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
-                            {level.PUCRITICALNAME}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          id="critical"
+                          variant="outline"
+                          className="w-full justify-between"
+                          disabled={criticalLevelsLoading}
+                        >
+                          <span className="truncate">
+                            {criticalLevelsLoading
+                              ? t("common.loading")
+                              : selectedCriticalLevels.length === 0
+                                ? t("ticket.allCriticalLevels")
+                                : selectedCriticalLevels.length <= 2
+                                  ? selectedCriticalLevels.map(getCriticalFilterLabel).join(", ")
+                                  : `${selectedCriticalLevels.length} ${language === "th" ? "ระดับที่เลือก" : "levels selected"}`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+                        <DropdownMenuLabel>{t("ticket.criticalLevel")}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {criticalLevels.map((level) => {
+                          const value = String(level.PUCRITICALNO);
+                          const checked = selectedCriticalLevels.includes(value);
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={value}
+                              checked={checked}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={(nextChecked) => {
+                                const criticalSet = new Set(selectedCriticalLevels);
+                                if (nextChecked) {
+                                  criticalSet.add(value);
+                                } else {
+                                  criticalSet.delete(value);
+                                }
+                                handleFilterChange("pucriticalno", serializeCriticalFilter(Array.from(criticalSet)) as TicketFilters["pucriticalno"]);
+                              }}
+                            >
+                              {level.PUCRITICALNAME}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                   {/* Overdue: in_progress/planed with schedule_finish before now */}
                   <div className="space-y-2 flex items-end">
@@ -1511,7 +1840,7 @@ export const TicketList: React.FC = () => {
           </span>
           {filters.status && (
             <Badge variant="secondary" className="gap-1">
-              Status: {filters.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}
+              Status: {parseStatusFilter(filters.status).map(getStatusFilterLabel).join(", ")}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("status")}
@@ -1520,7 +1849,7 @@ export const TicketList: React.FC = () => {
           )}
           {filters.pucriticalno && (
             <Badge variant="secondary" className="gap-1">
-              {t('ticket.criticalLevel')}: {getCriticalLevelText(filters.pucriticalno, t)}
+              {t('ticket.criticalLevel')}: {parseCriticalFilter(filters.pucriticalno).map(getCriticalFilterLabel).join(", ")}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("pucriticalno")}
@@ -1529,7 +1858,7 @@ export const TicketList: React.FC = () => {
           )}
           {filters.ticketClass && (
             <Badge variant="secondary" className="gap-1">
-              {t('ticket.ticketClass')}: {getTicketClassLabel(filters.ticketClass)}
+              {t('ticket.ticketClass')}: {parseTicketClassFilter(filters.ticketClass).map(getTicketClassFilterLabel).join(", ")}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("ticketClass")}
@@ -1538,7 +1867,7 @@ export const TicketList: React.FC = () => {
           )}
           {filters.plant && (
             <Badge variant="secondary" className="gap-1">
-              Plant: {filters.plant}
+              Plant: {parsePlantFilter(filters.plant).map(getPlantFilterLabel).join(", ")}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("plant")}
@@ -1547,7 +1876,7 @@ export const TicketList: React.FC = () => {
           )}
           {filters.area && (
             <Badge variant="secondary" className="gap-1">
-              Area: {filters.area}
+              Area: {parseAreaFilter(filters.area).map(getAreaFilterLabel).join(", ")}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("area")}
@@ -1565,7 +1894,7 @@ export const TicketList: React.FC = () => {
           )}
           {filters.created_by && (
             <Badge variant="secondary" className="gap-1">
-              Created By: {users.find(u => u.id === filters.created_by)?.name || `User ${filters.created_by}`}
+              Created By: {parseUserFilter(filters.created_by).map(getUserFilterLabel).join(", ")}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("created_by")}
@@ -1574,7 +1903,7 @@ export const TicketList: React.FC = () => {
           )}
           {filters.assigned_to && (
             <Badge variant="secondary" className="gap-1">
-              Assigned To: {users.find(u => u.id === filters.assigned_to)?.name || `User ${filters.assigned_to}`}
+              Assigned To: {parseUserFilter(filters.assigned_to).map(getUserFilterLabel).join(", ")}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("assigned_to")}

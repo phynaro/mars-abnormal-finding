@@ -615,31 +615,87 @@ const getTickets = async (req, res) => {
     }
 
     if (pucriticalno) {
-      whereClause += " AND t.pucriticalno = @pucriticalno";
-      params.push({
-        name: "pucriticalno",
-        value: parseInt(pucriticalno),
-        type: sql.Int,
-      });
+      if (pucriticalno.includes(',')) {
+        const criticalList = pucriticalno
+          .split(',')
+          .map((value) => parseInt(value.trim()))
+          .filter((value) => !isNaN(value));
+        if (criticalList.length > 0) {
+          const criticalPlaceholders = criticalList.map((_, index) => `@pucriticalno${index}`).join(',');
+          whereClause += ` AND t.pucriticalno IN (${criticalPlaceholders})`;
+          criticalList.forEach((criticalValue, index) => {
+            params.push({ name: `pucriticalno${index}`, value: criticalValue, type: sql.Int });
+          });
+        }
+      } else {
+        whereClause += " AND t.pucriticalno = @pucriticalno";
+        params.push({
+          name: "pucriticalno",
+          value: parseInt(pucriticalno),
+          type: sql.Int,
+        });
+      }
     }
 
     if (ticketClass) {
-      whereClause += " AND t.ticketClass = @ticketClass";
-      params.push({
-        name: "ticketClass",
-        value: parseInt(ticketClass),
-        type: sql.Int,
-      });
+      if (ticketClass.includes(',')) {
+        const ticketClassList = ticketClass
+          .split(',')
+          .map((value) => parseInt(value.trim()))
+          .filter((value) => !isNaN(value));
+        if (ticketClassList.length > 0) {
+          const ticketClassPlaceholders = ticketClassList.map((_, index) => `@ticketClass${index}`).join(',');
+          whereClause += ` AND t.ticketClass IN (${ticketClassPlaceholders})`;
+          ticketClassList.forEach((ticketClassValue, index) => {
+            params.push({ name: `ticketClass${index}`, value: ticketClassValue, type: sql.Int });
+          });
+        }
+      } else {
+        whereClause += " AND t.ticketClass = @ticketClass";
+        params.push({
+          name: "ticketClass",
+          value: parseInt(ticketClass),
+          type: sql.Int,
+        });
+      }
     }
 
     if (assigned_to) {
-      whereClause += " AND t.assigned_to = @assigned_to";
-      params.push({ name: "assigned_to", value: assigned_to, type: sql.Int });
+      if (assigned_to.includes(',')) {
+        const assignedToList = assigned_to
+          .split(',')
+          .map((value) => parseInt(value.trim()))
+          .filter((value) => !isNaN(value));
+        if (assignedToList.length > 0) {
+          const assignedToPlaceholders = assignedToList.map((_, index) => `@assigned_to${index}`).join(',');
+          whereClause += ` AND t.assigned_to IN (${assignedToPlaceholders})`;
+          assignedToList.forEach((assignedToValue, index) => {
+            params.push({ name: `assigned_to${index}`, value: assignedToValue, type: sql.Int });
+          });
+        }
+      } else {
+        whereClause += " AND t.assigned_to = @assigned_to";
+        params.push({ name: "assigned_to", value: assigned_to, type: sql.Int });
+      }
     }
 
     if (created_by) {
-      whereClause += " AND t.created_by = @created_by";
-      params.push({ name: "created_by", value: created_by, type: sql.Int });
+      if (created_by.includes(',')) {
+        const createdByList = created_by
+          .split(',')
+          .map((value) => parseInt(value.trim()))
+          .filter((value) => !isNaN(value));
+        if (createdByList.length > 0) {
+          const createdByPlaceholders = createdByList.map((_, index) => `@created_by${index}`).join(',');
+          whereClause += ` AND t.created_by IN (${createdByPlaceholders})`;
+          createdByList.forEach((createdByValue, index) => {
+            params.push({ name: `created_by${index}`, value: createdByValue, type: sql.Int });
+          });
+        }
+      } else {
+        whereClause += " AND t.created_by = @created_by";
+        params.push({ name: "created_by", value: created_by, type: sql.Int });
+      }
     }
 
     if (search) {
@@ -653,13 +709,35 @@ const getTickets = async (req, res) => {
     }
 
     if (plant) {
-      whereClause += " AND pe.plant = @plant";
-      params.push({ name: "plant", value: plant, type: sql.VarChar(50) });
+      if (plant.includes(',')) {
+        const plantList = plant.split(',').map(p => p.trim()).filter(Boolean);
+        if (plantList.length > 0) {
+          const plantPlaceholders = plantList.map((_, index) => `@plant${index}`).join(',');
+          whereClause += ` AND pe.plant IN (${plantPlaceholders})`;
+          plantList.forEach((plantValue, index) => {
+            params.push({ name: `plant${index}`, value: plantValue, type: sql.VarChar(50) });
+          });
+        }
+      } else {
+        whereClause += " AND pe.plant = @plant";
+        params.push({ name: "plant", value: plant, type: sql.VarChar(50) });
+      }
     }
 
     if (area) {
-      whereClause += " AND pe.area = @area";
-      params.push({ name: "area", value: area, type: sql.VarChar(50) });
+      if (area.includes(',')) {
+        const areaList = area.split(',').map(a => a.trim()).filter(Boolean);
+        if (areaList.length > 0) {
+          const areaPlaceholders = areaList.map((_, index) => `@area${index}`).join(',');
+          whereClause += ` AND pe.area IN (${areaPlaceholders})`;
+          areaList.forEach((areaValue, index) => {
+            params.push({ name: `area${index}`, value: areaValue, type: sql.VarChar(50) });
+          });
+        }
+      } else {
+        whereClause += " AND pe.area = @area";
+        params.push({ name: "area", value: area, type: sql.VarChar(50) });
+      }
     }
 
     // Add team filter to WHERE clause if applicable
