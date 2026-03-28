@@ -779,6 +779,8 @@ class DashboardService {
 
   async getCalendarHeatmapData(params: {
     year?: number;
+    startDate?: string;
+    endDate?: string;
     plant?: string;
     area?: string;
   } = {}): Promise<CalendarHeatmapResponse> {

@@ -15,8 +15,16 @@ import 'react-calendar-heatmap/dist/styles.css';
 import { 
   TrendingUp, TrendingDown, Clock, DollarSign, 
   AlertTriangle, CheckCircle, User, Award,
-  BarChart3, Filter, X
+  BarChart3, Filter, X, ChevronDown
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuCheckboxItem,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import dashboardService, { type AbnormalFindingKPIResponse, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityResponse, type AreaActivityOpenClosedResponse, type UserActivityResponse, type UserCloserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse, type CaseCountByPUResponse } from '@/services/dashboardService';
 import { KPITileSkeleton } from '@/components/ui/kpi-tile-skeleton';
 import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
@@ -24,7 +32,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import authService from '@/services/authService';
 import hierarchyService from '@/services/hierarchyService';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
-import { formatLocalDate, calculatePeriodForDate, getDateRangeForFilter } from '@/utils/periodCalculations';
+import { formatLocalDate, calculatePeriodForDate, getDateRangeForFilter, getCompanyYearDateRange } from '@/utils/periodCalculations';
 
 // Utility function for dynamic currency formatting
 const formatCurrencyDynamic = (amount: number): { display: string; tooltip: string } => {
@@ -307,7 +315,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const [plantFilter, setPlantFilter] = useState<string>('all');
   const [areaFilter, setAreaFilter] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedPeriod, setSelectedPeriod] = useState<number>(1);
+  const [selectedPeriods, setSelectedPeriods] = useState<number[]>([1]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
 
   // Pending Filters - Changes not yet applied
@@ -315,7 +323,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const [pendingPlantFilter, setPendingPlantFilter] = useState<string>('all');
   const [pendingAreaFilter, setPendingAreaFilter] = useState<string>('all');
   const [pendingSelectedYear, setPendingSelectedYear] = useState<number>(new Date().getFullYear());
-  const [pendingSelectedPeriod, setPendingSelectedPeriod] = useState<number>(1);
+  const [pendingSelectedPeriods, setPendingSelectedPeriods] = useState<number[]>([1]);
 
   // API State
   const [kpiData, setKpiData] = useState<AbnormalFindingKPIResponse['data'] | null>(null);
@@ -382,6 +390,42 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
+  const selectedPeriod = selectedPeriods[0] ?? 1;
+  const isMultiCustomPeriod = timeFilter === 'select-period' && selectedPeriods.length > 1;
+
+  const areNumberArraysEqual = (a: number[], b: number[]) => {
+    if (a.length !== b.length) return false;
+    return a.every((value, index) => value === b[index]);
+  };
+
+  const sortPeriods = (periods: number[]) => [...periods].sort((a, b) => a - b);
+
+  const isContiguousPeriods = (periods: number[]) => {
+    if (periods.length <= 1) return true;
+    const sorted = sortPeriods(periods);
+    return sorted.every((period, index) => index === 0 || period === sorted[index - 1] + 1);
+  };
+
+  const formatPeriodSelection = (periods: number[]) => {
+    if (periods.length === 0) return '';
+    const sorted = sortPeriods(periods);
+    if (sorted.length === 1) return `P${sorted[0]}`;
+    return `P${sorted[0]}-P${sorted[sorted.length - 1]}`;
+  };
+
+  const togglePendingPeriod = (period: number) => {
+    setPendingSelectedPeriods((prev) => {
+      const exists = prev.includes(period);
+      const next = exists ? prev.filter((value) => value !== period) : [...prev, period];
+      if (next.length === 0) return prev;
+      const sortedNext = sortPeriods(next);
+      if (!isContiguousPeriods(sortedNext)) {
+        return prev;
+      }
+      return sortedNext;
+    });
+  };
+
 
   // Helper functions for active filters
   const hasActiveFilters = () => {
@@ -413,7 +457,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     setPlantFilter(pendingPlantFilter);
     setAreaFilter(pendingAreaFilter);
     setSelectedYear(pendingSelectedYear);
-    setSelectedPeriod(pendingSelectedPeriod);
+    setSelectedPeriods(sortPeriods(pendingSelectedPeriods));
     setIsFilterModalOpen(false);
   };
 
@@ -423,7 +467,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     setPendingPlantFilter(plantFilter);
     setPendingAreaFilter(areaFilter);
     setPendingSelectedYear(selectedYear);
-    setPendingSelectedPeriod(selectedPeriod);
+    setPendingSelectedPeriods([...selectedPeriods]);
   };
 
   // Check if there are pending changes
@@ -433,7 +477,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       pendingPlantFilter !== plantFilter ||
       pendingAreaFilter !== areaFilter ||
       pendingSelectedYear !== selectedYear ||
-      pendingSelectedPeriod !== selectedPeriod
+      !areNumberArraysEqual(sortPeriods(pendingSelectedPeriods), sortPeriods(selectedPeriods))
     );
   };
 
@@ -492,12 +536,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       // Record start time for minimum loading duration
       const startTime = Date.now();
       
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-        compare_startDate: dateRange.compare_startDate,
-        compare_endDate: dateRange.compare_endDate,
+        compare_startDate: isMultiCustomPeriod ? undefined : dateRange.compare_startDate,
+        compare_endDate: isMultiCustomPeriod ? undefined : dateRange.compare_endDate,
         plant: plantFilter !== 'all' ? plantFilter : undefined,
         area: areaFilter !== 'all' ? areaFilter : undefined
       };
@@ -520,7 +564,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, MIN_LOADING_TIME]);
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, selectedPeriods, isMultiCustomPeriod, MIN_LOADING_TIME]);
 
   // Fetch participation data
   const fetchParticipationData = useCallback(async () => {
@@ -570,7 +614,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const fetchAreaOpenClosedData = useCallback(async () => {
     try {
       setAreaOpenClosedLoading(true);
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
@@ -585,14 +629,14 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setAreaOpenClosedLoading(false);
     }
-  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod]);
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, selectedPeriods]);
 
   // Fetch user activity data
   const fetchUserActivityData = useCallback(async () => {
     try {
       setUserActivityLoading(true);
       
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
@@ -609,14 +653,14 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setUserActivityLoading(false);
     }
-  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod]);
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, selectedPeriods]);
 
   // Fetch user closer activity data (workers who finished the job)
   const fetchCloserActivityData = useCallback(async () => {
     try {
       setCloserActivityLoading(true);
 
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       const params = {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
@@ -633,20 +677,14 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCloserActivityLoading(false);
     }
-  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod]);
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, selectedPeriods]);
 
   // Fetch calendar heatmap data
   const fetchCalendarHeatmapData = useCallback(async () => {
     try {
       setCalendarHeatmapLoading(true);
-      
-      // Calculate the year based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
-      const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
-      
-      
       const params = {
-        year: yearFromDateRange,
+        year: selectedYear,
         plant: plantFilter !== 'all' ? plantFilter : undefined,
         area: areaFilter !== 'all' ? areaFilter : undefined
       };
@@ -662,19 +700,16 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCalendarHeatmapLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch downtime avoidance trend data
   const fetchDowntimeTrendData = useCallback(async () => {
     try {
       setDowntimeTrendLoading(true);
-      
-      // Calculate the year based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
-      const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
-      
+
       const params = {
-        year: yearFromDateRange,
+        // Keep this chart year-based regardless of custom multi-period selection
+        year: selectedYear,
         plant: plantFilter !== 'all' ? plantFilter : undefined,
         area: areaFilter !== 'all' ? areaFilter : undefined
       };
@@ -691,19 +726,16 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setDowntimeTrendLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch cost avoidance data
   const fetchCostAvoidanceData = useCallback(async () => {
     try {
       setCostAvoidanceLoading(true);
-      
-      // Calculate the year based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
-      const yearFromDateRange = parseInt(dateRange.startDate.split('-')[0]);
-      
+
       const params = {
-        year: yearFromDateRange,
+        // Keep this chart year-based regardless of custom multi-period selection
+        year: selectedYear,
         plant: plantFilter !== 'all' ? plantFilter : undefined,
         area: areaFilter !== 'all' ? areaFilter : undefined
       };
@@ -719,7 +751,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCostAvoidanceLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch downtime impact leaderboard data
   const fetchDowntimeImpactData = useCallback(async () => {
@@ -727,7 +759,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setDowntimeImpactLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -748,7 +780,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setDowntimeImpactLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch cost impact leaderboard data
   const fetchCostImpactData = useCallback(async () => {
@@ -756,7 +788,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setCostImpactLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -776,7 +808,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCostImpactLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch Ontime Rate by Area Data
   const fetchOntimeRateByAreaData = useCallback(async () => {
@@ -784,7 +816,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setOntimeRateByAreaLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -804,7 +836,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setOntimeRateByAreaLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch Ontime Rate by User Data
   const fetchOntimeRateByUserData = useCallback(async () => {
@@ -819,7 +851,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       }
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -838,7 +870,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setOntimeRateByUserLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch Ticket Resolve Duration by User Data
   const fetchResolveDurationByUserData = useCallback(async () => {
@@ -853,7 +885,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       }
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -872,7 +904,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setResolveDurationByUserLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch Ticket Resolve Duration by Area Data
   const fetchResolveDurationByAreaData = useCallback(async () => {
@@ -880,7 +912,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setResolveDurationByAreaLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -900,7 +932,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setResolveDurationByAreaLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch Tickets Closed Per Period Data
   const fetchTicketsClosedData = useCallback(async () => {
@@ -932,7 +964,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setCostByFailureModeLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -952,7 +984,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCostByFailureModeLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch Downtime Impact by Failure Mode Data
   const fetchDowntimeByFailureModeData = useCallback(async () => {
@@ -960,7 +992,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setDowntimeByFailureModeLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -980,7 +1012,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setDowntimeByFailureModeLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch Cost Impact Reporter Data
   const fetchCostImpactReporterData = useCallback(async () => {
@@ -988,7 +1020,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setCostImpactReporterLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -1008,7 +1040,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCostImpactReporterLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch downtime impact reporter leaderboard data
   const fetchDowntimeImpactReporterData = useCallback(async () => {
@@ -1016,7 +1048,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setDowntimeImpactReporterLoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -1036,7 +1068,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setDowntimeImpactReporterLoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Fetch Case Count by PU Data
   const fetchCaseCountByPUData = useCallback(async () => {
@@ -1044,7 +1076,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       setCaseCountByPULoading(true);
       
       // Calculate the date range based on time filter
-      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
       
       const params = {
         startDate: dateRange.startDate,
@@ -1064,7 +1096,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } finally {
       setCaseCountByPULoading(false);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Update selectedYear when timeFilter changes (only for applied filters)
   useEffect(() => {
@@ -1124,57 +1156,57 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     fetchUserActivityData();
     fetchCloserActivityData();
     fetchAreaOpenClosedData();
-  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, fetchKPIData, fetchUserActivityData, fetchCloserActivityData, fetchAreaOpenClosedData]);
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriod, selectedPeriods, fetchKPIData, fetchUserActivityData, fetchCloserActivityData, fetchAreaOpenClosedData]);
 
   // Fetch calendar heatmap data when time filter, year, or area changes
   useEffect(() => {
     fetchCalendarHeatmapData();
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCalendarHeatmapData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchCalendarHeatmapData]);
 
   // Fetch downtime trend data when time filter, year, or filters change
   useEffect(() => {
     fetchDowntimeTrendData();
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchDowntimeTrendData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchDowntimeTrendData]);
 
   // Fetch cost avoidance data when time filter, year, or area changes
   useEffect(() => {
     fetchCostAvoidanceData();
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCostAvoidanceData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchCostAvoidanceData]);
 
   // Fetch downtime impact data when time filter, period, or filters change
   useEffect(() => {
     fetchDowntimeImpactData();
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchDowntimeImpactData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchDowntimeImpactData]);
 
   // Fetch cost impact data when time filter or period changes (not affected by area filter)
   useEffect(() => {
     fetchCostImpactData();
-  }, [timeFilter, selectedYear, selectedPeriod, fetchCostImpactData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, fetchCostImpactData]);
 
   // Fetch downtime impact reporter data when time filter, period, or area changes
   useEffect(() => {
     fetchDowntimeImpactReporterData();
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchDowntimeImpactReporterData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchDowntimeImpactReporterData]);
 
   // Fetch cost impact reporter data when time filter, period, or area changes
   useEffect(() => {
     fetchCostImpactReporterData();
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCostImpactReporterData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchCostImpactReporterData]);
 
   // Fetch downtime by failure mode data when time filter, period, or area changes
   useEffect(() => {
     fetchDowntimeByFailureModeData();
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchDowntimeByFailureModeData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchDowntimeByFailureModeData]);
 
   // Fetch cost by failure mode data when time filter, period, or area changes
   useEffect(() => {
     fetchCostByFailureModeData();
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCostByFailureModeData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchCostByFailureModeData]);
 
   // Fetch case count by PU data when time filter, period, or filters change
   useEffect(() => {
     fetchCaseCountByPUData();
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchCaseCountByPUData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchCaseCountByPUData]);
 
   // Fetch resolve duration by area data when time filter or period changes (only when "All Area" is selected)
   useEffect(() => {
@@ -1183,7 +1215,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } else {
       setResolveDurationByAreaData([]);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchResolveDurationByAreaData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchResolveDurationByAreaData]);
 
   // Fetch resolve duration by user data when time filter, period, or area changes (only when specific area is selected)
   useEffect(() => {
@@ -1192,7 +1224,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } else {
       setResolveDurationByUserData([]);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchResolveDurationByUserData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchResolveDurationByUserData]);
 
   // Fetch ontime rate by area data when time filter or period changes (only when "All Area" is selected)
   useEffect(() => {
@@ -1201,7 +1233,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } else {
       setOntimeRateByAreaData([]);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchOntimeRateByAreaData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchOntimeRateByAreaData]);
 
   // Fetch ontime rate by user data when time filter, period, or area changes (only when specific area is selected)
   useEffect(() => {
@@ -1210,7 +1242,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     } else {
       setOntimeRateByUserData([]);
     }
-  }, [timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter, fetchOntimeRateByUserData]);
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchOntimeRateByUserData]);
 
   // Fetch tickets closed per period data when year or filters change
   useEffect(() => {
@@ -1255,7 +1287,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
 
     const { kpis, summary } = kpiData;
-    const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+    const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
     const baseParams = new URLSearchParams();
     baseParams.set('startDate', dateRange.startDate);
     baseParams.set('endDate', dateRange.endDate);
@@ -1283,14 +1315,15 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     pendingParams.set('endDate', dateRange.endDate);
     if (plantFilter && plantFilter !== 'all') pendingParams.set('plant', plantFilter);
     if (areaFilter && areaFilter !== 'all') pendingParams.set('area', areaFilter);
+    const showComparison = !(timeFilter === 'select-period' && selectedPeriods.length > 1);
 
     return [
       {
         title: t('dashboard.totalTickets'),
         value: kpis.totalTicketsThisPeriod,
-        change: summary.comparisonMetrics.ticketGrowthRate.percentage,
-        changeDescription: summary.comparisonMetrics.ticketGrowthRate.description,
-        changeType: summary.comparisonMetrics.ticketGrowthRate.type,
+        change: showComparison ? summary.comparisonMetrics.ticketGrowthRate.percentage : undefined,
+        changeDescription: showComparison ? summary.comparisonMetrics.ticketGrowthRate.description : undefined,
+        changeType: showComparison ? summary.comparisonMetrics.ticketGrowthRate.type : undefined,
         icon: <AlertTriangle className="h-4 w-4" />,
         color: 'text-brand',
         ticketRoute: baseParams.toString()
@@ -1298,9 +1331,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       {
         title: t('dashboard.closedTickets'),
         value: kpis.closedTicketsThisPeriod,
-        change: summary.comparisonMetrics.closureRateImprovement.percentage,
-        changeDescription: summary.comparisonMetrics.closureRateImprovement.description,
-        changeType: summary.comparisonMetrics.closureRateImprovement.type,
+        change: showComparison ? summary.comparisonMetrics.closureRateImprovement.percentage : undefined,
+        changeDescription: showComparison ? summary.comparisonMetrics.closureRateImprovement.description : undefined,
+        changeType: showComparison ? summary.comparisonMetrics.closureRateImprovement.type : undefined,
         icon: <CheckCircle className="h-4 w-4" />,
         color: 'text-success',
         ticketRoute: closedParams.toString()
@@ -1322,9 +1355,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       {
         title: t('dashboard.totalDowntimeAvoidance'),
         value: `${kpis.totalDowntimeAvoidanceThisPeriod.toFixed(1)} ${t('dashboard.hours')}`,
-        change: summary.comparisonMetrics.downtimeAvoidanceGrowth.percentage,
-        changeDescription: summary.comparisonMetrics.downtimeAvoidanceGrowth.description,
-        changeType: summary.comparisonMetrics.downtimeAvoidanceGrowth.type,
+        change: showComparison ? summary.comparisonMetrics.downtimeAvoidanceGrowth.percentage : undefined,
+        changeDescription: showComparison ? summary.comparisonMetrics.downtimeAvoidanceGrowth.description : undefined,
+        changeType: showComparison ? summary.comparisonMetrics.downtimeAvoidanceGrowth.type : undefined,
         icon: <TrendingUp className="h-4 w-4" />,
         color: 'text-accent'
       },
@@ -1332,14 +1365,14 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         title: t('dashboard.totalCostAvoidance'),
         value: formatCurrencyDynamic(kpis.totalCostAvoidanceThisPeriod).display,
         tooltip: formatCurrencyDynamic(kpis.totalCostAvoidanceThisPeriod).tooltip,
-        change: summary.comparisonMetrics.costAvoidanceGrowth.percentage,
-        changeDescription: summary.comparisonMetrics.costAvoidanceGrowth.description,
-        changeType: summary.comparisonMetrics.costAvoidanceGrowth.type,
+        change: showComparison ? summary.comparisonMetrics.costAvoidanceGrowth.percentage : undefined,
+        changeDescription: showComparison ? summary.comparisonMetrics.costAvoidanceGrowth.description : undefined,
+        changeType: showComparison ? summary.comparisonMetrics.costAvoidanceGrowth.type : undefined,
         icon: <DollarSign className="h-4 w-4" />,
         color: 'text-info'
       }
     ];
-  }, [kpiData, t, timeFilter, selectedYear, selectedPeriod, plantFilter, areaFilter]);
+  }, [kpiData, t, timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   // Top Performers - Dynamic data from API
   const topPerformers: TopPerformer[] = useMemo(() => {
@@ -1561,11 +1594,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     return calendarHeatmapData;
   }, [calendarHeatmapData]);
 
-  // Calculate the year for calendar heatmap title based on time filter
-  const calendarHeatmapYear = useMemo(() => {
-    // For calendar heatmap, we should use the selectedYear directly
-    // as it represents the year we want to display data for
-    return selectedYear;
+  const calendarHeatmapRange = useMemo(() => {
+    const { startDate, endDate } = getCompanyYearDateRange(selectedYear);
+    return {
+      startDate: formatLocalDate(startDate),
+      endDate: formatLocalDate(endDate),
+    };
   }, [selectedYear]);
 
   return (
@@ -1635,7 +1669,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <span className="text-muted-foreground">{t('dashboard.range')}:</span>
               <span className="text-foreground font-medium">
                 {(() => {
-                  const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+                  const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
                   return `${dateRange.startDate} - ${dateRange.endDate}`;
                 })()}
               </span>
@@ -1646,7 +1680,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         const currentPeriodInfo = calculatePeriodForDate(new Date(), selectedYear);
                         return `P${currentPeriodInfo.period}`;
                       })()
-                    : `P${selectedPeriod}`
+                    : formatPeriodSelection(selectedPeriods)
                   }
                 </span>
               )}
@@ -1707,7 +1741,12 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
               <div className="space-y-2">
                 <label className="text-sm font-medium">{t('dashboard.timeRange')}</label>
-                <Select value={pendingTimeFilter} onValueChange={setPendingTimeFilter}>
+                <Select value={pendingTimeFilter} onValueChange={(value) => {
+                  setPendingTimeFilter(value);
+                  if (value === 'select-period' && pendingSelectedPeriods.length === 0) {
+                    setPendingSelectedPeriods([1]);
+                  }
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder={t('dashboard.selectPeriod')} />
                   </SelectTrigger>
@@ -1741,16 +1780,34 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-medium">{t('dashboard.period')}</label>
-                    <Select value={pendingSelectedPeriod.toString()} onValueChange={(value) => setPendingSelectedPeriod(parseInt(value))}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 13 }, (_, i) => (
-                          <SelectItem key={i + 1} value={(i + 1).toString()}>P{i + 1}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="outline" className="w-full justify-between">
+                          <span className="truncate">{formatPeriodSelection(pendingSelectedPeriods)}</span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+                        <DropdownMenuLabel>{t('dashboard.period')}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        {Array.from({ length: 13 }, (_, i) => {
+                          const periodNo = i + 1;
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={periodNo}
+                              checked={pendingSelectedPeriods.includes(periodNo)}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={() => togglePendingPeriod(periodNo)}
+                            >
+                              {`P${periodNo}`}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                    <p className="text-xs text-muted-foreground">
+                      Only contiguous period ranges are allowed
+                    </p>
                   </div>
                 </>
               )}
@@ -2057,7 +2114,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
           {/* Who Active (User) */}
           <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => {
-            const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+            const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
             const params = new URLSearchParams({
               startDate: dateRange.startDate,
               endDate: dateRange.endDate,
@@ -2288,7 +2345,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         {/* When Active - Calendar Heatmap */}
         <Card>
           <CardHeader>
-            <CardTitle>{t('dashboard.whenActive')} ({calendarHeatmapYear})</CardTitle>
+            <CardTitle>{t('dashboard.whenActive')} ({calendarHeatmapRange.startDate} - {calendarHeatmapRange.endDate})</CardTitle>
           </CardHeader>
           <CardContent>
             {calendarHeatmapLoading ? (
@@ -2307,8 +2364,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             ) : (
               <div className="calendar-heatmap-container">
                 <CalendarHeatmap
-                  startDate={new Date(calendarHeatmapYear, 0, 1)}
-                  endDate={new Date(calendarHeatmapYear, 11, 31)}
+                  startDate={new Date(`${calendarHeatmapRange.startDate}T00:00:00`)}
+                  endDate={new Date(`${calendarHeatmapRange.endDate}T00:00:00`)}
                   values={calendarData}
                   classForValue={(value) => {
                     if (!value) {
@@ -2815,7 +2872,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           const caseCountByPUTop10 = caseCountByPUData.slice(0, CASE_COUNT_BY_PU_TOP);
           const caseCountByPUHasMore = caseCountByPUData.length > CASE_COUNT_BY_PU_TOP;
           const caseCountByPUFullUrl = (() => {
-            const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+            const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
             const params = new URLSearchParams({
               startDate: dateRange.startDate,
               endDate: dateRange.endDate
@@ -2888,7 +2945,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                                 style={{ cursor: 'pointer' }}
                                 onClick={() => {
                                   if (payload) {
-                                    const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod);
+                                    const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
                                     const params = new URLSearchParams({
                                       startDate: dateRange.startDate,
                                       endDate: dateRange.endDate,

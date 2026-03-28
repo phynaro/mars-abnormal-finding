@@ -3581,12 +3581,35 @@ exports.getCalendarHeatmapData = async (req, res) => {
     // Extract query parameters
     const {
       year = new Date().getFullYear(),
+      startDate,
+      endDate,
       plant,
       area
     } = req.query;
 
+    const hasCustomDateRange = !!(startDate && endDate);
+    const parsedYear = parseInt(year);
+    const safeYear = Number.isNaN(parsedYear) ? new Date().getFullYear() : parsedYear;
+
+    const getFirstSundayOfYear = (targetYear) => {
+      const firstDayOfYear = new Date(Date.UTC(targetYear, 0, 1));
+      const dayOfWeek = firstDayOfYear.getUTCDay();
+      const firstSunday = new Date(firstDayOfYear);
+      const daysToSubtract = dayOfWeek === 0 ? 0 : dayOfWeek;
+      firstSunday.setUTCDate(firstDayOfYear.getUTCDate() - daysToSubtract);
+      return firstSunday;
+    };
+
+    const companyYearStart = getFirstSundayOfYear(safeYear);
+    const companyYearEnd = new Date(companyYearStart);
+    companyYearEnd.setUTCDate(companyYearStart.getUTCDate() + 363);
+    const companyYearStartStr = companyYearStart.toISOString().split('T')[0];
+    const companyYearEndStr = companyYearEnd.toISOString().split('T')[0];
+
     // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
-    let whereClause = `WHERE YEAR(t.created_at) = ${parseInt(year)}`;
+    let whereClause = hasCustomDateRange
+      ? `WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'`
+      : `WHERE CAST(t.created_at AS DATE) >= '${companyYearStartStr}' AND CAST(t.created_at AS DATE) <= '${companyYearEndStr}'`;
     
     if (plant && plant !== 'all') {
       whereClause += ` AND pe.plant = '${plant}'`;
@@ -3620,15 +3643,19 @@ exports.getCalendarHeatmapData = async (req, res) => {
     });
     
 
-    // Generate data for the entire year (including days with 0 tickets)
+    // Generate data for the requested date span (including days with 0 tickets)
     const calendarData = [];
-    const startDate = new Date(Date.UTC(parseInt(year), 0, 1)); // January 1st UTC
-    const endDate = new Date(Date.UTC(parseInt(year), 11, 31)); // December 31st UTC
+    const spanStartDate = hasCustomDateRange
+      ? new Date(`${startDate}T00:00:00.000Z`)
+      : new Date(`${companyYearStartStr}T00:00:00.000Z`);
+    const spanEndDate = hasCustomDateRange
+      ? new Date(`${endDate}T00:00:00.000Z`)
+      : new Date(`${companyYearEndStr}T00:00:00.000Z`);
     
     
     // Use a more reliable date iteration method
-    let currentDate = new Date(startDate);
-    while (currentDate <= endDate) {
+    let currentDate = new Date(spanStartDate);
+    while (currentDate <= spanEndDate) {
       const dateStr = currentDate.toISOString().split('T')[0];
       const count = dataMap[dateStr] || 0;
       
@@ -3652,7 +3679,9 @@ exports.getCalendarHeatmapData = async (req, res) => {
           totalTickets: calendarData.reduce((sum, item) => sum + item.count, 0),
           maxTicketsPerDay: calendarData.length > 0 ? Math.max(...calendarData.map(item => item.count)) : 0,
           appliedFilters: {
-            year: parseInt(year),
+            year: hasCustomDateRange ? null : safeYear,
+            startDate: startDate || null,
+            endDate: endDate || null,
             plant: plant || null,
             area: area || null
           }

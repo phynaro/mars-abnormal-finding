@@ -88,7 +88,8 @@ export const getCompanyYearDateRange = (year: number) => {
 export const getDateRangeForFilter = (
   timeFilter: string, 
   year?: number, 
-  period?: number
+  period?: number,
+  periods?: number[]
 ): {
   startDate: string;
   endDate: string;
@@ -153,13 +154,30 @@ export const getDateRangeForFilter = (
     }
     
     case 'select-period': {
-      if (!period) {
+      const selectedPeriods = Array.isArray(periods) && periods.length > 0
+        ? [...periods].sort((a, b) => a - b)
+        : (period ? [period] : []);
+
+      if (selectedPeriods.length === 0) {
         throw new Error('Period number is required for select-period filter');
       }
-      
-      const { startDate: currentStart, endDate: currentEnd } = getPeriodDateRange(currentYear, period);
-      const { startDate: prevStart, endDate: prevEnd } = getPeriodDateRange(currentYear, period - 1);
-      
+
+      const firstSelectedPeriod = selectedPeriods[0];
+      const lastSelectedPeriod = selectedPeriods[selectedPeriods.length - 1];
+      const { startDate: currentStart } = getPeriodDateRange(currentYear, firstSelectedPeriod);
+      const { endDate: currentEnd } = getPeriodDateRange(currentYear, lastSelectedPeriod);
+
+      if (selectedPeriods.length > 1) {
+        return {
+          startDate: formatLocalDate(currentStart),
+          endDate: formatLocalDate(currentEnd),
+          compare_startDate: '',
+          compare_endDate: ''
+        };
+      }
+
+      const { startDate: prevStart, endDate: prevEnd } = getPeriodDateRange(currentYear, firstSelectedPeriod - 1);
+
       return {
         startDate: formatLocalDate(currentStart),
         endDate: formatLocalDate(currentEnd),
