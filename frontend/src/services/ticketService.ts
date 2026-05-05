@@ -377,6 +377,12 @@ export interface SingleTicketResponse {
   data: Ticket;
 }
 
+export interface TicketFilterUser {
+  id: number;
+  name: string;
+  email?: string;
+}
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
 class TicketService {
@@ -446,6 +452,22 @@ class TicketService {
       const { handleApiError } = await import('../utils/apiErrorHandler');
       const errorData = await handleApiError(response);
       throw new Error(errorData.message || 'Failed to fetch tickets');
+    }
+
+    return response.json();
+  }
+
+  async getTicketFilterUsers(role: 'created_by' | 'assigned_to'): Promise<{ success: boolean; data: TicketFilterUser[] }> {
+    const headers = getAuthHeaders();
+    const queryParams = new URLSearchParams({ role });
+    const response = await fetch(`${API_BASE_URL}/tickets/filter-users?${queryParams}`, {
+      method: 'GET',
+      headers
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch ticket filter users');
     }
 
     return response.json();

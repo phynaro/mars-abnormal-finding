@@ -4594,6 +4594,57 @@ const reassignTicket = async (req, res) => {
   }
 };
 
+const TICKET_USER_FILTER_COLUMNS = {
+  created_by: "created_by",
+  assigned_to: "assigned_to",
+};
+
+const getTicketFilterUsers = async (req, res) => {
+  try {
+    const { role } = req.query;
+    const filterColumn = TICKET_USER_FILTER_COLUMNS[role];
+
+    if (!filterColumn) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid ticket user filter role",
+      });
+    }
+
+    const pool = await sql.connect(dbConfig);
+    const result = await pool.request().query(`
+      SELECT DISTINCT
+        p.PERSONNO AS id,
+        COALESCE(
+          NULLIF(LTRIM(RTRIM(p.PERSON_NAME)), ''),
+          NULLIF(LTRIM(RTRIM(ISNULL(p.FIRSTNAME, '') + ' ' + ISNULL(p.LASTNAME, ''))), '')
+        ) AS name,
+        p.EMAIL AS email
+      FROM IgxTickets t
+      INNER JOIN Person p ON p.PERSONNO = t.${filterColumn}
+      WHERE t.${filterColumn} IS NOT NULL
+        AND p.FLAGDEL != 'Y'
+      ORDER BY name
+    `);
+
+    res.json({
+      success: true,
+      data: result.recordset.map((person) => ({
+        id: person.id,
+        name: person.name || `User ${person.id}`,
+        email: person.email,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching ticket filter users:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch ticket filter users",
+      error: error.message,
+    });
+  }
+};
+
 // Get available L2+ users for assignment
 const getAvailableAssignees = async (req, res) => {
   try {
@@ -5923,6 +5974,7 @@ module.exports = {
   reviewAndClose,
   reopenTicket,
   reassignTicket,
+  getTicketFilterUsers,
   getAvailableAssignees,
 
   getUserPendingTickets,

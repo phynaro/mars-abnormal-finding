@@ -10,13 +10,17 @@ interface LayoutProps {
   children: React.ReactNode;
 }
 
+const LG_BREAKPOINT_PX = 1024;
+
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() =>
+    typeof window !== 'undefined' && window.innerWidth < LG_BREAKPOINT_PX
+  );
 
   // Handle responsive behavior
   useEffect(() => {
     const checkScreenSize = () => {
-      const isMobileView = window.innerWidth < 1024; // lg breakpoint
+      const isMobileView = window.innerWidth < LG_BREAKPOINT_PX;
       setIsMobile(isMobileView);
     };
 

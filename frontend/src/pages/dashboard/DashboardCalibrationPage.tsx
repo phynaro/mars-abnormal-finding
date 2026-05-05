@@ -10,6 +10,7 @@ import CalibrationDueSoonNotification from '@/components/dashboard/calibration/C
 import CalibrationOverdueNotification from '@/components/dashboard/calibration/CalibrationOverdueNotification';
 import CalibrationJobList from '@/components/dashboard/calibration/CalibrationJobList';
 import CalibrationPMPlanList from '@/components/dashboard/calibration/CalibrationPMPlanList';
+import CalibrationPmSchedulePanel from '@/components/dashboard/calibration/CalibrationPmSchedulePanel';
 
 const DashboardCalibrationPage: React.FC = () => {
   const { t } = useLanguage();
@@ -37,6 +38,8 @@ const DashboardCalibrationPage: React.FC = () => {
         title={t('dashboard.calibration.title')}
         description={t('dashboard.calibration.description')}
       />
+
+      <CalibrationPmSchedulePanel companyYear={companyYear} />
 
       {/* 1. Per-person year overview */}
       <section className="space-y-2">

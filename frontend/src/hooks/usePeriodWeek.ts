@@ -25,7 +25,6 @@ export const usePeriodWeek = (): UsePeriodWeekReturn => {
     try {
       setLoading(true);
       setError(null);
-      
       const response = await api.get<{ success: boolean; data: PeriodWeekData }>('/dashboard/current-period-week');
       
       if (response.success) {

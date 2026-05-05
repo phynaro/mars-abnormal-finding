@@ -37,6 +37,9 @@ router.post('/notifications/pending/:userId', requireFormPermission('TKT', 'view
 // Send pending ticket notifications to all users (requires TKT form save permission)
 router.post('/notifications/pending', requireFormPermission('TKT', 'save'), ticketController.sendPendingTicketNotificationsToAll);
 
+// Get ticket-scoped users for filters (requires TKT form view permission)
+router.get('/filter-users', requireFormPermission('TKT', 'view'), ticketController.getTicketFilterUsers);
+
 // Get ticket by ID (requires TKT form view permission)
 router.get('/:id', requireFormPermission('TKT', 'view'), ticketController.getTicketById);
 

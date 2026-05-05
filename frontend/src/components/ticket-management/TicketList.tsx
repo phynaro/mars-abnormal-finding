@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 // Removed outer Card wrapper for direct placement
 import { Button } from "@/components/ui/button";
@@ -30,10 +30,9 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ticketService } from "@/services/ticketService";
-import type { Ticket, TicketFilters } from "@/services/ticketService";
+import type { Ticket, TicketFilters, TicketFilterUser } from "@/services/ticketService";
 import { ticketClassService, type TicketClass } from "@/services/ticketClassService";
 import { hierarchyService, type PUCritical } from "@/services/hierarchyService";
-import authService from "@/services/authService";
 import { useToast } from "@/hooks/useToast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useAuth } from "@/contexts/AuthContext";
@@ -69,8 +68,6 @@ import {
 } from "@/utils/ticketBadgeStyles";
 import { StarRatingDisplay } from "@/components/ui/star-rating";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
-
 /** Plant codes for the quick filter toggle group (most used). "All" = no plant filter. */
 const QUICK_PLANT_OPTIONS = ['DP', 'DJ', 'SN', 'ST', 'PS', 'PP'] as const;
 const STATUS_FILTER_OPTIONS = [
@@ -94,6 +91,148 @@ interface HierarchyOption {
   plant?: string;
 }
 
+interface SearchableMultiSelectUserFilterProps {
+  id: string;
+  label: string;
+  options: TicketFilterUser[];
+  selectedValues: string[];
+  triggerLabel: string;
+  searchPlaceholder: string;
+  loadingText: string;
+  emptyText: string;
+  loading: boolean;
+  onChange: (nextValues: string[]) => void;
+}
+
+const SearchableMultiSelectUserFilter: React.FC<SearchableMultiSelectUserFilterProps> = ({
+  id,
+  label,
+  options,
+  selectedValues,
+  triggerLabel,
+  searchPlaceholder,
+  loadingText,
+  emptyText,
+  loading,
+  onChange,
+}) => {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setOpen(false);
+        setQuery("");
+      }
+    };
+
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+      document.addEventListener("keydown", handleEscape);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
+  }, [open]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = options.filter((option) => {
+    if (!normalizedQuery) return true;
+    return (
+      option.name.toLowerCase().includes(normalizedQuery) ||
+      option.email?.toLowerCase().includes(normalizedQuery)
+    );
+  });
+
+  const toggleValue = (value: string) => {
+    const nextValues = selectedValues.includes(value)
+      ? selectedValues.filter((item) => item !== value)
+      : [...selectedValues, value];
+    onChange(nextValues);
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="relative" ref={containerRef}>
+        <Button
+          id={id}
+          type="button"
+          variant="outline"
+          className="w-full justify-between"
+          onClick={() =>
+            setOpen((prev) => {
+              const nextOpen = !prev;
+              if (!nextOpen) {
+                setQuery("");
+              }
+              return nextOpen;
+            })
+          }
+        >
+          <span className="truncate">{triggerLabel}</span>
+          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
+        {open && (
+          <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover text-popover-foreground shadow-md">
+            <div className="border-b p-2">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder={searchPlaceholder}
+                  className="pl-9"
+                  autoFocus
+                />
+              </div>
+            </div>
+            <div className="max-h-60 overflow-y-auto p-1">
+              {loading ? (
+                <div className="p-3 text-sm text-muted-foreground">{loadingText}</div>
+              ) : filteredOptions.length === 0 ? (
+                <div className="p-3 text-sm text-muted-foreground">{emptyText}</div>
+              ) : (
+                filteredOptions.map((option) => {
+                  const value = option.id.toString();
+                  const checked = selectedValues.includes(value);
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      className="flex w-full items-start gap-2 rounded-sm px-3 py-2 text-left text-sm hover:bg-hover hover:text-hover-foreground"
+                      onClick={() => toggleValue(value)}
+                    >
+                      <Checkbox checked={checked} className="mt-0.5 pointer-events-none" />
+                      <div className="min-w-0">
+                        <div className="truncate font-medium">{option.name}</div>
+                        {option.email && (
+                          <div className="truncate text-xs text-muted-foreground">{option.email}</div>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
 export const TicketList: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -107,7 +246,9 @@ export const TicketList: React.FC = () => {
   const [totalTickets, setTotalTickets] = useState(0);
   const [plants, setPlants] = useState<HierarchyOption[]>([]);
   const [areas, setAreas] = useState<HierarchyOption[]>([]);
-  const [users, setUsers] = useState<Array<{id: number; name: string; email?: string}>>([]);
+  const [createdByUsers, setCreatedByUsers] = useState<TicketFilterUser[]>([]);
+  const [assignedToUsers, setAssignedToUsers] = useState<TicketFilterUser[]>([]);
+  const [ticketUsersLoading, setTicketUsersLoading] = useState(false);
   const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
   const [ticketClasses, setTicketClasses] = useState<TicketClass[]>([]);
@@ -258,12 +399,32 @@ export const TicketList: React.FC = () => {
   };
 
   const getUserFilterLabel = (userId: string): string => {
-    const selectedUser = users.find((user) => String(user.id) === userId);
+    const selectedUser = [...createdByUsers, ...assignedToUsers].find((user) => String(user.id) === userId);
     return selectedUser?.name || `User ${userId}`;
   };
 
   const selectedCreatedByUsers = parseUserFilter(filters.created_by);
   const selectedAssignedToUsers = parseUserFilter(filters.assigned_to);
+
+  const getUserFilterSummary = (selectedUserIds: string[], type: "created_by" | "assigned_to"): string => {
+    if (selectedUserIds.length === 0) {
+      return t("ticket.allUsers");
+    }
+
+    if (selectedUserIds.length <= 2) {
+      return selectedUserIds.map(getUserFilterLabel).join(", ");
+    }
+
+    if (language === "th") {
+      return type === "created_by"
+        ? `${selectedUserIds.length} ผู้สร้างที่เลือก`
+        : `${selectedUserIds.length} ผู้รับผิดชอบที่เลือก`;
+    }
+
+    return type === "created_by"
+      ? `${selectedUserIds.length} creators selected`
+      : `${selectedUserIds.length} assignees selected`;
+  };
 
   const parseCriticalFilter = (critical?: number | string): string[] => {
     if (critical === undefined || critical === null || critical === "") return [];
@@ -340,17 +501,21 @@ export const TicketList: React.FC = () => {
     }
   };
 
-  const fetchUsers = async () => {
+  const fetchTicketFilterUsers = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/users/all-basic`, {
-        headers: authService.getAuthHeaders()
-      });
-      const result = await response.json();
-      if (result.success) {
-        setUsers(result.data);
-      }
+      setTicketUsersLoading(true);
+      const [createdByResponse, assignedToResponse] = await Promise.all([
+        ticketService.getTicketFilterUsers("created_by"),
+        ticketService.getTicketFilterUsers("assigned_to"),
+      ]);
+      setCreatedByUsers(createdByResponse.data || []);
+      setAssignedToUsers(assignedToResponse.data || []);
     } catch (error) {
-      console.error('Failed to fetch users:', error);
+      console.error('Failed to fetch ticket filter users:', error);
+      setCreatedByUsers([]);
+      setAssignedToUsers([]);
+    } finally {
+      setTicketUsersLoading(false);
     }
   };
 
@@ -382,13 +547,6 @@ export const TicketList: React.FC = () => {
     }
   };
 
-  // Initialize filters from URL on mount
-  useEffect(() => {
-    const urlFilters = initializeFiltersFromURL();
-    setFilters(urlFilters);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Only run on mount
-
   // Handle URL parameter changes (e.g., when navigating from Area Dashboard)
   useEffect(() => {
     const urlFilters = initializeFiltersFromURL();
@@ -408,10 +566,11 @@ export const TicketList: React.FC = () => {
     fetchTickets();
   }, [filters]);
 
+
   useEffect(() => {
     fetchPlants();
     // Don't fetch areas on mount - wait for plant selection
-    fetchUsers();
+    fetchTicketFilterUsers();
     fetchCriticalLevels();
     fetchTicketClasses();
   }, []);
@@ -1188,93 +1347,41 @@ export const TicketList: React.FC = () => {
                     </div>
                   </div>
                   {/* 2. Created By */}
-                  <div className="space-y-2">
-                    <Label htmlFor="created_by">{t('ticket.createdBy')}</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button id="created_by" variant="outline" className="w-full justify-between">
-                          <span className="truncate">
-                            {selectedCreatedByUsers.length === 0
-                              ? t("ticket.allUsers")
-                              : selectedCreatedByUsers.length <= 2
-                                ? selectedCreatedByUsers.map(getUserFilterLabel).join(", ")
-                                : `${selectedCreatedByUsers.length} ${language === "th" ? "ผู้สร้างที่เลือก" : "creators selected"}`}
-                          </span>
-                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
-                        <DropdownMenuLabel>{t("ticket.createdBy")}</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {users.map((user) => {
-                          const value = user.id.toString();
-                          const checked = selectedCreatedByUsers.includes(value);
-                          return (
-                            <DropdownMenuCheckboxItem
-                              key={user.id}
-                              checked={checked}
-                              onSelect={(e) => e.preventDefault()}
-                              onCheckedChange={(nextChecked) => {
-                                const userSet = new Set(selectedCreatedByUsers);
-                                if (nextChecked) {
-                                  userSet.add(value);
-                                } else {
-                                  userSet.delete(value);
-                                }
-                                handleFilterChange("created_by", serializeUserFilter(Array.from(userSet)) as TicketFilters["created_by"]);
-                              }}
-                            >
-                              {user.name}
-                            </DropdownMenuCheckboxItem>
-                          );
-                        })}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                  <SearchableMultiSelectUserFilter
+                    id="created_by"
+                    label={t('ticket.createdBy')}
+                    options={createdByUsers}
+                    selectedValues={selectedCreatedByUsers}
+                    triggerLabel={getUserFilterSummary(selectedCreatedByUsers, "created_by")}
+                    searchPlaceholder={t('ticket.searchUsers')}
+                    loadingText={t('ticket.searching')}
+                    emptyText={t('ticket.noUsersFound')}
+                    loading={ticketUsersLoading}
+                    onChange={(nextValues) =>
+                      handleFilterChange(
+                        "created_by",
+                        serializeUserFilter(nextValues) as TicketFilters["created_by"]
+                      )
+                    }
+                  />
                   {/* 3. Assigned To */}
-                  <div className="space-y-2">
-                    <Label htmlFor="assigned_to">{t('ticket.assignedTo')}</Label>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button id="assigned_to" variant="outline" className="w-full justify-between">
-                          <span className="truncate">
-                            {selectedAssignedToUsers.length === 0
-                              ? t("ticket.allUsers")
-                              : selectedAssignedToUsers.length <= 2
-                                ? selectedAssignedToUsers.map(getUserFilterLabel).join(", ")
-                                : `${selectedAssignedToUsers.length} ${language === "th" ? "ผู้รับผิดชอบที่เลือก" : "assignees selected"}`}
-                          </span>
-                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
-                        <DropdownMenuLabel>{t("ticket.assignedTo")}</DropdownMenuLabel>
-                        <DropdownMenuSeparator />
-                        {users.map((user) => {
-                          const value = user.id.toString();
-                          const checked = selectedAssignedToUsers.includes(value);
-                          return (
-                            <DropdownMenuCheckboxItem
-                              key={user.id}
-                              checked={checked}
-                              onSelect={(e) => e.preventDefault()}
-                              onCheckedChange={(nextChecked) => {
-                                const userSet = new Set(selectedAssignedToUsers);
-                                if (nextChecked) {
-                                  userSet.add(value);
-                                } else {
-                                  userSet.delete(value);
-                                }
-                                handleFilterChange("assigned_to", serializeUserFilter(Array.from(userSet)) as TicketFilters["assigned_to"]);
-                              }}
-                            >
-                              {user.name}
-                            </DropdownMenuCheckboxItem>
-                          );
-                        })}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                  <SearchableMultiSelectUserFilter
+                    id="assigned_to"
+                    label={t('ticket.assignedTo')}
+                    options={assignedToUsers}
+                    selectedValues={selectedAssignedToUsers}
+                    triggerLabel={getUserFilterSummary(selectedAssignedToUsers, "assigned_to")}
+                    searchPlaceholder={t('ticket.searchUsers')}
+                    loadingText={t('ticket.searching')}
+                    emptyText={t('ticket.noUsersFound')}
+                    loading={ticketUsersLoading}
+                    onChange={(nextValues) =>
+                      handleFilterChange(
+                        "assigned_to",
+                        serializeUserFilter(nextValues) as TicketFilters["assigned_to"]
+                      )
+                    }
+                  />
                   {/* 4. Plant */}
                   <div className="space-y-2">
                     <Label htmlFor="plant">Plant</Label>
@@ -1606,7 +1713,7 @@ export const TicketList: React.FC = () => {
                     <SearchableCombobox
                       options={[
                         { value: "all", label: t('ticket.allUsers') },
-                        ...users.map((user) => ({
+                        ...createdByUsers.map((user) => ({
                           value: user.id.toString(),
                           label: user.name,
                         })),
@@ -1625,7 +1732,7 @@ export const TicketList: React.FC = () => {
                     <SearchableCombobox
                       options={[
                         { value: "all", label: t('ticket.allUsers') },
-                        ...users.map((user) => ({
+                        ...assignedToUsers.map((user) => ({
                           value: user.id.toString(),
                           label: user.name,
                         })),

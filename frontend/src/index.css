@@ -204,4 +204,88 @@
   .shadow-accent {
     box-shadow: 0 4px 14px 0 hsl(var(--accent) / 0.2);
   }
+
+  /* react-big-calendar scoped overrides */
+  .rbc-wrapper {
+    font-family: inherit;
+    font-size: 0.875rem;
+  }
+  .rbc-wrapper .rbc-toolbar {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-bottom: 0.75rem;
+  }
+  .rbc-wrapper .rbc-toolbar button {
+    border-radius: 0.375rem;
+    border: 1px solid hsl(var(--border));
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    padding: 0.25rem 0.75rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .rbc-wrapper .rbc-toolbar button:hover {
+    background: hsl(var(--muted));
+  }
+  .rbc-wrapper .rbc-toolbar button.rbc-active {
+    background: hsl(var(--primary));
+    color: hsl(var(--primary-foreground));
+    border-color: hsl(var(--primary));
+  }
+  .rbc-wrapper .rbc-header {
+    background: hsl(var(--muted) / 0.5);
+    color: hsl(var(--muted-foreground));
+    font-weight: 500;
+    font-size: 0.75rem;
+    padding: 0.375rem 0;
+    border-color: hsl(var(--border));
+  }
+  .rbc-wrapper .rbc-month-view,
+  .rbc-wrapper .rbc-time-view,
+  .rbc-wrapper .rbc-agenda-view {
+    border-color: hsl(var(--border));
+    border-radius: 0.5rem;
+    overflow: hidden;
+  }
+  .rbc-wrapper .rbc-day-bg,
+  .rbc-wrapper .rbc-month-row {
+    border-color: hsl(var(--border));
+  }
+  .rbc-wrapper .rbc-off-range-bg {
+    background: hsl(var(--muted) / 0.3);
+  }
+  .rbc-wrapper .rbc-today {
+    background: hsl(var(--primary) / 0.06);
+  }
+  .rbc-wrapper .rbc-date-cell {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.375rem;
+    color: hsl(var(--foreground));
+  }
+  .rbc-wrapper .rbc-date-cell.rbc-now {
+    font-weight: 700;
+    color: hsl(var(--primary));
+  }
+  .rbc-wrapper .rbc-show-more {
+    font-size: 0.7rem;
+    color: hsl(var(--primary));
+    background: transparent;
+  }
+  .rbc-wrapper .rbc-agenda-table th,
+  .rbc-wrapper .rbc-agenda-table td {
+    border-color: hsl(var(--border));
+    padding: 0.375rem 0.5rem;
+    font-size: 0.8125rem;
+  }
+  .dark .rbc-wrapper .rbc-calendar,
+  .dark .rbc-wrapper .rbc-month-view,
+  .dark .rbc-wrapper .rbc-header,
+  .dark .rbc-wrapper .rbc-time-view,
+  .dark .rbc-wrapper .rbc-agenda-view,
+  .dark .rbc-wrapper .rbc-agenda-table {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+    border-color: hsl(var(--border));
+  }
 }

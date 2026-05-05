@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const dashboardController = require('../controllers/dashboardController');
 const calibrationController = require('../controllers/calibrationController');
+const pmCalibrationScheduleController = require('../controllers/pmCalibrationScheduleController');
+const calibrationUserEventsController = require('../controllers/calibrationUserEventsController');
 const { authenticateToken, requireFormPermission } = require('../middleware/auth');
 
 // Public endpoints (before authentication middleware)
@@ -114,5 +116,19 @@ router.get('/calibration/due-soon', requireFormPermission('WO', 'view'), calibra
 router.get('/calibration/overdue', requireFormPermission('WO', 'view'), calibrationController.getOverdue);
 router.get('/calibration/jobs', requireFormPermission('WO', 'view'), calibrationController.getJobs);
 router.get('/calibration/pm-plans', requireFormPermission('WO', 'view'), calibrationController.getPmPlans);
+
+// PM schedule calibration (PMCODE contains -CAL), separate from WO-type calibration
+router.get('/calibration/pm-schedule/kpi', requireFormPermission('WO', 'view'), pmCalibrationScheduleController.getPmScheduleKpi);
+router.get('/calibration/pm-schedule/calendar-range', requireFormPermission('WO', 'view'), pmCalibrationScheduleController.getPmScheduleCalendarRange);
+router.get('/calibration/pm-schedule/detail/:pmSchNo', requireFormPermission('WO', 'view'), pmCalibrationScheduleController.getPmScheduleDetail);
+router.get('/calibration/pm-schedule/team-kpi', requireFormPermission('WO', 'view'), pmCalibrationScheduleController.getPmScheduleTeamKpi);
+router.get('/calibration/pm-schedule/assignees', requireFormPermission('WO', 'view'), pmCalibrationScheduleController.getPmScheduleAssignees);
+router.get('/calibration/pm-schedule', requireFormPermission('WO', 'view'), pmCalibrationScheduleController.getPmScheduleList);
+router.get('/calibration/user-events', requireFormPermission('WO', 'view'), calibrationUserEventsController.getCalibrationUserEvents);
+router.get('/calibration/user-events/calendar-range', requireFormPermission('WO', 'view'), calibrationUserEventsController.getCalibrationUserEventsCalendarRange);
+router.get('/calibration/user-events/:id', requireFormPermission('WO', 'view'), calibrationUserEventsController.getCalibrationUserEventById);
+router.post('/calibration/user-events', requireFormPermission('WO', 'view'), calibrationUserEventsController.createCalibrationUserEvent);
+router.put('/calibration/user-events/:id', requireFormPermission('WO', 'view'), calibrationUserEventsController.updateCalibrationUserEvent);
+router.delete('/calibration/user-events/:id', requireFormPermission('WO', 'view'), calibrationUserEventsController.deleteCalibrationUserEvent);
 
 module.exports = router;

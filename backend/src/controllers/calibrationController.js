@@ -1,6 +1,7 @@
 /**
  * Calibration Dashboard Controller
  * WOTypeNo = 5 (Calibration). Data from dbo.PM, dbo.PMSched, dbo.WO.
+ * Excludes dbo.PM rows where FREEZE = 'T' (frozen / not in use).
  * Due dates from PMSched.DUEDATE (target date). Audit allows completion up to 7 days after DUEDATE.
  * Classification: see helps/calibration-classification-guideline.md
  */
@@ -11,6 +12,11 @@ const dbConfig = require('../config/dbConfig');
 const WO_TYPE_CALIBRATION = 5;
 /** WO status: 9 = history, 7 = finish (completed) */
 const WO_STATUS_FINISHED = [7, 9];
+
+/** PM.FREEZE = 'T' means the plan is frozen (not in use); exclude from calibration queries. */
+function pmNotFrozen(alias) {
+  return `(${alias}.FREEZE IS NULL OR LTRIM(RTRIM(${alias}.FREEZE)) <> 'T')`;
+}
 
 /**
  * SQL Server 2008–compatible date expression (no TRY_CONVERT).
@@ -41,55 +47,54 @@ exports.getPersonPeriodSummary = async (req, res) => {
     }
 
     const dueDateExpr = dateExprFromColumn('s.DUEDATE');
-    const actFinishExpr = dateExprFromColumn('wo.ACT_FINISH_D');
 
-    // Finished per period: WO calibration (WOTYPENO=5), ASSIGN set, ACT_FINISH_D in period, status finished/history
-    // Remaining per period: PMSched for calibration PM where DUEDATE in period and (no WO or WO not finished)
+    // Source of truth: dbo.PMSched where PMCODE contains '-CAL', not frozen, not deleted.
+    // Finished  = schedule row where WOStatusNo = 9 (on PMSched itself) OR linked WO.WOSTATUSNO = 9.
+    // Remaining = all other rows in the same period window.
+    // WONo = 0 means "no WO created yet" (not NULL), so we treat WONo <= 0 as absent.
+    // Period is derived via IgxDateDim on DUEDATE.
     const query = `
       WITH Periods AS (
         SELECT 1 AS PeriodNo UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6
         UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10 UNION SELECT 11 UNION SELECT 12 UNION SELECT 13
       ),
-      CompanyYearParam AS (SELECT CAST(@CompanyYear AS INT) AS cy),
-      -- Finished: WO with WOTYPENO=5, status 7 or 9, by assignee and period of ACT_FINISH_D
-      FinishedCTE AS (
+      CalSched AS (
         SELECT
-          wo.ASSIGN AS assigneeId,
-          p.PERSON_NAME AS assigneeName,
-          dd.CompanyYear,
+          pm.ASSIGN         AS assigneeId,
+          p.PERSON_NAME     AS assigneeName,
           dd.PeriodNo,
-          COUNT(*) AS finished
-        FROM dbo.WO wo
-        INNER JOIN dbo.IgxDateDim dd ON dd.DateKey = ${actFinishExpr}
-          AND dd.CompanyYear = (SELECT cy FROM CompanyYearParam)
-        LEFT JOIN dbo.Person p ON p.PERSONNO = wo.ASSIGN
-        WHERE wo.WOTYPENO = ${WO_TYPE_CALIBRATION}
-          AND wo.ASSIGN IS NOT NULL AND wo.ASSIGN <> 0
-          AND wo.WOSTATUSNO IN (7, 9)
-          AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
-          AND (@AssigneeId IS NULL OR wo.ASSIGN = @AssigneeId)
-        GROUP BY wo.ASSIGN, p.PERSON_NAME, dd.CompanyYear, dd.PeriodNo
-      ),
-      -- Remaining: PMSched for calibration PM, DUEDATE in period, (WONo IS NULL or WO not finished)
-      RemainingCTE AS (
-        SELECT
-          COALESCE(wo.ASSIGN, pm.ASSIGN) AS assigneeId,
-          p.PERSON_NAME AS assigneeName,
-          dd.CompanyYear,
-          dd.PeriodNo,
-          COUNT(*) AS remaining
+          CASE
+            WHEN s.WOStatusNo = 9 THEN 1
+            WHEN s.WONo > 0 AND wo.WOSTATUSNO = 9 THEN 1
+            ELSE 0
+          END AS isFinished
         FROM dbo.PMSched s
-        INNER JOIN dbo.PM pm ON pm.PMNO = s.PMNO AND pm.WOTYPENO = ${WO_TYPE_CALIBRATION}
-          AND (pm.FLAGDEL IS NULL OR pm.FLAGDEL <> 'Y')
-        INNER JOIN dbo.IgxDateDim dd ON dd.DateKey = ${dueDateExpr}
-          AND dd.CompanyYear = (SELECT cy FROM CompanyYearParam)
-        LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo
-        LEFT JOIN dbo.Person p ON p.PERSONNO = COALESCE(wo.ASSIGN, pm.ASSIGN)
-        WHERE (s.WONo IS NULL OR (wo.WOSTATUSNO NOT IN (7, 9) AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')))
-          AND (COALESCE(wo.ASSIGN, pm.ASSIGN) IS NOT NULL AND COALESCE(wo.ASSIGN, pm.ASSIGN) <> 0)
-          AND (@AssigneeId IS NULL OR COALESCE(wo.ASSIGN, pm.ASSIGN) = @AssigneeId)
-          AND s.YearNo = (SELECT cy FROM CompanyYearParam)
-        GROUP BY COALESCE(wo.ASSIGN, pm.ASSIGN), p.PERSON_NAME, dd.CompanyYear, dd.PeriodNo
+        INNER JOIN dbo.PM pm
+          ON  pm.PMNO    = s.PMNO
+          AND pm.PMCODE LIKE '%-CAL%'
+          AND (pm.FREEZE  IS NULL OR LTRIM(RTRIM(pm.FREEZE))  <> 'T')
+          AND (pm.FLAGDEL IS NULL OR LTRIM(RTRIM(pm.FLAGDEL)) <> 'T')
+        INNER JOIN dbo.IgxDateDim dd
+          ON  dd.DateKey      = ${dueDateExpr}
+          AND dd.CompanyYear  = @CompanyYear
+        LEFT JOIN dbo.WO wo
+          ON  wo.WONO    = s.WONo
+          AND s.WONo     > 0
+          AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
+        LEFT JOIN dbo.Person p ON p.PERSONNO = pm.ASSIGN
+        WHERE pm.ASSIGN IS NOT NULL
+          AND pm.ASSIGN <> 0
+          AND (@AssigneeId IS NULL OR pm.ASSIGN = @AssigneeId)
+      ),
+      FinishedCTE AS (
+        SELECT assigneeId, assigneeName, PeriodNo, COUNT(*) AS finished
+        FROM CalSched WHERE isFinished = 1
+        GROUP BY assigneeId, assigneeName, PeriodNo
+      ),
+      RemainingCTE AS (
+        SELECT assigneeId, assigneeName, PeriodNo, COUNT(*) AS remaining
+        FROM CalSched WHERE isFinished = 0
+        GROUP BY assigneeId, assigneeName, PeriodNo
       ),
       AllAssignees AS (
         SELECT assigneeId, assigneeName FROM FinishedCTE
@@ -101,13 +106,14 @@ exports.getPersonPeriodSummary = async (req, res) => {
         a.assigneeName,
         pr.PeriodNo,
         'P' + CAST(pr.PeriodNo AS VARCHAR(10)) AS period,
-        ISNULL(f.finished, 0) AS finished,
+        ISNULL(f.finished,  0) AS finished,
         ISNULL(r.remaining, 0) AS remaining
-      FROM AllAssignees a
-      CROSS JOIN Periods pr
-      LEFT JOIN FinishedCTE f ON f.assigneeId = a.assigneeId AND f.PeriodNo = pr.PeriodNo
-      LEFT JOIN RemainingCTE r ON r.assigneeId = a.assigneeId AND r.PeriodNo = pr.PeriodNo
-      ORDER BY a.assigneeName, pr.PeriodNo
+      FROM   AllAssignees a
+      CROSS  JOIN Periods pr
+      LEFT   JOIN FinishedCTE  f ON f.assigneeId = a.assigneeId AND f.PeriodNo = pr.PeriodNo
+      LEFT   JOIN RemainingCTE r ON r.assigneeId = a.assigneeId AND r.PeriodNo = pr.PeriodNo
+      WHERE  ISNULL(f.finished, 0) + ISNULL(r.remaining, 0) > 0
+      ORDER  BY a.assigneeName, pr.PeriodNo
     `;
 
     const request = pool.request();
@@ -117,7 +123,6 @@ exports.getPersonPeriodSummary = async (req, res) => {
     const result = await request.query(query);
     const rows = result.recordset || [];
 
-    // Group by assignee
     const byAssignee = new Map();
     for (const row of rows) {
       const key = row.assigneeId;
@@ -125,14 +130,14 @@ exports.getPersonPeriodSummary = async (req, res) => {
         byAssignee.set(key, {
           assigneeId: row.assigneeId,
           assigneeName: row.assigneeName || `User ${row.assigneeId}`,
-          periods: []
+          periods: [],
         });
       }
       byAssignee.get(key).periods.push({
         period: row.period,
         periodNo: row.PeriodNo,
         finished: row.finished,
-        remaining: row.remaining
+        remaining: row.remaining,
       });
     }
 
@@ -140,15 +145,15 @@ exports.getPersonPeriodSummary = async (req, res) => {
       success: true,
       data: {
         assignees: Array.from(byAssignee.values()),
-        companyYear: companyYear ? parseInt(companyYear, 10) : null
-      }
+        companyYear: companyYear ? parseInt(companyYear, 10) : null,
+      },
     });
   } catch (error) {
     console.error('Error in getPersonPeriodSummary:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch calibration person-period summary',
-      error: error.message
+      error: error.message,
     });
   }
 };
@@ -178,6 +183,7 @@ exports.getIncoming = async (req, res) => {
       FROM dbo.PMSched s
       INNER JOIN dbo.PM p ON p.PMNO = s.PMNO AND p.WOTYPENO = ${WO_TYPE_CALIBRATION}
         AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
+        AND ${pmNotFrozen('p')}
       LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo
       WHERE ${dueExpr} >= CAST(GETDATE() AS DATE)
         AND ${dueExpr} <= DATEADD(day, @Days, CAST(GETDATE() AS DATE))
@@ -205,6 +211,7 @@ exports.getIncoming = async (req, res) => {
         FROM dbo.PMSched s
         INNER JOIN dbo.PM p ON p.PMNO = s.PMNO AND p.WOTYPENO = ${WO_TYPE_CALIBRATION}
           AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
+          AND ${pmNotFrozen('p')}
         LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo
         WHERE ${dueExpr} >= CAST(GETDATE() AS DATE)
           AND ${dueExpr} <= DATEADD(day, @Days, CAST(GETDATE() AS DATE))
@@ -268,6 +275,7 @@ exports.getLate = async (req, res) => {
       FROM dbo.PMSched s
       INNER JOIN dbo.PM p ON p.PMNO = s.PMNO AND p.WOTYPENO = ${WO_TYPE_CALIBRATION}
         AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
+        AND ${pmNotFrozen('p')}
       LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo
       WHERE ${dueExpr} >= DATEADD(day, -7, CAST(GETDATE() AS DATE))
         AND ${dueExpr} < CAST(GETDATE() AS DATE)
@@ -297,6 +305,7 @@ exports.getLate = async (req, res) => {
         FROM dbo.PMSched s
         INNER JOIN dbo.PM p ON p.PMNO = s.PMNO AND p.WOTYPENO = ${WO_TYPE_CALIBRATION}
           AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
+          AND ${pmNotFrozen('p')}
         LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo
         WHERE ${dueExpr} >= DATEADD(day, -7, CAST(GETDATE() AS DATE))
           AND ${dueExpr} < CAST(GETDATE() AS DATE)
@@ -357,6 +366,7 @@ exports.getDueSoon = async (req, res) => {
       FROM dbo.PMSched s
       INNER JOIN dbo.PM p ON p.PMNO = s.PMNO AND p.WOTYPENO = ${WO_TYPE_CALIBRATION}
         AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
+        AND ${pmNotFrozen('p')}
       LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo
       WHERE ${dueExpr} > DATEADD(day, 7, CAST(GETDATE() AS DATE))
         AND ${dueExpr} <= DATEADD(day, 14, CAST(GETDATE() AS DATE))
@@ -384,6 +394,7 @@ exports.getDueSoon = async (req, res) => {
         FROM dbo.PMSched s
         INNER JOIN dbo.PM p ON p.PMNO = s.PMNO AND p.WOTYPENO = ${WO_TYPE_CALIBRATION}
           AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
+          AND ${pmNotFrozen('p')}
         LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo
         WHERE ${dueExpr} > DATEADD(day, 7, CAST(GETDATE() AS DATE))
           AND ${dueExpr} <= DATEADD(day, 14, CAST(GETDATE() AS DATE))
@@ -444,6 +455,7 @@ exports.getOverdue = async (req, res) => {
       FROM dbo.PMSched s
       INNER JOIN dbo.PM p ON p.PMNO = s.PMNO AND p.WOTYPENO = ${WO_TYPE_CALIBRATION}
         AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
+        AND ${pmNotFrozen('p')}
       LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo
       WHERE ${dueExpr} < DATEADD(day, -7, CAST(GETDATE() AS DATE))
         ${yearFilter}
@@ -471,6 +483,7 @@ exports.getOverdue = async (req, res) => {
         FROM dbo.PMSched s
         INNER JOIN dbo.PM p ON p.PMNO = s.PMNO AND p.WOTYPENO = ${WO_TYPE_CALIBRATION}
           AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
+          AND ${pmNotFrozen('p')}
         LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo
         WHERE ${dueExpr} < DATEADD(day, -7, CAST(GETDATE() AS DATE))
           ${yearFilter}
@@ -524,7 +537,8 @@ exports.getJobs = async (req, res) => {
 
     const pool = await sql.connect(dbConfig);
 
-    let whereClause = ` WHERE wo.WOTYPENO = ${WO_TYPE_CALIBRATION} AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')`;
+    let whereClause = ` WHERE wo.WOTYPENO = ${WO_TYPE_CALIBRATION} AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
+      AND (wo.PMNO IS NULL OR pm.PMNO IS NULL OR ${pmNotFrozen('pm')})`;
 
     const addInputs = (req) => {
       if (search) req.input('Search', sql.NVarChar(100), `%${search}%`);
@@ -554,6 +568,7 @@ exports.getJobs = async (req, res) => {
     addInputs(countRequest);
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total FROM dbo.WO wo
+      LEFT JOIN dbo.PM pm ON pm.PMNO = wo.PMNO
       LEFT JOIN dbo.Person p ON p.PERSONNO = wo.ASSIGN
       ${whereClause}
     `);
@@ -578,6 +593,7 @@ exports.getJobs = async (req, res) => {
           p.PERSON_NAME AS assigneeName,
           ROW_NUMBER() OVER (ORDER BY wo.WODATE DESC, wo.WONO DESC) AS RowNum
         FROM dbo.WO wo
+        LEFT JOIN dbo.PM pm ON pm.PMNO = wo.PMNO
         LEFT JOIN dbo.Person p ON p.PERSONNO = wo.ASSIGN
         ${whereClause}
       ) AS Ordered
@@ -625,6 +641,7 @@ exports.getPmPlans = async (req, res) => {
       SELECT COUNT(*) AS total FROM dbo.PM pm
       WHERE pm.WOTYPENO = ${WO_TYPE_CALIBRATION}
         AND (pm.FLAGDEL IS NULL OR pm.FLAGDEL <> 'Y')
+        AND ${pmNotFrozen('pm')}
     `);
     const total = countResult.recordset[0]?.total || 0;
 
@@ -648,6 +665,7 @@ exports.getPmPlans = async (req, res) => {
         FROM dbo.PM pm
         WHERE pm.WOTYPENO = ${WO_TYPE_CALIBRATION}
           AND (pm.FLAGDEL IS NULL OR pm.FLAGDEL <> 'Y')
+          AND ${pmNotFrozen('pm')}
       ) AS Ordered
       WHERE RowNum >= @StartRow AND RowNum <= @EndRow
     `);

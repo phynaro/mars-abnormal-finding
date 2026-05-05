@@ -16,6 +16,7 @@ import HomePage from './pages/home/HomePage';
 import DashboardMaintenanceKPIPage from './pages/dashboard/DashboardMaintenanceKPIPage';
 import DashboardPreventiveMaintenancePage from './pages/dashboard/DashboardPreventiveMaintenancePage';
 import DashboardCalibrationPage from './pages/dashboard/DashboardCalibrationPage';
+import DashboardCalibrationV2Page from './pages/dashboard/DashboardCalibrationV2Page';
 import DashboardMCCPage from './pages/dashboard/DashboardMCCPage';
 import DashboardSparePartPage from './pages/dashboard/DashboardSparePartPage';
 import DashboardBacklogPage from './pages/dashboard/DashboardBacklogPage';
@@ -227,6 +228,7 @@ const AppContent: React.FC = () => {
           <Route path="dashboard/maintenance-kpi" element={<DashboardMaintenanceKPIPage />} />
           <Route path="dashboard/preventive-maintenance" element={<DashboardPreventiveMaintenancePage />} />
           <Route path="dashboard/calibration" element={<DashboardCalibrationPage />} />
+          <Route path="dashboard/calibration-v2" element={<DashboardCalibrationV2Page />} />
           <Route path="dashboard/mcc" element={<DashboardMCCPage />} />
           <Route path="dashboard/spare-part" element={<DashboardSparePartPage />} />
           <Route path="dashboard/backlog" element={<DashboardBacklogPage />} />
