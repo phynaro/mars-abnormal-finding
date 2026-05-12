@@ -1126,8 +1126,10 @@ const TicketDetailsPage: React.FC = () => {
                   </Button>
                 </>
               )}
-            {/* Approve Review button - Creator can approve review when ticket is finished */}
-            {isCreator && ticket.status === "finished" && (
+            {/* Approve Review button - Creator can approve review when ticket is finished or review escalated */}
+            {isCreator &&
+              (ticket.status === "finished" ||
+                ticket.status === "review_escalated") && (
               <>
                 <Button onClick={() => openAction("approve-review")}>
                   {t('ticket.approveReview')}
@@ -3062,8 +3064,10 @@ const TicketDetailsPage: React.FC = () => {
                   </Button>
                 </>
               )}
-            {/* Approve Review button - Creator can approve review when ticket is finished */}
-            {isCreator && ticket.status === "finished" && (
+            {/* Approve Review button - Creator can approve review when ticket is finished or review escalated */}
+            {isCreator &&
+              (ticket.status === "finished" ||
+                ticket.status === "review_escalated") && (
               <>
                 <Button onClick={() => openAction("approve-review")} size="sm" className="shadow-lg w-auto whitespace-nowrap">
                   <Star className="mr-2 h-4 w-4" /> {t('ticket.approveReview')}

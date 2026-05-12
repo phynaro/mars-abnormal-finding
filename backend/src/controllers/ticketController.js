@@ -3869,11 +3869,12 @@ const approveReview = async (req, res) => {
 
     // Requester automatically has permission (implicit L1), no need to check approval table
 
-    // Check if ticket is in Finished status
-    if (ticket.status !== "finished") {
+    // Check if ticket is in a status eligible for requestor review approval
+    if (!["finished", "review_escalated"].includes(ticket.status)) {
       return res.status(400).json({
         success: false,
-        message: "Only Finished tickets can be reviewed",
+        message:
+          "Only Finished or Review Escalated tickets can be reviewed",
       });
     }
 

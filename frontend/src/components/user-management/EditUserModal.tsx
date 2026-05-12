@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import userManagementService from '@/services/userManagementService';
 import type { UpdateUserData, User } from '../../services/userManagementService';
 
 interface Department {
@@ -39,7 +40,12 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     dbNo: user.dbNo
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [error, setError] = useState<string>('');
+  const [passwordError, setPasswordError] = useState<string>('');
+  const [passwordSuccess, setPasswordSuccess] = useState<string>('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   useEffect(() => {
     setFormData({
@@ -79,6 +85,38 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleResetPassword = async () => {
+    setPasswordError('');
+    setPasswordSuccess('');
+
+    if (!newPassword || !confirmPassword) {
+      setPasswordError('Please enter and confirm the new password');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New password and confirm password do not match');
+      return;
+    }
+
+    if (newPassword.length < 4) {
+      setPasswordError('Password must be at least 4 characters');
+      return;
+    }
+
+    setIsResettingPassword(true);
+    try {
+      await userManagementService.resetUserPassword(user.userId, newPassword);
+      setPasswordSuccess('Password reset successfully');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (resetError) {
+      setPasswordError(resetError instanceof Error ? resetError.message : 'Failed to reset password');
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[9850]">
       <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -100,6 +138,51 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               <div className="bg-gray-50 p-3 rounded">
                 <p className="text-sm text-gray-600">User ID: <span className="font-semibold text-gray-900">{user.userId}</span></p>
                 <p className="text-xs text-gray-500 mt-1">User ID cannot be changed</p>
+              </div>
+              <div className="space-y-3 border rounded-md p-4">
+                <p className="text-sm font-medium">Admin Password Reset</p>
+                {passwordError && (
+                  <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                    {passwordError}
+                  </div>
+                )}
+                {passwordSuccess && (
+                  <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded text-sm">
+                    {passwordSuccess}
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="Enter new password"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <Input
+                      id="confirmPassword"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm new password"
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={handleResetPassword}
+                    disabled={isResettingPassword || isSubmitting}
+                  >
+                    {isResettingPassword ? 'Resetting...' : 'Reset Password'}
+                  </Button>
+                </div>
               </div>
             </div>
 
