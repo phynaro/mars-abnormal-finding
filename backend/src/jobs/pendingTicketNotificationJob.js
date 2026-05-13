@@ -40,16 +40,20 @@ class PendingTicketNotificationJob {
         this.currentTask = null;
       }
 
-      // Get schedule from database
       const pool = await sql.connect(dbConfig);
-      const result = await pool.request().query(`
-        SELECT TOP 1 
-          schedule_cron, 
-          timezone, 
-          is_enabled
-        FROM IgxNotificationSchedule
-        WHERE notification_type = 'pending_tickets'
-      `);
+      let result;
+      try {
+        result = await pool.request().query(`
+          SELECT TOP 1
+            schedule_cron,
+            timezone,
+            is_enabled
+          FROM IgxNotificationSchedule
+          WHERE notification_type = 'pending_tickets'
+        `);
+      } finally {
+        await pool.close();
+      }
 
       if (result.recordset.length === 0) {
         console.log('⚠️  No pending tickets notification schedule found in database');

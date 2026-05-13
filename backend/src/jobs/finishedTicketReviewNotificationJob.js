@@ -40,14 +40,19 @@ class FinishedTicketReviewNotificationJob {
       }
 
       const pool = await sql.connect(dbConfig);
-      const result = await pool.request().query(`
-        SELECT TOP 1
-          schedule_cron,
-          timezone,
-          is_enabled
-        FROM IgxNotificationSchedule
-        WHERE notification_type = 'finished_ticket_review'
-      `);
+      let result;
+      try {
+        result = await pool.request().query(`
+          SELECT TOP 1
+            schedule_cron,
+            timezone,
+            is_enabled
+          FROM IgxNotificationSchedule
+          WHERE notification_type = 'finished_ticket_review'
+        `);
+      } finally {
+        await pool.close();
+      }
 
       if (result.recordset.length === 0) {
         console.log('⚠️  No finished ticket review notification schedule found in database');

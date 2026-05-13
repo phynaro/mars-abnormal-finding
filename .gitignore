@@ -112,3 +112,4 @@ helps/
 mars-images-*.tar.gz
 mars-images-latest.tar.gz
 nul
+.claude/

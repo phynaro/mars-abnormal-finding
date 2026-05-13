@@ -48,6 +48,7 @@ import workorderVolumeService from '@/services/dashboard/workorderVolumeService'
 import CalibrationBigCalendar from '@/components/dashboard/calibration/CalibrationBigCalendar';
 import CalibrationUserEventModal from '@/components/dashboard/calibration/CalibrationUserEventModal';
 import PmScheduleDetailModal from '@/components/dashboard/calibration/PmScheduleDetailModal';
+import CalibrationOverduePanel from '@/components/dashboard/calibration/CalibrationOverduePanel';
 import {
   ClipboardList,
   CheckCircle2,
@@ -63,6 +64,7 @@ import {
   Pencil,
   PieChart as PieChartIcon,
   Trash2,
+  AlertTriangle,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, Tooltip,
@@ -82,7 +84,7 @@ import {
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
-type TabKey = 'overview' | 'equipment-types' | 'team' | 'calendar' | 'user-events';
+type TabKey = 'overview' | 'equipment-types' | 'team' | 'calendar' | 'user-events' | 'overdue';
 type TimeFilterKey = 'this-year' | 'this-period' | 'select-period';
 
 interface FilterPending {
@@ -1556,6 +1558,10 @@ const DashboardCalibrationV2Page: React.FC = () => {
             <CalendarDays className="h-4 w-4" />
             {t('dashboard.calibrationV2.tab.userEvents')}
           </TabsTrigger>
+          <TabsTrigger value="overdue" className="gap-1.5 text-sm text-destructive data-[state=active]:text-destructive">
+            <AlertTriangle className="h-4 w-4" />
+            Overdue
+          </TabsTrigger>
         </TabsList>
 
         {/* Overview */}
@@ -1583,6 +1589,11 @@ const DashboardCalibrationV2Page: React.FC = () => {
         {/* User events */}
         <TabsContent value="user-events" className="mt-0">
           {renderUserEventsTab()}
+        </TabsContent>
+
+        {/* Overdue */}
+        <TabsContent value="overdue" className="mt-0">
+          <CalibrationOverduePanel />
         </TabsContent>
       </Tabs>
 

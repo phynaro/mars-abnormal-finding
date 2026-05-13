@@ -5,7 +5,11 @@
  */
 
 const path = require('path');
-require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+if (process.env.NODE_ENV === 'development') {
+  require('dotenv').config({ path: path.join(__dirname, '../../.env.development') });
+} else {
+  require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+}
 
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
@@ -18,6 +22,7 @@ const dueDateNotificationService = require('../services/dueDateNotificationServi
 const oldOpenTicketNotificationService = require('../services/oldOpenTicketNotificationService');
 const finishedTicketReviewNotificationService = require('../services/finishedTicketReviewNotificationService');
 const reviewEscalationNotificationService = require('../services/reviewEscalationNotificationService');
+const calibrationDueDateNotificationService = require('../services/calibrationDueDateNotificationService');
 
 /** Timestamped log helpers */
 const ts = () => new Date().toISOString();
@@ -44,6 +49,7 @@ const JOB_NAME_SCHEDULE_DUE_DATE = notificationQueue.JOB_NAME_SCHEDULE_DUE_DATE;
 const JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS = notificationQueue.JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS;
 const JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW = notificationQueue.JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW;
 const JOB_NAME_SCHEDULE_REVIEW_ESCALATION = notificationQueue.JOB_NAME_SCHEDULE_REVIEW_ESCALATION;
+const JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE = notificationQueue.JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE;
 
 const connection = process.env.REDIS_URL
   ? { url: process.env.REDIS_URL }
@@ -579,8 +585,9 @@ async function processAssignmentTicketNotification(job) {
  * @returns {Promise<Object>} - Service result
  */
 async function runScheduleNotification(notificationType, serviceMethod, isRetry = false) {
-  const pool = await sql.connect(dbConfig);
+  let pool;
   try {
+    pool = await sql.connect(dbConfig);
     await pool.request()
       .input('type', sql.VarChar(50), notificationType)
       .query(`
@@ -621,15 +628,13 @@ async function runScheduleNotification(notificationType, serviceMethod, isRetry 
     return result;
   } catch (err) {
     if (!isRetry && err && err.message && String(err.message).includes('Connection is closed')) {
-      try {
-        await pool.close();
-      } catch (_) {}
+      if (pool) { try { await pool.close(); } catch (_) {} pool = null; }
       log('[Worker] Schedule job got Connection is closed, retrying once with fresh DB connection');
       return runScheduleNotification(notificationType, serviceMethod, true);
     }
     throw err;
   } finally {
-    await pool.close();
+    if (pool) { try { await pool.close(); } catch (_) {} }
   }
 }
 
@@ -680,6 +685,16 @@ async function processScheduleReviewEscalation(job) {
     reviewEscalationNotificationService.sendNotifications()
   );
   log(`✅ [Worker] Schedule review-escalation completed:`, result);
+  return result;
+}
+
+async function processScheduleCalibrationDueDate(job) {
+  const { notification_type = 'calibration_due_date' } = job.data;
+  log(`⏰ [Worker] Running schedule job: ${notification_type}`);
+  const result = await runScheduleNotification(notification_type, () =>
+    calibrationDueDateNotificationService.sendToAllUsers()
+  );
+  log(`✅ [Worker] Schedule calibration-due-date completed:`, result);
   return result;
 }
 
@@ -754,6 +769,10 @@ async function processor(job) {
   }
   if (job.name === JOB_NAME_SCHEDULE_REVIEW_ESCALATION) {
     await processScheduleReviewEscalation(job);
+    return;
+  }
+  if (job.name === JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE) {
+    await processScheduleCalibrationDueDate(job);
     return;
   }
   warn(`[Worker] Unknown job name: ${job.name}`);

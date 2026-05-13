@@ -122,7 +122,8 @@ const NOTIFICATION_TEST_ENQUEUERS = {
   old_open_tickets: (payload) => notificationQueue.addScheduleOldOpenTicketsJob(payload),
   due_date_reminder: (payload) => notificationQueue.addScheduleDueDateJob(payload),
   finished_ticket_review: (payload) => notificationQueue.addScheduleFinishedTicketReviewJob(payload),
-  review_escalation: (payload) => notificationQueue.addScheduleReviewEscalationJob(payload)
+  review_escalation: (payload) => notificationQueue.addScheduleReviewEscalationJob(payload),
+  calibration_due_date: (payload) => notificationQueue.addScheduleCalibrationDueDateJob(payload),
 };
 
 /**
@@ -145,7 +146,7 @@ const testNotification = async (req, res) => {
     if (!enqueuer) {
       return res.status(400).json({
         success: false,
-        message: `Unknown notification_type: ${notification_type}. Supported: pending_tickets, old_open_tickets, due_date_reminder, finished_ticket_review, review_escalation`
+        message: `Unknown notification_type: ${notification_type}. Supported: pending_tickets, old_open_tickets, due_date_reminder, finished_ticket_review, review_escalation, calibration_due_date`
       });
     }
 

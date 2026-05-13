@@ -229,6 +229,7 @@ const oldOpenTicketNotificationJob = require('./jobs/oldOpenTicketNotificationJo
 const dueDateNotificationJob = require('./jobs/dueDateNotificationJob');
 const finishedTicketReviewNotificationJob = require('./jobs/finishedTicketReviewNotificationJob');
 const reviewEscalationNotificationJob = require('./jobs/reviewEscalationNotificationJob');
+const calibrationDueDateNotificationJob = require('./jobs/calibrationDueDateNotificationJob');
 
 // Start server
 app.listen(PORT, async () => {
@@ -267,6 +268,12 @@ app.listen(PORT, async () => {
     await reviewEscalationNotificationJob.initialize();
   } else {
     console.log('⚠️  Review escalation notifications are disabled via environment variable');
+  }
+
+  if (process.env.ENABLE_CALIBRATION_DUE_DATE_NOTIFICATIONS !== 'false') {
+    await calibrationDueDateNotificationJob.initialize();
+  } else {
+    console.log('⚠️  Calibration due-date notifications are disabled via environment variable');
   }
 });
 

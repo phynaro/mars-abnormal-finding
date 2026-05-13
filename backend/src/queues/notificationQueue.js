@@ -24,9 +24,9 @@ const JOB_NAME_SCHEDULE_DUE_DATE = 'schedule-due-date';
 const JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS = 'schedule-old-open-tickets';
 const JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW = 'schedule-finished-ticket-review';
 const JOB_NAME_SCHEDULE_REVIEW_ESCALATION = 'schedule-review-escalation';
+const JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE = 'schedule-calibration-due-date';
 
 let queue = null;
-let connectionFailed = false;
 
 function getConnection() {
   const url = process.env.REDIS_URL || 'redis://localhost:6379';
@@ -35,7 +35,6 @@ function getConnection() {
 
 function getQueue() {
   if (queue) return queue;
-  if (connectionFailed) return null;
   try {
     const connection = getConnection();
     queue = new Queue(QUEUE_NAME, {
@@ -43,7 +42,6 @@ function getQueue() {
     });
     return queue;
   } catch (err) {
-    connectionFailed = true;
     console.warn('Notification queue: Redis connection failed, notifications will be skipped:', err.message);
     return null;
   }
@@ -283,6 +281,23 @@ async function addScheduleReviewEscalationJob(payload) {
   }
 }
 
+async function addScheduleCalibrationDueDateJob(payload) {
+  const q = getQueue();
+  if (!q) return null;
+  try {
+    const job = await q.add(JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE, payload || { notification_type: 'calibration_due_date' }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: { count: 1000 },
+    });
+    console.log(`📬 Enqueued schedule job ${job.id} (schedule-calibration-due-date)`);
+    return job.id;
+  } catch (err) {
+    console.error('Failed to enqueue schedule-calibration-due-date:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   addCreateTicketNotificationJob,
   addAcceptTicketNotificationJob,
@@ -302,6 +317,7 @@ module.exports = {
   addScheduleOldOpenTicketsJob,
   addScheduleFinishedTicketReviewJob,
   addScheduleReviewEscalationJob,
+  addScheduleCalibrationDueDateJob,
   QUEUE_NAME,
   JOB_NAME_CREATE_TICKET,
   JOB_NAME_ACCEPT_TICKET,
@@ -321,4 +337,5 @@ module.exports = {
   JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS,
   JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW,
   JOB_NAME_SCHEDULE_REVIEW_ESCALATION,
+  JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE,
 };
