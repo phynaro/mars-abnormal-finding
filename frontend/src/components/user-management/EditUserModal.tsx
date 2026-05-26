@@ -99,11 +99,6 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       return;
     }
 
-    if (newPassword.length < 4) {
-      setPasswordError('Password must be at least 4 characters');
-      return;
-    }
-
     setIsResettingPassword(true);
     try {
       await userManagementService.resetUserPassword(user.userId, newPassword);
