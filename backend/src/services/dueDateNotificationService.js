@@ -172,7 +172,7 @@ class DueDateNotificationService {
       const result = await pool.request().query(`
         SELECT DISTINCT
           p.PERSONNO,
-          p.PERSON_NAME,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
           ue.LineID
         FROM IgxTickets t
         INNER JOIN Person p ON t.assigned_to = p.PERSONNO
@@ -320,7 +320,7 @@ class DueDateNotificationService {
         .request()
         .input('userId', sql.Int, userId)
         .query(`
-          SELECT p.PERSONNO, p.PERSON_NAME, ue.LineID
+          SELECT p.PERSONNO, ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME, ue.LineID
           FROM Person p
           LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
           LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID

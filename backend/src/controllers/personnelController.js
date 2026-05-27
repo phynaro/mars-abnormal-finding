@@ -22,7 +22,7 @@ class PersonnelController {
       
       // Add search functionality
       if (search) {
-        const searchCondition = `(p.PERSONCODE LIKE @search OR p.FIRSTNAME LIKE @search OR p.LASTNAME LIKE @search OR p.PERSON_NAME LIKE @search OR p.EMAIL LIKE @search)`;
+        const searchCondition = `(p.PERSONCODE LIKE @search OR p.FIRSTNAME LIKE @search OR p.LASTNAME LIKE @search OR p.EMAIL LIKE @search)`;
         whereClause = whereClause ? `${whereClause} AND ${searchCondition}` : `WHERE ${searchCondition}`;
         params.push({ name: 'search', type: sql.NVarChar, value: `%${search}%` });
       }
@@ -582,14 +582,14 @@ class PersonnelController {
             p.PERSONCODE,
             p.FIRSTNAME,
             p.LASTNAME,
-            p.PERSON_NAME,
+            ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
             p.EMAIL,
             p.PHONE,
             d.DEPTNAME,
             d.DEPTCODE,
             t.TITLENAME,
             t.TITLECODE,
-            ROW_NUMBER() OVER (ORDER BY p.PERSON_NAME) as row_num
+            ROW_NUMBER() OVER (ORDER BY p.FIRSTNAME, p.LASTNAME) as row_num
           FROM USERGROUP_MEMBER ugm
           INNER JOIN Person p ON ugm.PERSON = p.PERSONNO
           LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO

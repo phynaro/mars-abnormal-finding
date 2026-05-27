@@ -97,7 +97,6 @@ const ProductionUnitPage: React.FC = () => {
                   <th className="px-4 py-2">Type</th>
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Dept</th>
-                  <th className="px-4 py-2">Site</th>
                 </tr>
               </thead>
               <tbody>
@@ -109,7 +108,6 @@ const ProductionUnitPage: React.FC = () => {
                     <td className="px-4 py-2">{pu.PUTYPENAME ?? '-'}</td>
                     <td className="px-4 py-2"><StatusBadge status={pu.PUSTATUSNAME} /></td>
                     <td className="px-4 py-2">{pu.DEPTNAME ?? '-'}</td>
-                    <td className="px-4 py-2">{pu.SiteName ?? '-'}</td>
                   </tr>
                 ))}
               </tbody>
@@ -126,7 +124,7 @@ const ProductionUnitPage: React.FC = () => {
                 </div>
                 <div className="text-xs text-muted-foreground">Code: {pu.PUCODE}</div>
                 <div className="text-xs text-muted-foreground">Type: {pu.PUTYPENAME ?? '-'}</div>
-                <div className="text-xs text-muted-foreground">{pu.DEPTNAME ?? '-'} • {pu.SiteName ?? '-'}</div>
+                <div className="text-xs text-muted-foreground">{pu.DEPTNAME ?? '-'}</div>
               </Card>
             ))}
           </div>

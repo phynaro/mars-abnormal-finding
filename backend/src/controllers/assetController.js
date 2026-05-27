@@ -49,10 +49,10 @@ const getDepartments = async (req, res) => {
     const result = await pool.request()
       .input('siteNo', sql.Int, siteNo)
       .query(`
-        SELECT DEPTNO, DEPTCODE, DEPTNAME, DEPTPARENT, HIERARCHYNO, CURR_LEVEL, SiteNo
-        FROM Dept 
+        SELECT DEPTNO, DEPTCODE, DEPTNAME, SiteNo
+        FROM Dept
         WHERE FLAGDEL = 'F' AND SiteNo = @siteNo
-        ORDER BY HIERARCHYNO, DEPTNAME
+        ORDER BY DEPTNAME
       `);
 
     res.json({
@@ -121,22 +121,17 @@ const getProductionUnits = async (req, res) => {
     const result = await request.query(`
       SELECT *
       FROM (
-        SELECT 
-          p.PUNO, p.PUCODE, p.PUNAME, p.PUPARENT, p.PUREFCODE,
-          p.PULOCATION, p.LATITUDE, p.LONGITUDE, p.IMG, p.NOTE,
-          p.HIERARCHYNO, p.CURR_LEVEL, p.TEXT1, p.TEXT2, p.TEXT3,
-          pt.PUTYPENAME, pt.PUTYPECODE,
-          ps.PUSTATUSNAME, ps.PUSTATUSCODE,
-          s.SiteName, s.SiteCode,
-          d.DEPTNAME, d.DEPTCODE,
-          pg.PUGROUPNAME,
-          ROW_NUMBER() OVER (ORDER BY p.HIERARCHYNO, p.PUCODE) as row_num
+        SELECT
+          p.PUNO, p.PUCODE, p.PUNAME,
+          p.PULOCATION, p.LATITUDE, p.LONGITUDE,
+          pt.PUTYPENAME,
+          ps.PUSTATUSNAME,
+          d.DEPTNAME,
+          ROW_NUMBER() OVER (ORDER BY p.PUCODE) as row_num
         FROM PU p
         LEFT JOIN PUType pt ON p.PUTYPENO = pt.PUTYPENO
         LEFT JOIN PUStatus ps ON p.PUSTATUSNO = ps.PUSTATUSNO
-        LEFT JOIN Site s ON p.SiteNo = s.SiteNo
         LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
-        LEFT JOIN PUGroup pg ON p.PUGROUPNO = pg.PUGROUPNO
         ${whereClause}
       ) AS paginated_results
       WHERE row_num > @offset AND row_num <= @offset + @limit
@@ -227,29 +222,21 @@ const getEquipment = async (req, res) => {
     const result = await request.query(`
       SELECT *
       FROM (
-        SELECT 
-          e.EQNO, e.EQCODE, e.EQNAME, e.EQPARENT, e.EQREFCODE,
-          e.ASSETNO, e.EQMODEL, e.EQSERIALNO, e.EQBrand,
-          e.Location, e.Room, e.IMG, e.NOTE,
-          e.HIERARCHYNO, e.CURR_LEVEL,
-          e.EQ_SPEC_DATA1, e.EQ_SPEC_DATA2, e.EQ_SPEC_DATA3, e.EQ_SPEC_DATA4, e.EQ_SPEC_DATA5,
+        SELECT
+          e.EQNO, e.EQCODE, e.EQNAME,
+          e.ASSETNO, e.Location, e.Room,
           p.PUCODE, p.PUNAME,
-          et.EQTYPENAME, et.EQTYPECODE,
-          es.EQSTATUSNAME, es.EQSTATUSCODE,
-          s.SiteName, s.SiteCode,
-          d_own.DEPTNAME as OwnerDeptName, d_own.DEPTCODE as OwnerDeptCode,
-          d_maint.DEPTNAME as MaintDeptName, d_maint.DEPTCODE as MaintDeptCode,
-          b.BUILDINGNAME, f.FLOORNAME,
-          ROW_NUMBER() OVER (ORDER BY e.HIERARCHYNO, e.EQCODE) as row_num
+          et.EQTYPENAME,
+          es.EQSTATUSNAME,
+          d_own.DEPTNAME as OwnerDeptName,
+          d_maint.DEPTNAME as MaintDeptName,
+          ROW_NUMBER() OVER (ORDER BY e.EQCODE) as row_num
         FROM EQ e
         LEFT JOIN PU p ON e.PUNO = p.PUNO
         LEFT JOIN EQType et ON e.EQTYPENO = et.EQTYPENO
         LEFT JOIN EQStatus es ON e.EQSTATUSNO = es.EQSTATUSNO
-        LEFT JOIN Site s ON e.SiteNo = s.SiteNo
         LEFT JOIN Dept d_own ON e.DEPT_OWN = d_own.DEPTNO
         LEFT JOIN Dept d_maint ON e.DEPT_MAINT = d_maint.DEPTNO
-        LEFT JOIN EQ_Building b ON e.EQBuildingNo = b.BUILDINGNO
-        LEFT JOIN EQ_Floor f ON e.EQFloorNo = f.FLOORNO
         ${whereClause}
       ) AS paginated_results
       WHERE row_num > @offset AND row_num <= @offset + @limit
@@ -589,18 +576,16 @@ const getProductionUnitDetails = async (req, res) => {
     const result = await pool.request()
       .input('puNo', sql.Int, puNo)
       .query(`
-        SELECT 
+        SELECT
           p.*,
           pt.PUTYPENAME, pt.PUTYPECODE,
           ps.PUSTATUSNAME, ps.PUSTATUSCODE,
-          s.SiteName, s.SiteCode,
           d.DEPTNAME, d.DEPTCODE,
           pg.PUGROUPNAME,
           parent.PUNAME as ParentPUName, parent.PUCODE as ParentPUCode
         FROM PU p
         LEFT JOIN PUType pt ON p.PUTYPENO = pt.PUTYPENO
         LEFT JOIN PUStatus ps ON p.PUSTATUSNO = ps.PUSTATUSNO
-        LEFT JOIN Site s ON p.SiteNo = s.SiteNo
         LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
         LEFT JOIN PUGroup pg ON p.PUGROUPNO = pg.PUGROUPNO
         LEFT JOIN PU parent ON p.PUPARENT = parent.PUNO
@@ -673,29 +658,22 @@ const getEquipmentByPUNO = async (req, res) => {
     request.input('puNo', sql.Int, puNo);
 
     const result = await request.query(`
-      SELECT 
-        e.EQNO, e.EQCODE, e.EQNAME, e.EQPARENT, e.EQREFCODE,
-        e.ASSETNO, e.EQMODEL, e.EQSERIALNO, e.EQBrand,
-        e.Location, e.Room, e.IMG, e.NOTE,
-        e.HIERARCHYNO, e.CURR_LEVEL,
+      SELECT
+        e.EQNO, e.EQCODE, e.EQNAME,
+        e.ASSETNO, e.Location, e.Room,
         p.PUCODE, p.PUNAME,
-        et.EQTYPENAME, et.EQTYPECODE,
-        es.EQSTATUSNAME, es.EQSTATUSCODE,
-        s.SiteName, s.SiteCode,
-        d_own.DEPTNAME as OwnerDeptName, d_own.DEPTCODE as OwnerDeptCode,
-        d_maint.DEPTNAME as MaintDeptName, d_maint.DEPTCODE as MaintDeptCode,
-        b.BUILDINGNAME, f.FLOORNAME
+        et.EQTYPENAME,
+        es.EQSTATUSNAME,
+        d_own.DEPTNAME as OwnerDeptName,
+        d_maint.DEPTNAME as MaintDeptName
       FROM EQ e
       LEFT JOIN PU p ON e.PUNO = p.PUNO
       LEFT JOIN EQType et ON e.EQTYPENO = et.EQTYPENO
       LEFT JOIN EQStatus es ON e.EQSTATUSNO = es.EQSTATUSNO
-      LEFT JOIN Site s ON e.SiteNo = s.SiteNo
       LEFT JOIN Dept d_own ON e.DEPT_OWN = d_own.DEPTNO
       LEFT JOIN Dept d_maint ON e.DEPT_MAINT = d_maint.DEPTNO
-      LEFT JOIN EQ_Building b ON e.EQBuildingNo = b.BUILDINGNO
-      LEFT JOIN EQ_Floor f ON e.EQFloorNo = f.FLOORNO
       WHERE e.FLAGDEL = 'F' AND e.PUNO = @puNo
-      ORDER BY e.HIERARCHYNO, e.EQCODE
+      ORDER BY e.EQCODE
     `);
 
     res.json({
@@ -721,25 +699,20 @@ const getEquipmentDetails = async (req, res) => {
     const result = await pool.request()
       .input('eqNo', sql.Int, eqNo)
       .query(`
-        SELECT 
+        SELECT
           e.*,
           p.PUNAME, p.PUCODE,
           et.EQTYPENAME, et.EQTYPECODE,
           es.EQSTATUSNAME, es.EQSTATUSCODE,
-          s.SiteName, s.SiteCode,
           d_own.DEPTNAME as OwnerDeptName, d_own.DEPTCODE as OwnerDeptCode,
           d_maint.DEPTNAME as MaintDeptName, d_maint.DEPTCODE as MaintDeptCode,
-          b.BUILDINGNAME, f.FLOORNAME,
           parent.EQNAME as ParentEQName, parent.EQCODE as ParentEQCode
         FROM EQ e
         LEFT JOIN PU p ON e.PUNO = p.PUNO
         LEFT JOIN EQType et ON e.EQTYPENO = et.EQTYPENO
         LEFT JOIN EQStatus es ON e.EQSTATUSNO = es.EQSTATUSNO
-        LEFT JOIN Site s ON e.SiteNo = s.SiteNo
         LEFT JOIN Dept d_own ON e.DEPT_OWN = d_own.DEPTNO
         LEFT JOIN Dept d_maint ON e.DEPT_MAINT = d_maint.DEPTNO
-        LEFT JOIN EQ_Building b ON e.EQBuildingNo = b.BUILDINGNO
-        LEFT JOIN EQ_Floor f ON e.EQFloorNo = f.FLOORNO
         LEFT JOIN EQ parent ON e.EQPARENT = parent.EQNO
         WHERE e.EQNO = @eqNo AND e.FLAGDEL = 'F'
       `);

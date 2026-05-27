@@ -25,7 +25,6 @@ export interface ProductionUnit {
   PULOCATION?: string;
   LATITUDE?: number | null;
   LONGITUDE?: number | null;
-  SiteName?: string;
   DEPTNAME?: string;
 }
 

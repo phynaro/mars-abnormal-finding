@@ -193,19 +193,19 @@ exports.getWorkflowTracking = async (req, res) => {
           wt.CreatedAt,
           
           -- From Person information
-          fp.PERSON_NAME as FromPersonName,
+          ISNULL(fp.FIRSTNAME,'') + ' ' + ISNULL(fp.LASTNAME,'') as FromPersonName,
           fp.EMAIL as FromPersonEmail,
           fp.PHONE as FromPersonPhone,
           fp.TITLE as FromPersonTitle,
-          
+
           -- Receive Person information
-          rp.PERSON_NAME as ReceivePersonName,
+          ISNULL(rp.FIRSTNAME,'') + ' ' + ISNULL(rp.LASTNAME,'') as ReceivePersonName,
           rp.EMAIL as ReceivePersonEmail,
           rp.PHONE as ReceivePersonPhone,
           rp.TITLE as ReceivePersonTitle,
-          
+
           -- Approved Person information
-          ap.PERSON_NAME as ApprovedPersonName,
+          ISNULL(ap.FIRSTNAME,'') + ' ' + ISNULL(ap.LASTNAME,'') as ApprovedPersonName,
           ap.EMAIL as ApprovedPersonEmail,
           ap.PHONE as ApprovedPersonPhone,
           ap.TITLE as ApprovedPersonTitle,
@@ -319,19 +319,19 @@ exports.getWorkflowTrackingByDocNo = async (req, res) => {
         wt.CreatedAt,
         
         -- From Person information
-        fp.PERSON_NAME as FromPersonName,
+        ISNULL(fp.FIRSTNAME,'') + ' ' + ISNULL(fp.LASTNAME,'') as FromPersonName,
         fp.EMAIL as FromPersonEmail,
         fp.PHONE as FromPersonPhone,
         fp.TITLE as FromPersonTitle,
-        
+
         -- Receive Person information
-        rp.PERSON_NAME as ReceivePersonName,
+        ISNULL(rp.FIRSTNAME,'') + ' ' + ISNULL(rp.LASTNAME,'') as ReceivePersonName,
         rp.EMAIL as ReceivePersonEmail,
         rp.PHONE as ReceivePersonPhone,
         rp.TITLE as ReceivePersonTitle,
-        
+
         -- Approved Person information
-        ap.PERSON_NAME as ApprovedPersonName,
+        ISNULL(ap.FIRSTNAME,'') + ' ' + ISNULL(ap.LASTNAME,'') as ApprovedPersonName,
         ap.EMAIL as ApprovedPersonEmail,
         ap.PHONE as ApprovedPersonPhone,
         ap.TITLE as ApprovedPersonTitle,

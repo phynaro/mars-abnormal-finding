@@ -140,11 +140,15 @@ const CaseCountByPUFullPage: React.FC = () => {
                     dataKey="caseCount"
                     fill="hsl(var(--primary))"
                     shape={(props: any) => {
-                      const { payload, ...barProps } = props;
+                      const { x, y, width, height, fill, payload } = props;
                       return (
                         <g>
                           <rect
-                            {...barProps}
+                            x={x}
+                            y={y}
+                            width={width}
+                            height={height}
+                            fill={fill}
                             style={{ cursor: 'pointer' }}
                             onClick={() => payload && handleBarClick(payload)}
                           />

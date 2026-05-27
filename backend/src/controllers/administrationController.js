@@ -34,7 +34,7 @@ const getTicketApprovals = async (req, res) => {
     }
 
     if (search) {
-      const searchCondition = `(ta.personno LIKE @search OR per.PERSON_NAME LIKE @search OR per.FIRSTNAME LIKE @search OR per.LASTNAME LIKE @search OR per.PERSONCODE LIKE @search)`;
+      const searchCondition = `(ta.personno LIKE @search OR per.FIRSTNAME LIKE @search OR per.LASTNAME LIKE @search OR per.PERSONCODE LIKE @search)`;
       whereClause = pool.request ? `${whereClause} AND ${searchCondition}` : `WHERE ${searchCondition}`;
       request.input('search', sql.NVarChar, `%${search}%`);
     }
@@ -52,13 +52,13 @@ const getTicketApprovals = async (req, res) => {
              CAST(MAX(CAST(ta.is_active AS INT)) AS BIT) as is_active, 
              MIN(ta.created_at) as created_at, 
              MAX(ta.updated_at) as updated_at,
-             per.PERSON_NAME as person_name, 
-             per.FIRSTNAME, 
-             per.LASTNAME, 
+             ISNULL(per.FIRSTNAME,'') + ' ' + ISNULL(per.LASTNAME,'') as person_name,
+             per.FIRSTNAME,
+             per.LASTNAME,
              per.PERSONCODE,
              d.DEPTCODE,
              d.DEPTNAME,
-             CASE 
+             CASE
                WHEN ta.approval_level = 1 THEN 'L1 - Create/Review/Reopen'
                WHEN ta.approval_level = 2 THEN 'L2 - Accept/Reject/Escalate/Finish'
                WHEN ta.approval_level = 3 THEN 'L3 - Reassign/Reject Final'
@@ -70,8 +70,8 @@ const getTicketApprovals = async (req, res) => {
       LEFT JOIN Person per ON ta.personno = per.PERSONNO
       LEFT JOIN Dept d ON per.DEPTNO = d.DEPTNO
       ${whereClause}
-      GROUP BY ta.personno, ta.approval_level, per.PERSON_NAME, per.FIRSTNAME, per.LASTNAME, per.PERSONCODE, d.DEPTCODE, d.DEPTNAME
-      ORDER BY per.PERSON_NAME, ta.approval_level
+      GROUP BY ta.personno, ta.approval_level, per.FIRSTNAME, per.LASTNAME, per.PERSONCODE, d.DEPTCODE, d.DEPTNAME
+      ORDER BY per.FIRSTNAME, per.LASTNAME, ta.approval_level
     `);
 
     res.json({
@@ -101,7 +101,7 @@ const getTicketApprovalsByPersonAndLevel = async (req, res) => {
       .query(`
         SELECT ta.id, ta.personno, ta.plant_code, ta.area_code, ta.line_code, ta.machine_code, 
                ta.approval_level, ta.is_active, ta.created_at, ta.updated_at,
-               per.PERSON_NAME as person_name, per.FIRSTNAME, per.LASTNAME, per.PERSONCODE,
+               ISNULL(per.FIRSTNAME,'') + ' ' + ISNULL(per.LASTNAME,'') as person_name, per.FIRSTNAME, per.LASTNAME, per.PERSONCODE,
                CASE 
                  WHEN ta.machine_code IS NOT NULL THEN 'Machine: ' + ta.machine_code
                  WHEN ta.line_code IS NOT NULL THEN 'Line: ' + ta.line_code
@@ -154,7 +154,7 @@ const getTicketApprovalById = async (req, res) => {
       .query(`
         SELECT ta.id, ta.personno, ta.plant_code, ta.area_code, ta.line_code, ta.machine_code, 
                ta.approval_level, ta.is_active, ta.created_at, ta.updated_at,
-               per.PERSON_NAME as person_name, per.FIRSTNAME, per.LASTNAME, per.PERSONCODE,
+               ISNULL(per.FIRSTNAME,'') + ' ' + ISNULL(per.LASTNAME,'') as person_name, per.FIRSTNAME, per.LASTNAME, per.PERSONCODE,
                CASE 
                  WHEN ta.machine_code IS NOT NULL THEN 'Machine: ' + ta.machine_code
                  WHEN ta.line_code IS NOT NULL THEN 'Line: ' + ta.line_code
@@ -1007,15 +1007,17 @@ const searchPersons = async (req, res) => {
     const request = pool.request();
     
     if (search) {
-      whereClause = `WHERE (PERSONNO LIKE @search OR PERSON_NAME LIKE @search OR FIRSTNAME LIKE @search OR LASTNAME LIKE @search OR PERSONCODE LIKE @search)`;
+      whereClause = `WHERE (PERSONNO LIKE @search OR FIRSTNAME LIKE @search OR LASTNAME LIKE @search OR PERSONCODE LIKE @search)`;
       request.input('search', sql.NVarChar, `%${search}%`);
     }
     
     const result = await request.query(`
-      SELECT TOP ${limit} PERSONNO, PERSON_NAME, FIRSTNAME, LASTNAME, PERSONCODE, EMAIL, PHONE
+      SELECT TOP ${limit} PERSONNO,
+             ISNULL(FIRSTNAME,'') + ' ' + ISNULL(LASTNAME,'') AS PERSON_NAME,
+             FIRSTNAME, LASTNAME, PERSONCODE, EMAIL, PHONE
       FROM Person
       ${whereClause}
-      ORDER BY PERSON_NAME
+      ORDER BY FIRSTNAME, LASTNAME
     `);
 
     res.json({

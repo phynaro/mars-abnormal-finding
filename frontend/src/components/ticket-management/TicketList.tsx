@@ -208,10 +208,11 @@ const SearchableMultiSelectUserFilter: React.FC<SearchableMultiSelectUserFilterP
                   const value = option.id.toString();
                   const checked = selectedValues.includes(value);
                   return (
-                    <button
+                    <div
                       key={option.id}
-                      type="button"
-                      className="flex w-full items-start gap-2 rounded-sm px-3 py-2 text-left text-sm hover:bg-hover hover:text-hover-foreground"
+                      role="option"
+                      aria-selected={checked}
+                      className="flex w-full cursor-pointer items-start gap-2 rounded-sm px-3 py-2 text-left text-sm hover:bg-hover hover:text-hover-foreground"
                       onClick={() => toggleValue(value)}
                     >
                       <Checkbox checked={checked} className="mt-0.5 pointer-events-none" />
@@ -221,7 +222,7 @@ const SearchableMultiSelectUserFilter: React.FC<SearchableMultiSelectUserFilterP
                           <div className="truncate text-xs text-muted-foreground">{option.email}</div>
                         )}
                       </div>
-                    </button>
+                    </div>
                   );
                 })
               )}
@@ -1324,7 +1325,7 @@ export const TicketList: React.FC = () => {
                 <span className="ml-2 hidden sm:inline">{t('homepage.filters')}</span>
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] lg:max-h-none dark:text-gray-100 flex flex-col">
+            <DialogContent aria-describedby={undefined} className="max-w-3xl max-h-[90vh] lg:max-h-none dark:text-gray-100 flex flex-col">
               <DialogHeader className="flex-shrink-0">
                 <DialogTitle>{t('ticket.filter')}</DialogTitle>
               </DialogHeader>
@@ -1685,7 +1686,7 @@ export const TicketList: React.FC = () => {
                 {t('ticket.export')}
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] lg:max-h-none dark:text-gray-100 flex flex-col">
+            <DialogContent aria-describedby={undefined} className="max-w-3xl max-h-[90vh] lg:max-h-none dark:text-gray-100 flex flex-col">
               <DialogHeader className="flex-shrink-0">
                 <DialogTitle>{t('ticket.exportTickets')}</DialogTitle>
               </DialogHeader>

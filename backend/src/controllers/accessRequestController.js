@@ -173,7 +173,7 @@ const getAllAccessRequests = async (req, res) => {
           ra.ApprovedBy,
           ra.ApprovedAt,
           ra.LinkPersonNo,
-          p.PERSON_NAME as ApprovedByName
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as ApprovedByName
         FROM IgxRequestAccess ra
         LEFT JOIN Person p ON ra.ApprovedBy = p.PERSONNO
         ORDER BY ra.CreatedAt DESC

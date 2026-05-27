@@ -192,7 +192,7 @@ const UPCOMING_QUERY = `
   WITH CalibDue AS (
     SELECT
       pm.ASSIGN                              AS PersonNo,
-      p.PERSON_NAME                          AS AssigneeName,
+      ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS AssigneeName,
       ue.LineID,
       pm.PMNO,
       pm.PMCODE,

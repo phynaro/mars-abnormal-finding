@@ -263,7 +263,7 @@ const userController = {
         .query(`
           SELECT 
             p.PERSONNO as id,
-            p.PERSON_NAME as name,
+            ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as name,
             p.FIRSTNAME,
             p.LASTNAME,
             p.EMAIL,
@@ -272,7 +272,7 @@ const userController = {
             1 as IsActive
           FROM Person p
           WHERE p.FLAGDEL != 'Y'
-          ORDER BY p.PERSON_NAME
+          ORDER BY p.FIRSTNAME, p.LASTNAME
         `);
 
       const users = result.recordset.map(user => ({

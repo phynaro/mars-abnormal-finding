@@ -154,7 +154,7 @@ class FinishedTicketReviewNotificationService {
       const result = await pool.request().query(`
         SELECT DISTINCT
           p.PERSONNO,
-          p.PERSON_NAME,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
           ue.LineID
         FROM IgxTickets t
         INNER JOIN Person p ON t.created_by = p.PERSONNO

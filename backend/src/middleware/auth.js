@@ -63,23 +63,16 @@ const authenticateToken = async (req, res, next) => {
       const userResult = await pool.request()
         .input('userID', sql.VarChar, decodedToken.userId)
         .query(`
-          SELECT 
+          SELECT
             u.PersonNo,
             u.UserID,
             u.GroupNo,
             u.LevelReport,
-            u.StoreRoom,
-            u.DBNo,
-            u.StartDate,
-            u.LastDate,
             u.ExpireDate,
             u.NeverExpireFlag,
             ue.EmailVerified,
-            ue.EmailVerificationToken,
-            ue.EmailVerificationExpires,
             ue.LastLogin,
             ue.CreatedAt,
-            ue.UpdatedAt,
             ue.LineID,
             ue.AvatarUrl,
             ue.IsActive,
@@ -89,24 +82,14 @@ const authenticateToken = async (req, res, next) => {
             p.FIRSTNAME,
             p.LASTNAME,
             p.EMAIL,
-            p.PHONE,
-            p.TITLE,
             p.DEPTNO,
-            p.CRAFTNO,
-            p.CREWNO,
-            p.PERSON_NAME,
-            p.SiteNo,
-            p.PINCODE,
             d.DEPTCODE,
-            d.DEPTNAME,
-            s.SiteCode,
-            s.SiteName
+            d.DEPTNAME
           FROM _secUsers u
           LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
           LEFT JOIN _secUserGroups g ON u.GroupNo = g.GroupNo
           LEFT JOIN Person p ON u.PersonNo = p.PERSONNO
           LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
-          LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo
           WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
         `);
 
@@ -127,30 +110,19 @@ const authenticateToken = async (req, res, next) => {
         personCode: user.PERSONCODE,
         firstName: user.FIRSTNAME,
         lastName: user.LASTNAME,
-        fullName: user.PERSON_NAME,
         email: user.EMAIL,
-        phone: user.PHONE,
-        title: user.TITLE,
         department: user.DEPTNO,
         departmentCode: user.DEPTCODE,
         departmentName: user.DEPTNAME,
-        craft: user.CRAFTNO,
-        crew: user.CREWNO,
-        siteNo: user.SiteNo,
-        siteCode: user.SiteCode,
-        siteName: user.SiteName,
         groupNo: user.GroupNo,
         groupCode: user.UserGCode,
         groupName: user.UserGName,
         levelReport: user.LevelReport,
         permissionLevel: user.LevelReport,
-        storeRoom: user.StoreRoom,
-        dbNo: user.DBNo,
         lineId: user.LineID,
         avatarUrl: user.AvatarUrl,
         lastLogin: user.LastLogin,
         createdAt: user.CreatedAt
-        // Permissions will be fetched separately when needed
       };
       
       next();

@@ -61,7 +61,7 @@ exports.getPersonPeriodSummary = async (req, res) => {
       CalSched AS (
         SELECT
           pm.ASSIGN         AS assigneeId,
-          p.PERSON_NAME     AS assigneeName,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS assigneeName,
           dd.PeriodNo,
           CASE
             WHEN s.WOStatusNo = 9 THEN 1
@@ -590,7 +590,7 @@ exports.getJobs = async (req, res) => {
           wo.WOSTATUSNO AS woStatusNo,
           wo.PMNO,
           wo.ASSIGN AS assigneeId,
-          p.PERSON_NAME AS assigneeName,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS assigneeName,
           ROW_NUMBER() OVER (ORDER BY wo.WODATE DESC, wo.WONO DESC) AS RowNum
         FROM dbo.WO wo
         LEFT JOIN dbo.PM pm ON pm.PMNO = wo.PMNO

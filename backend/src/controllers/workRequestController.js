@@ -21,7 +21,7 @@ const getUserPersonMapping = async (pool, userId) => {
         ue.LineID,
         ue.IsActive,
         p.PERSONNO,
-        p.PERSON_NAME,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
         p.EMAIL,
         p.PHONE,
         p.DEPTNO,
@@ -1287,7 +1287,7 @@ exports.executeWorkflowAction = async (req, res) => {
         wft.Event_Date,
         wft.Event_Time,
         wft.Send_for,
-        p.PERSON_NAME
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME
       FROM WFTrackeds wft
       LEFT JOIN PERSON p ON wft.From_PersonNo = p.PERSONNO
       WHERE wft.DOCNO = @wrno AND wft.WFDocFlowCode = 'WR'
@@ -1450,8 +1450,8 @@ exports.getWorkflowStatus = async (req, res) => {
         wft.NotApproved_Flag,
         wft.Readed_Flag,
         wft.Action_Flag,
-        p.PERSON_NAME as FROM_PERSON_NAME,
-        rp.PERSON_NAME as TO_PERSON_NAME
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as FROM_PERSON_NAME,
+        ISNULL(rp.FIRSTNAME,'') + ' ' + ISNULL(rp.LASTNAME,'') as TO_PERSON_NAME
       FROM WFTrackeds wft
       LEFT JOIN PERSON p ON wft.From_PersonNo = p.PERSONNO
       LEFT JOIN PERSON rp ON wft.Receive_PersonNo = rp.PERSONNO

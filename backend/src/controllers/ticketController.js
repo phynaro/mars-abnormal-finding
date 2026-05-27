@@ -273,10 +273,11 @@ const createTicket = async (req, res) => {
                 console.log(`Action: CREATE`);
                 // Get reporter information for notifications
                 const reporterResult = await runQuery(pool, `
-                    SELECT p.PERSON_NAME, p.FIRSTNAME, p.LASTNAME, p.EMAIL, p.DEPTNO, ue.LineID
+                    SELECT ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
+                           p.FIRSTNAME, p.LASTNAME, p.EMAIL, p.DEPTNO, ue.LineID
                     FROM Person p
                     LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+                    LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                     WHERE p.PERSONNO = @user_id
                 `, [
                     { name: 'user_id', type: sql.Int, value: created_by }
@@ -773,14 +774,14 @@ const getTickets = async (req, res) => {
             FROM (
                 SELECT 
                     t.*,
-                    r.PERSON_NAME as reporter_name,
+                    ISNULL(r.FIRSTNAME,'') + ' ' + ISNULL(r.LASTNAME,'') as reporter_name,
                     r.EMAIL as reporter_email,
                     r.PHONE as reporter_phone,
-                    a.PERSON_NAME as assignee_name,
+                    ISNULL(a.FIRSTNAME,'') + ' ' + ISNULL(a.LASTNAME,'') as assignee_name,
                     a.EMAIL as assignee_email,
                     a.PHONE as assignee_phone,
-                    accepted_user.PERSON_NAME as accepted_by_name,
-                    rejected_user.PERSON_NAME as rejected_by_name,
+                    ISNULL(accepted_user.FIRSTNAME,'') + ' ' + ISNULL(accepted_user.LASTNAME,'') as accepted_by_name,
+                    ISNULL(rejected_user.FIRSTNAME,'') + ' ' + ISNULL(rejected_user.LASTNAME,'') as rejected_by_name,
                     -- Hierarchy information from IgxPUExtension
                     pe.pucode,
                     pe.plant as plant_code,
@@ -875,19 +876,19 @@ const getTicketById = async (req, res) => {
     const result = await pool.request().input("id", sql.Int, id).query(`
                 SELECT 
                     t.*,
-                    r.PERSON_NAME as reporter_name,
+                    ISNULL(r.FIRSTNAME,'') + ' ' + ISNULL(r.LASTNAME,'') as reporter_name,
                     r.EMAIL as reporter_email,
                     r.PHONE as reporter_phone,
-                    a.PERSON_NAME as assignee_name,
+                    ISNULL(a.FIRSTNAME,'') + ' ' + ISNULL(a.LASTNAME,'') as assignee_name,
                     a.EMAIL as assignee_email,
                     a.PHONE as assignee_phone,
                     -- Workflow tracking fields
-                    accepted_user.PERSON_NAME as accepted_by_name,
-                    rejected_user.PERSON_NAME as rejected_by_name,
-                    finished_user.PERSON_NAME as finished_by_name,
-                    escalated_user.PERSON_NAME as escalated_by_name,
-                    approved_user.PERSON_NAME as approved_by_name,
-                    reopened_user.PERSON_NAME as reopened_by_name,
+                    ISNULL(accepted_user.FIRSTNAME,'') + ' ' + ISNULL(accepted_user.LASTNAME,'') as accepted_by_name,
+                    ISNULL(rejected_user.FIRSTNAME,'') + ' ' + ISNULL(rejected_user.LASTNAME,'') as rejected_by_name,
+                    ISNULL(finished_user.FIRSTNAME,'') + ' ' + ISNULL(finished_user.LASTNAME,'') as finished_by_name,
+                    ISNULL(escalated_user.FIRSTNAME,'') + ' ' + ISNULL(escalated_user.LASTNAME,'') as escalated_by_name,
+                    ISNULL(approved_user.FIRSTNAME,'') + ' ' + ISNULL(approved_user.LASTNAME,'') as approved_by_name,
+                    ISNULL(reopened_user.FIRSTNAME,'') + ' ' + ISNULL(reopened_user.LASTNAME,'') as reopened_by_name,
                     
                     -- Hierarchy information from IgxPUExtension
                     pe.pucode,
@@ -992,7 +993,7 @@ const getTicketById = async (req, res) => {
       .query(`
                 SELECT 
                     tc.*,
-                    u.PERSON_NAME as user_name,
+                    ISNULL(u.FIRSTNAME,'') + ' ' + ISNULL(u.LASTNAME,'') as user_name,
                     u.EMAIL as user_email,
                     ue.AvatarUrl as user_avatar_url
                 FROM IgxTicketComments tc
@@ -1008,8 +1009,8 @@ const getTicketById = async (req, res) => {
       .query(`
                 SELECT 
                     tsh.*,
-                    u.PERSON_NAME as changed_by_name,
-                    to_user_person.PERSON_NAME as to_user_name,
+                    ISNULL(u.FIRSTNAME,'') + ' ' + ISNULL(u.LASTNAME,'') as changed_by_name,
+                    ISNULL(to_user_person.FIRSTNAME,'') + ' ' + ISNULL(to_user_person.LASTNAME,'') as to_user_name,
                     to_user_person.EMAIL as to_user_email
                 FROM IgxTicketStatusHistory tsh
                 LEFT JOIN Person u ON tsh.changed_by = u.PERSONNO
@@ -1122,10 +1123,10 @@ const updateTicket = async (req, res) => {
                 LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                 WHERE t.id = @ticket_id;
 
-                SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID 
+                SELECT ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
                 FROM Person p
                 LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+                LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
                 WHERE p.PERSONNO = @reporter_id;
             `,
         [
@@ -1492,10 +1493,10 @@ const assignTicket = async (req, res) => {
             LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             WHERE t.id = @ticket_id;
 
-            SELECT PERSON_NAME, EMAIL, DEPTNO, LineID
+            SELECT ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+            LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @assignee_id;
         `,
       [
@@ -2096,10 +2097,10 @@ const acceptTicket = async (req, res) => {
             LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             WHERE t.id = @ticket_id;
 
-            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
+            SELECT ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+            LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @reporter_id;
         `,
       [
@@ -3111,16 +3112,16 @@ const rejectTicket = async (req, res) => {
             LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             WHERE t.id = @ticket_id;
 
-            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
+            SELECT ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+            LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @reporter_id;
 
-            SELECT p.PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
+            SELECT ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+            LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
             WHERE p.PERSONNO = @assignee_id;
         `,
       [
@@ -4616,10 +4617,7 @@ const getTicketFilterUsers = async (req, res) => {
     const result = await pool.request().query(`
       SELECT DISTINCT
         p.PERSONNO AS id,
-        COALESCE(
-          NULLIF(LTRIM(RTRIM(p.PERSON_NAME)), ''),
-          NULLIF(LTRIM(RTRIM(ISNULL(p.FIRSTNAME, '') + ' ' + ISNULL(p.LASTNAME, ''))), '')
-        ) AS name,
+        NULLIF(LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))), '') AS name,
         p.EMAIL AS email
       FROM IgxTickets t
       INNER JOIN Person p ON p.PERSONNO = t.${filterColumn}
@@ -4709,7 +4707,7 @@ const getAvailableAssignees = async (req, res) => {
       // Build search condition
       let searchCondition = "";
       if (search) {
-        searchCondition = `AND (p.FIRSTNAME LIKE @search OR p.LASTNAME LIKE @search OR p.PERSON_NAME LIKE @search OR p.EMAIL LIKE @search)`;
+        searchCondition = `AND (p.FIRSTNAME LIKE @search OR p.LASTNAME LIKE @search OR p.EMAIL LIKE @search)`;
         request.input("search", sql.NVarChar, `%${search}%`);
       }
 
@@ -4719,7 +4717,7 @@ const getAvailableAssignees = async (req, res) => {
                     p.PERSONNO,
                     p.FIRSTNAME,
                     p.LASTNAME,
-                    p.PERSON_NAME,
+                    ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
                     p.EMAIL,
                     p.PHONE,
                     p.TITLE,
@@ -4986,10 +4984,10 @@ const getUserPendingTickets = async (req, res) => {
             FROM (
                 SELECT 
                     t.*,
-                    r.PERSON_NAME as reporter_name,
+                    ISNULL(r.FIRSTNAME,'') + ' ' + ISNULL(r.LASTNAME,'') as reporter_name,
                     r.EMAIL as reporter_email,
                     r.PHONE as reporter_phone,
-                    a.PERSON_NAME as assignee_name,
+                    ISNULL(a.FIRSTNAME,'') + ' ' + ISNULL(a.LASTNAME,'') as assignee_name,
                     a.EMAIL as assignee_email,
                     a.PHONE as assignee_phone,
                     -- Hierarchy information from IgxPUExtension (prioritize most specific)
@@ -5052,11 +5050,11 @@ const getUserPendingTickets = async (req, res) => {
                     END as user_relationship,
                     ta.approval_level as user_approval_level,
                     -- Action person names
-                    accepted_person.PERSON_NAME as accepted_by_name,
-                    escalated_person.PERSON_NAME as escalated_by_name,
-                    reviewed_person.PERSON_NAME as reviewed_by_name,
-                    finished_person.PERSON_NAME as finished_by_name,
-                    rejected_person.PERSON_NAME as rejected_by_name,
+                    ISNULL(accepted_person.FIRSTNAME,'') + ' ' + ISNULL(accepted_person.LASTNAME,'') as accepted_by_name,
+                    ISNULL(escalated_person.FIRSTNAME,'') + ' ' + ISNULL(escalated_person.LASTNAME,'') as escalated_by_name,
+                    ISNULL(reviewed_person.FIRSTNAME,'') + ' ' + ISNULL(reviewed_person.LASTNAME,'') as reviewed_by_name,
+                    ISNULL(finished_person.FIRSTNAME,'') + ' ' + ISNULL(finished_person.LASTNAME,'') as finished_by_name,
+                    ISNULL(rejected_person.FIRSTNAME,'') + ' ' + ISNULL(rejected_person.LASTNAME,'') as rejected_by_name,
                     -- Deduplication: prioritize rows with higher digit_count and approval_level
                     ROW_NUMBER() OVER (
                         PARTITION BY t.id 

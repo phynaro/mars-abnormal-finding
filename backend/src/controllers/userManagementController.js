@@ -31,23 +31,18 @@ const userManagementController = {
         // Get all users with group and person information
         const result = await pool.request()
           .query(`
-            SELECT 
+            SELECT
               u.PersonNo,
               u.UserID,
               u.GroupNo,
               u.LevelReport,
               u.StoreRoom,
               u.DBNo,
-              u.StartDate,
-              u.LastDate,
               u.ExpireDate,
               u.NeverExpireFlag,
               ue.EmailVerified,
-              ue.EmailVerificationToken,
-              ue.EmailVerificationExpires,
               ue.LastLogin,
               ue.CreatedAt,
-              ue.UpdatedAt,
               ue.LineID,
               ue.AvatarUrl,
               ue.IsActive,
@@ -60,14 +55,10 @@ const userManagementController = {
               p.PHONE,
               p.TITLE,
               p.DEPTNO,
-              p.CRAFTNO,
-              p.CREWNO,
               p.PERSON_NAME,
               p.SiteNo,
-              p.PINCODE,
               d.DEPTCODE,
               d.DEPTNAME,
-              s.SiteCode,
               s.SiteName
             FROM _secUsers u
             LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
@@ -92,10 +83,7 @@ const userManagementController = {
           department: user.DEPTNO,
           departmentCode: user.DEPTCODE,
           departmentName: user.DEPTNAME,
-          craft: user.CRAFTNO,
-          crew: user.CREWNO,
           siteNo: user.SiteNo,
-          siteCode: user.SiteCode,
           siteName: user.SiteName,
           groupNo: user.GroupNo,
           groupCode: user.UserGCode,
@@ -108,7 +96,7 @@ const userManagementController = {
           avatarUrl: user.AvatarUrl,
           lastLogin: user.LastLogin,
           createdAt: user.CreatedAt,
-          isActive: user.IsActive === 1 || user.IsActive === true  // NULL = inactive (not logged in yet)
+          isActive: user.IsActive === 1 || user.IsActive === true
         }));
 
         res.json({
@@ -150,23 +138,18 @@ const userManagementController = {
       const result = await pool.request()
         .input('userID', sql.VarChar(50), userId)
         .query(`
-          SELECT 
+          SELECT
             u.PersonNo,
             u.UserID,
             u.GroupNo,
             u.LevelReport,
             u.StoreRoom,
             u.DBNo,
-            u.StartDate,
-            u.LastDate,
             u.ExpireDate,
             u.NeverExpireFlag,
             ue.EmailVerified,
-            ue.EmailVerificationToken,
-            ue.EmailVerificationExpires,
             ue.LastLogin,
             ue.CreatedAt,
-            ue.UpdatedAt,
             ue.LineID,
             ue.AvatarUrl,
             ue.IsActive,
@@ -179,14 +162,10 @@ const userManagementController = {
             p.PHONE,
             p.TITLE,
             p.DEPTNO,
-            p.CRAFTNO,
-            p.CREWNO,
             p.PERSON_NAME,
             p.SiteNo,
-            p.PINCODE,
             d.DEPTCODE,
             d.DEPTNAME,
-            s.SiteCode,
             s.SiteName
           FROM _secUsers u
           LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
@@ -219,10 +198,7 @@ const userManagementController = {
         department: user.DEPTNO,
         departmentCode: user.DEPTCODE,
         departmentName: user.DEPTNAME,
-        craft: user.CRAFTNO,
-        crew: user.CREWNO,
         siteNo: user.SiteNo,
-        siteCode: user.SiteCode,
         siteName: user.SiteName,
         groupNo: user.GroupNo,
         groupCode: user.UserGCode,
@@ -235,7 +211,7 @@ const userManagementController = {
         avatarUrl: user.AvatarUrl,
         lastLogin: user.LastLogin,
         createdAt: user.CreatedAt,
-        isActive: user.IsActive === 1 || user.IsActive === true  // NULL = inactive (not logged in yet)
+        isActive: user.IsActive === 1 || user.IsActive === true
       };
 
       res.json({
@@ -450,21 +426,16 @@ const userManagementController = {
           personCode: personCode,
           firstName: firstName,
           lastName: lastName,
-          fullName: firstName + ' ' + lastName,
           email: email,
           phone: phone,
-          title: title,
           department: department,
-          craft: craft,
-          crew: crew,
-          siteNo: siteNo,
           groupNo: groupNo,
           levelReport: levelReport || 1,
           storeRoom: storeRoom || 1,
           dbNo: dbNo || 1,
           lineId: lineId,
           createdAt: newUser.CreatedAt,
-          isActive: false  // Will become active on first login when IgxUserExtension is created
+          isActive: false
         };
 
         res.status(201).json({

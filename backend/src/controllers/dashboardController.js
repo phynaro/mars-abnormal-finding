@@ -857,10 +857,7 @@ exports.getPersonalWorkOrderVolume = async (req, res) => {
       )
       SELECT
         f.ASSIGN as assigneeId,
-        CASE
-          WHEN p.PERSON_NAME IS NOT NULL THEN p.PERSON_NAME
-          ELSE 'User ' + CAST(f.ASSIGN AS VARCHAR(10))
-        END as assignee,
+        COALESCE(NULLIF(LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))), ''), 'User ' + CAST(f.ASSIGN AS VARCHAR(10))) as assignee,
         COUNT(*) AS WO_Count,
         SUM(CASE WHEN f.WRNO <> 0 THEN 1 ELSE 0 END) AS hasWR,
         SUM(CASE WHEN f.WOSTATUSNO = 9 THEN 1 ELSE 0 END) AS history,
@@ -881,9 +878,9 @@ exports.getPersonalWorkOrderVolume = async (req, res) => {
         ON dd.DateKey = F.LocalDate
       LEFT JOIN Person p ON f.ASSIGN = p.PERSONNO
       WHERE (@CompanyYear IS NULL OR dd.CompanyYear = @CompanyYear)
-        AND f.ASSIGN IS NOT NULL 
+        AND f.ASSIGN IS NOT NULL
         AND f.ASSIGN <> 0
-      GROUP BY f.ASSIGN, p.PERSON_NAME
+      GROUP BY f.ASSIGN, p.FIRSTNAME, p.LASTNAME
       ORDER BY COUNT(*) DESC
     `;
 
@@ -976,10 +973,7 @@ exports.getPersonalWorkOrderVolumeByPeriod = async (req, res) => {
       )
       SELECT
         f.ASSIGN as assigneeId,
-        CASE
-          WHEN p.PERSON_NAME IS NOT NULL THEN p.PERSON_NAME
-          ELSE 'User ' + CAST(f.ASSIGN AS VARCHAR(10))
-        END as assignee,
+        COALESCE(NULLIF(LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))), ''), 'User ' + CAST(f.ASSIGN AS VARCHAR(10))) as assignee,
         dd.CompanyYear as companyYear,
         dd.PeriodNo as periodNo,
         COUNT(*) AS woCount,
@@ -1002,9 +996,9 @@ exports.getPersonalWorkOrderVolumeByPeriod = async (req, res) => {
         ON dd.DateKey = F.LocalDate
       LEFT JOIN Person p ON f.ASSIGN = p.PERSONNO
       WHERE (@CompanyYear IS NULL OR dd.CompanyYear = @CompanyYear)
-        AND f.ASSIGN IS NOT NULL 
+        AND f.ASSIGN IS NOT NULL
         AND f.ASSIGN <> 0
-      GROUP BY f.ASSIGN, p.PERSON_NAME, dd.CompanyYear, dd.PeriodNo
+      GROUP BY f.ASSIGN, p.FIRSTNAME, p.LASTNAME, dd.CompanyYear, dd.PeriodNo
       ORDER BY f.ASSIGN, dd.CompanyYear, dd.PeriodNo
     `;
 
@@ -1089,10 +1083,7 @@ async function getWorkOrderVolumeFilterOptions(pool, appliedFilters = {}) {
     // Get assignees - only those who have work orders matching current filters
     const assignees = await pool.request().query(`
       SELECT DISTINCT wo.ASSIGN as id, 
-             CASE 
-               WHEN p.PERSON_NAME IS NOT NULL THEN p.PERSON_NAME
-               ELSE 'User ' + CAST(wo.ASSIGN AS VARCHAR(10))
-             END as name
+             COALESCE(NULLIF(LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))), ''), 'User ' + CAST(wo.ASSIGN AS VARCHAR(10))) as name
       FROM WO wo
       LEFT JOIN Person p ON wo.ASSIGN = p.PERSONNO
       ${whereClause}
@@ -1796,18 +1787,18 @@ exports.getUserActivityData = async (req, res) => {
     const userActivityQuery = `
       SELECT TOP 10
         t.created_by as user_id,
-        p.PERSON_NAME as user_name,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as user_name,
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count
       FROM IgxTickets t
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
+      GROUP BY t.created_by, p.FIRSTNAME, p.LASTNAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
-      ORDER BY ticket_count DESC, p.PERSON_NAME ASC
+      ORDER BY ticket_count DESC, p.FIRSTNAME ASC, p.LASTNAME ASC
     `;
 
     const result = await pool.request().query(userActivityQuery);
@@ -1906,7 +1897,7 @@ exports.getUserCloserActivity = async (req, res) => {
     const userCloserActivityQuery = `
       SELECT TOP (${limit})
         t.finished_by as user_id,
-        p.PERSON_NAME as user_name,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as user_name,
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count
       FROM IgxTickets t
@@ -1915,9 +1906,9 @@ exports.getUserCloserActivity = async (req, res) => {
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
       LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.finished_by, p.PERSON_NAME, ue.AvatarUrl
+      GROUP BY t.finished_by, p.FIRSTNAME, p.LASTNAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
-      ORDER BY ticket_count DESC, p.PERSON_NAME ASC
+      ORDER BY ticket_count DESC, p.FIRSTNAME ASC, p.LASTNAME ASC
     `;
 
     const result = await pool.request().query(userCloserActivityQuery);
@@ -2839,22 +2830,22 @@ exports.getOntimeRateByUser = async (req, res) => {
     const ontimeRateByUserQuery = `
       SELECT 
         t.finished_by as user_id,
-        p.PERSON_NAME as user_name,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as user_name,
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as total_finished,
         COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_finished,
-        CASE 
-          WHEN COUNT(t.id) > 0 THEN 
+        CASE
+          WHEN COUNT(t.id) > 0 THEN
             ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
-          ELSE 0 
+          ELSE 0
         END as ontime_rate_percentage
       FROM IgxTickets t
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.finished_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.finished_by, p.PERSON_NAME, ue.AvatarUrl
+      GROUP BY t.finished_by, p.FIRSTNAME, p.LASTNAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY ontime_rate_percentage DESC
     `;
@@ -2958,7 +2949,7 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
     const resolveDurationByUserQuery = `
       SELECT 
         t.finished_by as user_id,
-        p.PERSON_NAME as user_name,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as user_name,
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         AVG(DATEDIFF(HOUR, t.created_at, t.finished_at)) as avg_resolve_hours
@@ -2966,9 +2957,9 @@ exports.getTicketResolveDurationByUser = async (req, res) => {
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.finished_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.finished_by, p.PERSON_NAME, ue.AvatarUrl
+      GROUP BY t.finished_by, p.FIRSTNAME, p.LASTNAME, ue.AvatarUrl
       HAVING COUNT(t.id) > 0
       ORDER BY avg_resolve_hours ASC
     `;
@@ -3394,7 +3385,7 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
     const costImpactReporterQuery = `
       SELECT TOP 10
         t.created_by as user_id,
-        p.PERSON_NAME as user_name,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as user_name,
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.cost_avoidance, 0)) as total_cost_avoidance
@@ -3402,9 +3393,9 @@ exports.getCostImpactReporterLeaderboard = async (req, res) => {
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
+      GROUP BY t.created_by, p.FIRSTNAME, p.LASTNAME, ue.AvatarUrl
       HAVING SUM(ISNULL(t.cost_avoidance, 0)) > 0
       ORDER BY total_cost_avoidance DESC
     `;
@@ -3499,7 +3490,7 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
     const downtimeImpactReporterQuery = `
       SELECT TOP 10
         t.created_by as user_id,
-        p.PERSON_NAME as user_name,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as user_name,
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as ticket_count,
         SUM(ISNULL(t.downtime_avoidance_hours, 0)) as total_downtime_hours
@@ -3507,9 +3498,9 @@ exports.getDowntimeImpactReporterLeaderboard = async (req, res) => {
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       INNER JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${whereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
+      GROUP BY t.created_by, p.FIRSTNAME, p.LASTNAME, ue.AvatarUrl
       HAVING SUM(ISNULL(t.downtime_avoidance_hours, 0)) > 0
       ORDER BY total_downtime_hours DESC
     `;
@@ -3849,33 +3840,33 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
     const topPerformersQuery = `
       SELECT TOP 1
         t.created_by as personno,
-        p.PERSON_NAME as personName,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as personName,
         ue.AvatarUrl as avatarUrl,
         COUNT(*) as ticketCount
       FROM IgxTickets t
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
-      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
+      GROUP BY t.created_by, p.FIRSTNAME, p.LASTNAME, ue.AvatarUrl
       ORDER BY COUNT(*) DESC
     `;
 
     const topCostSaverQuery = `
       SELECT TOP 1
         t.created_by as personno,
-        p.PERSON_NAME as personName,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as personName,
         ue.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.cost_avoidance), 0) as totalSavings
       FROM IgxTickets t
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
       AND t.status IN ('closed', 'resolved')
-      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
+      GROUP BY t.created_by, p.FIRSTNAME, p.LASTNAME, ue.AvatarUrl
       HAVING ISNULL(SUM(t.cost_avoidance), 0) > 0
       ORDER BY totalSavings DESC
     `;
@@ -3883,17 +3874,17 @@ LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
     const topDowntimeSaverQuery = `
       SELECT TOP 1
         t.created_by as personno,
-        p.PERSON_NAME as personName,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as personName,
         ue.AvatarUrl as avatarUrl,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeSaved
       FROM IgxTickets t
       LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
       LEFT JOIN Person p ON t.created_by = p.PERSONNO
       LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+      LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
       ${currentWhereClause}
       AND t.status IN ('closed', 'resolved')
-      GROUP BY t.created_by, p.PERSON_NAME, ue.AvatarUrl
+      GROUP BY t.created_by, p.FIRSTNAME, p.LASTNAME, ue.AvatarUrl
       HAVING ISNULL(SUM(t.downtime_avoidance_hours), 0) > 0
       ORDER BY totalDowntimeSaved DESC
     `;
@@ -4105,7 +4096,7 @@ const getPersonalKPIComparison = async (req, res) => {
       WITH UserKPIData AS (
         SELECT 
           p.PERSONNO as personno,
-          p.PERSON_NAME as personName,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as personName,
           p.DEPTNO as deptNo,
           ue.AvatarUrl as avatarUrl,
           d.DEPTCODE as deptCode,
@@ -4151,7 +4142,7 @@ const getPersonalKPIComparison = async (req, res) => {
           AND t.created_at >= @startDate 
           AND t.created_at <= @endDate
         WHERE p.FLAGDEL != 'Y'
-        GROUP BY p.PERSONNO, p.PERSON_NAME, p.DEPTNO, ue.AvatarUrl, d.DEPTCODE, d.DEPTNAME
+        GROUP BY p.PERSONNO, p.FIRSTNAME, p.LASTNAME, p.DEPTNO, ue.AvatarUrl, d.DEPTCODE, d.DEPTNAME
         HAVING COUNT(t.id) > 0  -- Only include users who have tickets in the date range
       )
       SELECT 
@@ -4281,7 +4272,7 @@ const getDepartmentUserKPITicketsCreated = async (req, res) => {
       WITH UserPeriodTickets AS (
         SELECT 
           p.PERSONNO,
-          p.PERSON_NAME,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
           p.DEPTNO,
           d.DEPTNAME,
           dd.PeriodNo,
@@ -4294,12 +4285,12 @@ const getDepartmentUserKPITicketsCreated = async (req, res) => {
         WHERE p.DEPTNO = @deptNo 
           AND p.FLAGDEL != 'Y'
           AND (dd.CompanyYear = @year OR dd.CompanyYear IS NULL)
-        GROUP BY p.PERSONNO, p.PERSON_NAME, p.DEPTNO, d.DEPTNAME, dd.PeriodNo
+        GROUP BY p.PERSONNO, p.FIRSTNAME, p.LASTNAME, p.DEPTNO, d.DEPTNAME, dd.PeriodNo
       ),
       AllUserPeriods AS (
         SELECT 
           p.PERSONNO,
-          p.PERSON_NAME,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
           p.DEPTNO,
           d.DEPTNAME,
           periods.PeriodNo
@@ -4408,7 +4399,7 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
       WITH UserPeriodTickets AS (
         SELECT 
           p.PERSONNO,
-          p.PERSON_NAME,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
           p.DEPTNO,
           d.DEPTNAME,
           dd.PeriodNo,
@@ -4421,12 +4412,12 @@ const getDepartmentUserKPITicketsAssigned = async (req, res) => {
         WHERE p.DEPTNO = @deptNo 
           AND p.FLAGDEL != 'Y'
           AND (dd.CompanyYear = @year OR dd.CompanyYear IS NULL)
-        GROUP BY p.PERSONNO, p.PERSON_NAME, p.DEPTNO, d.DEPTNAME, dd.PeriodNo
+        GROUP BY p.PERSONNO, p.FIRSTNAME, p.LASTNAME, p.DEPTNO, d.DEPTNAME, dd.PeriodNo
       ),
       AllUserPeriods AS (
         SELECT 
           p.PERSONNO,
-          p.PERSON_NAME,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
           p.DEPTNO,
           d.DEPTNAME,
           periods.PeriodNo
@@ -4557,7 +4548,7 @@ const getDepartmentUserKPIClosureRate = async (req, res) => {
       AllUserPeriods AS (
         SELECT
           p.PERSONNO,
-          p.PERSON_NAME,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
           p.DEPTNO,
           d.DEPTNAME,
           periods.PeriodNo

@@ -457,7 +457,9 @@ const getUserById = async (pool, userId) => {
     const result = await pool.request()
         .input('user_id', sql.Int, userId)
         .query(`
-            SELECT p.PERSONNO, p.PERSON_NAME, p.EMAIL,
+            SELECT p.PERSONNO,
+                   ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
+                   p.EMAIL,
                    ue.LineID
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo
@@ -476,7 +478,9 @@ const getUserByIdWithAvatar = async (pool, userId) => {
     const result = await pool.request()
         .input('user_id', sql.Int, userId)
         .query(`
-            SELECT p.PERSONNO, p.PERSON_NAME, p.EMAIL,
+            SELECT p.PERSONNO,
+                   ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
+                   p.EMAIL,
                    ue.LineID, ue.AvatarUrl
             FROM Person p
             LEFT JOIN _secUsers u ON p.PERSONNO = u.PersonNo

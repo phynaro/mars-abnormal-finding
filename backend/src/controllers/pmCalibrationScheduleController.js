@@ -181,7 +181,7 @@ exports.getPmScheduleList = async (req, res) => {
           pm.PMNAME,
           pm.DEPTNO,
           pm.ASSIGN AS assigneeId,
-          p.PERSON_NAME AS assigneeName,
+          ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS assigneeName,
           wo.WOCODE,
           wo.WOSTATUSNO AS woStatusNo,
           eq.EQCODE,
@@ -257,7 +257,7 @@ exports.getPmScheduleCalendarRange = async (req, res) => {
         pm.PMNAME,
         pm.DEPTNO,
         pm.ASSIGN AS assigneeId,
-        p.PERSON_NAME AS assigneeName,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS assigneeName,
         wo.WOCODE,
         wo.WOSTATUSNO AS woStatusNo,
         eq.EQCODE,
@@ -321,7 +321,7 @@ exports.getPmScheduleDetail = async (req, res) => {
         d.DEPTCODE,
         d.DEPTNAME,
         pm.ASSIGN AS assigneeId,
-        p.PERSON_NAME AS assigneeName,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS assigneeName,
         wo.WOCODE,
         wo.WOSTATUSNO AS woStatusNo,
         wo.WODATE AS woDateRaw,
@@ -390,7 +390,7 @@ exports.getPmScheduleTeamKpi = async (req, res) => {
       SELECT
         pm.ASSIGN AS assigneeId,
         COALESCE(
-          NULLIF(LTRIM(RTRIM(p.PERSON_NAME)), N''),
+          NULLIF(LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))), N''),
           N'User ' + CAST(pm.ASSIGN AS nvarchar(20))
         ) AS assigneeName,
         COUNT(*) AS totalScheduled,
@@ -405,7 +405,7 @@ exports.getPmScheduleTeamKpi = async (req, res) => {
       WHERE ${built.whereFragment}
         AND pm.ASSIGN IS NOT NULL
         AND pm.ASSIGN <> 0
-      GROUP BY pm.ASSIGN, p.PERSON_NAME
+      GROUP BY pm.ASSIGN, p.FIRSTNAME, p.LASTNAME
       ORDER BY assigneeName
     `;
 
@@ -439,7 +439,7 @@ exports.getPmScheduleAssignees = async (req, res) => {
       SELECT DISTINCT
         pm.ASSIGN AS id,
         COALESCE(
-          NULLIF(LTRIM(RTRIM(p.PERSON_NAME)), N''),
+          NULLIF(LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))), N''),
           N'User ' + CAST(pm.ASSIGN AS nvarchar(20))
         ) AS name
       FROM dbo.PM pm

@@ -277,16 +277,16 @@ exports.getInventoryItemById = async (req, res) => {
         -- Creator information
         creator.PERSONNO as CREATOR_PERSONNO,
         creator.PERSONCODE as CREATOR_PERSONCODE,
-        creator.PERSON_NAME as CREATOR_NAME,
+        ISNULL(creator.FIRSTNAME,'') + ' ' + ISNULL(creator.LASTNAME,'') as CREATOR_NAME,
         creator.FIRSTNAME as CREATOR_FIRSTNAME,
         creator.LASTNAME as CREATOR_LASTNAME,
         creator.TITLE as CREATOR_TITLE,
         creator.EMAIL as CREATOR_EMAIL,
-        
+
         -- Updater information
         updater.PERSONNO as UPDATER_PERSONNO,
         updater.PERSONCODE as UPDATER_PERSONCODE,
-        updater.PERSON_NAME as UPDATER_NAME,
+        ISNULL(updater.FIRSTNAME,'') + ' ' + ISNULL(updater.LASTNAME,'') as UPDATER_NAME,
         updater.FIRSTNAME as UPDATER_FIRSTNAME,
         updater.LASTNAME as UPDATER_LASTNAME,
         updater.TITLE as UPDATER_TITLE,

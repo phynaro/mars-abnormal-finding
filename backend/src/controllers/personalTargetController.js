@@ -19,7 +19,7 @@ const getPersonalTargets = async (req, res) => {
         pt.updated_at,
         pt.created_by,
         pt.updated_by,
-        p.PERSON_NAME,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
         p.PERSONCODE
       FROM dbo.IgxTicketPersonTarget pt
       LEFT JOIN dbo.Person p ON pt.PERSONNO = p.PERSONNO
@@ -86,7 +86,7 @@ const getPersonalTargetById = async (req, res) => {
         pt.updated_at,
         pt.created_by,
         pt.updated_by,
-        p.PERSON_NAME,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
         p.PERSONCODE
       FROM dbo.IgxTicketPersonTarget pt
       LEFT JOIN dbo.Person p ON pt.PERSONNO = p.PERSONNO
