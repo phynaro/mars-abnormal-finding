@@ -6,121 +6,112 @@
 
 **Architecture:** The new Cedar schema is a slimmed-down standard schema: `Person` lost 16 columns (EMAIL, PHONE, TITLE, PINCODE, PERSON_NAME, SiteNo, etc.), `Site` table was removed entirely, `PU`/`EQ`/`PM` lost SiteNo and other fields, and `sp_WOMain_Insert` signature changed. The approach is: (1) extend `IgxUserExtension` to own the person profile fields that Cedar no longer holds, (2) migrate existing data into it, (3) rewrite all affected queries, (4) re-verify the Cedar WO stored procedure.
 
-**Tech Stack:** Node.js/Express, mssql (parameterized queries), MSSQL (SQL Server), Docker Compose
+**Tech Stack:** Node.js/Express, mssql (parameterized queries), MSSQL (SQL Server **2008** — no CONCAT function, use `ISNULL(x,'') + ' ' + ISNULL(y,'')`), Docker Compose
+
+---
+
+## ✅ Already Completed (as of 2026-05-26)
+
+### PERSON_NAME sweep — ALL direct SQL SELECTs replaced
+Every `p.PERSON_NAME` / `u.PERSON_NAME` reference in backend code was replaced with
+`ISNULL(x.FIRSTNAME,'') + ' ' + ISNULL(x.LASTNAME,'')` using the `+` operator (SQL Server 2008 — no CONCAT).
+`GROUP BY` clauses updated to use `FIRSTNAME, LASTNAME` instead of the alias.
+
+Files completed:
+- `controllers/ticketController.js`
+- `controllers/ticketController/helpers.js`
+- `controllers/dashboardController.js`
+- `controllers/calibrationController.js`
+- `controllers/calibrationUserEventsController.js`
+- `controllers/pmCalibrationScheduleController.js`
+- `controllers/inventoryController.js`
+- `controllers/administrationController.js`
+- `controllers/personnelController.js`
+- `controllers/userController.js` (SELECT only — UPDATE left intentionally, see Task 3)
+- `controllers/accessRequestController.js`
+- `controllers/personalTargetController.js`
+- `controllers/workflowController.js`
+- `controllers/workRequestController.js`
+- `services/dueDateNotificationService.js`
+- `services/pendingTicketNotificationService.js`
+- `services/finishedTicketReviewNotificationService.js`
+- `services/calibrationDueDateNotificationService.js`
+
+**Intentionally deferred:** `userManagementController.js` lines 58, 165, 373, 394, 528 — still references `PERSON_NAME` because ViewUserModal/EditUserModal actively display it. Must update frontend modals + controller together (Task 3 below).
+
+### Site table cleanup — assetController.js (Task 7 ✅)
+- Removed all `LEFT JOIN Site`, `SiteName`, `SiteCode` from `getProductionUnits`, `getEquipment`, `getProductionUnitDetails`, `getEquipmentDetails`
+- `frontend/assetService.ts` — removed `SiteName?: string` from `ProductionUnit` interface
+- `frontend/ProductionUnitPage.tsx` — removed Site column from table and mobile card
+
+### Stored procedures — deferred (in-database patch needed)
+These SPs internally SELECT `PERSON_NAME` — cannot fix from EDEN code side alone:
+- `sp_Igx_GetUsersForNotification` — used by `reviewEscalationNotificationService.js`, `oldOpenTicketNotificationService.js`
+- `sp_Dashboard_Backlog_AssignTo` — used by `backlogController.js` (`row.PERSON_NAME`)
+
+These must be patched directly in the Cedar DB before cutover.
 
 ---
 
 ## Schema Diff Reference
 
-Use this as the source of truth throughout all tasks.
+### `Person` table — columns REMOVED from new Cedar
 
-### `Person` table — 16 columns REMOVED from new Cedar
-
-| Column | Type (old) | Impact |
-|---|---|---|
-| `PERSON_NAME` | `nvarchar(200)` | Used as `fullName` in `req.user` and throughout. **Replacement:** `CONCAT(ISNULL(FIRSTNAME,''),' ',ISNULL(LASTNAME,''))` |
-| `EMAIL` | `nvarchar(200)` | Auth, notifications, all controllers. **Move to `IgxUserExtension.email`** |
-| `PHONE` | `nvarchar(30)` | Auth, controllers. **Move to `IgxUserExtension.phone`** |
-| `TITLE` | `nvarchar(200)` | Auth, controllers. **Move to `IgxUserExtension.title_text`** (avoid reserved word) |
-| `PINCODE` | `nvarchar(10)` | Auth. **Move to `IgxUserExtension.pincode`** |
-| `SiteNo` | `int` | Auth JOIN to Site. **Drop — Site table removed (see below)** |
-| `CREATEUSER` / `CREATEDATE` | — | Audit columns, no EDEN queries use these |
-| `Host`,`Port`,`EnableSsl` | — | Unused by EDEN |
-| `VendorNo`,`FLAGRESPONSE`,`DEPTWR`,`DEPTWO`,`FLAGWAITQUO` | — | Unused by EDEN |
+| Column | Impact |
+|---|---|
+| `PERSON_NAME` | **DONE** — replaced with `ISNULL(FIRSTNAME,'') + ' ' + ISNULL(LASTNAME,'')` everywhere |
+| `EMAIL` | Auth, notifications, controllers. **Move to `IgxUserExtension.email`** (pending) |
+| `PHONE` | Controllers. **Move to `IgxUserExtension.phone`** (pending) |
+| `TITLE` | Controllers. **Move to `IgxUserExtension.title_text`** (avoid reserved word) (pending) |
+| `PINCODE` | Auth. **Move to `IgxUserExtension.pincode`** (pending) |
+| `SiteNo` | `auth.js`/`authController.js` already clean. Still in `workRequestController.js` line ~29, `userManagementController.js` INSERT ~394. Drop — no replacement. |
 
 Also: `PERSONCODE` shrunk from `nvarchar(20)` → `varchar(10)` NOT NULL in new.
 
-### `Site` table — COMPLETELY REMOVED from new Cedar
-
-- Old Cedar had `dbo.Site(SiteNo, SiteCode, SiteName, …)`.
-- New Cedar: table does not exist.
-- EDEN wrote `req.user.siteNo`, `siteCode`, `siteName` from it.
-- **Resolution:** Drop `siteCode`/`siteName` from `req.user`. Add `site_name VARCHAR(50)` to `IgxUserExtension` if site display is needed (optional, low priority).
+### `Site` table — COMPLETELY REMOVED ✅ DONE
+Removed from `assetController.js` and frontend. No remaining references.
 
 ### `_secUsers` — `PersonAccessNo` column removed
-
-- Old had column `PersonAccessNo INT`. New does not.
-- EDEN does not SELECT it (confirmed by grep), but it must not appear in any INSERT.
+Not queried by EDEN. No action needed.
 
 ### `Dept` — columns removed in new Cedar
+`SiteNo` — not queried by EDEN after cleanup. `LineToken`, `COSTCENTERNO`, etc. — not queried. No action.
 
-| Column | Old | Impact |
-|---|---|---|
-| `SiteNo` | `int` | Used in `assetController.js`. Remove JOIN/filter. |
-| `LineToken` | `nvarchar(max)` | Not queried by EDEN (confirmed by grep). No action. |
-| `COSTCENTERNO`, `UserGroupNo`, `FLAGGENQUO` | — | Not queried by EDEN. No action. |
-| `CREATEUSER`, `CREATEDATE` | — | Not queried by EDEN. No action. |
+### `PU` / `EQ` / `PM` — SiteNo and other columns removed
+`SiteNo` removed from all three. EDEN calibration queries may reference `pm.SiteNo` — see Task 9.
 
-### `PU` table — columns removed in new Cedar
-
-| Column | Old | Impact |
-|---|---|---|
-| `SiteNo` | `int` | Queried in some controllers |
-| `TEXT1-3` | `nvarchar(100-200)` → `varchar(20)` | **Truncation risk** if writing |
-| `PUREFCODE` | `nvarchar(50)` → `varchar(20)` | Truncation risk if writing |
-| `CREATEUSER`, `CREATEDATE` | — | Not queried |
-| Many others | — | Not queried by EDEN |
-
-### `EQ` table — columns removed in new Cedar
-
-| Column | Old | Impact |
-|---|---|---|
-| `SiteNo` | `int` | Used in EMS queries |
-| `TEXT1-3` | `nvarchar(200)` → `varchar(20)` | **Truncation risk** |
-| `EQCODE` | `nvarchar(50)` → `varchar(25)` NOT NULL | Truncation risk |
-| `CREATEUSER`, `CREATEDATE` | — | Not queried |
-
-### `PM` table — columns removed in new Cedar
-
-| Column | Old | Impact |
-|---|---|---|
-| `SiteNo` | `int` | Used in calibration queries |
-| `PMCODE` | `nvarchar(50)` → `varchar(25)` | Truncation risk |
-| `CREATEUSER`, `CREATEDATE` | — | Not queried |
-
-### `WO` table — columns changed in new Cedar
-
-| Column | Old | New | Impact |
-|---|---|---|---|
-| `WFStatusCode` | `nvarchar(100)` | `varchar(3)` | EDEN writes `'10'`, `'30'`, `'50'` — all ≤ 3 chars. **Safe.** |
-| `SiteNo` | `int` | **REMOVED** | Must remove from any WO INSERT/UPDATE |
-| `ASSIGN_REMARK` | `nvarchar(1000)` | `varchar(255)` | Truncation risk |
-| `WRCODE` | `varchar(100)` | `varchar(10)` | Truncation risk |
-| Many approval/billing/TPM cols | various | **REMOVED** | Used by `cedarIntegrationService.js` (see Task 5) |
+### `WO` table — columns changed
+`SiteNo` removed — must remove from `cedarIntegrationService.js` (Task 8).
 
 ### `sp_WOMain_Insert` — signature changed
-
-- Old: 80 parameters including `@SiteNo`, `@EQTypeNo`, `@FlagTPM`, `@TPMNo`, `@JsaType`, `@JsaNo`, `@FlagCleaningJobFinish`, etc.
-- New: MCP returned 0 parameters — **needs verification** (likely MCP introspection limitation; actual SP may still exist with different params).
+Old: 80 parameters including `@SiteNo`, `@EQTypeNo`, `@FlagTPM`, etc.
+New: needs verification via `mcp__cedar_new__execute_read_query` — see Task 8.
 
 ---
 
-## Files Affected
+## Files Remaining
 
-| File | What changes |
+| File | What still needs changing |
 |---|---|
-| `backend/src/middleware/auth.js` | Remove Person cols, Site JOIN, add computed PERSON_NAME |
-| `backend/src/controllers/authController.js` | Same query appears 3× (login, refresh, LINE login) |
-| `backend/src/controllers/administrationController.js` | PERSON_NAME, EMAIL, PHONE references |
-| `backend/src/controllers/personnelController.js` | PERSON_NAME, EMAIL, PHONE, SiteNo references |
-| `backend/src/controllers/userController.js` | EMAIL, PHONE, TITLE references |
-| `backend/src/controllers/userManagementController.js` | EMAIL, PHONE, TITLE, SiteNo, PINCODE, Site JOIN |
-| `backend/src/controllers/ticketController.js` | PERSON_NAME, EMAIL, PHONE, TITLE references (many places) |
-| `backend/src/controllers/ticketController/helpers.js` | PERSON_NAME, EMAIL references |
-| `backend/src/controllers/workRequestController.js` | EMAIL, PHONE, SiteNo, TITLENO references |
-| `backend/src/controllers/workflowController.js` | EMAIL, PHONE, TITLE references |
-| `backend/src/controllers/assetController.js` | SiteNo filter, Site JOIN |
-| `backend/src/controllers/backlogController.js` | WFStatusCode (read only — safe, no change needed) |
-| `backend/src/controllers/workOrderController.js` | WFStatusCode (read only — safe, no change needed) |
-| `backend/src/services/cedarIntegrationService.js` | sp_WOMain_Insert params, SiteNo in WO queries |
-| `backend/src/services/dueDateNotificationService.js` | PERSON_NAME, EMAIL |
-| `backend/src/services/pendingTicketNotificationService.js` | PERSON_NAME, EMAIL |
-| `backend/src/services/finishedTicketReviewNotificationService.js` | PERSON_NAME, EMAIL |
-| `backend/src/services/calibrationDueDateNotificationService.js` | PERSON_NAME, EMAIL |
-| `backend/src/services/oldOpenTicketNotificationService.js` | PERSON_NAME, EMAIL |
-| `backend/src/services/reviewEscalationNotificationService.js` | PERSON_NAME |
-| `backend/src/helpers/pmCalibrationScheduleQuery.js` | May reference SiteNo, PM fields |
-| `backend/src/helpers/calibrationEqTypeFromEqcode.js` | May reference EQ fields |
+| `backend/src/middleware/auth.js` | `p.EMAIL` → `ue.email` (no Site JOIN, no PERSON_NAME remaining) |
+| `backend/src/controllers/authController.js` | `p.EMAIL` → `ue.email` (3 query copies: login, LINE login, refresh) |
+| `backend/src/controllers/userManagementController.js` | PERSON_NAME (lines 58,165,373,394,528) + `p.EMAIL/PHONE/TITLE/SiteNo/PINCODE` → IgxUserExtension |
+| `backend/src/controllers/userController.js` | `p.EMAIL, p.PHONE, p.TITLE` → IgxUserExtension (PERSON_NAME SELECT already done) |
+| `backend/src/controllers/personnelController.js` | `p.EMAIL, p.PHONE, p.SiteNo` → IgxUserExtension / remove SiteNo |
+| `backend/src/controllers/workRequestController.js` | `p.SiteNo` (line ~29) — remove |
+| `backend/src/controllers/workflowController.js` | `fp.EMAIL, fp.PHONE, fp.TITLE` (multi-alias pattern) → IgxUserExtension |
+| `backend/src/controllers/administrationController.js` | `per.EMAIL, per.PHONE` → IgxUserExtension |
+| `backend/src/controllers/ticketController.js` | Notification SELECTs still read `p.EMAIL` → `ue.email` |
+| `backend/src/controllers/ticketController/helpers.js` | `p.EMAIL` in `getUserById*` → `ue.email` |
+| `backend/src/services/dueDateNotificationService.js` | `p.EMAIL` → `ue.email` |
+| `backend/src/services/pendingTicketNotificationService.js` | `p.EMAIL` → `ue.email` |
+| `backend/src/services/finishedTicketReviewNotificationService.js` | `p.EMAIL` → `ue.email` |
+| `backend/src/services/calibrationDueDateNotificationService.js` | `p.EMAIL` → `ue.email` |
+| `backend/src/services/oldOpenTicketNotificationService.js` | SP call (deferred) + `p.EMAIL` → `ue.email` |
+| `backend/src/services/reviewEscalationNotificationService.js` | SP call (deferred) + `p.EMAIL` → `ue.email` |
+| `backend/src/services/cedarIntegrationService.js` | `sp_WOMain_Insert` parameter list (Task 8) |
+| `backend/src/helpers/pmCalibrationScheduleQuery.js` | May reference `SiteNo` (Task 9) |
+| `backend/src/helpers/calibrationEqTypeFromEqcode.js` | May reference EQ fields (Task 9) |
 
 ---
 
@@ -159,14 +150,13 @@ const dbConfig = require('../src/config/dbConfig');
 async function run() {
   const pool = await sql.connect(dbConfig);
 
-  // Copy email, phone, title, pincode from old Person into IgxUserExtension
   const result = await pool.request().query(`
     UPDATE ue
     SET
-      ue.email      = COALESCE(ue.email,     p.EMAIL),
-      ue.phone      = COALESCE(ue.phone,     p.PHONE),
-      ue.title_text = COALESCE(ue.title_text, p.TITLE),
-      ue.pincode    = COALESCE(ue.pincode,   p.PINCODE)
+      ue.email      = CASE WHEN ue.email      IS NULL THEN p.EMAIL   ELSE ue.email      END,
+      ue.phone      = CASE WHEN ue.phone      IS NULL THEN p.PHONE   ELSE ue.phone      END,
+      ue.title_text = CASE WHEN ue.title_text IS NULL THEN p.TITLE   ELSE ue.title_text END,
+      ue.pincode    = CASE WHEN ue.pincode    IS NULL THEN p.PINCODE ELSE ue.pincode    END
     FROM IgxUserExtension ue
     INNER JOIN _secUsers u ON ue.UserID = u.UserID
     INNER JOIN Person p    ON u.PersonNo = p.PERSONNO
@@ -176,19 +166,20 @@ async function run() {
        OR p.PINCODE IS NOT NULL
   `);
 
-  console.log(`Rows updated: ${result.rowsAffected[0]}`);
+  console.log('Rows updated: ' + result.rowsAffected[0]);
 
-  // Verify
-  const check = await pool.request().query(`
-    SELECT COUNT(*) AS total FROM IgxUserExtension WHERE email IS NOT NULL
-  `);
-  console.log(`Users with email after migration: ${check.recordset[0].total}`);
+  const check = await pool.request().query(
+    'SELECT COUNT(*) AS total FROM IgxUserExtension WHERE email IS NOT NULL'
+  );
+  console.log('Users with email after migration: ' + check.recordset[0].total);
 
   await pool.close();
 }
 
-run().catch(err => { console.error(err); process.exit(1); });
+run().catch(function(err) { console.error(err); process.exit(1); });
 ```
+
+> **Note:** Uses `CASE WHEN ... IS NULL` instead of `COALESCE` to avoid SQL Server 2008 issues. No `CONCAT()`.
 
 - [ ] **Step 3: Run migration against old Cedar (before cutover)**
 
@@ -203,7 +194,7 @@ Rows updated: <N>
 Users with email after migration: <N>
 ```
 
-Verify N > 0. If 0, check that `.env` DB_SERVER points to old Cedar.
+Verify N > 0. If 0, check that `.env` `DB_SERVER` points to old Cedar.
 
 - [ ] **Step 4: Commit**
 
@@ -217,14 +208,12 @@ git commit -m "feat: migrate person profile fields (email/phone/title/pincode) t
 ## Task 2: Fix the shared user SELECT query — auth middleware and authController
 
 **Files:**
-- Modify: `backend/src/middleware/auth.js:63-154`
-- Modify: `backend/src/controllers/authController.js:210-265` (login query)
-- Modify: `backend/src/controllers/authController.js:520-570` (LINE login query)
-- Modify: `backend/src/controllers/authController.js:910-960` (refresh query)
+- Modify: `backend/src/middleware/auth.js`
+- Modify: `backend/src/controllers/authController.js` (3 copies: login, LINE login, refresh)
 
-The `authenticateToken` middleware and `authController` each contain their own copy of the Person+Site JOIN query. All three must be updated identically.
+**Current state:** No `Site` JOIN, no `PERSON_NAME`. Still reads `p.EMAIL` directly from `Person`. Must move to `ue.email` from `IgxUserExtension`.
 
-**The new canonical user SELECT** (replaces all three copies):
+**The new canonical user SELECT** (replaces auth middleware query and all authController copies):
 
 ```sql
 SELECT
@@ -232,18 +221,11 @@ SELECT
   u.UserID,
   u.GroupNo,
   u.LevelReport,
-  u.StoreRoom,
-  u.DBNo,
-  u.StartDate,
-  u.LastDate,
   u.ExpireDate,
   u.NeverExpireFlag,
   ue.EmailVerified,
-  ue.EmailVerificationToken,
-  ue.EmailVerificationExpires,
   ue.LastLogin,
   ue.CreatedAt,
-  ue.UpdatedAt,
   ue.LineID,
   ue.AvatarUrl,
   ue.IsActive,
@@ -257,9 +239,7 @@ SELECT
   p.FIRSTNAME,
   p.LASTNAME,
   p.DEPTNO,
-  p.CRAFTNO,
-  p.CREWNO,
-  CONCAT(ISNULL(p.FIRSTNAME,''), ' ', ISNULL(p.LASTNAME,'')) AS PERSON_NAME,
+  ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
   d.DEPTCODE,
   d.DEPTNAME
 FROM _secUsers u
@@ -270,61 +250,39 @@ LEFT JOIN Dept d              ON p.DEPTNO = d.DEPTNO
 WHERE u.UserID = @userID AND (ue.IsActive = 1 OR ue.IsActive IS NULL)
 ```
 
-Key changes from old query:
-- Removed: `p.EMAIL`, `p.PHONE`, `p.TITLE`, `p.SiteNo`, `p.PINCODE`, `p.PERSON_NAME`
-- Removed: `LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo`
-- Removed from SELECT: `s.SiteCode`, `s.SiteName`
-- Added: `ue.email AS EMAIL`, `ue.phone AS PHONE`, `ue.title_text AS TITLE`, `ue.pincode AS PINCODE`
-- Added: `CONCAT(ISNULL(p.FIRSTNAME,''), ' ', ISNULL(p.LASTNAME,'')) AS PERSON_NAME`
+Key changes from current query:
+- Remove: `p.EMAIL` (now `ue.email AS EMAIL`)
+- Added: `ue.phone AS PHONE`, `ue.title_text AS TITLE`, `ue.pincode AS PINCODE`
+- `PERSON_NAME` already computed via `+` operator (not CONCAT — SQL Server 2008)
 
 - [ ] **Step 1: Update `auth.js` middleware query**
 
-In `backend/src/middleware/auth.js`, replace the entire SQL string inside `authenticateToken` (the `pool.request()...query(...)` block, roughly lines 63–113) with the canonical query above. Also update the `req.user` mapping block below it: remove `siteNo`, `siteCode`, `siteName` assignments (lines ~139–141).
+In `backend/src/middleware/auth.js`, replace the SQL string inside `authenticateToken`. Find the `pool.request()...query(...)` block. Replace the SELECT columns to remove `p.EMAIL` and add the four `ue.*` columns above.
 
-Updated `req.user` block (remove the three site lines):
+Also update the `req.user` mapping block to add:
 ```js
 req.user = {
-  id: user.PersonNo,
-  userId: user.UserID,
-  username: user.UserID,
-  personCode: user.PERSONCODE,
-  firstName: user.FIRSTNAME,
-  lastName: user.LASTNAME,
+  // ... existing fields ...
+  email: user.EMAIL,        // now from ue.email
+  phone: user.PHONE,        // now from ue.phone
+  title: user.TITLE,        // now from ue.title_text
+  pinCode: user.PINCODE,    // now from ue.pincode
   fullName: user.PERSON_NAME,
-  email: user.EMAIL,
-  phone: user.PHONE,
-  title: user.TITLE,
-  department: user.DEPTNO,
-  departmentCode: user.DEPTCODE,
-  departmentName: user.DEPTNAME,
-  craft: user.CRAFTNO,
-  crew: user.CREWNO,
-  groupNo: user.GroupNo,
-  groupCode: user.UserGCode,
-  groupName: user.UserGName,
-  levelReport: user.LevelReport,
-  permissionLevel: user.LevelReport,
-  storeRoom: user.StoreRoom,
-  dbNo: user.DBNo,
-  lineId: user.LineID,
-  avatarUrl: user.AvatarUrl,
-  lastLogin: user.LastLogin,
-  createdAt: user.CreatedAt,
-  pinCode: user.PINCODE,
+  // ... no siteNo, siteCode, siteName ...
 };
 ```
 
-- [ ] **Step 2: Apply same query to `authController.js` login path (~line 210)**
+- [ ] **Step 2: Apply same query to `authController.js` login path**
 
-Find the block in the `login` function that reads `p.EMAIL, p.PHONE, p.TITLE, p.SiteNo, p.PINCODE, p.PERSON_NAME` and `LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo`. Replace with the canonical query. Remove site-related result mappings from the returned user object.
+Find the `login` function query block that reads `p.EMAIL`. Replace with the canonical query. Remove any remaining `s.SiteCode`, `s.SiteName` result mappings if present.
 
-- [ ] **Step 3: Apply same query to `authController.js` LINE login path (~line 520)**
+- [ ] **Step 3: Apply same query to `authController.js` LINE login path**
 
-Same as Step 2. Find the second copy of the same query and replace.
+Same as Step 2 for the LINE login function.
 
-- [ ] **Step 4: Apply same query to `authController.js` refresh path (~line 910)**
+- [ ] **Step 4: Apply same query to `authController.js` refresh path**
 
-Same as Step 2. Find the third copy and replace.
+Same as Step 2 for the token refresh function.
 
 - [ ] **Step 5: Start backend and test login**
 
@@ -333,137 +291,134 @@ cd backend
 npm run dev
 ```
 
-Test:
 ```bash
 curl -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
   -d '{"username":"<valid_user>","password":"<valid_pass>"}'
 ```
 
-Expected: `{"success":true,"data":{"token":"...","user":{...}}}` with no `siteCode`/`siteName` fields, but with `email`, `phone`, `title`, `fullName` present.
+Expected: `{"success":true,"data":{"token":"...","user":{...}}}` with `email` field populated from `IgxUserExtension` (will be `null` until Task 1 migration script runs, but should not error).
 
 - [ ] **Step 6: Commit**
 
 ```bash
 git add backend/src/middleware/auth.js backend/src/controllers/authController.js
-git commit -m "fix: update auth queries for new Cedar schema (remove Site JOIN, source profile from IgxUserExtension)"
+git commit -m "fix: source email/phone/title/pincode from IgxUserExtension in auth queries (Cedar new schema)"
 ```
 
 ---
 
-## Task 3: Fix Person queries in userManagementController and userController
+## Task 3: Fix `userManagementController.js` and `userController.js`
 
 **Files:**
-- Modify: `backend/src/controllers/userManagementController.js:55-200`
-- Modify: `backend/src/controllers/userController.js:265-275`
+- Modify: `backend/src/controllers/userManagementController.js`
+- Modify: `backend/src/controllers/userController.js`
+- Modify: `frontend/src/components/user-management/ViewUserModal.tsx`
+- Modify: `frontend/src/components/user-management/EditUserModal.tsx`
 
-- [ ] **Step 1: Fix `userManagementController.js` first user query (~line 55)**
+**Current state:** `userManagementController.js` still reads `p.PERSON_NAME` (lines 58, 165) and writes it (lines 373, 394, 528). Also reads `p.EMAIL, p.PHONE, p.TITLE, p.SiteNo, p.PINCODE`. These were intentionally left because the frontend modals display them. Update backend and frontend together.
 
-Find the SELECT that includes `p.EMAIL, p.PHONE, p.TITLE, p.SiteNo, p.PINCODE` and `LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo`. Replace with:
+- [ ] **Step 1: Fix `userManagementController.js` SELECT queries (lines ~55 and ~165)**
 
+For both SELECT queries, replace:
 ```sql
-ue.email      AS EMAIL,
-ue.phone      AS PHONE,
-ue.title_text AS TITLE,
-ue.pincode    AS PINCODE,
-CONCAT(ISNULL(p.FIRSTNAME,''), ' ', ISNULL(p.LASTNAME,'')) AS PERSON_NAME,
-```
-
-Remove the `LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo` line and any `s.SiteCode`, `s.SiteName` references. Remove `p.SiteNo`.
-
-- [ ] **Step 2: Fix `userManagementController.js` second query (~line 178)**
-
-Same changes as Step 1 for the second copy of the query in this file.
-
-- [ ] **Step 3: Fix `userController.js` (~line 269)**
-
-Replace `p.EMAIL, p.PHONE, p.TITLE` with `ue.email AS EMAIL, ue.phone AS PHONE, ue.title_text AS TITLE`. Ensure `IgxUserExtension ue` is already joined (it should be). If not, add: `LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID`.
-
-- [ ] **Step 4: Test user management endpoint**
-
-```bash
-curl http://localhost:3001/api/users/management \
-  -H "Authorization: Bearer <token>"
-```
-
-Expected: `{"success":true,"data":[...]}` with user email/phone fields populated from `IgxUserExtension`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add backend/src/controllers/userManagementController.js backend/src/controllers/userController.js
-git commit -m "fix: source email/phone/title from IgxUserExtension in user management controllers"
-```
-
----
-
-## Task 4: Fix Person queries in ticket and ticket helpers
-
-**Files:**
-- Modify: `backend/src/controllers/ticketController.js` (lines 276, 1125, 2099, 3114, 3120, 4623, 4712–4725)
-- Modify: `backend/src/controllers/ticketController/helpers.js` (lines 460, 479)
-
-These queries read `p.PERSON_NAME`, `p.EMAIL`, `p.PHONE`, `p.TITLE` from `Person`.
-
-- [ ] **Step 1: Fix all Person SELECT references in `ticketController.js`**
-
-For each query block that selects from `Person p`, apply these substitutions:
-
-Replace:
-```sql
-p.PERSON_NAME
-p.EMAIL
-p.PHONE
-p.TITLE
+p.PERSON_NAME,
+p.EMAIL,
+p.PHONE,
+p.TITLE,
+p.PINCODE,
+p.SiteNo,
 ```
 
 With:
 ```sql
-CONCAT(ISNULL(p.FIRSTNAME,''), ' ', ISNULL(p.LASTNAME,'')) AS PERSON_NAME
-ue.email      AS EMAIL
-ue.phone      AS PHONE
-ue.title_text AS TITLE
+ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME,
+ue.email      AS EMAIL,
+ue.phone      AS PHONE,
+ue.title_text AS TITLE,
+ue.pincode    AS PINCODE,
 ```
 
-For each such query, ensure there is a `LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID` (where `u` is `_secUsers` joined on `PersonNo = u.PersonNo`). In many ticket queries, `IgxUserExtension` is already joined via `ue`; for those that join `Person p` directly without going through `_secUsers`, use:
+Remove any `LEFT JOIN dbo.Site s ON p.SiteNo = s.SiteNo` and remove `s.SiteCode`, `s.SiteName` from SELECT. Remove `p.SiteNo`. Ensure `LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID` is present.
 
-```sql
-LEFT JOIN _secUsers su       ON p.PERSONNO = su.PersonNo
-LEFT JOIN IgxUserExtension ue ON su.UserID = ue.UserID
-```
+- [ ] **Step 2: Fix `userManagementController.js` INSERT/UPDATE (lines ~373, ~394, ~528)**
 
-Confirm alias names match surrounding query context in each case.
+Remove `PERSON_NAME` from INSERT column list and corresponding `@PERSON_NAME` parameter binding. Remove `SiteNo` from INSERT/UPDATE. These columns no longer exist in new Cedar.
 
-- [ ] **Step 2: Fix `ticketController/helpers.js` lines 460 and 479**
+- [ ] **Step 3: Fix `userController.js` profile query (~line 269)**
 
-Both are `SELECT p.PERSONNO, p.PERSON_NAME, p.EMAIL, ...` subqueries. Replace as in Step 1.
+Replace `p.EMAIL, p.PHONE, p.TITLE` with `ue.email AS EMAIL, ue.phone AS PHONE, ue.title_text AS TITLE`. Ensure `LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID` is present in the query.
 
-- [ ] **Step 3: Test ticket creation and viewing**
+- [ ] **Step 4: Update `ViewUserModal.tsx` to use `FIRSTNAME + LASTNAME`**
+
+The modal currently reads `user.PERSON_NAME`. Change to display `user.FIRSTNAME + ' ' + user.LASTNAME` (or the `fullName` field returned from the API). Remove any `PERSON_NAME` display field.
+
+- [ ] **Step 5: Update `EditUserModal.tsx`**
+
+Same as Step 4. If the modal has an editable "full name" field backed by `PERSON_NAME`, split it or remove it. EDEN does not manage first/last name — those come from Cedar and are read-only.
+
+- [ ] **Step 6: Test user management UI**
+
+Open the user management page, click View and Edit on a user. Expected: Names display correctly from FIRSTNAME/LASTNAME, email/phone/title populate from IgxUserExtension.
+
+- [ ] **Step 7: Commit**
 
 ```bash
-# Create a ticket
-curl -X POST http://localhost:3001/api/tickets \
-  -H "Authorization: Bearer <token>" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"test","description":"test","puno":1}'
-
-# View ticket
-curl http://localhost:3001/api/tickets/<id> \
-  -H "Authorization: Bearer <token>"
-```
-
-Expected: Ticket returns `reporter_name`, `assignee_name` etc. with actual names, not null.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add backend/src/controllers/ticketController.js backend/src/controllers/ticketController/helpers.js
-git commit -m "fix: replace Person.PERSON_NAME/EMAIL/PHONE with IgxUserExtension equivalents in ticket controller"
+git add backend/src/controllers/userManagementController.js \
+        backend/src/controllers/userController.js \
+        frontend/src/components/user-management/ViewUserModal.tsx \
+        frontend/src/components/user-management/EditUserModal.tsx
+git commit -m "fix: remove PERSON_NAME and SiteNo from user management; source profile from IgxUserExtension"
 ```
 
 ---
 
-## Task 5: Fix Person queries in remaining controllers
+## Task 4: Fix EMAIL references in ticket controller and helpers
+
+**Files:**
+- Modify: `backend/src/controllers/ticketController.js`
+- Modify: `backend/src/controllers/ticketController/helpers.js`
+
+**Current state:** PERSON_NAME sweep is complete. Notification SELECTs still read `p.EMAIL` from Person. Need to change to `ue.email`.
+
+- [ ] **Step 1: Fix notification SELECTs in `ticketController.js`**
+
+Search for `p.EMAIL` in notification query blocks (lines ~1126, ~1496, ~2100, ~3115, ~3121). For each:
+
+Replace:
+```sql
+p.EMAIL
+```
+With:
+```sql
+ue.email AS EMAIL
+```
+
+Confirm that each of these queries already has `LEFT JOIN IgxUserExtension ue ON ...` (they should — added during PERSON_NAME sweep). If any is missing, add:
+```sql
+LEFT JOIN _secUsers su ON p.PERSONNO = su.PersonNo
+LEFT JOIN IgxUserExtension ue ON su.UserID = ue.UserID
+```
+
+- [ ] **Step 2: Fix `helpers.js` `getUserById` and `getUserByIdWithAvatar`**
+
+Both functions have a SELECT that currently includes `p.EMAIL`. Replace with `ue.email AS EMAIL`. The `IgxUserExtension ue` join is already present in these helpers.
+
+- [ ] **Step 3: Test ticket notification flow**
+
+Trigger a ticket status change (e.g., accept a ticket) and check backend logs for SQL errors. Expected: No `Invalid column name 'EMAIL'` errors.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add backend/src/controllers/ticketController.js \
+        backend/src/controllers/ticketController/helpers.js
+git commit -m "fix: replace p.EMAIL with ue.email in ticket controller notification queries"
+```
+
+---
+
+## Task 5: Fix remaining controllers — administration, personnel, workRequest, workflow
 
 **Files:**
 - Modify: `backend/src/controllers/administrationController.js`
@@ -471,58 +426,64 @@ git commit -m "fix: replace Person.PERSON_NAME/EMAIL/PHONE with IgxUserExtension
 - Modify: `backend/src/controllers/workRequestController.js`
 - Modify: `backend/src/controllers/workflowController.js`
 
-- [ ] **Step 1: Fix `administrationController.js`**
+**Current state:** PERSON_NAME sweep is complete in all four. Still need to fix `EMAIL`/`PHONE` references and `SiteNo` removal.
 
-Multiple queries use `per.PERSON_NAME`, `per.EMAIL`, `per.PHONE` (lines 37, 55, 73, 74, 104, 157, 1010, 1015, 1018). Apply the same pattern as Task 4: replace `per.PERSON_NAME` with the CONCAT alias, replace `per.EMAIL`/`per.PHONE` with `ue.email`/`ue.phone`, add the `_secUsers`+`IgxUserExtension` join if not present.
+- [ ] **Step 1: Fix `administrationController.js` — EMAIL/PHONE**
 
-For the queries that already join `_secUsers` (check context), add:
-```sql
-LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
-```
+Search for `per.EMAIL` and `per.PHONE` (lines ~37, ~55, ~73, ~74, ~104, ~157, ~1010, ~1015, ~1018). For each:
+- Replace `per.EMAIL` → `ue.email AS EMAIL`
+- Replace `per.PHONE` → `ue.phone AS PHONE`
 
-For queries that only join `Person per` without going through `_secUsers`, add:
+For queries joining `Person per` directly (without `_secUsers`), add:
 ```sql
 LEFT JOIN _secUsers su ON per.PERSONNO = su.PersonNo
 LEFT JOIN IgxUserExtension ue ON su.UserID = ue.UserID
 ```
 
-- [ ] **Step 2: Fix `personnelController.js`**
+For queries already joining `_secUsers u`, add:
+```sql
+LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID
+```
 
-References `p.PERSON_NAME`, `p.EMAIL`, `p.PHONE`, `p.SiteNo` (lines 25, 71, 120, 348, 396, 586, 587, 596). Apply same pattern. Remove `p.SiteNo` references (no replacement needed unless the controller returns site info — if so, return `null`).
+- [ ] **Step 2: Fix `personnelController.js` — EMAIL/PHONE/SiteNo**
 
-- [ ] **Step 3: Fix `workRequestController.js`**
+Search for `p.EMAIL`, `p.PHONE`, `p.SiteNo` (lines ~25, ~71, ~120, ~348, ~396, ~586, ~587, ~596).
+- `p.EMAIL` → `ue.email AS EMAIL`
+- `p.PHONE` → `ue.phone AS PHONE`
+- `p.SiteNo` → remove entirely (no replacement). Remove corresponding `request.input('siteNo', ...)` bindings if only used for this.
 
-References `p.EMAIL`, `p.PHONE`, `p.SiteNo`, `p.TITLENO` (lines 25–29). 
-- `EMAIL`/`PHONE` → IgxUserExtension
-- `SiteNo` → remove or return null
-- `TITLENO` still exists in new `Person` table — no change needed
+Add IgxUserExtension join where missing (same pattern as Step 1).
 
-- [ ] **Step 4: Fix `workflowController.js`**
+- [ ] **Step 3: Fix `workRequestController.js` — SiteNo**
 
-References `fp.EMAIL`, `fp.PHONE`, `fp.TITLE`, `rp.EMAIL`, etc. (lines 197–211, 323–337 — three-alias pattern: `fp` = from person, `rp` = receive person, `ap` = approved person). For each person alias, add a corresponding `IgxUserExtension` join with a distinct alias:
+Line ~29: Remove `p.SiteNo` from the SELECT. Remove corresponding `request.input` binding if present. Also check `p.EMAIL`/`p.PHONE` in this file and replace with `ue.*`.
+
+- [ ] **Step 4: Fix `workflowController.js` — multi-alias EMAIL/PHONE/TITLE**
+
+Lines ~197–211 and ~323–337 have a three-alias pattern (`fp` = from person, `rp` = receive person, `ap` = approved person). Each person alias needs its own IgxUserExtension join:
 
 ```sql
 LEFT JOIN _secUsers su_fp      ON fp.PERSONNO = su_fp.PersonNo
 LEFT JOIN IgxUserExtension uef ON su_fp.UserID = uef.UserID
--- then use uef.email AS FromPersonEmail, uef.phone AS FromPersonPhone, uef.title_text AS FromPersonTitle
+
+LEFT JOIN _secUsers su_rp      ON rp.PERSONNO = su_rp.PersonNo
+LEFT JOIN IgxUserExtension uer ON su_rp.UserID = uer.UserID
+
+LEFT JOIN _secUsers su_ap      ON ap.PERSONNO = su_ap.PersonNo
+LEFT JOIN IgxUserExtension uea ON su_ap.UserID = uea.UserID
 ```
 
-Repeat for `rp` (alias `uer`) and `ap` (alias `uea`).
+Then replace:
+- `fp.EMAIL` → `uef.email AS FromPersonEmail`, `fp.PHONE` → `uef.phone`, `fp.TITLE` → `uef.title_text`
+- `rp.EMAIL` → `uer.email`, etc.
+- `ap.EMAIL` → `uea.email`, etc.
 
-- [ ] **Step 5: Test each affected endpoint**
+- [ ] **Step 5: Test affected endpoints**
 
 ```bash
-# Administration
-curl http://localhost:3001/api/administration/approvers \
-  -H "Authorization: Bearer <token>"
-
-# Personnel
-curl http://localhost:3001/api/personnel \
-  -H "Authorization: Bearer <token>"
-
-# Work requests
-curl http://localhost:3001/api/workrequest \
-  -H "Authorization: Bearer <token>"
+curl http://localhost:3001/api/administration/approvers -H "Authorization: Bearer <token>"
+curl http://localhost:3001/api/personnel -H "Authorization: Bearer <token>"
+curl http://localhost:3001/api/workrequest -H "Authorization: Bearer <token>"
 ```
 
 Expected: All return `{"success":true}` with no SQL errors.
@@ -534,12 +495,12 @@ git add backend/src/controllers/administrationController.js \
         backend/src/controllers/personnelController.js \
         backend/src/controllers/workRequestController.js \
         backend/src/controllers/workflowController.js
-git commit -m "fix: update Person queries in administration/personnel/workRequest/workflow controllers"
+git commit -m "fix: replace p.EMAIL/PHONE/SiteNo with IgxUserExtension in administration/personnel/workRequest/workflow"
 ```
 
 ---
 
-## Task 6: Fix Person queries in notification services
+## Task 6: Fix EMAIL references in notification services
 
 **Files:**
 - Modify: `backend/src/services/dueDateNotificationService.js`
@@ -549,32 +510,39 @@ git commit -m "fix: update Person queries in administration/personnel/workReques
 - Modify: `backend/src/services/oldOpenTicketNotificationService.js`
 - Modify: `backend/src/services/reviewEscalationNotificationService.js`
 
-All services query `p.PERSON_NAME`, `p.EMAIL` (or `ue.LineID` via IgxUserExtension which is already joined in most cases).
+**Current state:** PERSON_NAME sweep complete in all six. Still read `p.EMAIL` from Person. Also: `oldOpenTicketNotificationService.js` and `reviewEscalationNotificationService.js` call SPs that internally use `PERSON_NAME` — those SPs need in-database patches (separate action, see SP note below).
 
-- [ ] **Step 1: Fix each service**
+- [ ] **Step 1: Fix `p.EMAIL` → `ue.email` in all six services**
 
-Pattern for each file — find any `p.PERSON_NAME` or `p.EMAIL` reference and apply:
-- `PERSON_NAME` → `CONCAT(ISNULL(p.FIRSTNAME,''),' ',ISNULL(p.LASTNAME,'')) AS PERSON_NAME`
-- `p.EMAIL` → `ue.email AS EMAIL`
+For each file, search for `p.EMAIL` or `u.EMAIL` in SQL query strings. Replace with `ue.email AS EMAIL` (or matching alias). Ensure `LEFT JOIN IgxUserExtension ue ON u.UserID = ue.UserID` is present (most services already have this join).
 
-Most services already join `IgxUserExtension ue ON u.UserID = ue.UserID`. For those that don't, add the join.
+- [ ] **Step 2: Note on `sp_Igx_GetUsersForNotification` and `sp_Dashboard_Backlog_AssignTo`**
 
-Check `calibrationDueDateNotificationService.js:195` specifically — it selects `p.PERSON_NAME AS AssigneeName`, replace with `CONCAT(ISNULL(p.FIRSTNAME,''), ' ', ISNULL(p.LASTNAME,'')) AS AssigneeName`.
+These SPs are called from `reviewEscalationNotificationService.js`, `oldOpenTicketNotificationService.js`, and `backlogController.js`. The SPs internally SELECT `PERSON_NAME` — cannot fix from EDEN code. Must patch in the Cedar database:
 
-- [ ] **Step 2: Test notification worker manually**
+```sql
+-- Run against Cedar DB (both old for testing, and new before cutover):
+-- In sp_Igx_GetUsersForNotification: replace p.PERSON_NAME with
+--   ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'')
+-- In sp_Dashboard_Backlog_AssignTo: same replacement
+```
+
+Coordinate with DBA or whoever has write access to Cedar stored procedures.
+
+- [ ] **Step 3: Test notification services**
 
 ```bash
 cd backend
 node -e "
   require('dotenv').config({ path: '.env' });
-  const svc = require('./src/services/pendingTicketNotificationService');
-  svc.sendPendingTicketNotifications().then(r => console.log('OK', r)).catch(console.error);
+  var svc = require('./src/services/pendingTicketNotificationService');
+  svc.sendPendingTicketNotifications().then(function(r) { console.log('OK', r); }).catch(console.error);
 "
 ```
 
 Expected: Runs without SQL errors. May send 0 notifications if no pending tickets.
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add backend/src/services/dueDateNotificationService.js \
@@ -583,43 +551,14 @@ git add backend/src/services/dueDateNotificationService.js \
         backend/src/services/calibrationDueDateNotificationService.js \
         backend/src/services/oldOpenTicketNotificationService.js \
         backend/src/services/reviewEscalationNotificationService.js
-git commit -m "fix: update PERSON_NAME and EMAIL references in notification services for new Cedar schema"
+git commit -m "fix: replace p.EMAIL with ue.email in notification services for new Cedar schema"
 ```
 
 ---
 
-## Task 7: Fix `assetController.js` — remove Site JOIN and SiteNo filter
+## Task 7: Fix `assetController.js` — Site JOIN removal ✅ DONE
 
-**Files:**
-- Modify: `backend/src/controllers/assetController.js` (lines ~94, 137, 344, 358, 487, 499, 603)
-
-The asset controller joins `Site s ON p.SiteNo = s.SiteNo` and filters by `p.SiteNo = @siteNo`.
-
-- [ ] **Step 1: Remove Site JOIN and SiteNo filter from all queries**
-
-For each occurrence:
-- Remove `LEFT JOIN Site s ON p.SiteNo = s.SiteNo`
-- Remove any SELECT of `s.SiteCode`, `s.SiteName`
-- Remove `AND p.SiteNo = @siteNo` WHERE conditions (or make them no-ops if the filter must remain — return all records regardless of site since there's no Site data)
-- Remove any `request.input('siteNo', ...)` parameter bindings for those queries
-
-If the API currently accepts a `siteNo` query param used only for this filter, it can be silently ignored until a future phase.
-
-- [ ] **Step 2: Test asset endpoints**
-
-```bash
-curl http://localhost:3001/api/assets \
-  -H "Authorization: Bearer <token>"
-```
-
-Expected: Returns records without SQL errors. If previously filtered by site, may now return more records — that is expected.
-
-- [ ] **Step 3: Commit**
-
-```bash
-git add backend/src/controllers/assetController.js
-git commit -m "fix: remove Site table JOIN and SiteNo filter from assetController (Site table removed in new Cedar)"
-```
+**Completed 2026-05-26.** All `LEFT JOIN Site`, `SiteName`, `SiteCode` references removed from `assetController.js`. Frontend updated to remove `SiteName` from `ProductionUnit` interface and table column. No further action needed.
 
 ---
 
@@ -628,12 +567,17 @@ git commit -m "fix: remove Site table JOIN and SiteNo filter from assetControlle
 **Files:**
 - Modify: `backend/src/services/cedarIntegrationService.js`
 
-The old `sp_WOMain_Insert` had 80 parameters. New Cedar returned 0 parameters — this needs direct verification before code changes.
+The old `sp_WOMain_Insert` had 80 parameters. New Cedar returned 0 parameters from MCP introspection — needs direct verification.
 
 - [ ] **Step 1: Verify the new SP signature via raw query**
 
-Run this against new Cedar to get the actual parameter list:
+Load the MCP tool and run against new Cedar:
 
+```
+ToolSearch: select:mcp__cedar_new__execute_read_query
+```
+
+Then run:
 ```sql
 SELECT
   p.name AS parameter_name,
@@ -647,56 +591,25 @@ WHERE sp.name = 'sp_WOMain_Insert'
 ORDER BY p.parameter_id;
 ```
 
-Use the MCP tool:
-```
-mcp__cedar_new__execute_read_query with the SQL above
-```
+Expected: Returns actual parameter list. Compare against old (80 params).
 
-Expected: Returns the actual parameter list. Compare against old (80 params).
+- [ ] **Step 2: Map old params to new params**
 
-- [ ] **Step 2: Load the read query MCP tool**
-
-```
-ToolSearch: select:mcp__cedar_new__execute_read_query
-```
-
-Then run the query from Step 1 against new Cedar.
-
-- [ ] **Step 3: Map old params to new params**
-
-Key params that may have been removed (based on WO table column removals):
-- `@SiteNo` — likely removed (SiteNo removed from WO)
+Key params likely removed (based on WO column removals):
+- `@SiteNo` — removed (SiteNo removed from WO)
 - `@EQTypeNo` — likely removed
 - `@FlagTPM`, `@TPMNo` — likely removed
 - `@JsaType`, `@JsaNo` — likely removed
-- `@FlagCleaningJobFinish*` — likely removed
-- `@FlagHandoverOper*` — likely removed
-- `@FlagSafety`, `@FlagEnvironment` — check
+- `@FlagCleaningJobFinish`, `@FlagCleaningJobFinishNotReq` — likely removed
+- `@FlagHandoverOper`, `@FlagHandoverOperNotReq` — likely removed
 
-In `cedarIntegrationService.js`, the `setWorkOrderParameters` method (~line 485) sets all 80 params. Remove any `request.input(...)` calls for params that no longer exist in the new SP.
+In `cedarIntegrationService.js`, the `setWorkOrderParameters` method (~line 485) sets all 80 params. Remove `request.input(...)` calls for params that no longer exist in the new SP.
 
-- [ ] **Step 4: Update `setWorkOrderParameters` in `cedarIntegrationService.js`**
+- [ ] **Step 3: Update `setWorkOrderParameters` in `cedarIntegrationService.js`**
 
-After confirming the new SP signature, update `setWorkOrderParameters` to only set the parameters that exist in the new SP. Wrap removed params in a conditional or simply delete them.
+After confirming the new SP signature, remove the `request.input` calls for each dropped parameter. Do not guess — only remove params confirmed absent from the Step 1 query.
 
-Likely safe to remove (based on removed WO columns):
-```js
-// REMOVE these request.input calls:
-// request.input('@SiteNo', sql.Int, woData.siteNo);
-// request.input('@EQTypeNo', sql.Int, woData.eqTypeNo);
-// request.input('@FlagTPM', sql.NVarChar, woData.flagTPM);
-// request.input('@TPMNo', sql.Int, woData.tpmNo);
-// request.input('@JsaType', sql.Int, woData.jsaType);
-// request.input('@JsaNo', sql.NVarChar, woData.jsaNo);
-// request.input('@FlagCleaningJobFinish', sql.NVarChar, ...);
-// request.input('@FlagCleaningJobFinishNotReq', sql.NVarChar, ...);
-// request.input('@FlagHandoverOper', sql.NVarChar, ...);
-// request.input('@FlagHandoverOperNotReq', sql.NVarChar, ...);
-```
-
-- [ ] **Step 5: Test WO creation via Cedar integration**
-
-Use a test ticket that is in "accepted" state and call the Cedar sync:
+- [ ] **Step 4: Test WO creation**
 
 ```bash
 curl -X POST http://localhost:3001/api/cedar-integration/sync/<ticketId> \
@@ -705,7 +618,7 @@ curl -X POST http://localhost:3001/api/cedar-integration/sync/<ticketId> \
 
 Expected: `{"success":true,"data":{"wono": <new_wo_number>}}` — a WO is created in Cedar.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
 git add backend/src/services/cedarIntegrationService.js
@@ -722,26 +635,24 @@ git commit -m "fix: update sp_WOMain_Insert parameter list for new Cedar schema"
 - Modify: `backend/src/controllers/calibrationController.js`
 - Modify: `backend/src/controllers/pmCalibrationScheduleController.js`
 
-- [ ] **Step 1: Audit calibration helpers for removed columns**
+**Current state:** `pmCalibrationScheduleController.js` PERSON_NAME is done. Check if `SiteNo` references remain in helpers/controller.
 
-Read both helper files and look for any reference to:
-- `PM.SiteNo` / `pm.SiteNo`
-- `EQ.SiteNo` / `eq.SiteNo`
-- `PM.EQTypeNo`
-- `PM.CREATEUSER`, `PM.CREATEDATE`
-- `EQ.TEXT1` / `EQ.TEXT2` / `EQ.TEXT3` (now varchar(20), truncation risk on write)
+- [ ] **Step 1: Audit calibration helpers for removed columns**
 
 ```bash
 grep -n "SiteNo\|EQTypeNo\|CREATEDATE\|CREATEUSER" backend/src/helpers/pmCalibrationScheduleQuery.js
 grep -n "SiteNo\|EQTypeNo\|CREATEDATE\|CREATEUSER" backend/src/controllers/calibrationController.js
+grep -n "SiteNo" backend/src/helpers/calibrationEqTypeFromEqcode.js
 ```
+
+List all matches.
 
 - [ ] **Step 2: Remove SiteNo filter / JOIN from PM and EQ queries**
 
 For each occurrence:
 - Remove `AND pm.SiteNo = @siteNo` or `AND eq.SiteNo = @siteNo`
-- Remove corresponding `request.input('siteNo', ...)` if only used for this filter
-- Remove `pm.CREATEUSER`, `pm.CREATEDATE` from any SELECT (these columns are gone)
+- Remove corresponding `request.input('siteNo', ...)` if only used for that filter
+- Remove `pm.CREATEUSER`, `pm.CREATEDATE` from any SELECT (columns gone)
 
 - [ ] **Step 3: Test calibration schedule endpoint**
 
@@ -768,7 +679,6 @@ git commit -m "fix: remove SiteNo and removed-column references from calibration
 
 **Files:**
 - Modify: `backend/.env` (or `.env.production`)
-- Modify: `backend/src/config/dbConfig.js` (if needed)
 
 - [ ] **Step 1: Update DB connection env vars to point to new Cedar**
 
@@ -780,18 +690,15 @@ DB_NAME=CEDAR
 DB_USER=<user>
 DB_PASSWORD=<password>
 DB_PORT=1433
-DB_INSTANCE=       # leave blank if no named instance
+DB_INSTANCE=
 ```
 
-The new Cedar DB name is `CEDAR` (confirmed from MCP — old was `Cedar6_Mars`).
+The new Cedar DB name is `CEDAR` (old was `Cedar6_Mars`).
 
 - [ ] **Step 2: Restart backend and run health check**
 
 ```bash
-# Restart Docker dev stack
 docker compose -f docker-compose.local.yml up backend --build
-
-# Health check
 curl http://localhost:3001/api/health
 ```
 
@@ -807,38 +714,37 @@ curl -X POST http://localhost:3001/api/auth/login \
 
 Expected: Valid JWT returned, `user.email` populated from `IgxUserExtension`.
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 4: Note — do not commit `.env`**
 
-Do NOT commit `.env` files (they are gitignored). Update `.env.example` or document the change:
+`.env` files are gitignored. Update `.env.example` to document `DB_NAME=CEDAR`.
 
 ```bash
-git add backend/src/config/dbConfig.js   # only if changed
-git commit -m "docs: update DB_NAME to CEDAR for new Cedar schema cutover"
+git add backend/.env.example
+git commit -m "docs: update DB_NAME to CEDAR in env example for new Cedar schema"
 ```
 
 ---
 
 ## Task 11: Smoke test all affected endpoints
 
-**Files:** No code changes — this is a verification task.
+**Files:** No code changes — verification only.
 
 - [ ] **Step 1: Test auth flow end-to-end**
 
-Login → verify token → call protected endpoint:
 ```bash
 TOKEN=$(curl -s -X POST http://localhost:3001/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"<user>","password":"<pass>"}' | jq -r '.data.token')
+  -d '{"username":"<user>","password":"<pass>"}' | node -e "var d='';process.stdin.on('data',function(c){d+=c});process.stdin.on('end',function(){console.log(JSON.parse(d).data.token)})")
 
 curl http://localhost:3001/api/users/profile \
   -H "Authorization: Bearer $TOKEN"
 ```
 
-Expected: Profile returns `email`, `phone`, `fullName`.
+Expected: Profile returns `email`, `phone`, `fullName` populated.
 
 - [ ] **Step 2: Test ticket lifecycle**
 
-Create → Accept → Plan → Start → Finish (each step should trigger Cedar sync and notification queue).
+Create → Accept → Plan → Start → Finish. Each step triggers Cedar sync and notification queue.
 
 - [ ] **Step 3: Test notification worker**
 
@@ -855,12 +761,12 @@ Open `http://localhost/ems/schedule` in browser (via Docker). Expected: Schedule
 
 - [ ] **Step 5: Log any remaining SQL errors**
 
-Check backend logs for `Invalid column name` or `Invalid object name` errors. Each one maps to a missed query — fix inline and commit.
+Check backend logs for `Invalid column name` or `Invalid object name` errors. Each maps to a missed query — fix inline and commit.
 
 - [ ] **Step 6: Final commit**
 
 ```bash
-git add -p   # review any remaining fixes
+git add -p
 git commit -m "fix: resolve remaining Cedar new schema SQL errors found during smoke test"
 ```
 
@@ -868,12 +774,14 @@ git commit -m "fix: resolve remaining Cedar new schema SQL errors found during s
 
 ## Cutover Checklist
 
-Run these steps in order on the day of Cedar DB cutover:
+Run in this order on the day of Cedar DB cutover:
 
-- [ ] Run Task 1 migration script against **old Cedar** (before switching connection string)
+- [ ] Patch `sp_Igx_GetUsersForNotification` in Cedar DB (replace `PERSON_NAME` with `ISNULL(FIRSTNAME,'') + ' ' + ISNULL(LASTNAME,'')`)
+- [ ] Patch `sp_Dashboard_Backlog_AssignTo` in Cedar DB (same replacement)
+- [ ] Run Task 1 migration script against **old Cedar** (before switching connection string): `node backend/script/migrate-person-data-to-extension.js`
 - [ ] Verify email count > 0 in `IgxUserExtension`
+- [ ] Confirm Tasks 2–9 code changes are merged to main
 - [ ] Update `.env.production` to point to new Cedar (`DB_NAME=CEDAR`, new server)
 - [ ] Restart backend container: `docker compose -f docker-compose.deploy.yml up backend -d`
-- [ ] Test `/api/auth/login` returns valid user with email populated
-- [ ] Test one ticket status change fires Cedar WO sync without error
+- [ ] Smoke test: login, create ticket, notifications (escalation + old-open), WO creation, calibration schedule, backlog dashboard
 - [ ] Monitor backend logs for 15 minutes for any `Invalid column name` errors

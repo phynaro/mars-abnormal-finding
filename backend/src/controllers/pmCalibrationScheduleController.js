@@ -3,7 +3,7 @@
  */
 
 const sql = require('mssql');
-const dbConfig = require('../config/dbConfig');
+const dbConfigNew = require('../config/dbConfigNew');
 const {
   getPMCalSched,
   getPMCalSchedCoreWhere,
@@ -45,7 +45,7 @@ function plantInfoFromPmCode(pmCode) {
 
 exports.getPmScheduleKpi = async (req, res) => {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
 
     const request = pool.request();
     const built = buildPmCalSchedFilterClause(request, req.query);
@@ -124,7 +124,7 @@ exports.getPmScheduleList = async (req, res) => {
     const startRow = (page - 1) * limit + 1;
     const endRow = (page - 1) * limit + limit;
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
 
     const countReq = pool.request();
     const builtCount = buildPmCalSchedFilterClause(countReq, req.query);
@@ -172,7 +172,7 @@ exports.getPmScheduleList = async (req, res) => {
         eqTypeKey
       FROM (
         SELECT
-          s.PMSchNo,
+          CAST(s.PMNO AS VARCHAR(10)) + '_' + s.DUEDATE AS PMSchNo,
           s.PMNO,
           s.DUEDATE,
           s.WONo,
@@ -186,7 +186,7 @@ exports.getPmScheduleList = async (req, res) => {
           wo.WOSTATUSNO AS woStatusNo,
           eq.EQCODE,
           ${typeKeySel} AS eqTypeKey,
-          ROW_NUMBER() OVER (ORDER BY ${dueExpr}, s.PMSchNo) AS RowNum
+          ROW_NUMBER() OVER (ORDER BY ${dueExpr}, s.PMNO) AS RowNum
         ${fromJoinPm}
         ${leftJoinEq}
         ${leftJoinWo}
@@ -224,7 +224,7 @@ exports.getPmScheduleList = async (req, res) => {
 
 exports.getPmScheduleCalendarRange = async (req, res) => {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const request = pool.request();
 
     const base = applyPmCalSchedNonDateFilters(request, req.query);
@@ -248,7 +248,7 @@ exports.getPmScheduleCalendarRange = async (req, res) => {
     const typeKeySel = eqTypeKeyExpr('eq');
     const sqlText = `
       SELECT
-        s.PMSchNo,
+        CAST(s.PMNO AS VARCHAR(10)) + '_' + s.DUEDATE AS PMSchNo,
         s.PMNO,
         s.DUEDATE,
         s.WONo,
@@ -267,7 +267,7 @@ exports.getPmScheduleCalendarRange = async (req, res) => {
       ${leftJoinWo}
       LEFT JOIN dbo.Person p ON p.PERSONNO = pm.ASSIGN
       WHERE ${[...base.parts, range.clause].join(' AND ')}
-      ORDER BY ${dueExpr}, s.PMSchNo
+      ORDER BY ${dueExpr}, s.PMNO
     `;
 
     const result = await request.query(sqlText);
@@ -294,14 +294,18 @@ exports.getPmScheduleCalendarRange = async (req, res) => {
 
 exports.getPmScheduleDetail = async (req, res) => {
   try {
-    const pmSchNo = parseInt(req.params.pmSchNo, 10);
-    if (Number.isNaN(pmSchNo) || pmSchNo <= 0) {
-      return res.status(400).json({ success: false, message: 'Valid pmSchNo is required' });
+    const pmSchId = req.params.pmSchNo || '';
+    const sepIdx = pmSchId.indexOf('_');
+    const pmNo = sepIdx > 0 ? parseInt(pmSchId.slice(0, sepIdx), 10) : NaN;
+    const dueDate = sepIdx > 0 ? pmSchId.slice(sepIdx + 1) : '';
+    if (Number.isNaN(pmNo) || !dueDate) {
+      return res.status(400).json({ success: false, message: 'Valid pmSchNo is required (format: pmno_YYYYMMDD)' });
     }
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const request = pool.request();
-    request.input('PmSchNo', sql.Int, pmSchNo);
+    request.input('PmNo', sql.Int, pmNo);
+    request.input('DueDate', sql.VarChar(10), dueDate);
 
     const { fromJoinPm, leftJoinEq, leftJoinWo } = getPMCalSched();
     const typeKeySel = eqTypeKeyExpr('eq');
@@ -310,7 +314,7 @@ exports.getPmScheduleDetail = async (req, res) => {
 
     const sqlText = `
       SELECT TOP 1
-        s.PMSchNo,
+        CAST(s.PMNO AS VARCHAR(10)) + '_' + s.DUEDATE AS PMSchNo,
         s.PMNO,
         s.DUEDATE,
         s.WONo,
@@ -337,7 +341,7 @@ exports.getPmScheduleDetail = async (req, res) => {
       LEFT JOIN dbo.Person p ON p.PERSONNO = pm.ASSIGN
       LEFT JOIN dbo.Dept d ON d.DEPTNO = pm.DEPTNO
       WHERE ${getPMCalSchedCoreWhere()}
-        AND s.PMSchNo = @PmSchNo
+        AND s.PMNO = @PmNo AND s.DUEDATE = @DueDate
     `;
 
     const result = await request.query(sqlText);
@@ -377,7 +381,7 @@ exports.getPmScheduleDetail = async (req, res) => {
  */
 exports.getPmScheduleTeamKpi = async (req, res) => {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const request = pool.request();
     const built = buildPmCalSchedFilterClause(request, req.query);
     if (built.error) {
@@ -434,7 +438,7 @@ exports.getPmScheduleTeamKpi = async (req, res) => {
  */
 exports.getPmScheduleAssignees = async (req, res) => {
   try {
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const sqlText = `
       SELECT DISTINCT
         pm.ASSIGN AS id,

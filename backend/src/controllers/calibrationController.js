@@ -7,7 +7,7 @@
  */
 
 const sql = require('mssql');
-const dbConfig = require('../config/dbConfig');
+const dbConfigNew = require('../config/dbConfigNew');
 
 const WO_TYPE_CALIBRATION = 5;
 /** WO status: 9 = history, 7 = finish (completed) */
@@ -40,7 +40,7 @@ function woDateExpr(colName) {
 exports.getPersonPeriodSummary = async (req, res) => {
   try {
     let { companyYear, assigneeId } = req.query;
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
 
     if (!companyYear) {
       companyYear = new Date().getFullYear();
@@ -174,7 +174,7 @@ exports.getIncoming = async (req, res) => {
       ? parseInt(req.query.year || req.query.companyYear, 10)
       : null;
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const dueExpr = dateExprFromColumn('s.DUEDATE');
     const yearFilter = yearNo != null && !Number.isNaN(yearNo) ? 'AND s.YearNo = @YearNo' : '';
 
@@ -266,7 +266,7 @@ exports.getLate = async (req, res) => {
       ? parseInt(req.query.year || req.query.companyYear, 10)
       : null;
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const dueExpr = dateExprFromColumn('s.DUEDATE');
     const yearFilter = yearNo != null && !Number.isNaN(yearNo) ? 'AND s.YearNo = @YearNo' : '';
 
@@ -357,7 +357,7 @@ exports.getDueSoon = async (req, res) => {
       ? parseInt(req.query.year || req.query.companyYear, 10)
       : null;
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const dueExpr = dateExprFromColumn('s.DUEDATE');
     const yearFilter = yearNo != null && !Number.isNaN(yearNo) ? 'AND s.YearNo = @YearNo' : '';
 
@@ -446,7 +446,7 @@ exports.getOverdue = async (req, res) => {
       ? parseInt(req.query.year || req.query.companyYear, 10)
       : null;
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const dueExpr = dateExprFromColumn('s.DUEDATE');
     const yearFilter = yearNo != null && !Number.isNaN(yearNo) ? 'AND s.YearNo = @YearNo' : '';
 
@@ -535,7 +535,7 @@ exports.getJobs = async (req, res) => {
     const dateFrom = req.query.dateFrom;
     const dateTo = req.query.dateTo;
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
 
     let whereClause = ` WHERE wo.WOTYPENO = ${WO_TYPE_CALIBRATION} AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
       AND (wo.PMNO IS NULL OR pm.PMNO IS NULL OR ${pmNotFrozen('pm')})`;
@@ -635,7 +635,7 @@ exports.getPmPlans = async (req, res) => {
     const startRow = (page - 1) * limit + 1;
     const endRow = (page - 1) * limit + limit;
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
 
     const countResult = await pool.request().query(`
       SELECT COUNT(*) AS total FROM dbo.PM pm

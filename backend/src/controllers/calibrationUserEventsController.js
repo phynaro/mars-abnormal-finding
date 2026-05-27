@@ -1,5 +1,5 @@
 const sql = require('mssql');
-const dbConfig = require('../config/dbConfig');
+const dbConfigNew = require('../config/dbConfigNew');
 const {
   USER_EVENT_CATEGORIES,
   normalizeCategory,
@@ -80,7 +80,7 @@ exports.getCalibrationUserEvents = async (req, res) => {
     const startRow = (page - 1) * limit + 1;
     const endRow = (page - 1) * limit + limit;
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
 
     const countReq = pool.request();
     const whereParts = buildUserEventScopeFilters(countReq, req.query);
@@ -171,7 +171,7 @@ exports.getCalibrationUserEventsCalendarRange = async (req, res) => {
       });
     }
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const request = pool.request();
     request.input('ViewStartDate', sql.DateTime2, viewStartDate);
     request.input('ViewEndDate', sql.DateTime2, viewEndDate);
@@ -214,7 +214,7 @@ exports.getCalibrationUserEventById = async (req, res) => {
     if (Number.isNaN(id) || id <= 0) {
       return res.status(400).json({ success: false, message: 'Valid event id is required' });
     }
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const item = await getEventById(pool, id);
     if (!item) {
       return res.status(404).json({ success: false, message: 'Calibration user event not found' });
@@ -237,7 +237,7 @@ exports.createCalibrationUserEvent = async (req, res) => {
       return res.status(400).json({ success: false, message: errors.join('; ') });
     }
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const request = pool.request();
     const payload = normalizedUserEventInput(req.body, req.user.id, { includeCreateMeta: true });
     bindUserEventWriteInputs(request, payload, { includeCreateMeta: true });
@@ -303,7 +303,7 @@ exports.updateCalibrationUserEvent = async (req, res) => {
       return res.status(400).json({ success: false, message: errors.join('; ') });
     }
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const existing = await getEventById(pool, id);
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Calibration user event not found' });
@@ -352,7 +352,7 @@ exports.deleteCalibrationUserEvent = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid event id is required' });
     }
 
-    const pool = await sql.connect(dbConfig);
+    const pool = await sql.connect(dbConfigNew);
     const existing = await getEventById(pool, id);
     if (!existing) {
       return res.status(404).json({ success: false, message: 'Calibration user event not found' });
