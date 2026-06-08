@@ -13,10 +13,24 @@ import Cropper from 'react-easy-crop';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { HelpCircle, Key, MessageSquare, User, Unlink, LogOut } from 'lucide-react';
+import { HelpCircle, Key, MapPin, MessageSquare, User, Unlink, LogOut } from 'lucide-react';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
 import { compressImage, formatFileSize, isFileSizeValid } from '@/utils/imageCompression';
 import userManagementService, { type Department } from '@/services/userManagementService';
+import administrationService, {
+  type TicketApproval,
+  type TicketApprovalSummary,
+  getApprovalLevelName,
+} from '@/services/administrationService';
+import { Badge } from '@/components/ui/badge';
+
+function formatApprovalLocation(approval: TicketApproval): string {
+  const parts = [approval.plant_code];
+  if (approval.area_code) parts.push(approval.area_code);
+  if (approval.line_code) parts.push(approval.line_code);
+  if (approval.machine_code) parts.push(approval.machine_code);
+  return parts.join('-');
+}
 
 const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
@@ -58,6 +72,10 @@ const ProfilePage: React.FC = () => {
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
   const [showLogoutInstruction, setShowLogoutInstruction] = useState(false);
   const [unlinkLoading, setUnlinkLoading] = useState(false);
+  const [approvalAreasLoading, setApprovalAreasLoading] = useState(false);
+  const [approvalAreaGroups, setApprovalAreaGroups] = useState<
+    Array<{ summary: TicketApprovalSummary; locations: TicketApproval[] }>
+  >([]);
 
   const uploadsBase = getApiBaseUrl().replace(/\/$/, '').replace(/\/api$/, '');
 
@@ -391,6 +409,42 @@ const ProfilePage: React.FC = () => {
     }
   }, [user?.lineId]);
 
+  // Fetch current user's ticket approval areas
+  useEffect(() => {
+    const fetchApprovalAreas = async () => {
+      if (!user?.id) {
+        setApprovalAreaGroups([]);
+        return;
+      }
+
+      setApprovalAreasLoading(true);
+      try {
+        const summaries = await administrationService.ticketApproval.getAll({
+          personno: user.id,
+        });
+
+        const groups = await Promise.all(
+          summaries.map(async (summary) => {
+            const locations = await administrationService.ticketApproval.getByPersonAndLevel(
+              summary.personno,
+              summary.approval_level
+            );
+            return { summary, locations };
+          })
+        );
+
+        setApprovalAreaGroups(groups);
+      } catch (error) {
+        console.error('Failed to fetch approval areas:', error);
+        setApprovalAreaGroups([]);
+      } finally {
+        setApprovalAreasLoading(false);
+      }
+    };
+
+    fetchApprovalAreas();
+  }, [user?.id]);
+
   // Update original values when user data changes
   useEffect(() => {
     if (user) {
@@ -517,9 +571,51 @@ const ProfilePage: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Right column: LINE Account + Change password */}
+        {/* Right column: Approval areas + LINE Account + Change password */}
         <div className="space-y-6 lg:col-span-1">
-          {/* Section 2: LINE Account */}
+          {/* Approval areas (read-only) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MapPin className="h-5 w-5" />
+                {t('profile.approvalAreas')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {approvalAreasLoading ? (
+                <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+              ) : approvalAreaGroups.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('profile.noApprovalAreas')}</p>
+              ) : (
+                <div className="space-y-4">
+                  {approvalAreaGroups.map(({ summary, locations }) => (
+                    <div key={`${summary.personno}-${summary.approval_level}`} className="space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge variant={summary.is_active ? 'default' : 'secondary'}>
+                          {t('profile.approvalLevel', { level: summary.approval_level })}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {getApprovalLevelName(summary.approval_level)}
+                        </span>
+                        {!summary.is_active && (
+                          <Badge variant="outline">{t('profile.approvalInactive')}</Badge>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {locations.map((location) => (
+                          <Badge key={location.id ?? formatApprovalLocation(location)} variant="secondary">
+                            {formatApprovalLocation(location)}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* LINE Account */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">

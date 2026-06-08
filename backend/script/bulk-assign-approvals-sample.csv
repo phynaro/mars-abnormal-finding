@@ -1,0 +1,4 @@
+personCode,plant_code,area_code,line_code,approval_level,is_active
+2-372,PCH,A01,,2,true
+2-372,PCH,A02,,2,true
+2-601,PCH,A01,L01,3,true
