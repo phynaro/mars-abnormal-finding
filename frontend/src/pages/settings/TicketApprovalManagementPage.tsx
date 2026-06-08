@@ -578,7 +578,7 @@ const TicketApprovalManagementPage: React.FC = () => {
       
       // Set person search
     if (approval.person_name) {
-        setPersonSearch(`${approval.person_name} (${approval.personno})`);
+        setPersonSearch(approval.person_name);
     } else {
       setPersonSearch(`Person #${approval.personno}`);
     }
@@ -631,7 +631,7 @@ const TicketApprovalManagementPage: React.FC = () => {
 
   const selectPerson = (person: Person) => {
     setFormData(prev => ({ ...prev, personno: person.PERSONNO }));
-    setPersonSearch(`${person.PERSON_NAME} (${person.PERSONCODE})`);
+    setPersonSearch(person.PERSON_NAME);
     setShowPersonSearch(false);
     setPersons([]);
     
@@ -828,7 +828,7 @@ const TicketApprovalManagementPage: React.FC = () => {
       
       // Set person search
       if (approval.person_name) {
-        setPersonSearch(`${approval.person_name} (${approval.personno})`);
+        setPersonSearch(approval.person_name);
       } else {
         setPersonSearch(`Person #${approval.personno}`);
       }
