@@ -25,6 +25,7 @@ const JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS = 'schedule-old-open-tickets';
 const JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW = 'schedule-finished-ticket-review';
 const JOB_NAME_SCHEDULE_REVIEW_ESCALATION = 'schedule-review-escalation';
 const JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE = 'schedule-calibration-due-date';
+const JOB_NAME_SCHEDULE_EMS_CALIBRATION = 'schedule-ems-calibration';
 
 let queue = null;
 
@@ -298,6 +299,23 @@ async function addScheduleCalibrationDueDateJob(payload) {
   }
 }
 
+async function addScheduleEmsCalibrationJob(payload) {
+  const q = getQueue();
+  if (!q) return null;
+  try {
+    const job = await q.add(JOB_NAME_SCHEDULE_EMS_CALIBRATION, payload || { notification_type: 'ems_calibration' }, {
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnComplete: { count: 1000 },
+    });
+    console.log(`📬 Enqueued schedule job ${job.id} (schedule-ems-calibration)`);
+    return job.id;
+  } catch (err) {
+    console.error('Failed to enqueue schedule-ems-calibration:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   addCreateTicketNotificationJob,
   addAcceptTicketNotificationJob,
@@ -318,6 +336,7 @@ module.exports = {
   addScheduleFinishedTicketReviewJob,
   addScheduleReviewEscalationJob,
   addScheduleCalibrationDueDateJob,
+  addScheduleEmsCalibrationJob,
   QUEUE_NAME,
   JOB_NAME_CREATE_TICKET,
   JOB_NAME_ACCEPT_TICKET,
@@ -338,4 +357,5 @@ module.exports = {
   JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW,
   JOB_NAME_SCHEDULE_REVIEW_ESCALATION,
   JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE,
+  JOB_NAME_SCHEDULE_EMS_CALIBRATION,
 };

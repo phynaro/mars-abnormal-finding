@@ -3,7 +3,7 @@
  */
 
 const sql = require('mssql');
-const dbConfigNew = require('../config/dbConfigNew');
+const { getCedarPool } = require('../config/getCedarPool');
 const {
   getPMCalSched,
   getPMCalSchedCoreWhere,
@@ -45,7 +45,7 @@ function plantInfoFromPmCode(pmCode) {
 
 exports.getPmScheduleKpi = async (req, res) => {
   try {
-    const pool = await sql.connect(dbConfigNew);
+    const pool = await getCedarPool();
 
     const request = pool.request();
     const built = buildPmCalSchedFilterClause(request, req.query);
@@ -124,7 +124,7 @@ exports.getPmScheduleList = async (req, res) => {
     const startRow = (page - 1) * limit + 1;
     const endRow = (page - 1) * limit + limit;
 
-    const pool = await sql.connect(dbConfigNew);
+    const pool = await getCedarPool();
 
     const countReq = pool.request();
     const builtCount = buildPmCalSchedFilterClause(countReq, req.query);
@@ -224,7 +224,7 @@ exports.getPmScheduleList = async (req, res) => {
 
 exports.getPmScheduleCalendarRange = async (req, res) => {
   try {
-    const pool = await sql.connect(dbConfigNew);
+    const pool = await getCedarPool();
     const request = pool.request();
 
     const base = applyPmCalSchedNonDateFilters(request, req.query);
@@ -302,7 +302,7 @@ exports.getPmScheduleDetail = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid pmSchNo is required (format: pmno_YYYYMMDD)' });
     }
 
-    const pool = await sql.connect(dbConfigNew);
+    const pool = await getCedarPool();
     const request = pool.request();
     request.input('PmNo', sql.Int, pmNo);
     request.input('DueDate', sql.VarChar(10), dueDate);
@@ -381,7 +381,7 @@ exports.getPmScheduleDetail = async (req, res) => {
  */
 exports.getPmScheduleTeamKpi = async (req, res) => {
   try {
-    const pool = await sql.connect(dbConfigNew);
+    const pool = await getCedarPool();
     const request = pool.request();
     const built = buildPmCalSchedFilterClause(request, req.query);
     if (built.error) {
@@ -438,7 +438,7 @@ exports.getPmScheduleTeamKpi = async (req, res) => {
  */
 exports.getPmScheduleAssignees = async (req, res) => {
   try {
-    const pool = await sql.connect(dbConfigNew);
+    const pool = await getCedarPool();
     const sqlText = `
       SELECT DISTINCT
         pm.ASSIGN AS id,

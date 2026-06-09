@@ -1,7 +1,8 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { menuItems, type MenuItem } from './menuConfig';
+import { menuItems, isMenuChildPathActive, type MenuItem } from './menuConfig';
 import { useAuth } from '@/contexts/AuthContext';
+import { useEmsAccess } from '@/contexts/EmsAccessContext';
 
 interface SubmenuPanelProps {
   activeId: string | null;
@@ -10,16 +11,20 @@ interface SubmenuPanelProps {
 
 export const SubmenuPanel: React.FC<SubmenuPanelProps> = ({ activeId, collapsed = false }) => {
   const { user } = useAuth();
+  const { canAdmin: emsCanAdmin } = useEmsAccess();
   const navigate = useNavigate();
   const location = useLocation();
-  // Permission checks disabled for submenu: show all children
-  const canAccess = (_item: MenuItem) => true;
+
+  const canAccess = (item: MenuItem) => {
+    if (item.emsAdminOnly) return emsCanAdmin;
+    return true;
+  };
 
   const active = menuItems.find(m => m.id === activeId) || null;
   const hasChildren = !!active?.children?.length;
   // Render container to support slide animation even when collapsed
 
-  const items = (active?.children || []);
+  const items = (active?.children || []).filter((child) => canAccess(child));
 
   return (
     <div className={`sticky top-0 self-start h-[100dvh] border-r bg-card flex flex-col transition-[width] duration-300 ease-in-out overflow-hidden ${!active || !hasChildren ? 'w-0 min-w-0' : (collapsed ? 'w-0 min-w-0' : 'w-48 min-w-[128px]')}`}>
@@ -41,7 +46,7 @@ export const SubmenuPanel: React.FC<SubmenuPanelProps> = ({ activeId, collapsed 
                 return true;
               })
               .map(child => {
-                const isActive = location.pathname === child.path;
+                const isActive = isMenuChildPathActive(location.pathname, child.path);
                 return (
                   <button
                     key={child.id}

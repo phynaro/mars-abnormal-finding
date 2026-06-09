@@ -12,6 +12,9 @@ services:
     environment:
       - NODE_ENV=development
       - REDIS_URL=redis://redis:6379
+      # CEDAR DB: use host IP in Docker (localhost in backend/.env is for native dev only)
+      - DB_NEW_SERVER=192.168.0.208
+      - DB_NEW_INSTANCE=
       # Ensure file watcher uses polling (needed for bind mounts on Windows)
       - CHOKIDAR_USEPOLLING=true
     depends_on:
@@ -52,6 +55,8 @@ services:
     environment:
       - NODE_ENV=development
       - REDIS_URL=redis://redis:6379
+      - DB_NEW_SERVER=192.168.0.208
+      - DB_NEW_INSTANCE=
     volumes:
       - ./backend/src:/app/src
       - /app/node_modules

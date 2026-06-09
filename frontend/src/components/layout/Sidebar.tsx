@@ -5,8 +5,9 @@ import { ChevronRight, ChevronDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
-import { menuItems, type MenuItem } from "./menuConfig";
+import { menuItems, isMenuChildPathActive, type MenuItem } from "./menuConfig";
 import { getAvatarUrl } from "../../utils/url";
+import { useEmsAccess } from "../../contexts/EmsAccessContext";
 
 interface SidebarProps {
   isCollapsed?: boolean;
@@ -23,11 +24,12 @@ const Sidebar: React.FC<SidebarProps> = ({
   onMobileToggle,
 }) => {
   const { user } = useAuth();
+  const { canAccess: emsCanAccess, canAdmin: emsCanAdmin, loading: emsLoading } = useEmsAccess();
   const navigate = useNavigate();
   const location = useLocation();
   const [expandedItems, setExpandedItems] = useState<string[]>(() => {
     const activeParent = menuItems.find((item) =>
-      item.children?.some((child) => location.pathname.startsWith(child.path)),
+      item.children?.some((child) => isMenuChildPathActive(location.pathname, child.path)),
     );
     if (activeParent && activeParent.children?.length) {
       return [activeParent.id];
@@ -37,7 +39,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
   useEffect(() => {
     const activeParent = menuItems.find((item) =>
-      item.children?.some((child) => location.pathname.startsWith(child.path)),
+      item.children?.some((child) => isMenuChildPathActive(location.pathname, child.path)),
     );
     if (activeParent?.children?.length) {
       setExpandedItems((prev) =>
@@ -64,11 +66,19 @@ const Sidebar: React.FC<SidebarProps> = ({
     );
   };
 
-  const canAccess = (permissionLevel: number) => {
+  const canAccess = (item: MenuItem) => {
+    if (item.emsAdminOnly) {
+      if (emsLoading) return false;
+      return emsCanAccess && emsCanAdmin;
+    }
+    if (item.emsMenu) {
+      if (emsLoading) return false;
+      return emsCanAccess;
+    }
     if (user?.permissionLevel === undefined) {
       return true;
     }
-    return user.permissionLevel >= permissionLevel;
+    return user.permissionLevel >= item.permissionLevel;
   };
 
   const handleNavigation = (path: string) => {
@@ -80,7 +90,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const renderMenuItem = (item: MenuItem) => {
-    if (!canAccess(item.permissionLevel)) {
+    if (!canAccess(item)) {
       return null;
     }
 
@@ -88,7 +98,9 @@ const Sidebar: React.FC<SidebarProps> = ({
     const hasChildren = item.children && item.children.length > 0;
 
     // Check if this item is active, but not if a child is active
-    const hasActiveChild = item.children?.some(child => location.pathname.startsWith(child.path));
+    const hasActiveChild = item.children?.some((child) =>
+      isMenuChildPathActive(location.pathname, child.path),
+    );
     const isActive = !hasActiveChild && location.pathname.startsWith(item.path);
 
     return (
@@ -137,8 +149,8 @@ const Sidebar: React.FC<SidebarProps> = ({
               isCollapsed ? "ml-2" : "ml-4",
             )}
           >
-            {item.children!.map((child) => {
-              const isChildActive = location.pathname.startsWith(child.path);
+            {item.children!.filter((child) => canAccess(child)).map((child) => {
+              const isChildActive = isMenuChildPathActive(location.pathname, child.path);
 
               return (
                 <Button
@@ -149,13 +161,13 @@ const Sidebar: React.FC<SidebarProps> = ({
                     isChildActive
                       ? "bg-primary text-primary-foreground"
                       : "text-muted-foreground hover:text-foreground hover:bg-hover hover:text-hover-foreground",
-                    !canAccess(child.permissionLevel) &&
+                    !canAccess(child) &&
                       "opacity-50 cursor-not-allowed",
                     isCollapsed && !isMobile && "justify-center px-2",
                   )}
-                  disabled={!canAccess(child.permissionLevel)}
+                  disabled={!canAccess(child)}
                   onClick={() => {
-                    if (canAccess(child.permissionLevel)) {
+                    if (canAccess(child)) {
                       handleNavigation(child.path);
                     }
                   }}

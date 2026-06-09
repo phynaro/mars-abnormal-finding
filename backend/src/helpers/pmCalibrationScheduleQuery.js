@@ -5,8 +5,8 @@
 
 const sql = require('mssql');
 
-/** First two characters of PMCODE → plant (validated filter values). */
-const ALLOWED_PLANT_PREFIXES = ['PP', 'DJ', 'DP', 'SN', 'CT', 'PS'];
+/** Plant code prefix of PMCODE (segment before first '-', e.g. PP, PIP). */
+const ALLOWED_PLANT_PREFIXES = ['PP', 'DJ', 'DP', 'SN', 'CT', 'PS', 'ST', 'PIP'];
 
 const PM_CAL_PLANTS = [
   { code: 'PP', label: 'Pouch Plant' },
@@ -15,6 +15,8 @@ const PM_CAL_PLANTS = [
   { code: 'SN', label: 'Dry Sanook' },
   { code: 'CT', label: 'Care & Treat' },
   { code: 'PS', label: 'Positive Treat' },
+  { code: 'ST', label: 'ST Plant' },
+  { code: 'PIP', label: 'PIP Plant' },
 ];
 
 /**
@@ -34,7 +36,8 @@ function pmFlagActive(alias) {
 }
 
 function plantPrefixExpr() {
-  return `UPPER(LEFT(LTRIM(RTRIM(pm.PMCODE)), 2))`;
+  const code = `LTRIM(RTRIM(pm.PMCODE))`;
+  return `UPPER(LEFT(${code}, NULLIF(CHARINDEX(N'-', ${code} + N'-'), 0) - 1))`;
 }
 
 /**
@@ -104,7 +107,7 @@ function applyPmCalSchedNonDateFilters(request, query) {
       .filter((c) => ALLOWED_PLANT_PREFIXES.includes(c));
     if (codes.length > 0) {
       codes.forEach((c, i) => {
-        request.input(`Plant${i}`, sql.VarChar(2), c);
+        request.input(`Plant${i}`, sql.NVarChar(20), c);
       });
       parts.push(`${plantPrefixExpr()} IN (${codes.map((_, i) => `@Plant${i}`).join(', ')})`);
     }
@@ -195,6 +198,7 @@ module.exports = {
   PM_CAL_PLANTS,
   dateExprFromColumn,
   pmNotFrozen,
+  pmFlagActive,
   getPMCalSchedCoreWhere,
   getPMCalSched,
   leftJoinEq,

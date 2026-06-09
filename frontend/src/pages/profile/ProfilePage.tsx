@@ -13,7 +13,7 @@ import Cropper from 'react-easy-crop';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { HelpCircle, Key, MapPin, MessageSquare, User, Unlink, LogOut } from 'lucide-react';
+import { HelpCircle, Key, Gauge, MapPin, MessageSquare, User, Unlink, LogOut } from 'lucide-react';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
 import { compressImage, formatFileSize, isFileSizeValid } from '@/utils/imageCompression';
 import userManagementService, { type Department } from '@/services/userManagementService';
@@ -23,6 +23,8 @@ import administrationService, {
   getApprovalLevelName,
 } from '@/services/administrationService';
 import { Badge } from '@/components/ui/badge';
+import { useEmsAccess } from '@/contexts/EmsAccessContext';
+import { emsRoleLabel } from '@/components/ems/roles/roleLabels';
 
 function formatApprovalLocation(approval: TicketApproval): string {
   const parts = [approval.plant_code];
@@ -35,6 +37,7 @@ function formatApprovalLocation(approval: TicketApproval): string {
 const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
   const { t } = useLanguage();
+  const { emsRoles, loading: emsRolesLoading } = useEmsAccess();
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [email, setEmail] = useState(user?.email || '');
@@ -609,6 +612,31 @@ const ProfilePage: React.FC = () => {
                         ))}
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* EMS roles (read-only) */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Gauge className="h-5 w-5" />
+                {t('profile.emsRoles')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {emsRolesLoading ? (
+                <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
+              ) : emsRoles.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t('profile.noEmsRoles')}</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {emsRoles.map((role) => (
+                    <Badge key={role} variant="secondary">
+                      {emsRoleLabel(role, t)}
+                    </Badge>
                   ))}
                 </div>
               )}

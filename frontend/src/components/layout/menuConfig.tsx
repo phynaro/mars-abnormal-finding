@@ -16,7 +16,10 @@ import {
   Settings,
   TrendingUp,
   Users,
-  Bell
+  Bell,
+  Gauge,
+  Wrench,
+  CalendarDays,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -25,7 +28,19 @@ export interface MenuItem {
   icon: React.ReactNode;
   path: string;
   permissionLevel: number;
+  /** When true, item visibility uses EMS access (L2+ or EMS role), not permissionLevel alone */
+  emsMenu?: boolean;
+  /** EMS settings — visible only to plant managers / L3 admins */
+  emsAdminOnly?: boolean;
   children?: MenuItem[];
+}
+
+/** Active state for sidebar / submenu child links (supports detail routes). */
+export function isMenuChildPathActive(pathname: string, childPath: string): boolean {
+  if (childPath === '/ems/dashboard') {
+    return pathname === '/ems/dashboard' || pathname === '/ems';
+  }
+  return pathname === childPath || pathname.startsWith(`${childPath}/`);
 }
 
 export const menuItems: MenuItem[] = [
@@ -57,8 +72,51 @@ export const menuItems: MenuItem[] = [
      { id: 'dashboard-department-user-kpi', label: 'Department User KPI', icon: <Users className="h-4 w-4" />, path: '/dashboard/department-user-kpi', permissionLevel: 1 },
      { id: 'dashboard-area-pouch', label: 'Pouch Dashboard', icon: <MapPin className="h-4 w-4" />, path: '/dashboard/area/pouch', permissionLevel: 1 },
      { id: 'dashboard-area-dry', label: 'Dry Dashboard', icon: <MapPin className="h-4 w-4" />, path: '/dashboard/area/dry', permissionLevel: 1 },
-     { id: 'dashboard-area-pt', label: 'PT Dashboard', icon: <MapPin className="h-4 w-4" />, path: '/dashboard/area/pt', permissionLevel: 1 },
+      { id: 'dashboard-area-pt', label: 'PT Dashboard', icon: <MapPin className="h-4 w-4" />, path: '/dashboard/area/pt', permissionLevel: 1 },
     ]
+  },
+  {
+    id: 'ems',
+    label: 'Calibration',
+    icon: <Gauge className="h-5 w-5" />,
+    path: '/ems',
+    permissionLevel: 1,
+    emsMenu: true,
+    children: [
+      {
+        id: 'ems-dashboard',
+        label: 'Dashboard',
+        icon: <LayoutDashboard className="h-4 w-4" />,
+        path: '/ems/dashboard',
+        permissionLevel: 1,
+        emsMenu: true,
+      },
+      {
+        id: 'ems-equipment',
+        label: 'Equipment',
+        icon: <Wrench className="h-4 w-4" />,
+        path: '/ems/equipment',
+        permissionLevel: 1,
+        emsMenu: true,
+      },
+      {
+        id: 'ems-schedule',
+        label: 'Schedule',
+        icon: <CalendarDays className="h-4 w-4" />,
+        path: '/ems/schedule',
+        permissionLevel: 1,
+        emsMenu: true,
+      },
+      {
+        id: 'ems-settings',
+        label: 'Settings',
+        icon: <Settings className="h-4 w-4" />,
+        path: '/ems/settings/roles',
+        permissionLevel: 1,
+        emsMenu: true,
+        emsAdminOnly: true,
+      },
+    ],
   },
   // {
   //   id: 'workflow',

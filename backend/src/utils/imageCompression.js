@@ -92,8 +92,45 @@ function getSizeReductionInfo(originalBuffer, compressedBuffer) {
   };
 }
 
+/**
+ * Compress and resize image for equipment photos
+ * @param {Buffer} imageBuffer - Input image buffer
+ * @param {Object} options - Compression options
+ * @returns {Promise<Buffer>} Compressed image buffer
+ */
+async function compressEquipmentImage(imageBuffer, options = {}) {
+  const defaultOptions = {
+    maxWidth: 1024,
+    maxHeight: 1024,
+    quality: 85,
+    format: 'jpeg',
+  };
+
+  const config = { ...defaultOptions, ...options };
+
+  try {
+    const processedImage = await sharp(imageBuffer)
+      .resize(config.maxWidth, config.maxHeight, {
+        fit: 'inside',
+        withoutEnlargement: true,
+      })
+      .jpeg({
+        quality: config.quality,
+        progressive: true,
+        mozjpeg: true,
+      })
+      .toBuffer();
+
+    return processedImage;
+  } catch (error) {
+    console.error('Equipment image compression error:', error);
+    throw new Error('Failed to compress equipment image');
+  }
+}
+
 module.exports = {
   compressAvatar,
   compressTicketImage,
-  getSizeReductionInfo
+  compressEquipmentImage,
+  getSizeReductionInfo,
 };

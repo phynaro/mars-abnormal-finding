@@ -371,3 +371,45 @@ export function checkPermissionByGroupCode(
   return allowedGroupCodes.includes(userGroupCode);
 }
 
+/** EMS role values from backend IgxEmsUserRole */
+export type EmsRole = 'calibrator' | 'am' | 'plant_manager';
+
+export interface EmsAccessInput {
+  levelReport?: number | null;
+  emsRoles?: EmsRole[] | null;
+}
+
+/**
+ * EMS module access: L2+ engineers or any EMS role.
+ */
+export function checkEmsAccess(input: EmsAccessInput): PermissionCheckResult {
+  const level = Number(input.levelReport) || 0;
+  const roles = input.emsRoles || [];
+
+  if (level >= 2 || roles.length > 0) {
+    return { allowed: true };
+  }
+
+  return {
+    allowed: false,
+    reason: 'Requires engineer level (L2+) or an EMS role',
+  };
+}
+
+/**
+ * EMS settings admin: L3 or plant_manager role.
+ */
+export function checkEmsAdmin(input: EmsAccessInput): PermissionCheckResult {
+  const level = Number(input.levelReport) || 0;
+  const roles = input.emsRoles || [];
+
+  if (level >= 3 || roles.includes('plant_manager')) {
+    return { allowed: true };
+  }
+
+  return {
+    allowed: false,
+    reason: 'Requires manager level (L3) or Plant Manager EMS role',
+  };
+}
+

@@ -45,6 +45,8 @@ interface Props {
   rangeStart?: string;
   rangeEnd?: string;
   loadedCount?: number;
+  allowedViews?: PmCalendarView[];
+  toolbar?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,8 +82,9 @@ function parseDateTime(raw: string | null | undefined): Date | null {
 }
 
 function eventStatus(item: PmScheduleListItem): 'done' | 'in-progress' | 'pending' {
-  if (item.woStatusNo === 9) return 'done';
-  if (item.WONo != null) return 'in-progress';
+  if (item.schedWOStatusNo === 9 || item.woStatusNo === 9) return 'done';
+  const woNo = item.WONo != null ? Number(item.WONo) : 0;
+  if (woNo > 0) return 'in-progress';
   return 'pending';
 }
 
@@ -144,7 +147,14 @@ const CalibrationBigCalendar: React.FC<Props> = ({
   rangeStart,
   rangeEnd,
   loadedCount,
+  allowedViews = ['month', 'week', 'agenda'],
+  toolbar = true,
 }) => {
+  const calendarViews = allowedViews.map((v) => {
+    if (v === 'month') return Views.MONTH;
+    if (v === 'week') return Views.WEEK;
+    return Views.AGENDA;
+  });
   const events = useMemo<CalEvent[]>(() => {
     const result: CalEvent[] = [];
     for (const item of items) {
@@ -270,7 +280,8 @@ const CalibrationBigCalendar: React.FC<Props> = ({
           style={{ height: 560 }}
           eventPropGetter={eventPropGetter}
           components={{ event: EventComponent as React.ComponentType<{ event: CalEvent }> }}
-          views={[Views.MONTH, Views.WEEK, Views.AGENDA]}
+          views={calendarViews.length ? calendarViews : [Views.MONTH]}
+          toolbar={toolbar}
           popup
           showAllEvents={false}
         />

@@ -1,15 +1,23 @@
 const sql = require('mssql');
 
-const dbNewServer = process.env.DB_NEW_SERVER || 'localhost';
+// CEDAR DB (PM/WO/EQ + IgxEQExtension). In Docker, localhost is the container — fall back to DB_SERVER.
+let dbNewServer = process.env.DB_NEW_SERVER || process.env.DB_SERVER || 'localhost';
+if (dbNewServer === 'localhost' && process.env.DB_SERVER) {
+  dbNewServer = process.env.DB_SERVER;
+}
+
 const dbNewInstance = process.env.DB_NEW_INSTANCE;
-const serverName = dbNewInstance ? `${dbNewServer}\\${dbNewInstance}` : dbNewServer;
+// Named instance + IP breaks tedious DNS; use IP:port directly when server is an IP.
+const isIpAddress = /^\d{1,3}(\.\d{1,3}){3}$/.test(dbNewServer);
+const serverName =
+  dbNewInstance && !isIpAddress ? `${dbNewServer}\\${dbNewInstance}` : dbNewServer;
 
 const dbConfigNew = {
   server: serverName,
   port: parseInt(process.env.DB_NEW_PORT || '1434', 10),
   database: process.env.DB_NEW_NAME || 'CEDAR',
-  user: process.env.DB_NEW_USER || 'sa',
-  password: process.env.DB_NEW_PASSWORD || '',
+  user: process.env.DB_NEW_USER || process.env.DB_USER || 'sa',
+  password: process.env.DB_NEW_PASSWORD || process.env.DB_PASSWORD || '',
   options: {
     encrypt: (process.env.DB_NEW_ENCRYPT || 'false').toLowerCase() === 'true',
     trustServerCertificate: (process.env.DB_NEW_TRUST_SERVER_CERT || 'true').toLowerCase() === 'true',

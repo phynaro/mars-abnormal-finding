@@ -11,6 +11,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { getAvatarUrl } from '../../utils/url';
 import { checkPermission } from '@/utils/permissionChecker';
+import { useEmsAccess } from '@/contexts/EmsAccessContext';
 
 interface IconRailProps {
   activeId: string | null;
@@ -25,14 +26,20 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, submenuCollapsed =
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage } = useLanguage();
   const { periodWeek } = usePeriodWeek();
+  const { canAccess: emsCanAccess, loading: emsLoading } = useEmsAccess();
 
   // Permission check function
   const canAccess = (item: MenuItem) => {
-    // Check if this is the settings menu
+    if (item.emsMenu) {
+      if (emsLoading) return false;
+      return emsCanAccess;
+    }
     if (item.id === 'settings') {
       return checkPermission(user?.id, 'settings_access').allowed;
     }
-    // For other items, allow access (you can add more checks here)
+    if (user?.permissionLevel !== undefined && item.permissionLevel > 0) {
+      return user.permissionLevel >= item.permissionLevel;
+    }
     return true;
   };
 

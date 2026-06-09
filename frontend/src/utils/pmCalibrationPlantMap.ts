@@ -7,6 +7,8 @@ export const PM_CALIBRATION_PLANT_OPTIONS = [
   { code: 'SN', label: 'Dry Sanook' },
   { code: 'CT', label: 'Care & Treat' },
   { code: 'PS', label: 'Positive Treat' },
+  { code: 'ST', label: 'ST Plant' },
+  { code: 'PIP', label: 'PIP Plant' },
 ] as const;
 
 export type PmCalibrationPlantCode = (typeof PM_CALIBRATION_PLANT_OPTIONS)[number]['code'];

@@ -29,6 +29,12 @@ import type {
 } from '@/services/calibrationService';
 import type { Department } from '@/services/personnelService';
 
+interface UserEventApi {
+  createCalibrationUserEvent: (payload: CalibrationUserEventUpsertPayload) => Promise<unknown>;
+  updateCalibrationUserEvent: (id: number, payload: CalibrationUserEventUpsertPayload) => Promise<unknown>;
+  deleteCalibrationUserEvent: (id: number) => Promise<unknown>;
+}
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -36,6 +42,7 @@ interface Props {
   categories: CalibrationUserEventCategoryOption[];
   departments: Department[];
   users: Array<{ id: number; name: string }>;
+  eventApi?: UserEventApi;
   onSaved: () => void;
 }
 
@@ -91,9 +98,11 @@ const CalibrationUserEventModal: React.FC<Props> = ({
   categories,
   departments,
   users,
+  eventApi,
   onSaved,
 }) => {
   const { toast } = useToast();
+  const api = eventApi ?? calibrationService;
   const isEditMode = Boolean(eventItem);
   const [form, setForm] = useState<FormState>(defaultFormState);
   const [saving, setSaving] = useState(false);
@@ -162,9 +171,9 @@ const CalibrationUserEventModal: React.FC<Props> = ({
       setError(null);
       const payload = toPayload();
       if (isEditMode && eventItem) {
-        await calibrationService.updateCalibrationUserEvent(eventItem.id, payload);
+        await api.updateCalibrationUserEvent(eventItem.id, payload);
       } else {
-        await calibrationService.createCalibrationUserEvent(payload);
+        await api.createCalibrationUserEvent(payload);
       }
 
       toast({
@@ -192,7 +201,7 @@ const CalibrationUserEventModal: React.FC<Props> = ({
 
     try {
       setDeleting(true);
-      await calibrationService.deleteCalibrationUserEvent(eventItem.id);
+      await api.deleteCalibrationUserEvent(eventItem.id);
       toast({
         title: 'Success',
         description: 'User event deleted successfully',

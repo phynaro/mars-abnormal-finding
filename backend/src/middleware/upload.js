@@ -57,9 +57,19 @@ const uploadMemory = multer({
   }
 });
 
+const uploadEquipmentMemory = multer({
+  storage: multer.memoryStorage(),
+  fileFilter,
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+    files: 1,
+  },
+});
+
 module.exports = {
   upload,
-  uploadMemory
+  uploadMemory,
+  uploadEquipmentMemory,
 };
 
 // Avatar-specific storage under uploads/avatars/:userId (without compression)

@@ -122,7 +122,7 @@ function bindUserEventWriteInputs(request, data, { includeCreateMeta = false } =
   request.input('StartAt', sql.DateTime2, data.start_at);
   request.input('EndAt', sql.DateTime2, data.end_at);
   request.input('IsAllDay', sql.Bit, data.is_all_day);
-  request.input('PlantCode', sql.VarChar(2), data.plant_code);
+  request.input('PlantCode', sql.NVarChar(20), data.plant_code);
   request.input('DeptNo', sql.Int, data.dept_no);
   request.input('AssigneeId', sql.Int, data.assignee_id);
   request.input('ColorHex', sql.VarChar(7), data.color_hex);
@@ -143,7 +143,7 @@ function buildUserEventScopeFilters(request, query) {
       .map((s) => normalizePlantCode(s))
       .filter((c) => c && USER_EVENT_PLANT_CODES.includes(c));
     if (codes.length > 0) {
-      codes.forEach((code, idx) => request.input(`EventPlant${idx}`, sql.VarChar(2), code));
+      codes.forEach((code, idx) => request.input(`EventPlant${idx}`, sql.NVarChar(20), code));
       parts.push(`(e.plant_code IS NULL OR e.plant_code IN (${codes.map((_, idx) => `@EventPlant${idx}`).join(', ')}))`);
     }
   }

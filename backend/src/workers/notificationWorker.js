@@ -23,6 +23,7 @@ const oldOpenTicketNotificationService = require('../services/oldOpenTicketNotif
 const finishedTicketReviewNotificationService = require('../services/finishedTicketReviewNotificationService');
 const reviewEscalationNotificationService = require('../services/reviewEscalationNotificationService');
 const calibrationDueDateNotificationService = require('../services/calibrationDueDateNotificationService');
+const emsNotificationService = require('../services/ems/emsNotificationService');
 
 /** Timestamped log helpers */
 const ts = () => new Date().toISOString();
@@ -50,6 +51,7 @@ const JOB_NAME_SCHEDULE_OLD_OPEN_TICKETS = notificationQueue.JOB_NAME_SCHEDULE_O
 const JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW = notificationQueue.JOB_NAME_SCHEDULE_FINISHED_TICKET_REVIEW;
 const JOB_NAME_SCHEDULE_REVIEW_ESCALATION = notificationQueue.JOB_NAME_SCHEDULE_REVIEW_ESCALATION;
 const JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE = notificationQueue.JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE;
+const JOB_NAME_SCHEDULE_EMS_CALIBRATION = notificationQueue.JOB_NAME_SCHEDULE_EMS_CALIBRATION;
 
 const connection = process.env.REDIS_URL
   ? { url: process.env.REDIS_URL }
@@ -698,6 +700,16 @@ async function processScheduleCalibrationDueDate(job) {
   return result;
 }
 
+async function processScheduleEmsCalibration(job) {
+  const { notification_type = 'ems_calibration' } = job.data;
+  log(`⏰ [Worker] Running schedule job: ${notification_type}`);
+  const result = await runScheduleNotification(notification_type, () =>
+    emsNotificationService.processAll()
+  );
+  log(`✅ [Worker] Schedule ems-calibration completed:`, result);
+  return result;
+}
+
 async function processor(job) {
   if (job.name === JOB_NAME_CREATE_TICKET) {
     await processCreateTicketNotification(job);
@@ -773,6 +785,10 @@ async function processor(job) {
   }
   if (job.name === JOB_NAME_SCHEDULE_CALIBRATION_DUE_DATE) {
     await processScheduleCalibrationDueDate(job);
+    return;
+  }
+  if (job.name === JOB_NAME_SCHEDULE_EMS_CALIBRATION) {
+    await processScheduleEmsCalibration(job);
     return;
   }
   warn(`[Worker] Unknown job name: ${job.name}`);

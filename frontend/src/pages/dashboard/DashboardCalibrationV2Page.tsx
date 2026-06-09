@@ -181,9 +181,10 @@ function getCalendarVisibleRange(view: PmCalendarView, date: Date) {
 }
 
 function woStatusBadge(item: PmScheduleListItem) {
-  if (item.woStatusNo === 9)
+  if (item.schedWOStatusNo === 9 || item.woStatusNo === 9)
     return <Badge className="bg-green-100 text-green-800 border-green-200">Done</Badge>;
-  if (item.WONo != null)
+  const woNo = item.WONo != null ? Number(item.WONo) : 0;
+  if (woNo > 0)
     return <Badge className="bg-blue-100 text-blue-800 border-blue-200">In Progress</Badge>;
   return <Badge variant="outline" className="text-muted-foreground">No WO</Badge>;
 }

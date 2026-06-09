@@ -119,6 +119,7 @@ const accessRequestRoutes = require('./routes/accessRequest');
 const notificationScheduleRoutes = require('./routes/notificationSchedule');
 const ticketClassRoutes = require('./routes/ticketClass');
 const areaDashboardRoutes = require('./routes/areaDashboard');
+const emsRoutes = require('./routes/ems');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/access-request', accessRequestRoutes);
@@ -142,6 +143,7 @@ app.use('/api/personal-targets', personalTargetRoutes);
 app.use('/api/notification-schedules', notificationScheduleRoutes);
 app.use('/api/ticketclass', ticketClassRoutes);
 app.use('/api/dashboard/area', areaDashboardRoutes);
+app.use('/api/ems', emsRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
@@ -230,6 +232,7 @@ const dueDateNotificationJob = require('./jobs/dueDateNotificationJob');
 const finishedTicketReviewNotificationJob = require('./jobs/finishedTicketReviewNotificationJob');
 const reviewEscalationNotificationJob = require('./jobs/reviewEscalationNotificationJob');
 const calibrationDueDateNotificationJob = require('./jobs/calibrationDueDateNotificationJob');
+const emsNotificationJob = require('./jobs/emsNotificationJob');
 
 // Start server
 app.listen(PORT, async () => {
@@ -274,6 +277,12 @@ app.listen(PORT, async () => {
     await calibrationDueDateNotificationJob.initialize();
   } else {
     console.log('⚠️  Calibration due-date notifications are disabled via environment variable');
+  }
+
+  if (process.env.ENABLE_EMS_CALIBRATION_NOTIFICATIONS !== 'false') {
+    await emsNotificationJob.initialize();
+  } else {
+    console.log('⚠️  EMS calibration notifications are disabled via environment variable');
   }
 });
 

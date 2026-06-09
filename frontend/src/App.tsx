@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
+import { EmsAccessProvider } from './contexts/EmsAccessContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { ToastProvider } from './contexts/ToastContext';
@@ -64,6 +65,14 @@ import PersonalTargetSettingPage from './pages/settings/PersonalTargetSettingPag
 import WorkflowTypesPage from './pages/works/WorkflowTypesPage';
 import Loading from './components/common/Loading';
 import PermissionRoute from './components/common/PermissionRoute';
+import EmsRoute from './components/common/EmsRoute';
+import EmsAdminRoute from './components/common/EmsAdminRoute';
+import EmsLayout from './pages/ems/EmsLayout';
+import EmsDashboardPage from './pages/ems/DashboardPageV2';
+import EquipmentListPage from './pages/ems/EquipmentListPage';
+import EquipmentDetailPage from './pages/ems/EquipmentDetailPage';
+import SchedulePage from './pages/ems/SchedulePage';
+import RoleSettingsPage from './pages/ems/RoleSettingsPage';
 
 // Main App Component with Routing
 const AppContent: React.FC = () => {
@@ -228,6 +237,25 @@ const AppContent: React.FC = () => {
           <Route path="dashboard/preventive-maintenance" element={<DashboardPreventiveMaintenancePage />} />
           <Route path="dashboard/calibration" element={<DashboardCalibrationV2Page />} />
           <Route path="dashboard/calibration-v2" element={<DashboardCalibrationV2Page />} />
+
+          {/* EMS — Equipment Management / Calibration registry */}
+          <Route path="ems" element={
+            <EmsRoute>
+              <EmsLayout />
+            </EmsRoute>
+          }>
+            <Route index element={<Navigate to="dashboard" replace />} />
+            <Route path="dashboard" element={<EmsDashboardPage />} />
+            <Route path="equipment" element={<EquipmentListPage />} />
+            <Route path="equipment/:tagNo" element={<EquipmentDetailPage />} />
+            <Route path="schedule" element={<SchedulePage />} />
+            <Route path="settings/roles" element={
+              <EmsAdminRoute>
+                <RoleSettingsPage />
+              </EmsAdminRoute>
+            } />
+          </Route>
+
           <Route path="dashboard/mcc" element={<DashboardMCCPage />} />
           <Route path="dashboard/spare-part" element={<DashboardSparePartPage />} />
           <Route path="dashboard/backlog" element={<DashboardBacklogPage />} />
@@ -343,9 +371,11 @@ const App: React.FC = () => {
     <ThemeProvider>
       <LanguageProvider>
         <AuthProvider>
-          <ToastProvider>
-            <AppContent />
-          </ToastProvider>
+          <EmsAccessProvider>
+            <ToastProvider>
+              <AppContent />
+            </ToastProvider>
+          </EmsAccessProvider>
         </AuthProvider>
       </LanguageProvider>
     </ThemeProvider>
