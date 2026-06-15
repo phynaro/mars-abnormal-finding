@@ -19,6 +19,7 @@ export type PermissionType =
   | 'ticket_approve'
   | 'user_management'
   | 'settings_access'
+  | 'ems_access'
   | string; // Allow custom permission strings
 
 // Result interface for permission check
@@ -41,6 +42,11 @@ const MANAGER_USERS: number[] = []; // Add manager PersonNos here
 // HARDCODED REGULAR USERS
 // ============================================
 const REGULAR_USERS: number[] = []; // Add regular user PersonNos here
+
+// ============================================
+// EMS MODULE EARLY ACCESS (empty = hidden from nav/routes)
+// ============================================
+const EMS_ACCESS_USERS: number[] = [517,550, 548, 521, 133,526 ,494]; // Add PersonNos to enable EMS module
 
 /**
  * Check if a user has a specific permission
@@ -192,6 +198,17 @@ export function checkPermission(
         allowed: false,
         reason: 'User cannot access settings'
       };
+
+    case 'ems_access':
+      if (EMS_ACCESS_USERS.includes(personNo)) {
+        return {
+          allowed: true
+        };
+      }
+      return {
+        allowed: false,
+        reason: 'EMS module is not available'
+      };
       
     default:
       // For any custom permission, default to admin only
@@ -322,6 +339,12 @@ export const PERMISSION_CONFIG = {
     description: 'Can access settings',
     level: 2,
     groupCodes: ['ADMIN', 'MANAGER', 'MP']
+  },
+
+  ems_access: {
+    description: 'Can access EMS calibration module',
+    level: 2,
+    groupCodes: []
   }
 } as const;
 

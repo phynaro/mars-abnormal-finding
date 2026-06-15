@@ -34,7 +34,7 @@ function formatThaiDate(dateValue) {
 
 function buildBubble(item) {
   const color = urgencyColor(item.DaysUntilDue);
-  const calUrl = `${process.env.LIFF_URL || 'https://example.com'}/dashboard/calibration-v2`;
+  const calUrl = `${process.env.LIFF_URL || 'https://example.com'}/ems/dashboard`;
   const equipName = (item.EquipmentName || item.PMDESC || '-').trim();
   const desc = (item.PMDESC || '').trim();
 

@@ -60,6 +60,8 @@ const formatCurrencyDynamic = (amount: number): { display: string; tooltip: stri
 interface KPITile {
   title: string;
   value: string | number;
+  /** Grey sub-label shown below the main value (e.g. close/open rate %) */
+  subValue?: string;
   change?: number;
   changeDescription?: string;
   changeType?: 'no_change' | 'new_activity' | 'activity_stopped' | 'increase' | 'decrease';
@@ -1316,6 +1318,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     if (plantFilter && plantFilter !== 'all') pendingParams.set('plant', plantFilter);
     if (areaFilter && areaFilter !== 'all') pendingParams.set('area', areaFilter);
     const showComparison = !(timeFilter === 'select-period' && selectedPeriods.length > 1);
+    const closeToOpenRatePct = kpis.totalTicketsThisPeriod > 0
+      ? (kpis.closedTicketsThisPeriod / kpis.totalTicketsThisPeriod) * 100
+      : 0;
 
     return [
       {
@@ -1331,6 +1336,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       {
         title: t('dashboard.closedTickets'),
         value: kpis.closedTicketsThisPeriod,
+        subValue: `${closeToOpenRatePct.toFixed(1)}%`,
         change: showComparison ? summary.comparisonMetrics.closureRateImprovement.percentage : undefined,
         changeDescription: showComparison ? summary.comparisonMetrics.closureRateImprovement.description : undefined,
         changeType: showComparison ? summary.comparisonMetrics.closureRateImprovement.type : undefined,
@@ -1925,20 +1931,25 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-sm font-medium text-muted-foreground">{kpi.title}</p>
-                    {kpi.tooltip ? (
-                      <TooltipProvider>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <p className="text-2xl font-bold cursor-help">{kpi.value}</p>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>{kpi.tooltip}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </TooltipProvider>
-                    ) : (
-                      <p className="text-2xl font-bold">{kpi.value}</p>
-                    )}
+                    <div className="flex items-baseline gap-1">
+                      {kpi.tooltip ? (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <p className="text-2xl font-bold cursor-help">{kpi.value}</p>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>{kpi.tooltip}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                      ) : (
+                        <p className="text-2xl font-bold">{kpi.value}</p>
+                      )}
+                      {kpi.subValue && (
+                        <span className="text-sm text-muted-foreground">({kpi.subValue})</span>
+                      )}
+                    </div>
                     {kpi.change !== undefined && (
                       <div className="flex items-center mt-1">
                         {kpi.change > 0 ? (

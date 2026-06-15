@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { menuItems, isMenuChildPathActive, type MenuItem } from "./menuConfig";
 import { getAvatarUrl } from "../../utils/url";
 import { useEmsAccess } from "../../contexts/EmsAccessContext";
+import { checkPermission } from "@/utils/permissionChecker";
 
 interface SidebarProps {
   isCollapsed?: boolean;
@@ -24,7 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onMobileToggle,
 }) => {
   const { user } = useAuth();
-  const { canAccess: emsCanAccess, canAdmin: emsCanAdmin, loading: emsLoading } = useEmsAccess();
+  const { canAdmin: emsCanAdmin, loading: emsLoading } = useEmsAccess();
   const navigate = useNavigate();
   const location = useLocation();
   const [expandedItems, setExpandedItems] = useState<string[]>(() => {
@@ -67,13 +68,16 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const canAccess = (item: MenuItem) => {
-    if (item.emsAdminOnly) {
-      if (emsLoading) return false;
-      return emsCanAccess && emsCanAdmin;
+    if (item.id === 'ems' || item.emsMenu) {
+      return checkPermission(user?.id, 'ems_access').allowed;
     }
-    if (item.emsMenu) {
+    if (item.emsAdminOnly) {
+      if (!checkPermission(user?.id, 'ems_access').allowed) return false;
       if (emsLoading) return false;
-      return emsCanAccess;
+      return emsCanAdmin;
+    }
+    if (item.id === 'settings') {
+      return checkPermission(user?.id, 'settings_access').allowed;
     }
     if (user?.permissionLevel === undefined) {
       return true;

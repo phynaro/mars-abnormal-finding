@@ -236,13 +236,14 @@ const AppContent: React.FC = () => {
           <Route path="dashboard/maintenance-kpi" element={<DashboardMaintenanceKPIPage />} />
           <Route path="dashboard/preventive-maintenance" element={<DashboardPreventiveMaintenancePage />} />
           <Route path="dashboard/calibration" element={<DashboardCalibrationV2Page />} />
-          <Route path="dashboard/calibration-v2" element={<DashboardCalibrationV2Page />} />
 
-          {/* EMS — Equipment Management / Calibration registry */}
+          {/* EMS — Equipment Management / Calibration registry (hidden until ems_access granted) */}
           <Route path="ems" element={
-            <EmsRoute>
-              <EmsLayout />
-            </EmsRoute>
+            <PermissionRoute requiredPermission="ems_access">
+              <EmsRoute>
+                <EmsLayout />
+              </EmsRoute>
+            </PermissionRoute>
           }>
             <Route index element={<Navigate to="dashboard" replace />} />
             <Route path="dashboard" element={<EmsDashboardPage />} />
