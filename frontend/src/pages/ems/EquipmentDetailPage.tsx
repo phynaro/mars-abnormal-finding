@@ -5,13 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useLanguage } from '@/contexts/LanguageContext';
-import emsService, { type EmsEquipmentDetail } from '@/services/emsService';
+import emsService, { type EmsEquipmentChangeBatch, type EmsEquipmentDetail } from '@/services/emsService';
 import IdentitySection from '@/components/ems/equipment/IdentitySection';
 import SpecSection from '@/components/ems/equipment/SpecSection';
 import WoStatusSection from '@/components/ems/equipment/WoStatusSection';
+import EquipmentChangeHistorySection from '@/components/ems/equipment/EquipmentChangeHistorySection';
 import EquipmentEditModal from '@/components/ems/equipment/EquipmentEditModal';
 import { EQUIPMENT_THUMB_PX } from '@/components/ems/equipment/EquipmentImageCard';
 import { EmsPageStack } from '@/components/ems/shared/emsLayoutPrimitives';
+
+const CHANGE_HISTORY_PREVIEW = 5;
+const CHANGE_HISTORY_EXPANDED = 50;
 
 const EquipmentDetailPage: React.FC = () => {
   const { tagNo } = useParams<{ tagNo: string }>();
@@ -21,6 +25,10 @@ const EquipmentDetailPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyExpanded, setHistoryExpanded] = useState(false);
+  const [changeHistory, setChangeHistory] = useState<EmsEquipmentChangeBatch[]>([]);
+  const [changeHistoryHasMore, setChangeHistoryHasMore] = useState(false);
+  const [changeHistoryLoading, setChangeHistoryLoading] = useState(false);
+  const [changeHistoryExpanded, setChangeHistoryExpanded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -32,15 +40,23 @@ const EquipmentDetailPage: React.FC = () => {
     setData(res.data);
   }, [tagNo]);
 
+  const loadChangeHistory = useCallback(async (limit = CHANGE_HISTORY_PREVIEW) => {
+    if (!tagNo) return;
+    const res = await emsService.getEquipmentChangeHistory(tagNo, { page: 1, limit });
+    setChangeHistory(res.data.items);
+    setChangeHistoryHasMore(res.data.pagination.total > limit);
+  }, [tagNo]);
+
   useEffect(() => {
     if (!tagNo) return;
     setLoading(true);
     setError(null);
     setHistoryExpanded(false);
-    loadDetail(5)
+    setChangeHistoryExpanded(false);
+    Promise.all([loadDetail(5), loadChangeHistory(CHANGE_HISTORY_PREVIEW)])
       .catch((e) => setError(e instanceof Error ? e.message : t('common.error')))
       .finally(() => setLoading(false));
-  }, [tagNo, loadDetail, t]);
+  }, [tagNo, loadDetail, loadChangeHistory, t]);
 
   useEffect(() => {
     emsService.getMe()
@@ -60,6 +76,28 @@ const EquipmentDetailPage: React.FC = () => {
       setError(e instanceof Error ? e.message : t('common.error'));
     } finally {
       setHistoryLoading(false);
+    }
+  };
+
+  const expandChangeHistory = async () => {
+    setChangeHistoryExpanded(true);
+    setChangeHistoryLoading(true);
+    try {
+      await loadChangeHistory(CHANGE_HISTORY_EXPANDED);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'));
+    } finally {
+      setChangeHistoryLoading(false);
+    }
+  };
+
+  const handleSaved = async (updated: EmsEquipmentDetail) => {
+    setData(updated);
+    setChangeHistoryExpanded(false);
+    try {
+      await loadChangeHistory(CHANGE_HISTORY_PREVIEW);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'));
     }
   };
 
@@ -119,6 +157,13 @@ const EquipmentDetailPage: React.FC = () => {
             historyLoading={historyLoading}
             onExpandHistory={expandHistory}
           />
+          <EquipmentChangeHistorySection
+            batches={changeHistory}
+            historyExpanded={changeHistoryExpanded}
+            historyLoading={changeHistoryLoading}
+            hasMore={changeHistoryHasMore}
+            onExpandHistory={expandChangeHistory}
+          />
         </div>
       )}
 
@@ -128,7 +173,7 @@ const EquipmentDetailPage: React.FC = () => {
           onOpenChange={setEditOpen}
           detail={data}
           equipmentTypes={equipmentTypes}
-          onSaved={(updated) => setData(updated)}
+          onSaved={handleSaved}
         />
       )}
     </EmsPageStack>

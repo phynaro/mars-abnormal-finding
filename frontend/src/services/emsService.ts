@@ -143,6 +143,20 @@ export interface EmsPmHistoryItem {
   performedBy?: string | null;
 }
 
+export interface EmsEquipmentChangeItem {
+  fieldKey: string;
+  oldValue: string | null;
+  newValue: string | null;
+}
+
+export interface EmsEquipmentChangeBatch {
+  changeGroup: string;
+  changedAt: string;
+  changedBy: string;
+  changedByName: string | null;
+  changes: EmsEquipmentChangeItem[];
+}
+
 export interface EmsEquipmentDetail {
   identity: EmsEquipmentIdentity;
   specifications: EmsEquipmentSpecifications;
@@ -350,6 +364,13 @@ const emsService = {
     return emsFetch<{ success: boolean; data: EmsEquipmentDetail }>(
       `/equipment/${encodeURIComponent(tagNo)}${toQuery({ historyLimit })}`
     );
+  },
+
+  async getEquipmentChangeHistory(tagNo: string, params?: { page?: number; limit?: number }) {
+    return emsFetch<{
+      success: boolean;
+      data: { items: EmsEquipmentChangeBatch[]; pagination: EmsPagination };
+    }>(`/equipment/${encodeURIComponent(tagNo)}/changes${toQuery(params || {})}`);
   },
 
   async updateEquipment(

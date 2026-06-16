@@ -50,6 +50,7 @@ router.delete('/user-events/:id', calibrationUserEventsController.deleteCalibrat
 
 router.get('/equipment/filters', equipmentController.getFilterOptions);
 router.get('/equipment', equipmentController.listEquipment);
+router.get('/equipment/:tagNo/changes', equipmentController.getEquipmentChangeHistory);
 router.get('/equipment/:tagNo', equipmentController.getEquipmentDetail);
 router.put(
   '/equipment/:tagNo',

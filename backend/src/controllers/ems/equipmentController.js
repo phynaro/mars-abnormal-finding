@@ -23,6 +23,11 @@ const {
   WO_FINISHED_SQL,
 } = require('../../helpers/emsQueryHelpers');
 const { calculateEquipmentStatus, plantFromTagNo } = require('../../services/ems/statusCalculationService');
+const {
+  computeEquipmentChanges,
+  insertEquipmentChangeLog,
+  fetchEquipmentChangeHistory,
+} = require('../../services/ems/equipmentChangeLogService');
 
 const EQUIPMENT_LIST_SORT_COLUMNS = {
   tagNo: 'ext.tag_no',
@@ -117,38 +122,6 @@ function mapExtensionFields(row) {
     updatedBy: row.updated_by || null,
     updatedByName: row.updatedByName?.trim() || null,
   };
-}
-
-const EDITABLE_FIELD_MAP = {
-  description: { column: 'description', type: sql.NVarChar(500) },
-  area: { column: 'location', type: sql.NVarChar(255) },
-  manufacturer: { column: 'manufacturer', type: sql.NVarChar(255) },
-  model: { column: 'model', type: sql.NVarChar(255) },
-  serialNo: { column: 'serial_no', type: sql.NVarChar(255) },
-  equipmentType: { column: 'equipment_type', type: sql.NVarChar(100) },
-  workingRangeMin: { column: 'working_range_min', type: sql.Float, numeric: true },
-  workingRangeMax: { column: 'working_range_max', type: sql.Float, numeric: true },
-  workingRangeUnit: { column: 'working_range_unit', type: sql.NVarChar(50) },
-  workingRangePoints: { column: 'working_range_points', type: sql.Int, numeric: true },
-  calRangeMin: { column: 'cal_range_min', type: sql.Float, numeric: true },
-  calRangeMax: { column: 'cal_range_max', type: sql.Float, numeric: true },
-  calRangeUnit: { column: 'cal_range_unit', type: sql.NVarChar(50) },
-  calRangePoints: { column: 'cal_range_points', type: sql.Int, numeric: true },
-  mpeType: { column: 'mpe_type', type: sql.NVarChar(50) },
-  mpeValue: { column: 'mpe_value', type: sql.Float, numeric: true },
-  mpeUnit: { column: 'mpe_unit', type: sql.NVarChar(50) },
-  mpeCondition: { column: 'mpe_condition', type: sql.NVarChar(255) },
-  ccpCode: { column: 'ccp_code', type: sql.NVarChar(100) },
-  calRefWi: { column: 'cal_ref_wi', type: sql.NVarChar(255) },
-  calRefForm: { column: 'cal_ref_form', type: sql.NVarChar(255) },
-  calInterval: { column: 'cal_interval', type: sql.NVarChar(100) },
-  calIntervalWeeks: { column: 'cal_interval_weeks', type: sql.Int, numeric: true },
-};
-
-function parseOptionalNumber(value) {
-  if (value === undefined || value === null || value === '') return null;
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
 }
 
 function parseUpdatePayload(body) {
@@ -542,6 +515,38 @@ exports.getEquipmentDetail = async (req, res) => {
 };
 
 /**
+ * GET /api/ems/equipment/:tagNo/changes
+ */
+exports.getEquipmentChangeHistory = async (req, res) => {
+  try {
+    const tagNo = (req.params.tagNo || '').trim();
+    if (!tagNo) {
+      return res.status(400).json({ success: false, message: 'tagNo is required' });
+    }
+
+    const pool = await getCedarPool();
+    const extRow = await fetchEquipmentExtRow(pool, tagNo);
+
+    if (!extRow) {
+      return res.status(404).json({ success: false, message: 'Equipment not found' });
+    }
+
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 10));
+    const data = await fetchEquipmentChangeHistory(pool, tagNo, page, limit);
+
+    res.json({
+      success: true,
+      data,
+      message: 'Equipment change history',
+    });
+  } catch (error) {
+    console.error('EMS getEquipmentChangeHistory error:', error);
+    res.status(500).json({ success: false, message: 'Failed to fetch change history', error: error.message });
+  }
+};
+
+/**
  * PUT /api/ems/equipment/:tagNo
  */
 exports.updateEquipment = async (req, res) => {
@@ -560,44 +565,59 @@ exports.updateEquipment = async (req, res) => {
 
     const payload = parseUpdatePayload(req.body);
     const personNo = String(req.user.id);
-    const setParts = ['updated_at = GETDATE()', 'updated_by = @UpdatedBy'];
-    const updateReq = pool.request()
-      .input('TagNo', sql.NVarChar(50), tagNo)
-      .input('UpdatedBy', sql.NVarChar(50), personNo);
 
-    let paramIndex = 0;
-    for (const [key, config] of Object.entries(EDITABLE_FIELD_MAP)) {
-      if (!Object.prototype.hasOwnProperty.call(payload, key)) continue;
-      const rawValue = payload[key];
-      const paramName = `P${paramIndex}`;
-      paramIndex += 1;
-
-      let value;
-      if (config.numeric) {
-        value = parseOptionalNumber(rawValue);
-      } else {
-        value = rawValue === '' || rawValue === null || rawValue === undefined ? null : String(rawValue);
-      }
-
-      updateReq.input(paramName, config.type, value);
-      setParts.push(`${config.column} = @${paramName}`);
-    }
-
+    let newImageUrl = null;
     if (req.file) {
-      const imageUrl = await saveEquipmentImage(req.file, extRow.eqno, tagNo, extRow.image_url);
-      updateReq.input('ImageUrl', sql.NVarChar(500), imageUrl);
-      setParts.push('image_url = @ImageUrl');
+      newImageUrl = await saveEquipmentImage(req.file, extRow.eqno, tagNo, extRow.image_url);
     }
 
-    if (setParts.length <= 2 && !req.file) {
+    const changes = computeEquipmentChanges(extRow, payload, { newImageUrl });
+
+    if (!changes.length) {
       return res.status(400).json({ success: false, message: 'No fields to update' });
     }
 
-    await updateReq.query(`
-      UPDATE dbo.IgxEQExtension
-      SET ${setParts.join(', ')}
-      WHERE tag_no = @TagNo
-    `);
+    const setParts = ['updated_at = GETDATE()', 'updated_by = @UpdatedBy'];
+    let paramIndex = 0;
+    for (const change of changes) {
+      const paramName = `P${paramIndex}`;
+      paramIndex += 1;
+      setParts.push(`${change.config.column} = @${paramName}`);
+    }
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const txReq = new sql.Request(transaction);
+      txReq.input('TagNo', sql.NVarChar(50), tagNo);
+      txReq.input('UpdatedBy', sql.NVarChar(50), personNo);
+
+      let txParamIndex = 0;
+      for (const change of changes) {
+        const paramName = `P${txParamIndex}`;
+        txParamIndex += 1;
+        txReq.input(paramName, change.config.type, change.dbValue);
+      }
+
+      await txReq.query(`
+        UPDATE dbo.IgxEQExtension
+        SET ${setParts.join(', ')}
+        WHERE tag_no = @TagNo
+      `);
+
+      await insertEquipmentChangeLog(transaction, {
+        tagNo,
+        eqNo: extRow.eqno,
+        changedBy: personNo,
+        changes,
+      });
+
+      await transaction.commit();
+    } catch (txError) {
+      await transaction.rollback();
+      throw txError;
+    }
 
     const refreshedRow = await fetchEquipmentExtRow(pool, tagNo);
     const historyLimit = Math.min(100, Math.max(1, parseInt(req.query.historyLimit, 10) || 5));

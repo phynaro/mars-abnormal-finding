@@ -11,6 +11,7 @@ const dbConfigNew = require('../../src/config/dbConfigNew');
 
 const MIGRATION_FILES = [
   '004-alter-igx-eq-extension-cedar.sql',
+  '005-create-igx-ems-equipment-change-log.sql',
 ];
 
 async function runBatch(pool, filePath) {
