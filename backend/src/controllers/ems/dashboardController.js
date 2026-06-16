@@ -286,7 +286,30 @@ function monthDateRange(year, month) {
   const monthStart = `${y}-${String(m).padStart(2, '0')}-01`;
   const lastDay = new Date(y, m, 0).getDate();
   const monthEnd = `${y}-${String(m).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-  return { monthStart, monthEnd };
+  return { rangeStart: monthStart, rangeEnd: monthEnd };
+}
+
+function resolvePlantMatrixRange(query) {
+  if (query.startDate && query.endDate) {
+    return {
+      mode: query.mode || 'month',
+      year: parseInt(query.year, 10) || new Date().getFullYear(),
+      month: query.month != null ? parseInt(query.month, 10) : undefined,
+      period: query.period != null ? parseInt(query.period, 10) : undefined,
+      rangeStart: String(query.startDate),
+      rangeEnd: String(query.endDate),
+    };
+  }
+
+  const range = monthDateRange(query.year, query.month);
+  if (!range) return null;
+  return {
+    mode: 'month',
+    year: parseInt(query.year, 10),
+    month: parseInt(query.month, 10),
+    period: undefined,
+    ...range,
+  };
 }
 
 function plantLabelFor(code) {
@@ -295,24 +318,26 @@ function plantLabelFor(code) {
 }
 
 /**
- * GET /api/ems/dashboard/plant-matrix?year=2026&month=6
- * Per-plant schedule completion for tasks due within the selected calendar month.
+ * GET /api/ems/dashboard/plant-matrix
+ * Per-plant schedule completion for tasks due within the selected range.
+ * Query: mode=month|period|year, year, month (month mode), period (period mode),
+ *        or startDate + endDate (YYYY-MM-DD).
  */
 exports.getPlantMatrix = async (req, res) => {
   try {
-    const range = monthDateRange(req.query.year, req.query.month);
+    const range = resolvePlantMatrixRange(req.query);
     if (!range) {
       return res.status(400).json({
         success: false,
-        message: 'year and month are required (month 1–12)',
+        message: 'Provide startDate/endDate or year and month (month 1–12)',
       });
     }
 
     const pool = await getCedarPool();
     const request = pool.request();
     const dateRange = applyPmCalSchedDateRangeClause(request, {
-      startDate: range.monthStart,
-      endDate: range.monthEnd,
+      startDate: range.rangeStart,
+      endDate: range.rangeEnd,
       startParamName: 'PlantMatrixStart',
       endParamName: 'PlantMatrixEnd',
     });
@@ -378,10 +403,12 @@ exports.getPlantMatrix = async (req, res) => {
     res.json({
       success: true,
       data: {
-        year: parseInt(req.query.year, 10),
-        month: parseInt(req.query.month, 10),
-        monthStart: range.monthStart,
-        monthEnd: range.monthEnd,
+        mode: range.mode,
+        year: range.year,
+        month: range.month,
+        period: range.period,
+        rangeStart: range.rangeStart,
+        rangeEnd: range.rangeEnd,
         plants,
       },
       message: 'EMS dashboard plant matrix',

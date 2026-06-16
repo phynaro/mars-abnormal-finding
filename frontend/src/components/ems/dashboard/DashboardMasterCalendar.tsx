@@ -3,13 +3,18 @@ import React from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import ScheduleCalendarPanel from '@/components/ems/schedule/ScheduleCalendarPanel';
 import { EmsContentCard } from '@/components/ems/shared/emsLayoutPrimitives';
+import {
+  getTimeTravelAnchorDate,
+  type DashboardTimeTravelValue,
+} from '@/utils/emsDashboardTimeTravel';
 
 interface Props {
-  selectedMonth: Date;
+  timeTravel: DashboardTimeTravelValue;
 }
 
-const DashboardMasterCalendar: React.FC<Props> = ({ selectedMonth }) => {
+const DashboardMasterCalendar: React.FC<Props> = ({ timeTravel }) => {
   const { t } = useLanguage();
+  const anchorDate = getTimeTravelAnchorDate(timeTravel);
 
   return (
     <section className="space-y-4">
@@ -20,8 +25,8 @@ const DashboardMasterCalendar: React.FC<Props> = ({ selectedMonth }) => {
       <EmsContentCard>
         <div className="p-4 sm:p-6">
           <ScheduleCalendarPanel
-            anchorDate={selectedMonth}
-            controlledMonth
+            anchorDate={anchorDate}
+            controlledMonth={timeTravel.mode === 'month'}
             showHeader={false}
           />
         </div>

@@ -2,14 +2,17 @@ import React, { useEffect, useState } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
-import emsService, { type EmsPlantMatrixItem } from '@/services/emsService';
+import emsService, { type EmsKpiData, type EmsPlantMatrixItem } from '@/services/emsService';
 import { PM_CALIBRATION_PLANT_OPTIONS } from '@/utils/pmCalibrationPlantMap';
+import {
+  getTimeTravelDateRange,
+  type DashboardTimeTravelValue,
+} from '@/utils/emsDashboardTimeTravel';
 
 import PlantPerformanceCard from './PlantPerformanceCard';
 
 interface Props {
-  year: number;
-  month: number;
+  timeTravel: DashboardTimeTravelValue;
 }
 
 function emptyPlants(): EmsPlantMatrixItem[] {
@@ -24,11 +27,14 @@ function emptyPlants(): EmsPlantMatrixItem[] {
   }));
 }
 
-const PlantPerformanceMatrix: React.FC<Props> = ({ year, month }) => {
+const PlantPerformanceMatrix: React.FC<Props> = ({ timeTravel }) => {
   const { t } = useLanguage();
   const [plants, setPlants] = useState<EmsPlantMatrixItem[]>(emptyPlants);
+  const [kpiByPlant, setKpiByPlant] = useState<Record<string, EmsKpiData>>({});
   const [loading, setLoading] = useState(true);
+  const [kpiLoading, setKpiLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const dateRange = getTimeTravelDateRange(timeTravel);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,7 +42,14 @@ const PlantPerformanceMatrix: React.FC<Props> = ({ year, month }) => {
     setError(null);
 
     emsService
-      .getPlantMatrix({ year, month })
+      .getPlantMatrix({
+        mode: timeTravel.mode,
+        year: timeTravel.year,
+        month: timeTravel.month,
+        period: timeTravel.period,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+      })
       .then((data) => {
         if (cancelled) return;
         setPlants(data.plants);
@@ -53,7 +66,37 @@ const PlantPerformanceMatrix: React.FC<Props> = ({ year, month }) => {
     return () => {
       cancelled = true;
     };
-  }, [year, month, t]);
+  }, [dateRange.endDate, dateRange.startDate, t, timeTravel.mode, timeTravel.month, timeTravel.period, timeTravel.year]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setKpiLoading(true);
+
+    const plantCodes = PM_CALIBRATION_PLANT_OPTIONS.map((p) => p.code);
+    Promise.all(
+      plantCodes.map((code) =>
+        emsService.getDashboardKpi({ plant: code }).then((data) => ({ code, data }))
+      )
+    )
+      .then((results) => {
+        if (cancelled) return;
+        const next: Record<string, EmsKpiData> = {};
+        for (const { code, data } of results) {
+          next[code] = data;
+        }
+        setKpiByPlant(next);
+      })
+      .catch(() => {
+        if (!cancelled) setKpiByPlant({});
+      })
+      .finally(() => {
+        if (!cancelled) setKpiLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <section className="space-y-4">
@@ -65,15 +108,20 @@ const PlantPerformanceMatrix: React.FC<Props> = ({ year, month }) => {
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {loading ? (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-40 w-full rounded-xl" />
+            <Skeleton key={i} className="h-[220px] w-full rounded-xl" />
           ))}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {plants.map((plant) => (
-            <PlantPerformanceCard key={plant.plant} plant={plant} />
+            <PlantPerformanceCard
+              key={plant.plant}
+              plant={plant}
+              kpi={kpiByPlant[plant.plant] ?? null}
+              kpiLoading={kpiLoading}
+            />
           ))}
         </div>
       )}

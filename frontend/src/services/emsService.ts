@@ -209,10 +209,12 @@ export interface EmsPlantMatrixItem {
 }
 
 export interface EmsPlantMatrixData {
+  mode: 'month' | 'period' | 'year';
   year: number;
-  month: number;
-  monthStart: string;
-  monthEnd: string;
+  month?: number;
+  period?: number;
+  rangeStart: string;
+  rangeEnd: string;
   plants: EmsPlantMatrixItem[];
 }
 
@@ -302,7 +304,14 @@ const emsService = {
     );
   },
 
-  async getPlantMatrix(params: { year: number; month: number }) {
+  async getPlantMatrix(params: {
+    mode: 'month' | 'period' | 'year';
+    year: number;
+    month?: number;
+    period?: number;
+    startDate: string;
+    endDate: string;
+  }) {
     const res = await emsFetch<{ success: boolean; data: EmsPlantMatrixData }>(
       `/dashboard/plant-matrix${toQuery(params)}`
     );

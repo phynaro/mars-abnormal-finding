@@ -3,10 +3,14 @@ import React, { useMemo } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useLanguage } from '@/contexts/LanguageContext';
-import type { EmsPlantMatrixItem } from '@/services/emsService';
+import type { EmsKpiData, EmsPlantMatrixItem } from '@/services/emsService';
+
+import DashboardKpiCards from './DashboardKpiCards';
 
 interface Props {
   plant: EmsPlantMatrixItem;
+  kpi: EmsKpiData | null;
+  kpiLoading?: boolean;
 }
 
 const RING_SIZE = 88;
@@ -55,7 +59,7 @@ function CompletionRing({ rate, total }: { rate: number; total: number }) {
   );
 }
 
-const PlantPerformanceCard: React.FC<Props> = ({ plant }) => {
+const PlantPerformanceCard: React.FC<Props> = ({ plant, kpi, kpiLoading }) => {
   const { t } = useLanguage();
 
   const segments = useMemo(
@@ -81,52 +85,59 @@ const PlantPerformanceCard: React.FC<Props> = ({ plant }) => {
     ],
     [plant.done, plant.inProgress, plant.noWo, t]
   );
-
   return (
     <Card className="shadow-sm">
-      <CardContent className="pt-5 pb-5 space-y-4">
-        <div className="flex items-center gap-4">
-          <CompletionRing rate={plant.completionRate} total={plant.total} />
-          <div className="min-w-0 flex-1">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              {plant.plant}
-            </p>
-            <h3 className="text-sm font-semibold truncate">{plant.plantLabel}</h3>
-            <p className="text-xs text-muted-foreground mt-1">
-              {plant.total} {t('ems.dashboard.v2.tasksInMonth')}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t('ems.dashboard.v2.completion')}: {plant.done}/{plant.total}
-            </p>
-          </div>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex h-2 rounded-full overflow-hidden gap-px bg-muted/30">
-            {plant.total > 0 ? (
-              segments.map((seg) => {
-                const pct = (seg.count / plant.total) * 100;
-                if (pct <= 0) return null;
-                return (
-                  <div
-                    key={seg.key}
-                    className={cn('transition-all duration-300', seg.color)}
-                    style={{ width: `${pct}%` }}
-                    title={`${seg.label}: ${seg.count}`}
-                  />
-                );
-              })
-            ) : (
-              <div className="w-full bg-muted/50" />
-            )}
-          </div>
-          <div className="grid grid-cols-3 gap-1 text-[11px] text-muted-foreground">
-            {segments.map((seg) => (
-              <div key={seg.key} className="flex items-center gap-1 min-w-0">
-                <span className={cn('w-2 h-2 rounded-sm shrink-0', seg.color)} />
-                <span className="truncate">{seg.count}</span>
+      <CardContent className="pt-5 pb-5">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 lg:items-stretch">
+          <div className="space-y-4 min-w-0">
+            <div className="flex items-center gap-4">
+              <CompletionRing rate={plant.completionRate} total={plant.total} />
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  {plant.plant}
+                </p>
+                <h3 className="text-sm font-semibold truncate">{plant.plantLabel}</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  {plant.total} {t('ems.dashboard.v2.tasksInMonth')}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  {t('ems.dashboard.v2.completion')}: {plant.done}/{plant.total}
+                </p>
               </div>
-            ))}
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex h-2 rounded-full overflow-hidden gap-px bg-muted/30">
+                {plant.total > 0 ? (
+                  segments.map((seg) => {
+                    const pct = (seg.count / plant.total) * 100;
+                    if (pct <= 0) return null;
+                    return (
+                      <div
+                        key={seg.key}
+                        className={cn('transition-all duration-300', seg.color)}
+                        style={{ width: `${pct}%` }}
+                        title={`${seg.label}: ${seg.count}`}
+                      />
+                    );
+                  })
+                ) : (
+                  <div className="w-full bg-muted/50" />
+                )}
+              </div>
+              <div className="grid grid-cols-3 gap-1 text-[11px] text-muted-foreground">
+                {segments.map((seg) => (
+                  <div key={seg.key} className="flex items-center gap-1 min-w-0">
+                    <span className={cn('w-2 h-2 rounded-sm shrink-0', seg.color)} />
+                    <span className="truncate">{seg.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="min-w-0 h-full">
+            <DashboardKpiCards data={kpi} loading={kpiLoading} plant={plant.plant} compact />
           </div>
         </div>
       </CardContent>

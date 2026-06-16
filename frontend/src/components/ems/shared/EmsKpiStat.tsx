@@ -11,6 +11,7 @@ export interface EmsKpiStatProps {
   iconClassName?: string;
   valueClassName?: string;
   loading?: boolean;
+  compact?: boolean;
 }
 
 export function EmsKpiStat({
@@ -20,28 +21,30 @@ export function EmsKpiStat({
   iconClassName,
   valueClassName,
   loading,
+  compact,
 }: EmsKpiStatProps) {
   return (
-    <Card className="shadow-sm">
-      <CardContent className="pt-5 pb-5">
-        <div className="flex items-start justify-between gap-3">
+    <Card className="shadow-sm h-full">
+      <CardContent className={cn(compact ? 'p-3' : 'pt-5 pb-5')}>
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="text-sm text-muted-foreground">{label}</p>
+            <p className={cn('text-muted-foreground truncate', compact ? 'text-xs' : 'text-sm')}>{label}</p>
             {loading ? (
-              <Skeleton className="h-9 w-16 mt-2" />
+              <Skeleton className={cn('mt-1', compact ? 'h-7 w-12' : 'h-9 w-16 mt-2')} />
             ) : (
-              <p className={cn('text-3xl font-bold tabular-nums mt-1', valueClassName)}>
+              <p className={cn('font-bold tabular-nums mt-0.5', compact ? 'text-xl' : 'text-3xl mt-1', valueClassName)}>
                 {value ?? '—'}
               </p>
             )}
           </div>
           <div
             className={cn(
-              'shrink-0 rounded-lg p-2.5 bg-muted text-muted-foreground',
+              'shrink-0 rounded-lg bg-muted text-muted-foreground',
+              compact ? 'p-1.5' : 'p-2.5',
               iconClassName
             )}
           >
-            <Icon className="h-5 w-5" aria-hidden />
+            <Icon className={cn(compact ? 'h-4 w-4' : 'h-5 w-5')} aria-hidden />
           </div>
         </div>
       </CardContent>

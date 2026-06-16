@@ -1,5 +1,5 @@
 import React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { isMenuChildPathActive } from '@/components/layout/menuConfig';
 import type { LucideIcon } from 'lucide-react';
@@ -16,6 +16,8 @@ interface EmsSubNavProps {
 }
 
 const EmsSubNav: React.FC<EmsSubNavProps> = ({ tabs, className }) => {
+  const location = useLocation();
+
   return (
     <nav
       className={cn(
@@ -28,12 +30,11 @@ const EmsSubNav: React.FC<EmsSubNavProps> = ({ tabs, className }) => {
         <NavLink
           key={to}
           to={to}
-          isActive={(_, location) => isMenuChildPathActive(location.pathname, to)}
-          className={({ isActive }) =>
+          className={() =>
             cn(
               'inline-flex shrink-0 items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-all',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-              isActive
+              isMenuChildPathActive(location.pathname, to)
                 ? 'bg-background text-foreground shadow-sm'
                 : 'hover:bg-background/60 hover:text-foreground'
             )
