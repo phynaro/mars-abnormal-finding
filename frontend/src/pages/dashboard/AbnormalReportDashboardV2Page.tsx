@@ -311,13 +311,32 @@ const AvatarLabel = ({ data, maxAvatar = 28, clipPrefix = '' }: { data: any[], m
 
 const AbnormalReportDashboardV2Page: React.FC = () => {
   const { t } = useLanguage();
+
+  const getCurrentPeriod = (year: number = new Date().getFullYear()) =>
+    calculatePeriodForDate(new Date(), year).period;
+
+  const resolveSelectPeriods = (
+    priorPendingFilter: string,
+    priorPendingPeriods: number[],
+    appliedTimeFilter: string,
+    appliedPeriods: number[],
+    year: number,
+  ): number[] => {
+    if (priorPendingFilter === 'select-period' && priorPendingPeriods.length > 0) {
+      return priorPendingPeriods;
+    }
+    if (appliedTimeFilter === 'select-period' && appliedPeriods.length > 0) {
+      return [...appliedPeriods];
+    }
+    return [getCurrentPeriod(year)];
+  };
   
   // Global Filters - Applied (currently active)
   const [timeFilter, setTimeFilter] = useState<string>('this-period');
   const [plantFilter, setPlantFilter] = useState<string>('all');
   const [areaFilter, setAreaFilter] = useState<string>('all');
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedPeriods, setSelectedPeriods] = useState<number[]>([1]);
+  const [selectedPeriods, setSelectedPeriods] = useState<number[]>(() => [getCurrentPeriod()]);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
 
   // Pending Filters - Changes not yet applied
@@ -325,7 +344,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const [pendingPlantFilter, setPendingPlantFilter] = useState<string>('all');
   const [pendingAreaFilter, setPendingAreaFilter] = useState<string>('all');
   const [pendingSelectedYear, setPendingSelectedYear] = useState<number>(new Date().getFullYear());
-  const [pendingSelectedPeriods, setPendingSelectedPeriods] = useState<number[]>([1]);
+  const [pendingSelectedPeriods, setPendingSelectedPeriods] = useState<number[]>(() => [getCurrentPeriod()]);
 
   // API State
   const [kpiData, setKpiData] = useState<AbnormalFindingKPIResponse['data'] | null>(null);
@@ -392,7 +411,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
 
-  const selectedPeriod = selectedPeriods[0] ?? 1;
+  const selectedPeriod = selectedPeriods[0] ?? getCurrentPeriod(selectedYear);
   const isMultiCustomPeriod = timeFilter === 'select-period' && selectedPeriods.length > 1;
 
   const areNumberArraysEqual = (a: number[], b: number[]) => {
@@ -1748,10 +1767,18 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               <div className="space-y-2">
                 <label className="text-sm font-medium">{t('dashboard.timeRange')}</label>
                 <Select value={pendingTimeFilter} onValueChange={(value) => {
-                  setPendingTimeFilter(value);
-                  if (value === 'select-period' && pendingSelectedPeriods.length === 0) {
-                    setPendingSelectedPeriods([1]);
+                  if (value === 'select-period') {
+                    setPendingSelectedPeriods(
+                      resolveSelectPeriods(
+                        pendingTimeFilter,
+                        pendingSelectedPeriods,
+                        timeFilter,
+                        selectedPeriods,
+                        pendingSelectedYear,
+                      ),
+                    );
                   }
+                  setPendingTimeFilter(value);
                 }}>
                   <SelectTrigger>
                     <SelectValue placeholder={t('dashboard.selectPeriod')} />
