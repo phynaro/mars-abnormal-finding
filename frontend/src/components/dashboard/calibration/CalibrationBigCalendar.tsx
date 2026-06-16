@@ -9,6 +9,7 @@ import type {
   PmScheduleListItem,
 } from '@/services/calibrationService';
 import { Badge } from '@/components/ui/badge';
+import { resolveUserEventColor } from '@/constants/userEventColors';
 import { cn } from '@/lib/utils';
 
 // ---------------------------------------------------------------------------
@@ -100,12 +101,13 @@ const STATUS_STYLE: Record<string, string> = {
 function EventComponent({ event }: { event: CalEvent }) {
   if (event.kind === 'user-event') {
     const resource = event.resource as CalibrationUserEvent;
+    const color = resolveUserEventColor(resource.color_hex);
     return (
       <span
         className="block text-[11px] font-medium px-1 py-0.5 rounded truncate leading-tight border"
         style={{
-          backgroundColor: resource.color_hex || '#7c3aed',
-          borderColor: resource.color_hex || '#6d28d9',
+          backgroundColor: color,
+          borderColor: color,
           color: '#fff',
         }}
         title={`${resource.title}${resource.description ? ` — ${resource.description}` : ''}`}
@@ -183,7 +185,7 @@ const CalibrationBigCalendar: React.FC<Props> = ({
         end,
         kind: 'user-event',
         resource: event,
-        color: event.color_hex,
+        color: resolveUserEventColor(event.color_hex),
         allDay: event.is_all_day,
       });
     }
@@ -192,7 +194,7 @@ const CalibrationBigCalendar: React.FC<Props> = ({
 
   const eventPropGetter = (event: CalEvent) => {
     if (event.kind === 'user-event') {
-      const color = event.color || '#7c3aed';
+      const color = resolveUserEventColor(event.color);
       return {
         style: {
           backgroundColor: color,

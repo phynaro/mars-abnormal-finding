@@ -4,12 +4,16 @@ import { Button } from '@/components/ui/button';
 import { FileUpload } from '@/components/ui/file-upload';
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  EmsLandscapeDialogBody,
+  EmsLandscapeDialogContent,
+  EmsLandscapeDialogFooter,
+  EmsLandscapeDialogHeader,
+  EmsLandscapeDialogSection,
+} from '@/components/ems/EmsLandscapeDialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -180,220 +184,223 @@ const EquipmentEditModal: React.FC<EquipmentEditModalProps> = ({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <EmsLandscapeDialogContent>
+        <EmsLandscapeDialogHeader>
           <DialogTitle>{t('ems.equipment.editTitle')}</DialogTitle>
           <DialogDescription>{detail?.identity.tagNo}</DialogDescription>
-        </DialogHeader>
+        </EmsLandscapeDialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <Alert variant="destructive">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <EmsLandscapeDialogBody>
+            {error && (
+              <Alert variant="destructive" className="mb-5">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold">{t('ems.equipment.editSectionIdentity')}</h3>
-            <FieldRow label={t('ems.equipment.col.description')}>
-              <Input
-                value={form.description ?? ''}
-                onChange={(e) => setField('description', e.target.value)}
-              />
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.area')}>
-              <Input value={form.area ?? ''} onChange={(e) => setField('area', e.target.value)} />
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.equipmentType')}>
-              <Select
-                value={form.equipmentType || undefined}
-                onValueChange={(v) => setField('equipmentType', v)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={t('ems.equipment.filter.allTypes')} />
-                </SelectTrigger>
-                <SelectContent>
-                  {typeOptions.map((type) => (
-                    <SelectItem key={type} value={type}>
-                      {type}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.manufacturer')}>
-              <Input
-                value={form.manufacturer ?? ''}
-                onChange={(e) => setField('manufacturer', e.target.value)}
-              />
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.model')}>
-              <Input value={form.model ?? ''} onChange={(e) => setField('model', e.target.value)} />
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.serialNo')}>
-              <Input
-                value={form.serialNo ?? ''}
-                onChange={(e) => setField('serialNo', e.target.value)}
-              />
-            </FieldRow>
-          </section>
+            <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:gap-10">
+              <div className="space-y-6">
+                <EmsLandscapeDialogSection title={t('ems.equipment.editSectionIdentity')}>
+                  <FieldRow label={t('ems.equipment.col.description')}>
+                    <Input
+                      value={form.description ?? ''}
+                      onChange={(e) => setField('description', e.target.value)}
+                    />
+                  </FieldRow>
+                  <FieldRow label={t('ems.equipment.area')}>
+                    <Input value={form.area ?? ''} onChange={(e) => setField('area', e.target.value)} />
+                  </FieldRow>
+                  <FieldRow label={t('ems.equipment.equipmentType')}>
+                    <Select
+                      value={form.equipmentType || undefined}
+                      onValueChange={(v) => setField('equipmentType', v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={t('ems.equipment.filter.allTypes')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {typeOptions.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </FieldRow>
+                  <FieldRow label={t('ems.equipment.manufacturer')}>
+                    <Input
+                      value={form.manufacturer ?? ''}
+                      onChange={(e) => setField('manufacturer', e.target.value)}
+                    />
+                  </FieldRow>
+                  <FieldRow label={t('ems.equipment.model')}>
+                    <Input value={form.model ?? ''} onChange={(e) => setField('model', e.target.value)} />
+                  </FieldRow>
+                  <FieldRow label={t('ems.equipment.serialNo')}>
+                    <Input
+                      value={form.serialNo ?? ''}
+                      onChange={(e) => setField('serialNo', e.target.value)}
+                    />
+                  </FieldRow>
+                </EmsLandscapeDialogSection>
 
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold">{t('ems.equipment.spec.title')}</h3>
-            <FieldRow label={t('ems.equipment.spec.workingRange')}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <Input
-                  placeholder="Min"
-                  value={numToInput(form.workingRangeMin)}
-                  onChange={(e) => setField('workingRangeMin', inputToNum(e.target.value))}
-                />
-                <Input
-                  placeholder="Max"
-                  value={numToInput(form.workingRangeMax)}
-                  onChange={(e) => setField('workingRangeMax', inputToNum(e.target.value))}
-                />
-                <Input
-                  placeholder={t('ems.equipment.editUnit')}
-                  value={form.workingRangeUnit ?? ''}
-                  onChange={(e) => setField('workingRangeUnit', e.target.value)}
-                />
-                <Input
-                  placeholder={t('ems.equipment.spec.workingRangePoints')}
-                  value={numToInput(form.workingRangePoints)}
-                  onChange={(e) => setField('workingRangePoints', inputToNum(e.target.value))}
-                />
+                <EmsLandscapeDialogSection title={t('ems.equipment.image')}>
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                    {imagePreview ? (
+                      <div
+                        className="equipment-thumb flex-none overflow-hidden rounded-md border border-dashed bg-muted/40"
+                        style={{
+                          width: EQUIPMENT_THUMB_PX.base,
+                          height: EQUIPMENT_THUMB_PX.base,
+                          minWidth: EQUIPMENT_THUMB_PX.base,
+                          maxWidth: EQUIPMENT_THUMB_PX.base,
+                          minHeight: EQUIPMENT_THUMB_PX.base,
+                          maxHeight: EQUIPMENT_THUMB_PX.base,
+                        }}
+                      >
+                        <img
+                          src={imagePreview}
+                          alt=""
+                          className="block h-full w-full object-cover"
+                          width={EQUIPMENT_THUMB_PX.base}
+                          height={EQUIPMENT_THUMB_PX.base}
+                        />
+                      </div>
+                    ) : (
+                      <EquipmentImageCard
+                        imageUrl={detail?.identity.imageUrl}
+                        tagNo={detail?.identity.tagNo ?? ''}
+                      />
+                    )}
+                    <div className="min-w-0 flex-1 space-y-2">
+                      <FileUpload
+                        accept="image/*"
+                        onChange={handleImageChange}
+                        placeholder={t('ems.equipment.uploadImage')}
+                        className="w-full"
+                      />
+                      {imageFile && (
+                        <p className="truncate text-xs text-muted-foreground">{imageFile.name}</p>
+                      )}
+                      <p className="text-xs text-muted-foreground">{t('ems.equipment.uploadImageHint')}</p>
+                    </div>
+                  </div>
+                </EmsLandscapeDialogSection>
               </div>
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.spec.calRange')}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <Input
-                  placeholder="Min"
-                  value={numToInput(form.calRangeMin)}
-                  onChange={(e) => setField('calRangeMin', inputToNum(e.target.value))}
-                />
-                <Input
-                  placeholder="Max"
-                  value={numToInput(form.calRangeMax)}
-                  onChange={(e) => setField('calRangeMax', inputToNum(e.target.value))}
-                />
-                <Input
-                  placeholder={t('ems.equipment.editUnit')}
-                  value={form.calRangeUnit ?? ''}
-                  onChange={(e) => setField('calRangeUnit', e.target.value)}
-                />
-                <Input
-                  placeholder={t('ems.equipment.spec.calRangePoints')}
-                  value={numToInput(form.calRangePoints)}
-                  onChange={(e) => setField('calRangePoints', inputToNum(e.target.value))}
-                />
-              </div>
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.spec.mpe')}>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <Input
-                  placeholder="Type"
-                  value={form.mpeType ?? ''}
-                  onChange={(e) => setField('mpeType', e.target.value)}
-                />
-                <Input
-                  placeholder="Value"
-                  value={numToInput(form.mpeValue)}
-                  onChange={(e) => setField('mpeValue', inputToNum(e.target.value))}
-                />
-                <Input
-                  placeholder={t('ems.equipment.editUnit')}
-                  value={form.mpeUnit ?? ''}
-                  onChange={(e) => setField('mpeUnit', e.target.value)}
-                />
-                <Input
-                  placeholder="Condition"
-                  value={form.mpeCondition ?? ''}
-                  onChange={(e) => setField('mpeCondition', e.target.value)}
-                />
-              </div>
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.spec.ccpCode')}>
-              <Input value={form.ccpCode ?? ''} onChange={(e) => setField('ccpCode', e.target.value)} />
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.spec.calRefWi')}>
-              <Input value={form.calRefWi ?? ''} onChange={(e) => setField('calRefWi', e.target.value)} />
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.spec.calRefForm')}>
-              <Input
-                value={form.calRefForm ?? ''}
-                onChange={(e) => setField('calRefForm', e.target.value)}
-              />
-            </FieldRow>
-            <FieldRow label={t('ems.equipment.spec.calInterval')}>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Input
-                  value={form.calInterval ?? ''}
-                  onChange={(e) => setField('calInterval', e.target.value)}
-                />
-                <Input
-                  type="number"
-                  placeholder={t('ems.equipment.spec.weeks')}
-                  value={numToInput(form.calIntervalWeeks)}
-                  onChange={(e) => setField('calIntervalWeeks', inputToNum(e.target.value))}
-                />
-              </div>
-            </FieldRow>
-          </section>
 
-          <section className="space-y-3">
-            <h3 className="text-sm font-semibold">{t('ems.equipment.image')}</h3>
-            <div className="flex flex-col sm:flex-row gap-3 items-start">
-              {imagePreview ? (
-                <div
-                  className="equipment-thumb flex-none overflow-hidden rounded-md border border-dashed bg-muted/40"
-                  style={{
-                    width: EQUIPMENT_THUMB_PX.base,
-                    height: EQUIPMENT_THUMB_PX.base,
-                    minWidth: EQUIPMENT_THUMB_PX.base,
-                    maxWidth: EQUIPMENT_THUMB_PX.base,
-                    minHeight: EQUIPMENT_THUMB_PX.base,
-                    maxHeight: EQUIPMENT_THUMB_PX.base,
-                  }}
-                >
-                  <img
-                    src={imagePreview}
-                    alt=""
-                    className="block h-full w-full object-cover"
-                    width={EQUIPMENT_THUMB_PX.base}
-                    height={EQUIPMENT_THUMB_PX.base}
+              <EmsLandscapeDialogSection title={t('ems.equipment.spec.title')}>
+                <FieldRow label={t('ems.equipment.spec.workingRange')}>
+                  <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+                    <Input
+                      placeholder="Min"
+                      value={numToInput(form.workingRangeMin)}
+                      onChange={(e) => setField('workingRangeMin', inputToNum(e.target.value))}
+                    />
+                    <Input
+                      placeholder="Max"
+                      value={numToInput(form.workingRangeMax)}
+                      onChange={(e) => setField('workingRangeMax', inputToNum(e.target.value))}
+                    />
+                    <Input
+                      placeholder={t('ems.equipment.editUnit')}
+                      value={form.workingRangeUnit ?? ''}
+                      onChange={(e) => setField('workingRangeUnit', e.target.value)}
+                    />
+                    <Input
+                      placeholder={t('ems.equipment.spec.workingRangePoints')}
+                      value={numToInput(form.workingRangePoints)}
+                      onChange={(e) => setField('workingRangePoints', inputToNum(e.target.value))}
+                    />
+                  </div>
+                </FieldRow>
+                <FieldRow label={t('ems.equipment.spec.calRange')}>
+                  <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+                    <Input
+                      placeholder="Min"
+                      value={numToInput(form.calRangeMin)}
+                      onChange={(e) => setField('calRangeMin', inputToNum(e.target.value))}
+                    />
+                    <Input
+                      placeholder="Max"
+                      value={numToInput(form.calRangeMax)}
+                      onChange={(e) => setField('calRangeMax', inputToNum(e.target.value))}
+                    />
+                    <Input
+                      placeholder={t('ems.equipment.editUnit')}
+                      value={form.calRangeUnit ?? ''}
+                      onChange={(e) => setField('calRangeUnit', e.target.value)}
+                    />
+                    <Input
+                      placeholder={t('ems.equipment.spec.calRangePoints')}
+                      value={numToInput(form.calRangePoints)}
+                      onChange={(e) => setField('calRangePoints', inputToNum(e.target.value))}
+                    />
+                  </div>
+                </FieldRow>
+                <FieldRow label={t('ems.equipment.spec.mpe')}>
+                  <div className="grid grid-cols-2 gap-2 xl:grid-cols-4">
+                    <Input
+                      placeholder="Type"
+                      value={form.mpeType ?? ''}
+                      onChange={(e) => setField('mpeType', e.target.value)}
+                    />
+                    <Input
+                      placeholder="Value"
+                      value={numToInput(form.mpeValue)}
+                      onChange={(e) => setField('mpeValue', inputToNum(e.target.value))}
+                    />
+                    <Input
+                      placeholder={t('ems.equipment.editUnit')}
+                      value={form.mpeUnit ?? ''}
+                      onChange={(e) => setField('mpeUnit', e.target.value)}
+                    />
+                    <Input
+                      placeholder="Condition"
+                      value={form.mpeCondition ?? ''}
+                      onChange={(e) => setField('mpeCondition', e.target.value)}
+                    />
+                  </div>
+                </FieldRow>
+                <FieldRow label={t('ems.equipment.spec.ccpCode')}>
+                  <Input value={form.ccpCode ?? ''} onChange={(e) => setField('ccpCode', e.target.value)} />
+                </FieldRow>
+                <FieldRow label={t('ems.equipment.spec.calRefWi')}>
+                  <Input value={form.calRefWi ?? ''} onChange={(e) => setField('calRefWi', e.target.value)} />
+                </FieldRow>
+                <FieldRow label={t('ems.equipment.spec.calRefForm')}>
+                  <Input
+                    value={form.calRefForm ?? ''}
+                    onChange={(e) => setField('calRefForm', e.target.value)}
                   />
-                </div>
-              ) : (
-                <EquipmentImageCard
-                  imageUrl={detail?.identity.imageUrl}
-                  tagNo={detail?.identity.tagNo ?? ''}
-                />
-              )}
-              <div className="flex-1 min-w-0 space-y-2 w-full sm:w-auto">
-                <FileUpload
-                  accept="image/*"
-                  onChange={handleImageChange}
-                  placeholder={t('ems.equipment.uploadImage')}
-                  className="w-full sm:w-auto sm:min-w-[200px]"
-                />
-                {imageFile && (
-                  <p className="text-xs text-muted-foreground truncate">{imageFile.name}</p>
-                )}
-                <p className="text-xs text-muted-foreground">{t('ems.equipment.uploadImageHint')}</p>
-              </div>
+                </FieldRow>
+                <FieldRow label={t('ems.equipment.spec.calInterval')}>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    <Input
+                      value={form.calInterval ?? ''}
+                      onChange={(e) => setField('calInterval', e.target.value)}
+                    />
+                    <Input
+                      type="number"
+                      placeholder={t('ems.equipment.spec.weeks')}
+                      value={numToInput(form.calIntervalWeeks)}
+                      onChange={(e) => setField('calIntervalWeeks', inputToNum(e.target.value))}
+                    />
+                  </div>
+                </FieldRow>
+              </EmsLandscapeDialogSection>
             </div>
-          </section>
+          </EmsLandscapeDialogBody>
 
-          <DialogFooter className="gap-2 sm:gap-0">
+          <EmsLandscapeDialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
               {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={saving}>
               {saving ? t('ems.equipment.saving') : t('ems.equipment.save')}
             </Button>
-          </DialogFooter>
+          </EmsLandscapeDialogFooter>
         </form>
-      </DialogContent>
+      </EmsLandscapeDialogContent>
     </Dialog>
   );
 };

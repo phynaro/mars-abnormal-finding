@@ -2,11 +2,13 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 import { ChevronLeft, ChevronRight, Pencil, Plus, Trash2 } from 'lucide-react';
 
-import CalibrationUserEventModal from '@/components/dashboard/calibration/CalibrationUserEventModal';
+import ScheduleUserEventModal from '@/components/ems/schedule/ScheduleUserEventModal';
+import { UserEventColorSwatch } from '@/components/common/UserEventColorPicker';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { resolveUserEventColor } from '@/constants/userEventColors';
 import { useToast } from '@/hooks/useToast';
 import type {
   CalibrationUserEvent,
@@ -152,6 +154,9 @@ const ScheduleUserEventsPanel: React.FC<Props> = ({ filters }) => {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b bg-muted/40">
+                <th className="px-3 py-2 text-left font-medium text-muted-foreground whitespace-nowrap">
+                  {t('ems.schedule.userEventsColColor')}
+                </th>
                 <th className="px-3 py-2 text-left font-medium text-muted-foreground">
                   {t('ems.schedule.userEventsColTitle')}
                 </th>
@@ -173,8 +178,13 @@ const ScheduleUserEventsPanel: React.FC<Props> = ({ filters }) => {
               </tr>
             </thead>
             <tbody>
-              {items.map((event) => (
+              {items.map((event) => {
+                const eventColor = resolveUserEventColor(event.color_hex);
+                return (
                 <tr key={event.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
+                  <td className="px-3 py-2">
+                    <UserEventColorSwatch color={eventColor} className="h-5 w-5" title={eventColor} />
+                  </td>
                   <td className="px-3 py-2">
                     <div className="space-y-0.5">
                       <p className="font-medium">{event.title}</p>
@@ -239,7 +249,8 @@ const ScheduleUserEventsPanel: React.FC<Props> = ({ filters }) => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              );
+              })}
             </tbody>
           </table>
         </div>
@@ -274,7 +285,7 @@ const ScheduleUserEventsPanel: React.FC<Props> = ({ filters }) => {
         </div>
       )}
 
-      <CalibrationUserEventModal
+      <ScheduleUserEventModal
         open={modalOpen}
         onOpenChange={setModalOpen}
         eventItem={editingEvent}
