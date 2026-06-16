@@ -14,6 +14,7 @@ const {
   paginationMeta,
   WO_FINISHED_SQL,
   plantFromTagExpr,
+  timeToMinutesExpr,
 } = require('../../helpers/emsQueryHelpers');
 
 const WO_STATUS_HISTORY = 9;
@@ -135,6 +136,21 @@ exports.getScheduleList = async (req, res) => {
     dataReq.input('EndRow', sql.Int, endRow);
 
     const dueExpr = builtData.dueDateExpr;
+    const woFinishDateExpr = `(
+      CASE
+        WHEN LEN(LTRIM(RTRIM(wo.SCH_FINISH_D))) = 8 AND ISDATE(STUFF(STUFF(wo.SCH_FINISH_D, 5, 0, '-'), 8, 0, '-')) = 1 THEN CONVERT(date, STUFF(STUFF(wo.SCH_FINISH_D, 5, 0, '-'), 8, 0, '-'), 23)
+        WHEN LEN(LTRIM(RTRIM(wo.SCH_FINISH_D))) >= 10 AND ISDATE(LEFT(wo.SCH_FINISH_D, 10)) = 1 THEN CONVERT(date, LEFT(wo.SCH_FINISH_D, 10), 23)
+        ELSE NULL
+      END
+    )`;
+    const effectiveDueDateTimeExpr = `COALESCE(
+      CASE
+        WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${woFinishDateExpr} IS NOT NULL
+        THEN DATEADD(minute, ${timeToMinutesExpr('wo.SCH_FINISH_T')}, CAST(${woFinishDateExpr} AS DATETIME))
+        ELSE NULL
+      END,
+      CAST(${dueExpr} AS DATETIME)
+    )`;
     const dataWhere = builtData.whereFragment;
 
     const dataSql = `
@@ -145,7 +161,7 @@ exports.getScheduleList = async (req, res) => {
           ISNULL(ext.description, eq.EQNAME) AS description,
           ext.location AS area,
           ${plantFromTagExpr('ext.tag_no')} AS plant,
-          s.DUEDATE,
+          ${effectiveDueDateTimeExpr} AS DUEDATE,
           s.WONo,
           s.WOStatusNo AS schedWOStatusNo,
           wo.WOSTATUSNO AS woStatusNo,
@@ -153,8 +169,8 @@ exports.getScheduleList = async (req, res) => {
           pm.ASSIGN AS assigneeId,
           LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))) AS assigneeName,
           CAST(s.PMNO AS VARCHAR(10)) + '_' + s.DUEDATE AS PMSchNo,
-          DATEDIFF(day, CAST(GETDATE() AS DATE), ${dueExpr}) AS daysUntilDue,
-          ROW_NUMBER() OVER (ORDER BY ${dueExpr}, s.PMNO) AS RowNum
+          DATEDIFF(day, GETDATE(), ${effectiveDueDateTimeExpr}) AS daysUntilDue,
+          ROW_NUMBER() OVER (ORDER BY ${effectiveDueDateTimeExpr}, s.PMNO) AS RowNum
         ${fromJoinPm}
         ${leftJoinEq}
         ${leftJoinWo}

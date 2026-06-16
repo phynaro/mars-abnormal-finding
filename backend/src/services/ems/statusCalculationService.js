@@ -6,7 +6,6 @@
 const {
   EMS_EQUIPMENT_STATUS,
   EMS_WO_STATUS_FINISHED,
-  EMS_DUE_THIS_WEEK_MAX_DAYS,
   EMS_DUE_SOON_MAX_DAYS,
 } = require('../../constants/emsConstants');
 
@@ -14,6 +13,15 @@ function startOfDay(date) {
   const d = new Date(date);
   d.setHours(0, 0, 0, 0);
   return d;
+}
+
+function comingSundayMidnight(referenceDate = new Date()) {
+  const ref = new Date(referenceDate);
+  const today = startOfDay(ref);
+  const day = today.getDay(); // 0=Sun ... 6=Sat
+  const daysToNextSunday = day === 0 ? 7 : 7 - day;
+  today.setDate(today.getDate() + daysToNextSunday);
+  return today;
 }
 
 /**
@@ -24,7 +32,7 @@ function startOfDay(date) {
 function parseDueDate(value) {
   if (value == null || value === '') return null;
   if (value instanceof Date) {
-    return Number.isNaN(value.getTime()) ? null : startOfDay(value);
+    return Number.isNaN(value.getTime()) ? null : new Date(value);
   }
 
   const raw = String(value).trim();
@@ -36,9 +44,11 @@ function parseDueDate(value) {
     return Number.isNaN(d.getTime()) ? null : startOfDay(d);
   }
 
+  const d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) return d;
   const head = raw.length >= 10 ? raw.slice(0, 10) : raw;
-  const d = new Date(head);
-  return Number.isNaN(d.getTime()) ? null : startOfDay(d);
+  const d2 = new Date(head);
+  return Number.isNaN(d2.getTime()) ? null : startOfDay(d2);
 }
 
 /**
@@ -106,14 +116,19 @@ function getKpiBucket(input, referenceDate = new Date()) {
     return 'ok';
   }
 
-  const days = daysUntilDue(due, referenceDate);
-  if (days == null) {
+  if (!due) {
     return hasWo ? 'ok' : 'no_wo';
   }
 
-  if (days < 0) return 'overdue';
-  if (days <= EMS_DUE_THIS_WEEK_MAX_DAYS) return 'due_this_week';
-  if (days <= EMS_DUE_SOON_MAX_DAYS) return 'due_soon';
+  const ref = new Date(referenceDate);
+  if (due < ref) return 'overdue';
+
+  const weekDeadline = comingSundayMidnight(ref);
+  const dueSoonDeadline = new Date(weekDeadline);
+  dueSoonDeadline.setDate(dueSoonDeadline.getDate() + EMS_DUE_SOON_MAX_DAYS);
+
+  if (due < weekDeadline) return 'due_this_week';
+  if (due < dueSoonDeadline) return 'due_soon';
   return 'ok';
 }
 

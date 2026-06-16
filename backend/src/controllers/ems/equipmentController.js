@@ -203,12 +203,38 @@ async function fetchEquipmentExtRow(pool, tagNo) {
 async function buildEquipmentDetailData(pool, extRow, historyLimit = 5) {
   const eqNo = extRow.eqno;
   const woFinishExpr = dateExprFromColumn('wo.ACT_FINISH_D');
+  const woSchedFinishExpr = dateExprFromColumn('wo.SCH_FINISH_D');
 
   const calResult = await pool.request()
     .input('EqNo', sql.Int, eqNo)
     .query(`
       SELECT TOP 1
         s.DUEDATE,
+        wo.SCH_FINISH_D,
+        wo.SCH_FINISH_T,
+        (
+          CASE
+            WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${woSchedFinishExpr} IS NOT NULL
+            THEN DATEADD(
+              minute,
+              (
+                CASE
+                  WHEN wo.SCH_FINISH_T IS NULL THEN 0
+                  WHEN ISNUMERIC(LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10))))) = 0 THEN 0
+                  ELSE
+                    CASE
+                      WHEN CAST(LEFT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) NOT BETWEEN 0 AND 23 THEN 0
+                      WHEN CAST(RIGHT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) NOT BETWEEN 0 AND 59 THEN 0
+                      ELSE CAST(LEFT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) * 60
+                        + CAST(RIGHT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT)
+                    END
+                END
+              ),
+              CAST(${woSchedFinishExpr} AS DATETIME)
+            )
+            ELSE NULL
+          END
+        ) AS dueDateTime,
         s.WONo,
         s.WOStatusNo AS schedWOStatusNo,
         wo.WOSTATUSNO AS woStatusNo,
@@ -226,13 +252,39 @@ async function buildEquipmentDetailData(pool, extRow, historyLimit = 5) {
         AND (pm.FLAGDEL IS NULL OR pm.FLAGDEL <> 'T')
         AND NOT (${WO_FINISHED_SQL})
       ORDER BY
-        CASE WHEN ${dateExprFromColumn('s.DUEDATE')} < CAST(GETDATE() AS DATE) THEN 0 ELSE 1 END,
-        ${dateExprFromColumn('s.DUEDATE')} ASC
+        CASE
+          WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${woSchedFinishExpr} IS NOT NULL THEN 0
+          ELSE 1
+        END,
+        COALESCE(
+          CASE
+            WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${woSchedFinishExpr} IS NOT NULL
+            THEN DATEADD(
+              minute,
+              (
+                CASE
+                  WHEN wo.SCH_FINISH_T IS NULL THEN 0
+                  WHEN ISNUMERIC(LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10))))) = 0 THEN 0
+                  ELSE
+                    CASE
+                      WHEN CAST(LEFT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) NOT BETWEEN 0 AND 23 THEN 0
+                      WHEN CAST(RIGHT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) NOT BETWEEN 0 AND 59 THEN 0
+                      ELSE CAST(LEFT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) * 60
+                        + CAST(RIGHT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT)
+                    END
+                END
+              ),
+              CAST(${woSchedFinishExpr} AS DATETIME)
+            )
+            ELSE NULL
+          END,
+          CAST(${dateExprFromColumn('s.DUEDATE')} AS DATETIME)
+        ) ASC
     `);
 
   const cal = calResult.recordset[0] || null;
   const status = calculateEquipmentStatus({
-    dueDate: cal?.DUEDATE,
+    dueDate: cal?.dueDateTime || cal?.DUEDATE,
     woStatusNo: cal?.woStatusNo,
     schedWoStatusNo: cal?.schedWOStatusNo,
     woNo: cal?.WONo,
@@ -267,7 +319,7 @@ async function buildEquipmentDetailData(pool, extRow, historyLimit = 5) {
     ? {
         woNo: cal.WONo,
         woCode: cal.WOCODE,
-        dueDate: cal.DUEDATE,
+        dueDate: cal.dueDateTime || cal.DUEDATE,
         woStatusNo: cal.woStatusNo ?? cal.schedWOStatusNo,
         assignedCalibrator: cal.assigneeName || null,
         assigneeId: cal.assigneeId ?? null,
@@ -306,8 +358,8 @@ exports.listEquipment = async (req, res) => {
     const statusFilters = kpiBucket ? [] : parseStatusFilter(req.query);
 
     const pool = await getCedarPool();
-    const statusExpr = equipmentStatusCaseExpr('cal.dueDateParsed');
-    const bucketExpr = kpiBucketCaseExpr('cal.dueDateParsed');
+    const statusExpr = equipmentStatusCaseExpr('cal.dueDateTime');
+    const bucketExpr = kpiBucketCaseExpr('cal.dueDateTime');
 
     const countReq = pool.request();
     const whereParts = [...applyEmsPlantAreaFilters(countReq, req.query)];
@@ -378,7 +430,7 @@ exports.listEquipment = async (req, res) => {
           ext.cal_interval,
           ext.ccp_code,
           ${statusExpr} AS status,
-          cal.DUEDATE AS nextDueRaw,
+          cal.dueDateTime AS nextDueRaw,
           LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))) AS assigneeName,
           ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS RowNum
         ${emsEquipmentFromJoin()}

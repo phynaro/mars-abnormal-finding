@@ -65,14 +65,14 @@ test('DUE SOON within 7 days', () => {
   assert.strictEqual(getKpiBucket(input, REF), 'due_this_week');
 });
 
-test('DUE SOON within 8-30 days', () => {
-  const input = { dueDate: '20260701', woNo: 100, woStatusNo: 1 };
+test('DUE SOON within next 14 days after this week', () => {
+  const input = { dueDate: '20260620', woNo: 100, woStatusNo: 1 };
   assert.strictEqual(calculateEquipmentStatus(input, REF), 'DUE SOON');
   assert.strictEqual(getKpiBucket(input, REF), 'due_soon');
 });
 
-test('OK when due beyond 30 days', () => {
-  const input = { dueDate: '20260801', woNo: 100, woStatusNo: 1 };
+test('OK when due beyond due-soon window', () => {
+  const input = { dueDate: '20260701', woNo: 100, woStatusNo: 1 };
   assert.strictEqual(calculateEquipmentStatus(input, REF), 'OK');
   assert.strictEqual(getKpiBucket(input, REF), 'ok');
 });

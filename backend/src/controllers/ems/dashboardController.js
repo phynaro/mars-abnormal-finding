@@ -14,9 +14,10 @@ const {
   WO_FINISHED_SQL,
   plantFromTagExpr,
   PM_CAL_PLANTS,
+  weekDeadlineExpr,
+  timeToMinutesExpr,
 } = require('../../helpers/emsQueryHelpers');
 const {
-  EMS_DUE_THIS_WEEK_MAX_DAYS,
   EMS_DUE_SOON_MAX_DAYS,
 } = require('../../constants/emsConstants');
 
@@ -60,10 +61,10 @@ exports.getKpi = async (req, res) => {
       CASE
         WHEN cal.DUEDATE IS NULL THEN 'no_wo'
         WHEN cal.schedWOStatusNo = 9 OR (cal.WONo > 0 AND cal.woStatusNo IN (7, 9)) THEN 'ok'
-        WHEN cal.dueDateParsed IS NULL THEN 'no_wo'
-        WHEN cal.dueDateParsed < CAST(GETDATE() AS DATE) THEN 'overdue'
-        WHEN DATEDIFF(day, CAST(GETDATE() AS DATE), cal.dueDateParsed) <= ${EMS_DUE_THIS_WEEK_MAX_DAYS} THEN 'due_this_week'
-        WHEN DATEDIFF(day, CAST(GETDATE() AS DATE), cal.dueDateParsed) <= ${EMS_DUE_SOON_MAX_DAYS} THEN 'due_soon'
+        WHEN cal.dueDateTime IS NULL THEN 'no_wo'
+        WHEN cal.dueDateTime < GETDATE() THEN 'overdue'
+        WHEN cal.dueDateTime >= GETDATE() AND cal.dueDateTime < ${weekDeadlineExpr()} THEN 'due_this_week'
+        WHEN cal.dueDateTime >= ${weekDeadlineExpr()} AND cal.dueDateTime < DATEADD(day, ${EMS_DUE_SOON_MAX_DAYS}, ${weekDeadlineExpr()}) THEN 'due_soon'
         ELSE 'ok'
       END
     )`;
@@ -124,6 +125,16 @@ async function fetchSchedulePanel(req, res, windowClause, orderBy) {
 
   const pool = await getCedarPool();
   const dueExpr = dateExprFromColumn('s.DUEDATE');
+  const woFinishDateExpr = dateExprFromColumn('wo.SCH_FINISH_D');
+  const woFinishMinutesExpr = timeToMinutesExpr('wo.SCH_FINISH_T');
+  const woDueDateTimeExpr = `(
+    CASE
+      WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${woFinishDateExpr} IS NOT NULL
+      THEN DATEADD(minute, ${woFinishMinutesExpr}, CAST(${woFinishDateExpr} AS DATETIME))
+      ELSE NULL
+    END
+  )`;
+  const effectiveDueDateTimeExpr = `COALESCE(${woDueDateTimeExpr}, CAST(${dueExpr} AS DATETIME))`;
   const { fromJoinPm, leftJoinEq, leftJoinWo } = getPMCalSched();
 
   const countReq = pool.request();
@@ -169,9 +180,9 @@ async function fetchSchedulePanel(req, res, windowClause, orderBy) {
         ISNULL(ext.description, eq.EQNAME) AS description,
         ext.location AS area,
         ${plantFromTagExpr('ext.tag_no')} AS plant,
-        CASE WHEN ${dueExpr} < CAST(GETDATE() AS DATE)
-          THEN DATEDIFF(day, ${dueExpr}, CAST(GETDATE() AS DATE)) ELSE NULL END AS daysOverdue,
-        DATEDIFF(day, CAST(GETDATE() AS DATE), ${dueExpr}) AS daysUntilDue,
+        CASE WHEN ${effectiveDueDateTimeExpr} < GETDATE()
+          THEN DATEDIFF(day, ${effectiveDueDateTimeExpr}, GETDATE()) ELSE NULL END AS daysOverdue,
+        DATEDIFF(day, GETDATE(), ${effectiveDueDateTimeExpr}) AS daysUntilDue,
         s.DUEDATE AS dueDateRaw,
         s.WONo,
         wo.WOCODE,
@@ -222,11 +233,18 @@ exports.getOverdue = async (req, res) => {
  */
 exports.getDueThisWeek = async (req, res) => {
   try {
-    const dueExpr = dateExprFromColumn('s.DUEDATE');
+    const dueExpr = `COALESCE(
+      CASE
+        WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${dateExprFromColumn('wo.SCH_FINISH_D')} IS NOT NULL
+        THEN DATEADD(minute, ${timeToMinutesExpr('wo.SCH_FINISH_T')}, CAST(${dateExprFromColumn('wo.SCH_FINISH_D')} AS DATETIME))
+        ELSE NULL
+      END,
+      CAST(${dateExprFromColumn('s.DUEDATE')} AS DATETIME)
+    )`;
     await fetchSchedulePanel(
       req,
       res,
-      `${dueExpr} >= CAST(GETDATE() AS DATE) AND ${dueExpr} <= DATEADD(day, ${EMS_DUE_THIS_WEEK_MAX_DAYS}, CAST(GETDATE() AS DATE))`,
+      `${dueExpr} >= GETDATE() AND ${dueExpr} < ${weekDeadlineExpr()}`,
       `${dueExpr} ASC`
     );
   } catch (error) {
@@ -240,12 +258,19 @@ exports.getDueThisWeek = async (req, res) => {
  */
 exports.getDueSoon = async (req, res) => {
   try {
-    const dueExpr = dateExprFromColumn('s.DUEDATE');
+    const dueExpr = `COALESCE(
+      CASE
+        WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${dateExprFromColumn('wo.SCH_FINISH_D')} IS NOT NULL
+        THEN DATEADD(minute, ${timeToMinutesExpr('wo.SCH_FINISH_T')}, CAST(${dateExprFromColumn('wo.SCH_FINISH_D')} AS DATETIME))
+        ELSE NULL
+      END,
+      CAST(${dateExprFromColumn('s.DUEDATE')} AS DATETIME)
+    )`;
     await fetchSchedulePanel(
       req,
       res,
-      `${dueExpr} > DATEADD(day, ${EMS_DUE_THIS_WEEK_MAX_DAYS}, CAST(GETDATE() AS DATE))
-       AND ${dueExpr} <= DATEADD(day, ${EMS_DUE_SOON_MAX_DAYS}, CAST(GETDATE() AS DATE))`,
+      `${dueExpr} >= ${weekDeadlineExpr()}
+       AND ${dueExpr} < DATEADD(day, ${EMS_DUE_SOON_MAX_DAYS}, ${weekDeadlineExpr()})`,
       `${dueExpr} ASC`
     );
   } catch (error) {

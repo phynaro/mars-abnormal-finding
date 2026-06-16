@@ -11,11 +11,30 @@ const {
   PM_CAL_PLANTS,
 } = require('./pmCalibrationScheduleQuery');
 const {
-  EMS_DUE_THIS_WEEK_MAX_DAYS,
   EMS_DUE_SOON_MAX_DAYS,
 } = require('../constants/emsConstants');
 
 const WO_FINISHED_SQL = `(s.WOStatusNo = 9 OR (s.WONo > 0 AND wo.WOSTATUSNO IN (7, 9)))`;
+
+/** Parse HHmm-like column to minutes since midnight (invalid -> 0). */
+function timeToMinutesExpr(colName) {
+  const raw = `RIGHT('0000' + LTRIM(RTRIM(CAST(${colName} AS VARCHAR(10)))), 4)`;
+  return `(
+    CASE
+      WHEN ${colName} IS NULL THEN 0
+      WHEN ISNUMERIC(LTRIM(RTRIM(CAST(${colName} AS VARCHAR(10))))) = 0 THEN 0
+      WHEN CAST(LEFT(${raw}, 2) AS INT) NOT BETWEEN 0 AND 23 THEN 0
+      WHEN CAST(RIGHT(${raw}, 2) AS INT) NOT BETWEEN 0 AND 59 THEN 0
+      ELSE CAST(LEFT(${raw}, 2) AS INT) * 60 + CAST(RIGHT(${raw}, 2) AS INT)
+    END
+  )`;
+}
+
+/** Upcoming Sunday 00:00 local (end of coming Saturday). */
+function weekDeadlineExpr(nowExpr = 'GETDATE()') {
+  const todayDate = `CAST(${nowExpr} AS DATE)`;
+  return `DATEADD(day, 7 - (DATEDIFF(day, '1899-12-31', ${todayDate}) % 7), ${todayDate})`;
+}
 
 function plantFromTagExpr(tagCol = 'ext.tag_no') {
   return `UPPER(LTRIM(RTRIM(LEFT(${tagCol}, NULLIF(CHARINDEX(N'-', ${tagCol} + N'-'), 0) - 1))))`;
@@ -36,6 +55,18 @@ function emsEquipmentFromJoin() {
 /** Next open calibration schedule row per equipment. */
 function openCalApplySql() {
   const dueExpr = dateExprFromColumn('s.DUEDATE');
+  const woFinishDateExpr = dateExprFromColumn('wo.SCH_FINISH_D');
+  const woFinishMinutesExpr = timeToMinutesExpr('wo.SCH_FINISH_T');
+  const woFinishDateTimeExpr = `(
+    CASE
+      WHEN s.WONo > 0
+        AND wo.WONO IS NOT NULL
+        AND ${woFinishDateExpr} IS NOT NULL
+      THEN DATEADD(minute, ${woFinishMinutesExpr}, CAST(${woFinishDateExpr} AS DATETIME))
+      ELSE NULL
+    END
+  )`;
+  const effectiveDueDateTimeExpr = `COALESCE(${woFinishDateTimeExpr}, CAST(${dueExpr} AS DATETIME))`;
   return `
     OUTER APPLY (
       SELECT TOP 1
@@ -47,6 +78,10 @@ function openCalApplySql() {
         pm.ASSIGN AS assigneeId,
         pm.PMNO,
         wo.WOCODE,
+        wo.SCH_FINISH_D,
+        wo.SCH_FINISH_T,
+        ${woFinishDateTimeExpr} AS woDueDateTime,
+        ${effectiveDueDateTimeExpr} AS dueDateTime,
         ${dueExpr} AS dueDateParsed
       FROM dbo.PM pm
       INNER JOIN dbo.PMSched s ON s.PMNO = pm.PMNO
@@ -58,8 +93,8 @@ function openCalApplySql() {
         AND ${pmFlagActive('pm')}
         AND NOT ${WO_FINISHED_SQL}
       ORDER BY
-        CASE WHEN ${dueExpr} < CAST(GETDATE() AS DATE) THEN 0 ELSE 1 END,
-        ${dueExpr} ASC
+        CASE WHEN ${woFinishDateTimeExpr} IS NOT NULL THEN 0 ELSE 1 END,
+        ${effectiveDueDateTimeExpr} ASC
     ) cal
   `;
 }
@@ -67,14 +102,15 @@ function openCalApplySql() {
 /** SQL CASE matching statusCalculationService buckets (no_wo | overdue | due_this_week | due_soon | ok). */
 function kpiBucketCaseExpr(dueCol = 'cal.dueDateParsed') {
   const d = dueCol;
+  const weekDeadline = weekDeadlineExpr();
   return `(
     CASE
       WHEN cal.DUEDATE IS NULL THEN 'no_wo'
       WHEN cal.schedWOStatusNo = 9 OR (cal.WONo > 0 AND cal.woStatusNo IN (7, 9)) THEN 'ok'
       WHEN ${d} IS NULL THEN 'no_wo'
-      WHEN ${d} < CAST(GETDATE() AS DATE) THEN 'overdue'
-      WHEN DATEDIFF(day, CAST(GETDATE() AS DATE), ${d}) <= ${EMS_DUE_THIS_WEEK_MAX_DAYS} THEN 'due_this_week'
-      WHEN DATEDIFF(day, CAST(GETDATE() AS DATE), ${d}) <= ${EMS_DUE_SOON_MAX_DAYS} THEN 'due_soon'
+      WHEN ${d} < GETDATE() THEN 'overdue'
+      WHEN ${d} >= GETDATE() AND ${d} < ${weekDeadline} THEN 'due_this_week'
+      WHEN ${d} >= ${weekDeadline} AND ${d} < DATEADD(day, ${EMS_DUE_SOON_MAX_DAYS}, ${weekDeadline}) THEN 'due_soon'
       ELSE 'ok'
     END
   )`;
@@ -83,13 +119,14 @@ function kpiBucketCaseExpr(dueCol = 'cal.dueDateParsed') {
 /** Badge status for equipment list (NO WO | OVERDUE | DUE SOON | OK). */
 function equipmentStatusCaseExpr(dueCol = 'cal.dueDateParsed') {
   const d = dueCol;
+  const weekDeadline = weekDeadlineExpr();
   return `(
     CASE
       WHEN cal.DUEDATE IS NULL THEN 'NO WO'
       WHEN cal.schedWOStatusNo = 9 OR (cal.WONo > 0 AND cal.woStatusNo IN (7, 9)) THEN 'OK'
       WHEN ${d} IS NULL THEN 'NO WO'
-      WHEN ${d} < CAST(GETDATE() AS DATE) THEN 'OVERDUE'
-      WHEN DATEDIFF(day, CAST(GETDATE() AS DATE), ${d}) <= ${EMS_DUE_SOON_MAX_DAYS} THEN 'DUE SOON'
+      WHEN ${d} < GETDATE() THEN 'OVERDUE'
+      WHEN ${d} < DATEADD(day, ${EMS_DUE_SOON_MAX_DAYS}, ${weekDeadline}) THEN 'DUE SOON'
       ELSE 'OK'
     END
   )`;
@@ -165,6 +202,8 @@ module.exports = {
   eqActiveWhere,
   emsEquipmentFromJoin,
   openCalApplySql,
+  timeToMinutesExpr,
+  weekDeadlineExpr,
   kpiBucketCaseExpr,
   equipmentStatusCaseExpr,
   applyEmsPlantAreaFilters,
