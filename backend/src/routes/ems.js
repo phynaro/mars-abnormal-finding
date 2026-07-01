@@ -32,6 +32,7 @@ router.use(requireEmsAccess);
 
 router.get('/dashboard/kpi', dashboardController.getKpi);
 router.get('/dashboard/plant-matrix', dashboardController.getPlantMatrix);
+router.get('/dashboard/wo-period-status', dashboardController.getWoPeriodStatus);
 router.get('/dashboard/overdue', dashboardController.getOverdue);
 router.get('/dashboard/due-this-week', dashboardController.getDueThisWeek);
 router.get('/dashboard/due-soon', dashboardController.getDueSoon);

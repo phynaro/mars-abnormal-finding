@@ -14,7 +14,7 @@ import {
 } from '@/components/ui/table';
 import { useLanguage } from '@/contexts/LanguageContext';
 import emsService, { type EmsDashboardItem, type EmsPagination } from '@/services/emsService';
-import { formatEmsDate } from '@/components/ems/equipment/formatEmsValues';
+import { displayEffectiveDue } from '@/components/ems/equipment/formatEmsValues';
 import { cn } from '@/lib/utils';
 import type { DashboardFilters } from './DashboardFilterBar';
 
@@ -193,7 +193,7 @@ const EmsDashboardPanel: React.FC<EmsDashboardPanelProps> = ({
                     {showDaysUntilDue && (
                       <TableHead className="text-right">{t('ems.dashboard.daysUntilDue')}</TableHead>
                     )}
-                    <TableHead>{t('ems.dashboard.dueDate')}</TableHead>
+                    <TableHead>{t('ems.due.effectiveDue')}</TableHead>
                     <TableHead>{t('ems.equipment.wo.assignee')}</TableHead>
                     <TableHead>{t('ems.equipment.wo.woNo')}</TableHead>
                   </TableRow>
@@ -223,7 +223,7 @@ const EmsDashboardPanel: React.FC<EmsDashboardPanelProps> = ({
                           {row.daysUntilDue ?? '—'}
                         </TableCell>
                       )}
-                      <TableCell>{formatEmsDate(row.dueDate)}</TableCell>
+                      <TableCell>{displayEffectiveDue(row)}</TableCell>
                       <TableCell>{row.assigneeName?.trim() || '—'}</TableCell>
                       <TableCell>{row.woCode || row.woNo || '—'}</TableCell>
                     </TableRow>

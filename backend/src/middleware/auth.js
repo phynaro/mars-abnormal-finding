@@ -1,6 +1,18 @@
+const crypto = require('crypto');
 const { validateToken } = require('../controllers/authController');
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
+
+// Service API tokens (for 3rd-party integrations) carry this prefix so we can
+// distinguish them from user JWTs on the same Authorization: Bearer header.
+const API_TOKEN_PREFIX = 'eden_sk_';
+
+// Only these HTTP methods are allowed for read-only service tokens.
+const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+function hashApiToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
 
 // Helper function to get database connection
 async function getConnection() {
@@ -10,6 +22,83 @@ async function getConnection() {
   } catch (err) {
     console.error('Database connection error:', err);
     throw new Error('Database connection failed');
+  }
+}
+
+// Validate a service API token and attach a synthetic, read-only user to req.
+async function authenticateApiToken(req, res, next, token) {
+  // Read-only scope: block any state-changing method regardless of route.
+  if (!READ_ONLY_METHODS.has(req.method)) {
+    return res.status(403).json({
+      success: false,
+      message: 'This API token is read-only',
+      code: 'API_TOKEN_READ_ONLY'
+    });
+  }
+
+  try {
+    const pool = await getConnection();
+    const tokenHash = hashApiToken(token);
+    const result = await pool.request()
+      .input('tokenHash', sql.VarChar, tokenHash)
+      .query(`
+        SELECT id, name, scope, is_active, expires_at, revoked_at
+        FROM IgxApiTokens
+        WHERE token_hash = @tokenHash
+      `);
+
+    if (result.recordset.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid API token',
+        code: 'API_TOKEN_INVALID'
+      });
+    }
+
+    const apiToken = result.recordset[0];
+
+    if (!apiToken.is_active || apiToken.revoked_at) {
+      return res.status(401).json({
+        success: false,
+        message: 'API token has been revoked',
+        code: 'API_TOKEN_REVOKED'
+      });
+    }
+
+    if (apiToken.expires_at && new Date(apiToken.expires_at) < new Date()) {
+      return res.status(401).json({
+        success: false,
+        message: 'API token has expired',
+        code: 'API_TOKEN_EXPIRED'
+      });
+    }
+
+    // Fire-and-forget last-used update; never block the request on it.
+    pool.request()
+      .input('id', sql.Int, apiToken.id)
+      .query('UPDATE IgxApiTokens SET last_used_at = GETDATE() WHERE id = @id')
+      .catch((e) => console.error('Failed to update API token last_used_at:', e.message));
+
+    // Synthetic identity: read-only, high level so requirePermissionLevel passes,
+    // and an isApiToken flag that read-permission guards honor.
+    req.apiToken = { id: apiToken.id, name: apiToken.name, scope: apiToken.scope };
+    req.user = {
+      isApiToken: true,
+      readonly: true,
+      userId: `apitoken:${apiToken.id}`,
+      username: apiToken.name,
+      groupCode: 'API',
+      levelReport: 3,
+      permissionLevel: 3
+    };
+
+    return next();
+  } catch (dbError) {
+    console.error('API token validation error:', dbError);
+    return res.status(500).json({
+      success: false,
+      message: 'Error during API token authentication'
+    });
   }
 }
 
@@ -24,6 +113,11 @@ const authenticateToken = async (req, res, next) => {
         success: false, 
         message: 'Access token is required' 
       });
+    }
+
+    // Service API tokens (3rd-party integrations) take a separate, read-only path.
+    if (token.startsWith(API_TOKEN_PREFIX)) {
+      return authenticateApiToken(req, res, next, token);
     }
 
     // Validate token and get user info
@@ -153,6 +247,11 @@ const requireGroup = (allowedGroups) => {
       });
     }
 
+    // Read-only service tokens are allowed to perform read requests.
+    if (req.user.isApiToken && READ_ONLY_METHODS.has(req.method)) {
+      return next();
+    }
+
     // Check if user's group is in the allowed groups
     if (!allowedGroups.includes(req.user.groupCode)) {
       return res.status(403).json({ 
@@ -206,6 +305,18 @@ const requireFormPermission = (formId, action = 'view') => {
       return res.status(401).json({ 
         success: false, 
         message: 'Authentication required' 
+      });
+    }
+
+    // Read-only service tokens may view (read) any form.
+    if (req.user.isApiToken && READ_ONLY_METHODS.has(req.method)) {
+      if (action.toLowerCase() === 'view') {
+        return next();
+      }
+      return res.status(403).json({
+        success: false,
+        message: 'This API token is read-only',
+        code: 'API_TOKEN_READ_ONLY'
       });
     }
 

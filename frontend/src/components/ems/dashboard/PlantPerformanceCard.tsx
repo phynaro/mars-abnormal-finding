@@ -11,6 +11,7 @@ interface Props {
   plant: EmsPlantMatrixItem;
   kpi: EmsKpiData | null;
   kpiLoading?: boolean;
+  rangeLabel: string;
 }
 
 const RING_SIZE = 88;
@@ -59,11 +60,17 @@ function CompletionRing({ rate, total }: { rate: number; total: number }) {
   );
 }
 
-const PlantPerformanceCard: React.FC<Props> = ({ plant, kpi, kpiLoading }) => {
+const PlantPerformanceCard: React.FC<Props> = ({ plant, kpi, kpiLoading, rangeLabel }) => {
   const { t } = useLanguage();
 
   const segments = useMemo(
     () => [
+      {
+        key: 'overdue',
+        count: plant.overdue,
+        color: 'bg-red-500',
+        label: t('ems.dashboard.v2.statusOverdue'),
+      },
       {
         key: 'noWo',
         count: plant.noWo,
@@ -83,8 +90,9 @@ const PlantPerformanceCard: React.FC<Props> = ({ plant, kpi, kpiLoading }) => {
         label: t('ems.dashboard.v2.statusDone'),
       },
     ],
-    [plant.done, plant.inProgress, plant.noWo, t]
+    [plant.done, plant.inProgress, plant.noWo, plant.overdue, t]
   );
+
   return (
     <Card className="shadow-sm">
       <CardContent className="pt-5 pb-5">
@@ -98,11 +106,16 @@ const PlantPerformanceCard: React.FC<Props> = ({ plant, kpi, kpiLoading }) => {
                 </p>
                 <h3 className="text-sm font-semibold truncate">{plant.plantLabel}</h3>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {plant.total} {t('ems.dashboard.v2.tasksInMonth')}
+                  {t('ems.dashboard.v2.tasksDueInRange', { count: plant.total, label: rangeLabel })}
                 </p>
                 <p className="text-xs text-muted-foreground">
                   {t('ems.dashboard.v2.completion')}: {plant.done}/{plant.total}
                 </p>
+                {plant.overdue > 0 && (
+                  <p className="text-xs font-medium text-destructive mt-1">
+                    {plant.overdue} {t('ems.dashboard.v2.statusOverdue').toLowerCase()}
+                  </p>
+                )}
               </div>
             </div>
 
@@ -125,11 +138,13 @@ const PlantPerformanceCard: React.FC<Props> = ({ plant, kpi, kpiLoading }) => {
                   <div className="w-full bg-muted/50" />
                 )}
               </div>
-              <div className="grid grid-cols-3 gap-1 text-[11px] text-muted-foreground">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 text-[11px] text-muted-foreground">
                 {segments.map((seg) => (
                   <div key={seg.key} className="flex items-center gap-1 min-w-0">
                     <span className={cn('w-2 h-2 rounded-sm shrink-0', seg.color)} />
-                    <span className="truncate">{seg.count}</span>
+                    <span className="truncate" title={seg.label}>
+                      {seg.count}
+                    </span>
                   </div>
                 ))}
               </div>

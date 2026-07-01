@@ -1,5 +1,6 @@
 /**
  * Shared SQL helpers for EMS (IgxEQExtension + Cedar PM/WO).
+ * Effective due: open WO target (WO.PMNO) → PMSched.DUEDATE → PM.NEXTDUE_D.
  */
 
 const sql = require('mssql');
@@ -14,7 +15,38 @@ const {
   EMS_DUE_SOON_MAX_DAYS,
 } = require('../constants/emsConstants');
 
-const WO_FINISHED_SQL = `(s.WOStatusNo = 9 OR (s.WONo > 0 AND wo.WOSTATUSNO IN (7, 9)))`;
+/** Schedule row considered finished (legacy sched status, WONo link, or matching finished WO on PM). */
+const WO_FINISHED_SQL = `(
+  s.WOStatusNo = 9
+  OR (s.WONo > 0 AND wo.WOSTATUSNO IN (7, 9))
+  OR EXISTS (
+    SELECT 1 FROM dbo.WO wof
+    WHERE wof.PMNO = pm.PMNO
+      AND wof.WOSTATUSNO IN (7, 9)
+      AND (wof.FLAGDEL IS NULL OR wof.FLAGDEL <> 'Y')
+      AND ${dateExprFromColumn('wof.SCH_FINISH_D')} = ${dateExprFromColumn('s.DUEDATE')}
+  )
+)`;
+
+/** LEFT JOIN finished WO matched to schedule due (for aggregates — no subquery in SUM). */
+function leftJoinFinishedWoBySched(finishedAlias = 'wof', schedAlias = 's', pmAlias = 'pm') {
+  return `LEFT JOIN dbo.WO ${finishedAlias} ON ${finishedAlias}.PMNO = ${pmAlias}.PMNO
+    AND ${finishedAlias}.WOSTATUSNO IN (7, 9)
+    AND (${finishedAlias}.FLAGDEL IS NULL OR ${finishedAlias}.FLAGDEL <> 'Y')
+    AND ${dateExprFromColumn(`${finishedAlias}.SCH_FINISH_D`)} = ${dateExprFromColumn(`${schedAlias}.DUEDATE`)}`;
+}
+
+/** Finished check using leftJoinFinishedWoBySched (safe inside SUM/CASE). */
+function woFinishedJoinExpr(finishedAlias = 'wof', schedWoAlias = 'wo') {
+  return `(
+    s.WOStatusNo = 9
+    OR (s.WONo > 0 AND ${schedWoAlias}.WOSTATUSNO IN (7, 9))
+    OR ${finishedAlias}.WONO IS NOT NULL
+  )`;
+}
+
+/** Open WO exists on PM (new Cedar links via PMNO, not PMSched.WONo). */
+const WO_OPEN_SQL = `(openWo.WONO IS NOT NULL)`;
 
 /** Parse HHmm-like column to minutes since midnight (invalid -> 0). */
 function timeToMinutesExpr(colName) {
@@ -26,6 +58,48 @@ function timeToMinutesExpr(colName) {
       WHEN CAST(LEFT(${raw}, 2) AS INT) NOT BETWEEN 0 AND 23 THEN 0
       WHEN CAST(RIGHT(${raw}, 2) AS INT) NOT BETWEEN 0 AND 59 THEN 0
       ELSE CAST(LEFT(${raw}, 2) AS INT) * 60 + CAST(RIGHT(${raw}, 2) AS INT)
+    END
+  )`;
+}
+
+/** WO scheduled finish as datetime (date + time columns). */
+function woTargetDateTimeExpr(woAlias = 'openWo') {
+  const woFinishDateExpr = dateExprFromColumn(`${woAlias}.SCH_FINISH_D`);
+  const woFinishMinutesExpr = timeToMinutesExpr(`${woAlias}.SCH_FINISH_T`);
+  return `(
+    CASE
+      WHEN ${woAlias}.WONO IS NOT NULL AND ${woFinishDateExpr} IS NOT NULL
+      THEN DATEADD(minute, ${woFinishMinutesExpr}, CAST(${woFinishDateExpr} AS DATETIME))
+      ELSE NULL
+    END
+  )`;
+}
+
+/** PMSched due with PM.NEXTDUE_D fallback. */
+function scheduleDueDateExpr(schedAlias = 's', pmAlias = 'pm') {
+  const schedDue = dateExprFromColumn(`${schedAlias}.DUEDATE`);
+  const pmNextDue = dateExprFromColumn(`${pmAlias}.NEXTDUE_D`);
+  return `COALESCE(${schedDue}, ${pmNextDue})`;
+}
+
+/** Effective due datetime: WO target when open WO exists, else schedule due. */
+function effectiveDueDateTimeExpr(schedAlias = 's', pmAlias = 'pm', woAlias = 'openWo') {
+  const schedDue = scheduleDueDateExpr(schedAlias, pmAlias);
+  const woTarget = woTargetDateTimeExpr(woAlias);
+  return `COALESCE(${woTarget}, CAST(${schedDue} AS DATETIME))`;
+}
+
+/** Source label for effective due resolution. */
+function dueDateSourceExpr(schedAlias = 's', pmAlias = 'pm', woAlias = 'openWo') {
+  const schedDue = dateExprFromColumn(`${schedAlias}.DUEDATE`);
+  const pmNextDue = dateExprFromColumn(`${pmAlias}.NEXTDUE_D`);
+  const woTarget = woTargetDateTimeExpr(woAlias);
+  return `(
+    CASE
+      WHEN ${woTarget} IS NOT NULL THEN 'wo_target'
+      WHEN ${schedDue} IS NOT NULL THEN 'schedule'
+      WHEN ${pmNextDue} IS NOT NULL THEN 'pm_next_due'
+      ELSE NULL
     END
   )`;
 }
@@ -52,21 +126,32 @@ function emsEquipmentFromJoin() {
   `;
 }
 
-/** Next open calibration schedule row per equipment. */
+/** OUTER APPLY: latest open WO for a PM (links via PMNO on new Cedar). */
+function openWoApplySql(pmAlias = 'pm', woAlias = 'openWo') {
+  return `
+    OUTER APPLY (
+      SELECT TOP 1
+        wo.WONO,
+        wo.WOCODE,
+        wo.WOSTATUSNO,
+        wo.SCH_FINISH_D,
+        wo.SCH_FINISH_T,
+        wo.ASSIGN
+      FROM dbo.WO wo
+      WHERE wo.PMNO = ${pmAlias}.PMNO
+        AND wo.WOSTATUSNO NOT IN (7, 9)
+        AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
+      ORDER BY wo.WONO DESC
+    ) ${woAlias}
+  `;
+}
+
+/** Next open calibration obligation per equipment (effective-due model). */
 function openCalApplySql() {
-  const dueExpr = dateExprFromColumn('s.DUEDATE');
-  const woFinishDateExpr = dateExprFromColumn('wo.SCH_FINISH_D');
-  const woFinishMinutesExpr = timeToMinutesExpr('wo.SCH_FINISH_T');
-  const woFinishDateTimeExpr = `(
-    CASE
-      WHEN s.WONo > 0
-        AND wo.WONO IS NOT NULL
-        AND ${woFinishDateExpr} IS NOT NULL
-      THEN DATEADD(minute, ${woFinishMinutesExpr}, CAST(${woFinishDateExpr} AS DATETIME))
-      ELSE NULL
-    END
-  )`;
-  const effectiveDueDateTimeExpr = `COALESCE(${woFinishDateTimeExpr}, CAST(${dueExpr} AS DATETIME))`;
+  const schedDueExpr = scheduleDueDateExpr('s', 'pm');
+  const woTargetExpr = woTargetDateTimeExpr('openWo');
+  const effectiveExpr = effectiveDueDateTimeExpr('s', 'pm', 'openWo');
+  const sourceExpr = dueDateSourceExpr('s', 'pm', 'openWo');
   return `
     OUTER APPLY (
       SELECT TOP 1
@@ -74,39 +159,56 @@ function openCalApplySql() {
         s.DUEDATE,
         s.WONo,
         s.WOStatusNo AS schedWOStatusNo,
-        wo.WOSTATUSNO AS woStatusNo,
+        openWo.WONO AS openWoNo,
+        openWo.WOSTATUSNO AS woStatusNo,
+        openWo.WOCODE,
+        openWo.SCH_FINISH_D,
+        openWo.SCH_FINISH_T,
         pm.ASSIGN AS assigneeId,
         pm.PMNO,
-        wo.WOCODE,
-        wo.SCH_FINISH_D,
-        wo.SCH_FINISH_T,
-        ${woFinishDateTimeExpr} AS woDueDateTime,
-        ${effectiveDueDateTimeExpr} AS dueDateTime,
-        ${dueExpr} AS dueDateParsed
+        ${dateExprFromColumn('s.DUEDATE')} AS scheduleDueDateParsed,
+        ${woTargetExpr} AS woTargetDate,
+        ${effectiveExpr} AS effectiveDueDate,
+        ${effectiveExpr} AS dueDateTime,
+        CAST(${schedDueExpr} AS DATE) AS dueDateParsed,
+        ${sourceExpr} AS dueDateSource
       FROM dbo.PM pm
       INNER JOIN dbo.PMSched s ON s.PMNO = pm.PMNO
-      LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo AND s.WONo > 0
-        AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
+      ${openWoApplySql('pm', 'openWo')}
       WHERE pm.EQNO = eq.EQNO
         AND pm.PMCODE LIKE '%-CAL%'
         AND ${pmNotFrozen('pm')}
         AND ${pmFlagActive('pm')}
-        AND NOT ${WO_FINISHED_SQL}
-      ORDER BY
-        CASE WHEN ${woFinishDateTimeExpr} IS NOT NULL THEN 0 ELSE 1 END,
-        ${effectiveDueDateTimeExpr} ASC
+        AND ${openCalNotFinishedWhere()}
+      ORDER BY ${effectiveExpr} ASC
     ) cal
   `;
 }
 
+/**
+ * Schedule row not yet completed for open-cal selection.
+ */
+function openCalNotFinishedWhere() {
+  return `NOT (
+    s.WOStatusNo = 9
+    OR EXISTS (
+      SELECT 1 FROM dbo.WO wof
+      WHERE wof.PMNO = pm.PMNO
+        AND wof.WOSTATUSNO IN (7, 9)
+        AND (wof.FLAGDEL IS NULL OR wof.FLAGDEL <> 'Y')
+        AND ${dateExprFromColumn('wof.SCH_FINISH_D')} = ${dateExprFromColumn('s.DUEDATE')}
+    )
+  )`;
+}
+
 /** SQL CASE matching statusCalculationService buckets (no_wo | overdue | due_this_week | due_soon | ok). */
-function kpiBucketCaseExpr(dueCol = 'cal.dueDateParsed') {
+function kpiBucketCaseExpr(dueCol = 'cal.effectiveDueDate') {
   const d = dueCol;
   const weekDeadline = weekDeadlineExpr();
   return `(
     CASE
-      WHEN cal.DUEDATE IS NULL THEN 'no_wo'
-      WHEN cal.schedWOStatusNo = 9 OR (cal.WONo > 0 AND cal.woStatusNo IN (7, 9)) THEN 'ok'
+      WHEN cal.DUEDATE IS NULL AND cal.scheduleDueDateParsed IS NULL THEN 'no_wo'
+      WHEN cal.schedWOStatusNo = 9 OR cal.woStatusNo IN (7, 9) THEN 'ok'
       WHEN ${d} IS NULL THEN 'no_wo'
       WHEN ${d} < GETDATE() THEN 'overdue'
       WHEN ${d} >= GETDATE() AND ${d} < ${weekDeadline} THEN 'due_this_week'
@@ -117,13 +219,13 @@ function kpiBucketCaseExpr(dueCol = 'cal.dueDateParsed') {
 }
 
 /** Badge status for equipment list (NO WO | OVERDUE | DUE SOON | OK). */
-function equipmentStatusCaseExpr(dueCol = 'cal.dueDateParsed') {
+function equipmentStatusCaseExpr(dueCol = 'cal.effectiveDueDate') {
   const d = dueCol;
   const weekDeadline = weekDeadlineExpr();
   return `(
     CASE
-      WHEN cal.DUEDATE IS NULL THEN 'NO WO'
-      WHEN cal.schedWOStatusNo = 9 OR (cal.WONo > 0 AND cal.woStatusNo IN (7, 9)) THEN 'OK'
+      WHEN cal.DUEDATE IS NULL AND cal.scheduleDueDateParsed IS NULL THEN 'NO WO'
+      WHEN cal.schedWOStatusNo = 9 OR cal.woStatusNo IN (7, 9) THEN 'OK'
       WHEN ${d} IS NULL THEN 'NO WO'
       WHEN ${d} < GETDATE() THEN 'OVERDUE'
       WHEN ${d} < DATEADD(day, ${EMS_DUE_SOON_MAX_DAYS}, ${weekDeadline}) THEN 'DUE SOON'
@@ -191,6 +293,21 @@ function paginationMeta(page, limit, total) {
   };
 }
 
+/** Map explicit due fields for API responses (with backward-compat aliases). */
+function mapDueFields(row) {
+  const scheduleDueDate = row.scheduleDueDate ?? row.scheduleDueDateRaw ?? row.DUEDATE ?? null;
+  const woTargetDate = row.woTargetDate ?? null;
+  const effectiveDueDate = row.effectiveDueDate ?? row.effectiveDueDateTime ?? row.dueDateTime ?? null;
+  return {
+    scheduleDueDate,
+    woTargetDate,
+    effectiveDueDate,
+    dueDateSource: row.dueDateSource ?? null,
+    dueDate: effectiveDueDate,
+    nextDue: effectiveDueDate,
+  };
+}
+
 module.exports = {
   dateExprFromColumn,
   pmNotFrozen,
@@ -198,10 +315,19 @@ module.exports = {
   ALLOWED_PLANT_PREFIXES,
   PM_CAL_PLANTS,
   WO_FINISHED_SQL,
+  WO_OPEN_SQL,
+  leftJoinFinishedWoBySched,
+  woFinishedJoinExpr,
   plantFromTagExpr,
   eqActiveWhere,
   emsEquipmentFromJoin,
   openCalApplySql,
+  openWoApplySql,
+  openCalNotFinishedWhere,
+  woTargetDateTimeExpr,
+  scheduleDueDateExpr,
+  effectiveDueDateTimeExpr,
+  dueDateSourceExpr,
   timeToMinutesExpr,
   weekDeadlineExpr,
   kpiBucketCaseExpr,
@@ -211,4 +337,5 @@ module.exports = {
   parseKpiBucketFilter,
   KPI_BUCKET_VALUES,
   paginationMeta,
+  mapDueFields,
 };

@@ -20,7 +20,12 @@ const {
   dateExprFromColumn,
   ALLOWED_PLANT_PREFIXES,
   PM_CAL_PLANTS,
-  WO_FINISHED_SQL,
+  mapDueFields,
+  openWoApplySql,
+  openCalNotFinishedWhere,
+  effectiveDueDateTimeExpr,
+  dueDateSourceExpr,
+  woTargetDateTimeExpr,
 } = require('../../helpers/emsQueryHelpers');
 const { calculateEquipmentStatus, plantFromTagNo } = require('../../services/ems/statusCalculationService');
 const {
@@ -34,7 +39,7 @@ const EQUIPMENT_LIST_SORT_COLUMNS = {
   description: 'ISNULL(ext.description, eq.EQNAME)',
   area: 'ext.location',
   equipmentType: 'ext.equipment_type',
-  nextDue: 'cal.DUEDATE',
+  nextDue: 'cal.effectiveDueDate',
 };
 
 /** CCP-prefixed codes first, then other values, then blank/null — alphabetical within each tier. */
@@ -61,6 +66,7 @@ function parseEquipmentListSort(query) {
 }
 
 function mapEquipmentRow(row) {
+  const due = mapDueFields(row);
   return {
     tagNo: row.tagNo,
     eqNo: row.eqno,
@@ -73,7 +79,11 @@ function mapEquipmentRow(row) {
     calInterval: row.cal_interval,
     ccpCode: row.ccp_code || null,
     status: row.status,
-    nextDue: row.nextDueRaw || null,
+    scheduleDueDate: due.scheduleDueDate,
+    woTargetDate: due.woTargetDate,
+    effectiveDueDate: due.effectiveDueDate,
+    dueDateSource: due.dueDateSource,
+    nextDue: due.effectiveDueDate,
     assigneeName: row.assigneeName || null,
   };
 }
@@ -176,91 +186,43 @@ async function fetchEquipmentExtRow(pool, tagNo) {
 async function buildEquipmentDetailData(pool, extRow, historyLimit = 5) {
   const eqNo = extRow.eqno;
   const woFinishExpr = dateExprFromColumn('wo.ACT_FINISH_D');
-  const woSchedFinishExpr = dateExprFromColumn('wo.SCH_FINISH_D');
+  const effectiveExpr = effectiveDueDateTimeExpr('s', 'pm', 'openWo');
+  const woTargetExpr = woTargetDateTimeExpr('openWo');
+  const sourceExpr = dueDateSourceExpr('s', 'pm', 'openWo');
 
   const calResult = await pool.request()
     .input('EqNo', sql.Int, eqNo)
     .query(`
       SELECT TOP 1
         s.DUEDATE,
-        wo.SCH_FINISH_D,
-        wo.SCH_FINISH_T,
-        (
-          CASE
-            WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${woSchedFinishExpr} IS NOT NULL
-            THEN DATEADD(
-              minute,
-              (
-                CASE
-                  WHEN wo.SCH_FINISH_T IS NULL THEN 0
-                  WHEN ISNUMERIC(LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10))))) = 0 THEN 0
-                  ELSE
-                    CASE
-                      WHEN CAST(LEFT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) NOT BETWEEN 0 AND 23 THEN 0
-                      WHEN CAST(RIGHT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) NOT BETWEEN 0 AND 59 THEN 0
-                      ELSE CAST(LEFT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) * 60
-                        + CAST(RIGHT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT)
-                    END
-                END
-              ),
-              CAST(${woSchedFinishExpr} AS DATETIME)
-            )
-            ELSE NULL
-          END
-        ) AS dueDateTime,
-        s.WONo,
+        ${woTargetExpr} AS woTargetDate,
+        ${effectiveExpr} AS effectiveDueDate,
+        ${sourceExpr} AS dueDateSource,
+        openWo.WONO AS openWoNo,
         s.WOStatusNo AS schedWOStatusNo,
-        wo.WOSTATUSNO AS woStatusNo,
-        wo.WOCODE,
+        openWo.WOSTATUSNO AS woStatusNo,
+        openWo.WOCODE,
         pm.ASSIGN AS assigneeId,
         LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))) AS assigneeName
       FROM dbo.PM pm
       INNER JOIN dbo.PMSched s ON s.PMNO = pm.PMNO
-      LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo AND s.WONo > 0
-        AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
+      ${openWoApplySql('pm', 'openWo')}
       LEFT JOIN dbo.Person p ON p.PERSONNO = pm.ASSIGN
       WHERE pm.EQNO = @EqNo
         AND pm.PMCODE LIKE '%-CAL%'
         AND (pm.FREEZE IS NULL OR LTRIM(RTRIM(pm.FREEZE)) <> 'T')
         AND (pm.FLAGDEL IS NULL OR pm.FLAGDEL <> 'T')
-        AND NOT (${WO_FINISHED_SQL})
-      ORDER BY
-        CASE
-          WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${woSchedFinishExpr} IS NOT NULL THEN 0
-          ELSE 1
-        END,
-        COALESCE(
-          CASE
-            WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${woSchedFinishExpr} IS NOT NULL
-            THEN DATEADD(
-              minute,
-              (
-                CASE
-                  WHEN wo.SCH_FINISH_T IS NULL THEN 0
-                  WHEN ISNUMERIC(LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10))))) = 0 THEN 0
-                  ELSE
-                    CASE
-                      WHEN CAST(LEFT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) NOT BETWEEN 0 AND 23 THEN 0
-                      WHEN CAST(RIGHT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) NOT BETWEEN 0 AND 59 THEN 0
-                      ELSE CAST(LEFT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT) * 60
-                        + CAST(RIGHT(RIGHT('0000' + LTRIM(RTRIM(CAST(wo.SCH_FINISH_T AS VARCHAR(10)))), 4), 2) AS INT)
-                    END
-                END
-              ),
-              CAST(${woSchedFinishExpr} AS DATETIME)
-            )
-            ELSE NULL
-          END,
-          CAST(${dateExprFromColumn('s.DUEDATE')} AS DATETIME)
-        ) ASC
+        AND ${openCalNotFinishedWhere()}
+      ORDER BY ${effectiveExpr} ASC
     `);
 
   const cal = calResult.recordset[0] || null;
+  const due = cal ? mapDueFields(cal) : null;
   const status = calculateEquipmentStatus({
-    dueDate: cal?.dueDateTime || cal?.DUEDATE,
+    dueDate: due?.effectiveDueDate || cal?.DUEDATE,
     woStatusNo: cal?.woStatusNo,
     schedWoStatusNo: cal?.schedWOStatusNo,
-    woNo: cal?.WONo,
+    woNo: cal?.openWoNo,
     hasOpenSchedule: !!cal,
   });
 
@@ -290,9 +252,13 @@ async function buildEquipmentDetailData(pool, extRow, historyLimit = 5) {
 
   const currentWo = cal
     ? {
-        woNo: cal.WONo,
+        woNo: cal.openWoNo ?? null,
         woCode: cal.WOCODE,
-        dueDate: cal.dueDateTime || cal.DUEDATE,
+        scheduleDueDate: due?.scheduleDueDate ?? cal.DUEDATE,
+        woTargetDate: due?.woTargetDate ?? null,
+        effectiveDueDate: due?.effectiveDueDate ?? null,
+        dueDateSource: due?.dueDateSource ?? null,
+        dueDate: due?.effectiveDueDate ?? cal.DUEDATE,
         woStatusNo: cal.woStatusNo ?? cal.schedWOStatusNo,
         assignedCalibrator: cal.assigneeName || null,
         assigneeId: cal.assigneeId ?? null,
@@ -331,8 +297,8 @@ exports.listEquipment = async (req, res) => {
     const statusFilters = kpiBucket ? [] : parseStatusFilter(req.query);
 
     const pool = await getCedarPool();
-    const statusExpr = equipmentStatusCaseExpr('cal.dueDateTime');
-    const bucketExpr = kpiBucketCaseExpr('cal.dueDateTime');
+    const statusExpr = equipmentStatusCaseExpr('cal.effectiveDueDate');
+    const bucketExpr = kpiBucketCaseExpr('cal.effectiveDueDate');
 
     const countReq = pool.request();
     const whereParts = [...applyEmsPlantAreaFilters(countReq, req.query)];
@@ -389,7 +355,8 @@ exports.listEquipment = async (req, res) => {
 
     const dataSql = `
       SELECT tagNo, eqno, description, plant, area, manufacturer, model, equipment_type,
-             cal_interval, ccp_code, status, nextDueRaw, assigneeName
+             cal_interval, ccp_code, status, scheduleDueDateRaw, woTargetDate,
+             effectiveDueDate, dueDateSource, assigneeName
       FROM (
         SELECT
           ext.tag_no AS tagNo,
@@ -403,7 +370,10 @@ exports.listEquipment = async (req, res) => {
           ext.cal_interval,
           ext.ccp_code,
           ${statusExpr} AS status,
-          cal.dueDateTime AS nextDueRaw,
+          cal.DUEDATE AS scheduleDueDateRaw,
+          cal.woTargetDate,
+          cal.effectiveDueDate,
+          cal.dueDateSource,
           LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))) AS assigneeName,
           ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS RowNum
         ${emsEquipmentFromJoin()}

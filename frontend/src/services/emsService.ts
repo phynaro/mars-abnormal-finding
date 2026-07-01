@@ -40,14 +40,26 @@ export interface EmsKpiData {
   noWo: number;
 }
 
-export interface EmsDashboardItem {
+export type EmsDueDateSource = 'wo_target' | 'schedule' | 'pm_next_due' | null;
+
+export interface EmsDueFields {
+  scheduleDueDate?: string | null;
+  woTargetDate?: string | null;
+  effectiveDueDate?: string | null;
+  dueDateSource?: EmsDueDateSource;
+  /** @deprecated Use effectiveDueDate */
+  dueDate?: string | null;
+  /** @deprecated Use effectiveDueDate */
+  nextDue?: string | null;
+}
+
+export interface EmsDashboardItem extends EmsDueFields {
   tagNo: string;
   description: string;
   area: string;
   plant: string;
   daysOverdue?: number | null;
   daysUntilDue?: number | null;
-  dueDate?: string | null;
   woNo?: number | null;
   woCode?: string | null;
   assigneeId?: number | null;
@@ -58,7 +70,7 @@ export interface EmsDashboardItem {
 export type EmsEquipmentListSortBy = 'tagNo' | 'ccpCode' | 'description' | 'area' | 'equipmentType' | 'nextDue';
 export type EmsEquipmentListSortOrder = 'ASC' | 'DESC';
 
-export interface EmsEquipmentListItem {
+export interface EmsEquipmentListItem extends EmsDueFields {
   tagNo: string;
   eqNo: number;
   description: string;
@@ -70,7 +82,6 @@ export interface EmsEquipmentListItem {
   calInterval?: string;
   ccpCode?: string | null;
   status: string;
-  nextDue?: string | null;
   assigneeName?: string | null;
 }
 
@@ -127,10 +138,9 @@ export interface EmsEquipmentSpecifications {
   calRefForm?: string;
 }
 
-export interface EmsCurrentWo {
+export interface EmsCurrentWo extends EmsDueFields {
   woNo?: number | null;
   woCode?: string | null;
-  dueDate?: string | null;
   woStatusNo?: number | null;
   assignedCalibrator?: string | null;
   assigneeId?: number | null;
@@ -190,7 +200,7 @@ export interface EmsEquipmentUpdatePayload {
   calIntervalWeeks?: number | null;
 }
 
-export interface EmsScheduleItem {
+export interface EmsScheduleItem extends EmsDueFields {
   tagNo: string;
   description: string;
   area: string;
@@ -198,7 +208,6 @@ export interface EmsScheduleItem {
   woNo?: number | null;
   woCode?: string | null;
   woStatus: string;
-  dueDate?: string | null;
   daysUntilDue?: number | null;
   daysOverdue?: number | null;
   assignedCalibrator?: string | null;
@@ -217,6 +226,7 @@ export interface EmsPlantMatrixItem {
   plantLabel: string;
   total: number;
   done: number;
+  overdue: number;
   inProgress: number;
   noWo: number;
   completionRate: number;
@@ -230,6 +240,21 @@ export interface EmsPlantMatrixData {
   rangeStart: string;
   rangeEnd: string;
   plants: EmsPlantMatrixItem[];
+}
+
+export interface EmsWoPeriodStatusItem {
+  period: number;
+  ontime: number;
+  late: number;
+  notFinish: number;
+  total: number;
+}
+
+export interface EmsWoPeriodStatusData {
+  year: number;
+  rangeStart: string;
+  rangeEnd: string;
+  periods: EmsWoPeriodStatusItem[];
 }
 
 export type EmsKpiBucket = 'overdue' | 'due_this_week' | 'due_soon';
@@ -328,6 +353,17 @@ const emsService = {
   }) {
     const res = await emsFetch<{ success: boolean; data: EmsPlantMatrixData }>(
       `/dashboard/plant-matrix${toQuery(params)}`
+    );
+    return res.data;
+  },
+
+  async getWoPeriodStatus(params: {
+    year: number;
+    startDate: string;
+    endDate: string;
+  }): Promise<EmsWoPeriodStatusData> {
+    const res = await emsFetch<{ success: boolean; data: EmsWoPeriodStatusData }>(
+      `/dashboard/wo-period-status${toQuery(params)}`
     );
     return res.data;
   },

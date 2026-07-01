@@ -80,11 +80,25 @@ function eqTypeKeyExpr(eqAlias = 'eq') {
   )`;
 }
 
+/** Legacy WO join via PMSched.WONo (often unpopulated on new Cedar). */
+function leftJoinWoBySched(woAlias = 'wo') {
+  return `LEFT JOIN dbo.WO ${woAlias} ON ${woAlias}.WONO = s.WONo AND s.WONo > 0
+    AND (${woAlias}.FLAGDEL IS NULL OR ${woAlias}.FLAGDEL <> 'Y')`;
+}
+
+/** Open WO join via PM.PMNO (primary linkage on new Cedar). */
+function leftJoinOpenWoByPmno(woAlias = 'openWo', pmAlias = 'pm') {
+  return `LEFT JOIN dbo.WO ${woAlias} ON ${woAlias}.PMNO = ${pmAlias}.PMNO
+    AND ${woAlias}.WOSTATUSNO NOT IN (7, 9)
+    AND (${woAlias}.FLAGDEL IS NULL OR ${woAlias}.FLAGDEL <> 'Y')`;
+}
+
 function getPMCalSched() {
   return {
     fromJoinPm: `FROM dbo.PMSched s INNER JOIN dbo.PM pm ON pm.PMNO = s.PMNO`,
     leftJoinEq: leftJoinEq('eq'),
-    leftJoinWo: `LEFT JOIN dbo.WO wo ON wo.WONO = s.WONo AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')`,
+    leftJoinWo: leftJoinWoBySched('wo'),
+    leftJoinOpenWo: leftJoinOpenWoByPmno('openWo', 'pm'),
     dueDateExpr: dateExprFromColumn('s.DUEDATE'),
     plantPrefixExpr: plantPrefixExpr(),
   };
@@ -201,6 +215,8 @@ module.exports = {
   pmFlagActive,
   getPMCalSchedCoreWhere,
   getPMCalSched,
+  leftJoinWoBySched,
+  leftJoinOpenWoByPmno,
   leftJoinEq,
   eqTypeKeyExpr,
   plantPrefixExpr,

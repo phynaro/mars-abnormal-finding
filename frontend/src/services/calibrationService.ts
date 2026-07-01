@@ -149,7 +149,7 @@ export interface PmScheduleKpiResponse {
 }
 
 export interface PmScheduleListItem {
-  PMSchNo: number;
+  PMSchNo: number | string;
   PMNO: number;
   DUEDATE: string;
   WONo: number | null;
@@ -163,6 +163,14 @@ export interface PmScheduleListItem {
   woStatusNo: number | null;
   EQCODE: string | null;
   eqTypeKey: string | null;
+  /** EMS calendar: open WO via PMNO */
+  openWoNo?: number | null;
+  /** EMS calendar: effective due datetime */
+  effectiveDueDate?: string | Date | null;
+  /** EMS calendar: 1 when schedule row is finished */
+  isDone?: number | boolean | null;
+  /** EMS calendar: 1 when not finished and effective due is past */
+  isOverdue?: number | boolean | null;
 }
 
 export interface PmScheduleListResponse {

@@ -23,6 +23,26 @@ export function EmsKpiStat({
   loading,
   compact,
 }: EmsKpiStatProps) {
+  if (compact) {
+    return (
+      <div className="flex h-full flex-col rounded-lg bg-muted/40 px-3 py-2">
+        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Icon className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70" aria-hidden />
+          <span className="truncate">{label}</span>
+        </p>
+        <div className="flex flex-1 items-center justify-center">
+          {loading ? (
+            <Skeleton className="h-6 w-12" />
+          ) : (
+            <p className={cn('text-xl font-bold tabular-nums leading-none', valueClassName)}>
+              {value ?? '—'}
+            </p>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <Card className="shadow-sm h-full">
       <CardContent className={cn(compact ? 'p-3' : 'pt-5 pb-5')}>

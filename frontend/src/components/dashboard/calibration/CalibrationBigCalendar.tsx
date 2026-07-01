@@ -11,6 +11,7 @@ import type {
 import { Badge } from '@/components/ui/badge';
 import { resolveUserEventColor } from '@/constants/userEventColors';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 // ---------------------------------------------------------------------------
 // date-fns localizer
@@ -28,7 +29,7 @@ interface CalEvent {
   end: Date;
   kind: 'pm-schedule' | 'user-event';
   resource: PmScheduleListItem | CalibrationUserEvent;
-  status?: 'done' | 'in-progress' | 'pending';
+  status?: 'done' | 'overdue' | 'in-progress' | 'pending';
   color?: string | null;
   allDay?: boolean;
 }
@@ -82,15 +83,43 @@ function parseDateTime(raw: string | null | undefined): Date | null {
   return parsed;
 }
 
-function eventStatus(item: PmScheduleListItem): 'done' | 'in-progress' | 'pending' {
-  if (item.schedWOStatusNo === 9 || item.woStatusNo === 9) return 'done';
-  const woNo = item.WONo != null ? Number(item.WONo) : 0;
-  if (woNo > 0) return 'in-progress';
+function parseEffectiveDueDate(item: PmScheduleListItem): Date | null {
+  const raw = item.effectiveDueDate ?? item.DUEDATE;
+  if (raw instanceof Date) {
+    return Number.isNaN(raw.getTime()) ? null : raw;
+  }
+  return parseDueDate(raw);
+}
+
+function isScheduleDone(item: PmScheduleListItem): boolean {
+  if (item.isDone === 1 || item.isDone === true) return true;
+  if (item.schedWOStatusNo === 9 || item.woStatusNo === 9 || item.woStatusNo === 7) return true;
+  return false;
+}
+
+function isScheduleOverdue(item: PmScheduleListItem): boolean {
+  if (isScheduleDone(item)) return false;
+  if (item.isOverdue === 1 || item.isOverdue === true) return true;
+  const due = parseEffectiveDueDate(item);
+  if (!due) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return due < today;
+}
+
+function eventStatus(item: PmScheduleListItem): 'done' | 'overdue' | 'in-progress' | 'pending' {
+  if (isScheduleDone(item)) return 'done';
+  if (isScheduleOverdue(item)) return 'overdue';
+  const openWo = item.openWoNo != null
+    ? Number(item.openWoNo)
+    : (item.WONo != null ? Number(item.WONo) : 0);
+  if (openWo > 0) return 'in-progress';
   return 'pending';
 }
 
 const STATUS_STYLE: Record<string, string> = {
   done: 'bg-green-500 border-green-600 text-white',
+  overdue: 'bg-red-500 border-red-600 text-white',
   'in-progress': 'bg-blue-500 border-blue-600 text-white',
   pending: 'bg-orange-400 border-orange-500 text-white',
 };
@@ -152,6 +181,7 @@ const CalibrationBigCalendar: React.FC<Props> = ({
   allowedViews = ['month', 'week', 'agenda'],
   toolbar = true,
 }) => {
+  const { t } = useLanguage();
   const calendarViews = allowedViews.map((v) => {
     if (v === 'month') return Views.MONTH;
     if (v === 'week') return Views.WEEK;
@@ -160,7 +190,7 @@ const CalibrationBigCalendar: React.FC<Props> = ({
   const events = useMemo<CalEvent[]>(() => {
     const result: CalEvent[] = [];
     for (const item of items) {
-      const d = parseDueDate(item.DUEDATE);
+      const d = parseEffectiveDueDate(item);
       if (!d) continue;
       const dayEnd = new Date(d);
       dayEnd.setHours(23, 59, 59);
@@ -209,6 +239,7 @@ const CalibrationBigCalendar: React.FC<Props> = ({
 
     const base: Record<string, string> = {
       done: '#22c55e',
+      overdue: '#ef4444',
       'in-progress': '#3b82f6',
       pending: '#fb923c',
     };
@@ -236,13 +267,16 @@ const CalibrationBigCalendar: React.FC<Props> = ({
       {/* Legend */}
       <div className="flex flex-wrap gap-3 mb-3 items-center">
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="w-3 h-3 rounded-sm bg-green-500 inline-block" /> Done (WO status 9)
+          <span className="w-3 h-3 rounded-sm bg-green-500 inline-block" /> {t('ems.dashboard.v2.statusDone')}
         </div>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" /> In Progress (WO open)
+          <span className="w-3 h-3 rounded-sm bg-blue-500 inline-block" /> {t('ems.dashboard.v2.statusInProgress')}
         </div>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-          <span className="w-3 h-3 rounded-sm bg-orange-400 inline-block" /> Pending (No WO)
+          <span className="w-3 h-3 rounded-sm bg-red-500 inline-block" /> {t('ems.dashboard.v2.statusOverdue')}
+        </div>
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <span className="w-3 h-3 rounded-sm bg-orange-400 inline-block" /> {t('ems.dashboard.v2.statusNoWo')}
         </div>
         <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className="w-3 h-3 rounded-sm bg-violet-600 inline-block" /> User Events

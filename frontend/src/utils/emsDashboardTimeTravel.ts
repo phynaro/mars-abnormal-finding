@@ -9,6 +9,34 @@ import {
 
 export type DashboardTimeRangeMode = 'month' | 'period' | 'year';
 
+export const DASHBOARD_MONTH_I18N_KEYS = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+] as const;
+
+/** Human-readable label for the active time-travel selection (matches the filter bar). */
+export function formatTimeTravelSelectionLabel(
+  value: DashboardTimeTravelValue,
+  t: (key: string) => string
+): string {
+  if (value.mode === 'year') return String(safeYear(value.year));
+  if (value.mode === 'period') {
+    return `${safeYear(value.year)} P${clampPeriod(value.period)}`;
+  }
+  const monthKey = DASHBOARD_MONTH_I18N_KEYS[safeMonth(value.month) - 1];
+  return `${t(`ems.dashboard.v2.month.${monthKey}`)} ${safeYear(value.year)}`;
+}
+
 export interface DashboardTimeTravelValue {
   mode: DashboardTimeRangeMode;
   year: number;

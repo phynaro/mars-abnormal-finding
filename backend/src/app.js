@@ -120,6 +120,7 @@ const notificationScheduleRoutes = require('./routes/notificationSchedule');
 const ticketClassRoutes = require('./routes/ticketClass');
 const areaDashboardRoutes = require('./routes/areaDashboard');
 const emsRoutes = require('./routes/ems');
+const apiTokenRoutes = require('./routes/apiToken');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/access-request', accessRequestRoutes);
@@ -144,6 +145,7 @@ app.use('/api/notification-schedules', notificationScheduleRoutes);
 app.use('/api/ticketclass', ticketClassRoutes);
 app.use('/api/dashboard/area', areaDashboardRoutes);
 app.use('/api/ems', emsRoutes);
+app.use('/api/api-tokens', apiTokenRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

@@ -5,6 +5,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import emsService, { type EmsKpiData, type EmsPlantMatrixItem } from '@/services/emsService';
 import { PM_CALIBRATION_PLANT_OPTIONS } from '@/utils/pmCalibrationPlantMap';
 import {
+  formatTimeTravelSelectionLabel,
   getTimeTravelDateRange,
   type DashboardTimeTravelValue,
 } from '@/utils/emsDashboardTimeTravel';
@@ -21,6 +22,7 @@ function emptyPlants(): EmsPlantMatrixItem[] {
     plantLabel: p.label,
     total: 0,
     done: 0,
+    overdue: 0,
     inProgress: 0,
     noWo: 0,
     completionRate: 0,
@@ -35,6 +37,7 @@ const PlantPerformanceMatrix: React.FC<Props> = ({ timeTravel }) => {
   const [kpiLoading, setKpiLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const dateRange = getTimeTravelDateRange(timeTravel);
+  const rangeLabel = formatTimeTravelSelectionLabel(timeTravel, t);
 
   useEffect(() => {
     let cancelled = false;
@@ -102,7 +105,9 @@ const PlantPerformanceMatrix: React.FC<Props> = ({ timeTravel }) => {
     <section className="space-y-4">
       <div>
         <h2 className="text-base font-semibold">{t('ems.dashboard.v2.zoneB')}</h2>
-        <p className="text-sm text-muted-foreground mt-0.5">{t('ems.dashboard.v2.plantMatrix')}</p>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {t('ems.dashboard.v2.plantMatrixForRange', { label: rangeLabel })}
+        </p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
@@ -121,6 +126,7 @@ const PlantPerformanceMatrix: React.FC<Props> = ({ timeTravel }) => {
               plant={plant}
               kpi={kpiByPlant[plant.plant] ?? null}
               kpiLoading={kpiLoading}
+              rangeLabel={rangeLabel}
             />
           ))}
         </div>

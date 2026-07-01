@@ -20,7 +20,7 @@ const EMS_WO_STATUS_FINISHED = Object.freeze([7, 9]);
 
 /** Days-until-due thresholds (spec §5). */
 const EMS_DUE_THIS_WEEK_MAX_DAYS = 7;
-const EMS_DUE_SOON_MAX_DAYS = 14;
+const EMS_DUE_SOON_MAX_DAYS = 7;
 
 /** EMS notification rules (Phase 08). */
 const EMS_NOTIFICATION_RULES = Object.freeze({

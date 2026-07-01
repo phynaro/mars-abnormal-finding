@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsCurrentWo, EmsPmHistoryItem } from '@/services/emsService';
-import { formatEmsDate } from './formatEmsValues';
+import { displayEffectiveDue, formatEmsDate } from './formatEmsValues';
 
 interface WoStatusSectionProps {
   currentWo: EmsCurrentWo | null;
@@ -52,8 +52,18 @@ const WoStatusSection: React.FC<WoStatusSectionProps> = ({
                 <dd className="font-medium">{currentWo.woStatusNo ?? '—'}</dd>
               </div>
               <div className="flex justify-between gap-4">
-                <dt className="text-muted-foreground">{t('ems.equipment.wo.dueDate')}</dt>
-                <dd className="font-medium">{formatEmsDate(currentWo.dueDate)}</dd>
+                <dt className="text-muted-foreground">{t('ems.due.scheduleDue')}</dt>
+                <dd className="font-medium">{formatEmsDate(currentWo.scheduleDueDate)}</dd>
+              </div>
+              {currentWo.woTargetDate && (
+                <div className="flex justify-between gap-4">
+                  <dt className="text-muted-foreground">{t('ems.due.woTarget')}</dt>
+                  <dd className="font-medium">{formatEmsDate(currentWo.woTargetDate)}</dd>
+                </div>
+              )}
+              <div className="flex justify-between gap-4">
+                <dt className="text-muted-foreground">{t('ems.due.effectiveDue')}</dt>
+                <dd className="font-medium">{displayEffectiveDue(currentWo)}</dd>
               </div>
               <div className="flex justify-between gap-4">
                 <dt className="text-muted-foreground">{t('ems.equipment.wo.assignee')}</dt>

@@ -2,7 +2,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsScheduleItem } from '@/services/emsService';
-import { formatEmsDate } from '@/components/ems/equipment/formatEmsValues';
+import { displayEffectiveDue } from '@/components/ems/equipment/formatEmsValues';
 import { cn } from '@/lib/utils';
 import { EmsWoStatusBadge, formatScheduleDueDays } from './scheduleStatus';
 
@@ -30,7 +30,7 @@ const ScheduleCardList: React.FC<ScheduleCardListProps> = ({ items }) => {
             <p className="text-xs text-muted-foreground truncate mt-1">{row.description}</p>
             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span>
-                {t('ems.dashboard.dueDate')}: {formatEmsDate(row.dueDate)}
+                {t('ems.due.effectiveDue')}: {displayEffectiveDue(row)}
               </span>
               {dueDays.text !== '—' && (
                 <span className={cn('font-medium', dueDays.className)}>{dueDays.text}</span>

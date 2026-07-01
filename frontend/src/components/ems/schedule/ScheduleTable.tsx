@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsScheduleItem } from '@/services/emsService';
-import { formatEmsDate } from '@/components/ems/equipment/formatEmsValues';
+import { formatEmsDate, displayEffectiveDue } from '@/components/ems/equipment/formatEmsValues';
 import { EmsWoStatusBadge, formatScheduleDueDays } from './scheduleStatus';
 import { cn } from '@/lib/utils';
 
@@ -31,7 +31,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ items }) => {
             <TableHead>{t('ems.equipment.area')}</TableHead>
             <TableHead>{t('ems.equipment.wo.woNo')}</TableHead>
             <TableHead>{t('ems.schedule.woStatus')}</TableHead>
-            <TableHead>{t('ems.dashboard.dueDate')}</TableHead>
+            <TableHead>{t('ems.due.effectiveDue')}</TableHead>
             <TableHead>{t('ems.schedule.daysColumn')}</TableHead>
             <TableHead>{t('ems.equipment.wo.assignee')}</TableHead>
           </TableRow>
@@ -57,7 +57,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ items }) => {
                 <TableCell>
                   <EmsWoStatusBadge status={row.woStatus} />
                 </TableCell>
-                <TableCell>{formatEmsDate(row.dueDate)}</TableCell>
+                <TableCell>{displayEffectiveDue(row)}</TableCell>
                 <TableCell className={cn('whitespace-nowrap', dueDays.className)}>
                   {dueDays.text}
                 </TableCell>

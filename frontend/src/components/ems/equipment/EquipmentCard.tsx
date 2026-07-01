@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsEquipmentListItem } from '@/services/emsService';
 import { EmsStatusBadge, emsStatusLabel } from './equipmentStatus';
-import { formatEmsDate } from './formatEmsValues';
+import { displayEffectiveDue } from './formatEmsValues';
 import { cn } from '@/lib/utils';
 
 interface EquipmentCardListProps {
@@ -36,8 +36,8 @@ const EquipmentCardList: React.FC<EquipmentCardListProps> = ({ items, className 
             />
           </div>
           <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-            <span>{t('ems.equipment.col.nextDue')}</span>
-            <span className="font-medium text-foreground">{formatEmsDate(item.nextDue)}</span>
+            <span>{t('ems.equipment.col.effectiveDue')}</span>
+            <span className="font-medium text-foreground">{displayEffectiveDue(item)}</span>
           </div>
         </button>
       ))}

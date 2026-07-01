@@ -13,7 +13,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsEquipmentListItem, EmsEquipmentListSortOrder } from '@/services/emsService';
 import { cn } from '@/lib/utils';
 import { EmsStatusBadge, emsStatusLabel } from './equipmentStatus';
-import { formatEmsDate, formatManufacturerModel } from './formatEmsValues';
+import { displayEffectiveDue, formatManufacturerModel } from './formatEmsValues';
 
 interface EquipmentTableProps {
   items: EmsEquipmentListItem[];
@@ -55,7 +55,7 @@ const EquipmentTable: React.FC<EquipmentTableProps> = ({ items, sortOrder, onCcp
             <TableHead>{t('ems.equipment.col.manufacturerModel')}</TableHead>
             <TableHead>{t('ems.equipment.col.calInterval')}</TableHead>
             <TableHead>{t('ems.equipment.status')}</TableHead>
-            <TableHead>{t('ems.equipment.col.nextDue')}</TableHead>
+            <TableHead>{t('ems.equipment.col.effectiveDue')}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -84,7 +84,7 @@ const EquipmentTable: React.FC<EquipmentTableProps> = ({ items, sortOrder, onCcp
                   label={emsStatusLabel(item.status, t)}
                 />
               </TableCell>
-              <TableCell className="whitespace-nowrap">{formatEmsDate(item.nextDue)}</TableCell>
+              <TableCell className="whitespace-nowrap">{displayEffectiveDue(item)}</TableCell>
             </TableRow>
           ))}
         </TableBody>

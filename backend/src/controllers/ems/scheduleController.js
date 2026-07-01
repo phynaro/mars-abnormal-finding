@@ -13,8 +13,14 @@ const {
   applyEmsPlantAreaFilters,
   paginationMeta,
   WO_FINISHED_SQL,
+  WO_OPEN_SQL,
+  leftJoinFinishedWoBySched,
+  woFinishedJoinExpr,
   plantFromTagExpr,
-  timeToMinutesExpr,
+  effectiveDueDateTimeExpr,
+  dueDateSourceExpr,
+  woTargetDateTimeExpr,
+  mapDueFields,
 } = require('../../helpers/emsQueryHelpers');
 
 const WO_STATUS_HISTORY = 9;
@@ -23,23 +29,33 @@ function scheduleStatusLabel(row) {
   if ((row?.schedWOStatusNo ?? null) === WO_STATUS_HISTORY || (row?.woStatusNo ?? null) === WO_STATUS_HISTORY) {
     return 'Done';
   }
-  if ((row?.WONo ?? null) != null && row.WONo > 0) {
+  if ((row?.openWoNo ?? row?.WONo ?? null) != null && Number(row.openWoNo ?? row.WONo) > 0) {
     return 'In Progress';
   }
   return 'Pending';
 }
 
-function mapScheduleItem(row, dueExpr) {
+function mapScheduleItem(row) {
+  const due = mapDueFields({
+    scheduleDueDate: row.scheduleDueDateRaw ?? row.DUEDATE,
+    woTargetDate: row.woTargetDate,
+    effectiveDueDate: row.effectiveDueDate,
+    dueDateSource: row.dueDateSource,
+  });
   const daysUntilDue = row.daysUntilDue;
   return {
     tagNo: row.tagNo,
     description: row.description,
     area: row.area,
     plant: row.plant,
-    woNo: row.WONo ?? null,
+    woNo: row.openWoNo ?? row.WONo ?? null,
     woCode: row.WOCODE ?? null,
     woStatus: scheduleStatusLabel(row),
-    dueDate: row.DUEDATE,
+    scheduleDueDate: due.scheduleDueDate,
+    woTargetDate: due.woTargetDate,
+    effectiveDueDate: due.effectiveDueDate,
+    dueDateSource: due.dueDateSource,
+    dueDate: due.effectiveDueDate,
     daysUntilDue,
     daysOverdue: daysUntilDue != null && daysUntilDue < 0 ? Math.abs(daysUntilDue) : null,
     assignedCalibrator: row.assigneeName || null,
@@ -57,17 +73,16 @@ function applyWoStatusFilter(query, parts) {
     return;
   }
   if (woStatus === 'in-progress') {
-    parts.push(`s.WONo > 0 AND NOT (${WO_FINISHED_SQL})`);
+    parts.push(`${WO_OPEN_SQL} AND NOT (${WO_FINISHED_SQL})`);
     return;
   }
   if (woStatus === 'pending') {
-    parts.push(`(s.WONo IS NULL OR s.WONo <= 0) AND NOT (${WO_FINISHED_SQL})`);
+    parts.push(`NOT ${WO_OPEN_SQL} AND NOT (${WO_FINISHED_SQL})`);
   }
 }
 
 function buildEmsScheduleWhere(request, query) {
   const { applyPmCalSchedNonDateFilters, applyPmCalSchedDateRangeClause } = require('../../helpers/pmCalibrationScheduleQuery');
-  // Plant/area are scoped via IgxEQExtension tag (applyEmsPlantAreaFilters), not PMCODE prefix.
   const { plant: _plant, area: _area, ...pmQuery } = query;
   const base = applyPmCalSchedNonDateFilters(request, pmQuery);
   if (base.error) return { error: base.error };
@@ -112,7 +127,7 @@ exports.getScheduleList = async (req, res) => {
       return res.status(400).json({ success: false, message: builtCount.error });
     }
 
-    const { fromJoinPm, leftJoinEq, leftJoinWo } = getPMCalSched();
+    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getPMCalSched();
     const countWhere = builtCount.whereFragment;
 
     const countSql = `
@@ -120,6 +135,7 @@ exports.getScheduleList = async (req, res) => {
       ${fromJoinPm}
       ${leftJoinEq}
       ${leftJoinWo}
+      ${leftJoinOpenWo}
       INNER JOIN dbo.IgxEQExtension ext ON ext.eqno = eq.EQNO
       WHERE ${countWhere}
     `;
@@ -135,22 +151,8 @@ exports.getScheduleList = async (req, res) => {
     dataReq.input('StartRow', sql.Int, startRow);
     dataReq.input('EndRow', sql.Int, endRow);
 
-    const dueExpr = builtData.dueDateExpr;
-    const woFinishDateExpr = `(
-      CASE
-        WHEN LEN(LTRIM(RTRIM(wo.SCH_FINISH_D))) = 8 AND ISDATE(STUFF(STUFF(wo.SCH_FINISH_D, 5, 0, '-'), 8, 0, '-')) = 1 THEN CONVERT(date, STUFF(STUFF(wo.SCH_FINISH_D, 5, 0, '-'), 8, 0, '-'), 23)
-        WHEN LEN(LTRIM(RTRIM(wo.SCH_FINISH_D))) >= 10 AND ISDATE(LEFT(wo.SCH_FINISH_D, 10)) = 1 THEN CONVERT(date, LEFT(wo.SCH_FINISH_D, 10), 23)
-        ELSE NULL
-      END
-    )`;
-    const effectiveDueDateTimeExpr = `COALESCE(
-      CASE
-        WHEN s.WONo > 0 AND wo.WONO IS NOT NULL AND ${woFinishDateExpr} IS NOT NULL
-        THEN DATEADD(minute, ${timeToMinutesExpr('wo.SCH_FINISH_T')}, CAST(${woFinishDateExpr} AS DATETIME))
-        ELSE NULL
-      END,
-      CAST(${dueExpr} AS DATETIME)
-    )`;
+    const effectiveExpr = effectiveDueDateTimeExpr('s', 'pm', 'openWo');
+    const sourceExpr = dueDateSourceExpr('s', 'pm', 'openWo');
     const dataWhere = builtData.whereFragment;
 
     const dataSql = `
@@ -161,19 +163,24 @@ exports.getScheduleList = async (req, res) => {
           ISNULL(ext.description, eq.EQNAME) AS description,
           ext.location AS area,
           ${plantFromTagExpr('ext.tag_no')} AS plant,
-          ${effectiveDueDateTimeExpr} AS DUEDATE,
+          s.DUEDATE AS scheduleDueDateRaw,
+          ${woTargetDateTimeExpr('openWo')} AS woTargetDate,
+          ${effectiveExpr} AS effectiveDueDate,
+          ${sourceExpr} AS dueDateSource,
+          openWo.WONO AS openWoNo,
           s.WONo,
           s.WOStatusNo AS schedWOStatusNo,
-          wo.WOSTATUSNO AS woStatusNo,
-          wo.WOCODE,
+          openWo.WOSTATUSNO AS woStatusNo,
+          openWo.WOCODE,
           pm.ASSIGN AS assigneeId,
           LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))) AS assigneeName,
           CAST(s.PMNO AS VARCHAR(10)) + '_' + s.DUEDATE AS PMSchNo,
-          DATEDIFF(day, GETDATE(), ${effectiveDueDateTimeExpr}) AS daysUntilDue,
-          ROW_NUMBER() OVER (ORDER BY ${effectiveDueDateTimeExpr}, s.PMNO) AS RowNum
+          DATEDIFF(day, GETDATE(), ${effectiveExpr}) AS daysUntilDue,
+          ROW_NUMBER() OVER (ORDER BY ${effectiveExpr}, s.PMNO) AS RowNum
         ${fromJoinPm}
         ${leftJoinEq}
         ${leftJoinWo}
+        ${leftJoinOpenWo}
         INNER JOIN dbo.IgxEQExtension ext ON ext.eqno = eq.EQNO
         LEFT JOIN dbo.Person p ON p.PERSONNO = pm.ASSIGN
         WHERE ${dataWhere}
@@ -182,7 +189,7 @@ exports.getScheduleList = async (req, res) => {
     `;
 
     const dataResult = await dataReq.query(dataSql);
-    const items = (dataResult.recordset || []).map((row) => mapScheduleItem(row, dueExpr));
+    const items = (dataResult.recordset || []).map((row) => mapScheduleItem(row));
 
     res.json({
       success: true,
@@ -207,16 +214,20 @@ exports.getScheduleKpi = async (req, res) => {
       return res.status(400).json({ success: false, message: built.error });
     }
 
-    const { fromJoinPm, leftJoinEq, leftJoinWo } = getPMCalSched();
+    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getPMCalSched();
     const whereFragment = built.whereFragment;
+
+    const finishedExpr = woFinishedJoinExpr('wof', 'wo');
 
     const kpiSql = `
       SELECT
         COUNT(*) AS totalSchedules,
-        ISNULL(SUM(CASE WHEN ${WO_FINISHED_SQL} THEN 1 ELSE 0 END), 0) AS completed
+        ISNULL(SUM(CASE WHEN ${finishedExpr} THEN 1 ELSE 0 END), 0) AS completed
       ${fromJoinPm}
       ${leftJoinEq}
       ${leftJoinWo}
+      ${leftJoinOpenWo}
+      ${leftJoinFinishedWoBySched('wof')}
       INNER JOIN dbo.IgxEQExtension ext ON ext.eqno = eq.EQNO
       WHERE ${whereFragment}
     `;
@@ -241,7 +252,6 @@ exports.getScheduleKpi = async (req, res) => {
 
 /**
  * GET /api/ems/schedule/calendar-range
- * Registry-scoped PM rows for react-big-calendar (same shape as Calibration V2).
  */
 exports.getScheduleCalendarRange = async (req, res) => {
   try {
@@ -265,9 +275,10 @@ exports.getScheduleCalendarRange = async (req, res) => {
       return res.status(400).json({ success: false, message: built.error });
     }
 
-    const { fromJoinPm, leftJoinEq, leftJoinWo } = getPMCalSched();
+    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getPMCalSched();
     const typeKeySel = eqTypeKeyExpr('eq');
-    const dueExpr = built.dueDateExpr;
+    const effectiveExpr = effectiveDueDateTimeExpr('s', 'pm', 'openWo');
+    const finishedExpr = woFinishedJoinExpr('wof', 'wo');
 
     const sqlText = `
       SELECT
@@ -281,17 +292,23 @@ exports.getScheduleCalendarRange = async (req, res) => {
         pm.DEPTNO,
         pm.ASSIGN AS assigneeId,
         LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))) AS assigneeName,
-        wo.WOCODE,
-        wo.WOSTATUSNO AS woStatusNo,
+        openWo.WOCODE,
+        openWo.WOSTATUSNO AS woStatusNo,
+        openWo.WONO AS openWoNo,
         ext.tag_no AS EQCODE,
-        ${typeKeySel} AS eqTypeKey
+        ${typeKeySel} AS eqTypeKey,
+        ${effectiveExpr} AS effectiveDueDate,
+        CASE WHEN ${finishedExpr} THEN 1 ELSE 0 END AS isDone,
+        CASE WHEN NOT (${finishedExpr}) AND ${effectiveExpr} < GETDATE() THEN 1 ELSE 0 END AS isOverdue
       ${fromJoinPm}
       ${leftJoinEq}
       ${leftJoinWo}
+      ${leftJoinOpenWo}
+      ${leftJoinFinishedWoBySched('wof')}
       INNER JOIN dbo.IgxEQExtension ext ON ext.eqno = eq.EQNO
       LEFT JOIN dbo.Person p ON p.PERSONNO = pm.ASSIGN
       WHERE ${built.whereFragment}
-      ORDER BY ${dueExpr}, s.PMNO
+      ORDER BY ${effectiveExpr}, s.PMNO
     `;
 
     const result = await request.query(sqlText);

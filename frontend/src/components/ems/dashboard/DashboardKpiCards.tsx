@@ -95,8 +95,10 @@ const DashboardKpiCards: React.FC<Props> = ({ data, loading, plant, compact }) =
             type="button"
             onClick={() => navigate(tile.href)}
             className={cn(
-              'text-left rounded-xl transition-shadow h-full',
-              'hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2'
+              'text-left h-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              compact
+                ? 'rounded-lg [&>div]:hover:bg-muted/70'
+                : 'rounded-xl transition-shadow hover:shadow-md'
             )}
           >
             <EmsKpiStat

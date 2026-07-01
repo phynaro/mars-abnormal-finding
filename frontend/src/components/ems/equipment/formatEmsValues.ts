@@ -8,6 +8,15 @@ export function formatEmsDate(value?: string | null): string {
   return s;
 }
 
+/** Prefer explicit effective due, fall back to legacy aliases. */
+export function displayEffectiveDue(item: {
+  effectiveDueDate?: string | null;
+  nextDue?: string | null;
+  dueDate?: string | null;
+}): string {
+  return formatEmsDate(item.effectiveDueDate ?? item.nextDue ?? item.dueDate);
+}
+
 export function formatNum(value?: number | null, digits = 2): string {
   if (value == null || Number.isNaN(value)) return '—';
   return Number(value).toLocaleString(undefined, {

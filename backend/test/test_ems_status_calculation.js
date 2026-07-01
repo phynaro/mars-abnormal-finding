@@ -65,7 +65,7 @@ test('DUE SOON within 7 days', () => {
   assert.strictEqual(getKpiBucket(input, REF), 'due_this_week');
 });
 
-test('DUE SOON within next 14 days after this week', () => {
+test('DUE SOON within next 7 days after this week', () => {
   const input = { dueDate: '20260620', woNo: 100, woStatusNo: 1 };
   assert.strictEqual(calculateEquipmentStatus(input, REF), 'DUE SOON');
   assert.strictEqual(getKpiBucket(input, REF), 'due_soon');

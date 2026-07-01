@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { startOfMonth } from 'date-fns';
 import {
+  DASHBOARD_MONTH_I18N_KEYS,
+  formatTimeTravelSelectionLabel,
   getTimeTravelDateRange,
   setTimeTravelMonth,
   setTimeTravelPeriod,
@@ -22,20 +24,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { EmsFilterCard } from '@/components/ems/shared/emsLayoutPrimitives';
 import { cn } from '@/lib/utils';
 
-const MONTH_KEYS = [
-  'january',
-  'february',
-  'march',
-  'april',
-  'may',
-  'june',
-  'july',
-  'august',
-  'september',
-  'october',
-  'november',
-  'december',
-] as const;
+const MONTH_KEYS = DASHBOARD_MONTH_I18N_KEYS;
 
 const MODE_OPTIONS: DashboardTimeRangeMode[] = ['month', 'period', 'year'];
 
@@ -80,11 +69,7 @@ const DashboardTimeTravelBar: React.FC<Props> = ({ value, onChange, onReturnToPr
     return t('ems.dashboard.v2.modeYear');
   };
 
-  const selectionLabel = () => {
-    if (value.mode === 'year') return String(value.year);
-    if (value.mode === 'period') return `${value.year} P${value.period}`;
-    return `${monthLabel(value.month - 1)} ${value.year}`;
-  };
+  const selectionLabel = () => formatTimeTravelSelectionLabel(value, t);
 
   const handlePrev = () => {
     onChange(stepTimeTravel(value, -1));
