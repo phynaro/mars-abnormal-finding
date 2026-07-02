@@ -5135,6 +5135,10 @@ const getFailureModes = async (req, res) => {
                     FailureModeName as name
                 FROM FailureModes 
                 WHERE FlagDel != 'Y'
+                  AND (
+                    FailureModeCode LIKE 'ME%'
+                    OR FailureModeCode LIKE 'EL%'
+                  )
                 ORDER BY FailureModeName
             `);
 
