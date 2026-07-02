@@ -1318,6 +1318,22 @@ export const TicketList: React.FC = () => {
           >
             {t('ticket.overdue')}
           </Button>
+          <Button
+            variant={selectedStatuses.includes("open") ? "default" : "outline"}
+            size="sm"
+            onClick={() => {
+              const statusSet = new Set(selectedStatuses);
+              if (statusSet.has("open")) {
+                statusSet.delete("open");
+              } else {
+                statusSet.add("open");
+              }
+              handleFilterChange("status", serializeStatusFilter(Array.from(statusSet)));
+            }}
+            title={t('ticket.open')}
+          >
+            {t('ticket.open')}
+          </Button>
           <Dialog>
             <DialogTrigger asChild>
               <Button variant="outline" size="sm" title={t('ticket.filter')}>
