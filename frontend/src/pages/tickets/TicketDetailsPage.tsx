@@ -287,6 +287,16 @@ const TicketDetailsPage: React.FC = () => {
     Array<{ id: number; code: string; name: string }>
   >([]);
 
+  const getCriticalLevelOptionLabel = (level: any) => {
+    const description =
+      level?.PUCRITICALDESCRIPTION ||
+      level?.PUCRITICALDESC ||
+      level?.PUCRITICALCODE;
+    return description
+      ? `${level.PUCRITICALNAME} - ${description}`
+      : level.PUCRITICALNAME;
+  };
+
   // Use area-specific approval levels instead of global permission levels
   const isCreator = ticket?.user_relationship === "creator";
   const isApprover = ticket?.user_relationship === "approver";
@@ -428,7 +438,18 @@ const TicketDetailsPage: React.FC = () => {
       try {
         const response = await ticketService.getFailureModes();
         if (response.success) {
-          setFailureModes(response.data);
+          const sortedFailureModes = [...(response.data || [])].sort((a, b) => {
+            const codeCompare = (a.code || "").localeCompare(b.code || "", undefined, {
+              numeric: true,
+              sensitivity: "base",
+            });
+            if (codeCompare !== 0) return codeCompare;
+            return (a.name || "").localeCompare(b.name || "", undefined, {
+              numeric: true,
+              sensitivity: "base",
+            });
+          });
+          setFailureModes(sortedFailureModes);
         }
       } catch (err) {
         console.error("Error loading failure modes:", err);
@@ -2271,7 +2292,7 @@ const TicketDetailsPage: React.FC = () => {
                     <SelectContent>
                       {criticalLevels.map((level) => (
                         <SelectItem key={level.PUCRITICALNO} value={level.PUCRITICALNO.toString()}>
-                          {level.PUCRITICALNAME}
+                          {getCriticalLevelOptionLabel(level)}
                         </SelectItem>
                       ))}
                     </SelectContent>
