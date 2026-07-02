@@ -907,7 +907,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticket.chooseFiles': 'Choose Files',
     'ticket.showing': 'Showing',
     'ticket.criticalLevel': 'Critical Level',
-    'ticket.ticketClass': 'Ticket Class',
+    'ticket.ticketClass': '7 Abnormality',
     'ticketManagement.title': 'Abnormal Finding Report',
     'ticketManagement.createTicket': 'Create Ticket',
     'ticket.atLeastOneAfterImageRequired': 'At least one "after" image is required',
@@ -2046,7 +2046,7 @@ const translations: Record<Language, Record<string, string>> = {
     'ticketManagement.createTicket': 'แจ้งความผิดปกติ',
     'ticket.showing': 'กำลังแสดง',
     'ticket.criticalLevel': 'ระดับความสำคัญ *',
-    'ticket.ticketClass': 'ประเภทงาน',
+    'ticket.ticketClass': 'ความผิดปกติ 7 ประการ',
     'ticket.atLeastOneAfterImageRequired': 'ต้องมีรูปภาพ "หลังการแก้ไข" อย่างน้อย 1 รูป',
   
 
