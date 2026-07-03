@@ -1,6 +1,7 @@
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
 const notificationQueue = require('../queues/notificationQueue');
+const relayConfigService = require('../services/notificationRelayConfigService');
 
 /**
  * Get all notification schedules
@@ -175,9 +176,67 @@ const testNotification = async (req, res) => {
   }
 };
 
+/**
+ * Get runtime notification relay configuration.
+ */
+const getRelayConfig = async (req, res) => {
+  try {
+    const config = await relayConfigService.getConfig();
+    return res.json({
+      success: true,
+      data: config
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch relay config',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Update runtime notification relay configuration.
+ * Body: { enabled: boolean, personNo?: number, lineId?: string|null }
+ */
+const updateRelayConfig = async (req, res) => {
+  try {
+    const current = await relayConfigService.getConfig();
+    const enabled = typeof req.body?.enabled === 'boolean' ? req.body.enabled : current.enabled;
+    const personNo = req.body?.personNo !== undefined ? parseInt(req.body.personNo, 10) : current.personNo;
+    const lineId = req.body?.lineId !== undefined ? req.body.lineId : current.lineId;
+
+    if (Number.isNaN(personNo) || personNo <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'personNo must be a positive integer'
+      });
+    }
+
+    const updated = await relayConfigService.setConfig(
+      { enabled, personNo, lineId },
+      req.user?.userId || null
+    );
+
+    return res.json({
+      success: true,
+      message: 'Relay config updated',
+      data: updated
+    });
+  } catch (error) {
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update relay config',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getNotificationSchedules,
   getNotificationScheduleByType,
   updateNotificationSchedule,
-  testNotification
+  testNotification,
+  getRelayConfig,
+  updateRelayConfig
 };

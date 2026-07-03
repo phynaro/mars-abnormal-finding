@@ -16,6 +16,9 @@
  */
 
 const axios = require('axios');
+const sql = require('mssql');
+const dbConfig = require('../config/dbConfig');
+const relayConfigService = require('./notificationRelayConfigService');
 
 // ===== CONSTANTS =====
 
@@ -329,6 +332,7 @@ class TicketNotificationService {
     //this.apiBase = 'https://api.line.me/v2/bot/message';
     this.apiBase = 'https://default82d7037e747a42f887d16122afc26d.ec.environment.api.powerplatform.com:443/powerautomate/automations/direct/workflows/4f2b5416fca24dc38c5205a2b077d8e9/triggers/manual/paths/invoke?api-version=1&sp=%2Ftriggers%2Fmanual%2Frun&sv=1.0&sig=96wuyaCkrDLJxXhRun-l5qyVH3nqyYYKkHLaQSK4m0c';
     this.timeout = 10000; // 10 seconds
+    this.relayCache = { lineId: null, loadedAt: 0 };
   }
 
   /**
@@ -337,6 +341,54 @@ class TicketNotificationService {
    */
   isConfigured() {
     return !!this.channelAccessToken;
+  }
+
+  isRelayModeEnabled() {
+    return false;
+  }
+
+  getRelayPersonNo(config) {
+    const parsed = parseInt(config?.personNo || '550', 10);
+    return Number.isNaN(parsed) ? 550 : parsed;
+  }
+
+  async getRelayLineId(config) {
+    const relayLineId = (config?.lineId || '').trim();
+    if (relayLineId) return relayLineId;
+
+    const cacheTtlMs = 5 * 60 * 1000; // 5 minutes
+    const now = Date.now();
+    if (this.relayCache.lineId && now - this.relayCache.loadedAt < cacheTtlMs) {
+      return this.relayCache.lineId;
+    }
+
+    const relayPersonNo = this.getRelayPersonNo(config);
+    const pool = await sql.connect(dbConfig);
+    try {
+      const result = await pool.request()
+        .input('personNo', sql.Int, relayPersonNo)
+        .query(`
+          SELECT TOP 1
+            ue.LineID
+          FROM dbo.Person p
+          LEFT JOIN dbo._secUsers u ON u.PersonNo = p.PERSONNO
+          LEFT JOIN dbo.IgxUserExtension ue
+            ON ue.UserID = u.UserID
+            OR ue.PersonNo = p.PERSONNO
+          WHERE p.PERSONNO = @personNo
+            AND ue.LineID IS NOT NULL
+            AND LTRIM(RTRIM(ue.LineID)) <> ''
+          ORDER BY ue.UpdatedAt DESC
+        `);
+
+      const lineId = result.recordset?.[0]?.LineID || null;
+      if (lineId) {
+        this.relayCache = { lineId, loadedAt: now };
+      }
+      return lineId;
+    } finally {
+      await pool.close();
+    }
   }
 
   /**
@@ -356,6 +408,22 @@ class TicketNotificationService {
       if (!lineUserId) {
         console.warn('No LineID provided; skipping LINE notification');
         return { success: false, skipped: true, reason: 'no_user_id' };
+      }
+
+      const originalLineUserId = lineUserId;
+      const relayConfig = await relayConfigService.getConfig();
+      if (relayConfig.enabled) {
+        const relayLineId = await this.getRelayLineId(relayConfig);
+        if (!relayLineId) {
+          return {
+            success: false,
+            skipped: true,
+            reason: 'relay_target_not_found',
+            error: `Notification relay enabled but no LineID found for PersonNo ${this.getRelayPersonNo(relayConfig)}`
+          };
+        }
+        lineUserId = relayLineId;
+        console.log(`🔁 Notification relay active: ${originalLineUserId} -> ${lineUserId} (PersonNo ${this.getRelayPersonNo(relayConfig)})`);
       }
 
       if (!isValidLineUserId(lineUserId)) {
@@ -396,7 +464,10 @@ class TicketNotificationService {
       return { 
         success: true, 
         status: response.status,
-        messageId: response.data?.sentMessageId 
+        messageId: response.data?.sentMessageId,
+        relayed: relayConfig.enabled,
+        originalLineUserId: relayConfig.enabled ? originalLineUserId : undefined,
+        actualLineUserId: lineUserId
       };
 
     } catch (error) {

@@ -17,6 +17,8 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Mail, MessageSquare, User as UserIcon, CheckCircle2, XCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import notificationScheduleService from '@/services/notificationScheduleService';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api';
 
@@ -96,10 +98,16 @@ const NotificationTestingPage: React.FC = () => {
   // Results state
   const [recipients, setRecipients] = useState<NotificationRecipient[]>([]);
   const [loading, setLoading] = useState(false);
+  const [relayEnabled, setRelayEnabled] = useState(false);
+  const [relayPersonNo, setRelayPersonNo] = useState('550');
+  const [relayLineId, setRelayLineId] = useState('');
+  const [relayLoading, setRelayLoading] = useState(false);
+  const [relaySaving, setRelaySaving] = useState(false);
 
   // Load users for dropdowns
   useEffect(() => {
     loadUsers();
+    loadRelayConfig();
   }, []);
 
   const loadUsers = async () => {
@@ -116,6 +124,64 @@ const NotificationTestingPage: React.FC = () => {
       });
     } finally {
       setUsersLoading(false);
+    }
+  };
+
+  const loadRelayConfig = async () => {
+    try {
+      setRelayLoading(true);
+      const response = await notificationScheduleService.getRelayConfig();
+      if (response.success && response.data) {
+        setRelayEnabled(!!response.data.enabled);
+        setRelayPersonNo(String(response.data.personNo || 550));
+        setRelayLineId(response.data.lineId || '');
+      }
+    } catch (error) {
+      console.error('Failed to load relay config:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load notification relay settings',
+        variant: 'destructive'
+      });
+    } finally {
+      setRelayLoading(false);
+    }
+  };
+
+  const saveRelayConfig = async () => {
+    const parsedPersonNo = parseInt(relayPersonNo, 10);
+    if (Number.isNaN(parsedPersonNo) || parsedPersonNo <= 0) {
+      toast({
+        title: 'Validation Error',
+        description: 'Relay PersonNo must be a positive integer',
+        variant: 'destructive'
+      });
+      return;
+    }
+
+    try {
+      setRelaySaving(true);
+      await notificationScheduleService.updateRelayConfig({
+        enabled: relayEnabled,
+        personNo: parsedPersonNo,
+        lineId: relayLineId.trim() ? relayLineId.trim() : null,
+      });
+      toast({
+        title: 'Success',
+        description: relayEnabled
+          ? `Relay enabled. Notifications will be redirected to PersonNo ${parsedPersonNo}`
+          : 'Relay disabled. Notifications will send to real recipients',
+      });
+      await loadRelayConfig();
+    } catch (error) {
+      console.error('Failed to save relay config:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to save relay settings',
+        variant: 'destructive'
+      });
+    } finally {
+      setRelaySaving(false);
     }
   };
 
@@ -347,6 +413,58 @@ const NotificationTestingPage: React.FC = () => {
         title="Notification Testing"
         description="Test which users will receive notifications for different ticket actions"
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Notification Relay (Runtime Toggle)</CardTitle>
+          <CardDescription>
+            Redirect real notification sends to a test user without restarting containers.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label htmlFor="relay-enabled">Enable Relay Mode</Label>
+              <p className="text-xs text-gray-500 mt-1">
+                {relayEnabled
+                  ? 'ON: real recipients are resolved, but sends are redirected'
+                  : 'OFF: notifications are sent to normal recipients'}
+              </p>
+            </div>
+            <Switch
+              id="relay-enabled"
+              checked={relayEnabled}
+              onCheckedChange={setRelayEnabled}
+              disabled={relayLoading || relaySaving}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Relay PersonNo</Label>
+              <Input
+                value={relayPersonNo}
+                onChange={(e) => setRelayPersonNo(e.target.value)}
+                placeholder="550"
+                disabled={relayLoading || relaySaving}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Relay LINE ID (optional override)</Label>
+              <Input
+                value={relayLineId}
+                onChange={(e) => setRelayLineId(e.target.value)}
+                placeholder="Uxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                disabled={relayLoading || relaySaving}
+              />
+            </div>
+          </div>
+
+          <Button onClick={saveRelayConfig} disabled={relayLoading || relaySaving}>
+            {relaySaving ? 'Saving...' : 'Save Relay Settings'}
+          </Button>
+        </CardContent>
+      </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Configuration Card */}

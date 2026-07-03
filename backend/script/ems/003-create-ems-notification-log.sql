@@ -1,5 +1,5 @@
 -- EMS Phase 1: deduplication log for calibration notifications (Phase 08)
--- Database: Cedar6_Mars (dbConfig)
+-- Database: CEDAR (dbConfigNew / getCedarPool)
 
 IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'IgxEmsNotificationLog')
 BEGIN

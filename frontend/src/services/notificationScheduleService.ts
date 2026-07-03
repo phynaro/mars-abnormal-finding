@@ -22,6 +22,14 @@ export interface UpdateNotificationScheduleRequest {
   description?: string;
 }
 
+export interface NotificationRelayConfig {
+  enabled: boolean;
+  personNo: number;
+  lineId: string | null;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
 const API_BASE_URL = '/api/notification-schedules';
 
 class NotificationScheduleService {
@@ -83,6 +91,42 @@ class NotificationScheduleService {
     if (!response.ok) {
       const error = await response.json();
       throw new Error(error.message || 'Failed to test notification');
+    }
+
+    return response.json();
+  }
+
+  async getRelayConfig(): Promise<{ success: boolean; data: NotificationRelayConfig }> {
+    const response = await fetch(`${API_BASE_URL}/relay-config`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to fetch relay configuration');
+    }
+
+    return response.json();
+  }
+
+  async updateRelayConfig(payload: {
+    enabled: boolean;
+    personNo?: number;
+    lineId?: string | null;
+  }): Promise<{ success: boolean; message: string; data: NotificationRelayConfig }> {
+    const response = await fetch(`${API_BASE_URL}/relay-config`, {
+      method: 'PUT',
+      headers: {
+        ...getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to update relay configuration');
     }
 
     return response.json();

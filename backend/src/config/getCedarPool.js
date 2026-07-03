@@ -1,8 +1,10 @@
 const sql = require('mssql');
+const dbConfig = require('./dbConfig');
 const dbConfigNew = require('./dbConfigNew');
 
-/** Isolated pool for CEDAR (port 1434). Never use sql.connect(dbConfigNew) — it replaces the global pool used by Cedar6_Mars. */
+/** Isolated pools — never use sql.connect() for these; it replaces the global pool and pool.close() breaks concurrent callers. */
 let cedarPool = null;
+let marsPool = null;
 
 async function getCedarPool() {
   if (!cedarPool) {
@@ -11,4 +13,12 @@ async function getCedarPool() {
   return cedarPool;
 }
 
-module.exports = { getCedarPool };
+/** Cedar6_Mars — Person, IgxUserExtension, IgxEmsManagerArea, IgxNotificationSchedule. */
+async function getMarsPool() {
+  if (!marsPool) {
+    marsPool = await new sql.ConnectionPool(dbConfig).connect();
+  }
+  return marsPool;
+}
+
+module.exports = { getCedarPool, getMarsPool };

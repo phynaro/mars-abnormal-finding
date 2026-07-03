@@ -134,10 +134,12 @@ const NotificationScheduleManagementPage: React.FC = () => {
     try {
       setTestingType(schedule.notification_type);
       const response = await notificationScheduleService.test(schedule.notification_type);
-      const sent = response.data?.sent ?? response.data?.totalUsers ?? 0;
+      const jobId = response.data?.jobId;
       toast({
         title: 'Success',
-        description: `Test (${schedule.notification_type}): ${sent} users notified.`
+        description: jobId
+          ? `Test (${schedule.notification_type}) queued successfully. Job ID: ${jobId}`
+          : `Test (${schedule.notification_type}) queued successfully. Worker will process it shortly.`
       });
       await loadSchedules();
     } catch (error: any) {

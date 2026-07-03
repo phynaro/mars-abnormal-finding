@@ -5,8 +5,7 @@
 
 const sql = require('mssql');
 const { Resend } = require('resend');
-const dbConfig = require('../../config/dbConfig');
-const { getCedarPool } = require('../../config/getCedarPool');
+const { getCedarPool, getMarsPool } = require('../../config/getCedarPool');
 const abnFlexService = require('../abnormalFindingFlexService');
 const {
   emsEquipmentFromJoin,
@@ -327,60 +326,52 @@ async function logSent(pool, pmSchNo, rule, recipientPersonNo) {
 }
 
 async function getPersonContact(personNo) {
-  const pool = await sql.connect(dbConfig);
-  try {
-    const result = await pool.request()
-      .input('personNo', sql.Int, parseInt(personNo, 10))
-      .query(`
-        SELECT
-          p.PERSONNO AS PersonNo,
-          ISNULL(p.FIRSTNAME, '') + ' ' + ISNULL(p.LASTNAME, '') AS PersonName,
-          LTRIM(RTRIM(p.EMAIL)) AS Email,
-          ue.LineID
-        FROM dbo.Person p
-        LEFT JOIN dbo._secUsers u ON u.PersonNo = p.PERSONNO
-        LEFT JOIN dbo.IgxUserExtension ue ON ue.UserID = u.UserID
-        WHERE p.PERSONNO = @personNo
-          AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
-      `);
-    return result.recordset[0] || null;
-  } finally {
-    await pool.close();
-  }
+  const pool = await getMarsPool();
+  const result = await pool.request()
+    .input('personNo', sql.Int, parseInt(personNo, 10))
+    .query(`
+      SELECT
+        p.PERSONNO AS PersonNo,
+        ISNULL(p.FIRSTNAME, '') + ' ' + ISNULL(p.LASTNAME, '') AS PersonName,
+        LTRIM(RTRIM(p.EMAIL)) AS Email,
+        ue.LineID
+      FROM dbo.Person p
+      LEFT JOIN dbo._secUsers u ON u.PersonNo = p.PERSONNO
+      LEFT JOIN dbo.IgxUserExtension ue ON ue.UserID = u.UserID
+      WHERE p.PERSONNO = @personNo
+        AND (p.FLAGDEL IS NULL OR p.FLAGDEL <> 'Y')
+    `);
+  return result.recordset[0] || null;
 }
 
 async function getPlantManagersForScope(plantCode, area) {
-  const pool = await sql.connect(dbConfig);
-  try {
-    const result = await pool.request()
-      .input('plant', sql.NVarChar(20), plantCode || null)
-      .input('area', sql.NVarChar(100), area || null)
-      .query(`
-        SELECT
-          m.person_no AS PersonNo,
-          m.plant,
-          m.area,
-          ISNULL(p.FIRSTNAME, '') + ' ' + ISNULL(p.LASTNAME, '') AS PersonName,
-          LTRIM(RTRIM(p.EMAIL)) AS Email,
-          ue.LineID
-        FROM dbo.IgxEmsManagerArea m
-        LEFT JOIN dbo.Person p ON CAST(p.PERSONNO AS NVARCHAR(50)) = m.person_no
-        LEFT JOIN dbo._secUsers u ON u.PersonNo = p.PERSONNO
-        LEFT JOIN dbo.IgxUserExtension ue ON ue.UserID = u.UserID
-        WHERE (
-          m.plant IS NULL
-          OR UPPER(LTRIM(RTRIM(m.plant))) = UPPER(LTRIM(RTRIM(@plant)))
-        )
-        AND (
-          m.area IS NULL
-          OR LTRIM(RTRIM(m.area)) = ''
-          OR LTRIM(RTRIM(m.area)) = LTRIM(RTRIM(@area))
-        )
-      `);
-    return result.recordset || [];
-  } finally {
-    await pool.close();
-  }
+  const pool = await getMarsPool();
+  const result = await pool.request()
+    .input('plant', sql.NVarChar(20), plantCode || null)
+    .input('area', sql.NVarChar(100), area || null)
+    .query(`
+      SELECT
+        m.person_no AS PersonNo,
+        m.plant,
+        m.area,
+        ISNULL(p.FIRSTNAME, '') + ' ' + ISNULL(p.LASTNAME, '') AS PersonName,
+        LTRIM(RTRIM(p.EMAIL)) AS Email,
+        ue.LineID
+      FROM dbo.IgxEmsManagerArea m
+      LEFT JOIN dbo.Person p ON CAST(p.PERSONNO AS NVARCHAR(50)) = m.person_no
+      LEFT JOIN dbo._secUsers u ON u.PersonNo = p.PERSONNO
+      LEFT JOIN dbo.IgxUserExtension ue ON ue.UserID = u.UserID
+      WHERE (
+        m.plant IS NULL
+        OR UPPER(LTRIM(RTRIM(m.plant))) = UPPER(LTRIM(RTRIM(@plant)))
+      )
+      AND (
+        m.area IS NULL
+        OR LTRIM(RTRIM(m.area)) = ''
+        OR LTRIM(RTRIM(m.area)) = LTRIM(RTRIM(@area))
+      )
+    `);
+  return result.recordset || [];
 }
 
 async function filterPendingItems(items, rule, personKey, logPool) {
@@ -457,58 +448,50 @@ async function processAssigneeRule(rows, rule) {
     byAssignee[key].push(row);
   }
 
-  const logPool = await sql.connect(dbConfig);
+  const logPool = await getCedarPool();
   const summary = { rule, sent: 0, failed: 0, skipped: 0 };
 
-  try {
-    for (const [assigneeId, items] of Object.entries(byAssignee)) {
-      const contact = await getPersonContact(assigneeId);
-      const result = await sendToRecipient({ contact, items, rule, logPool });
-      if (result.skipped) summary.skipped += 1;
-      else if (result.success) summary.sent += 1;
-      else summary.failed += 1;
-    }
-  } finally {
-    await logPool.close();
+  for (const [assigneeId, items] of Object.entries(byAssignee)) {
+    const contact = await getPersonContact(assigneeId);
+    const result = await sendToRecipient({ contact, items, rule, logPool });
+    if (result.skipped) summary.skipped += 1;
+    else if (result.success) summary.sent += 1;
+    else summary.failed += 1;
   }
 
   return summary;
 }
 
 async function processEscalationRule(rows) {
-  const logPool = await sql.connect(dbConfig);
+  const logPool = await getCedarPool();
   const summary = { rule: EMS_NOTIFICATION_RULES.ESCALATION_14, sent: 0, failed: 0, skipped: 0 };
   const managerCache = new Map();
 
-  try {
-    for (const row of rows) {
-      const cacheKey = `${row.PlantCode}|${row.Area || ''}`;
-      let managers = managerCache.get(cacheKey);
-      if (!managers) {
-        managers = await getPlantManagersForScope(row.PlantCode, row.Area);
-        managerCache.set(cacheKey, managers);
-      }
-
-      for (const manager of managers) {
-        const contact = {
-          PersonNo: manager.PersonNo,
-          PersonName: manager.PersonName,
-          Email: manager.Email,
-          LineID: manager.LineID,
-        };
-        const result = await sendToRecipient({
-          contact,
-          items: [row],
-          rule: EMS_NOTIFICATION_RULES.ESCALATION_14,
-          logPool,
-        });
-        if (result.skipped) summary.skipped += 1;
-        else if (result.success) summary.sent += 1;
-        else summary.failed += 1;
-      }
+  for (const row of rows) {
+    const cacheKey = `${row.PlantCode}|${row.Area || ''}`;
+    let managers = managerCache.get(cacheKey);
+    if (!managers) {
+      managers = await getPlantManagersForScope(row.PlantCode, row.Area);
+      managerCache.set(cacheKey, managers);
     }
-  } finally {
-    await logPool.close();
+
+    for (const manager of managers) {
+      const contact = {
+        PersonNo: manager.PersonNo,
+        PersonName: manager.PersonName,
+        Email: manager.Email,
+        LineID: manager.LineID,
+      };
+      const result = await sendToRecipient({
+        contact,
+        items: [row],
+        rule: EMS_NOTIFICATION_RULES.ESCALATION_14,
+        logPool,
+      });
+      if (result.skipped) summary.skipped += 1;
+      else if (result.success) summary.sent += 1;
+      else summary.failed += 1;
+    }
   }
 
   return summary;
