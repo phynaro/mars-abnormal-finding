@@ -170,10 +170,20 @@ const TicketApprovalManagementPage: React.FC = () => {
 
   // Helper functions for managing hierarchy in formData
   const addPlantToHierarchy = (plantCode: string) => {
-    setFormData(prev => ({
-      ...prev,
-      hierarchies: [...prev.hierarchies, { plant_code: plantCode }]
-    }));
+    setFormData(prev => {
+      const exists = prev.hierarchies.some(
+        h => h.plant_code === plantCode && !h.area_code && !h.line_code && !h.machine_code
+      );
+
+      if (exists) {
+        return prev;
+      }
+
+      return {
+        ...prev,
+        hierarchies: [...prev.hierarchies, { plant_code: plantCode }]
+      };
+    });
   }
 
   const removePlantFromHierarchy = (plantCode: string) => {
@@ -724,7 +734,7 @@ const TicketApprovalManagementPage: React.FC = () => {
           description: `Ticket approval created successfully for ${filteredApprovalsToCreate.length} location(s)${approvalsToCreate.length > filteredApprovalsToCreate.length ? ` (${approvalsToCreate.length - filteredApprovalsToCreate.length} duplicates skipped)` : ''}`
         });
       } else if (viewMode === 'edit' && selectedApproval) {
-        // Update existing approval - Delete all and recreate
+        // Update existing approval using atomic replace endpoint
         console.log('=== FRONTEND: Starting approval update ===');
         console.log('Form data:', formData);
         console.log('Form data hierarchies:', formData.hierarchies);
@@ -739,42 +749,47 @@ const TicketApprovalManagementPage: React.FC = () => {
           return;
         }
         
-        // Delete all existing approvals for this person/level using personno and approval_level
-        console.log('Deleting existing approvals for person:', selectedApproval.personno, 'level:', selectedApproval.approval_level);
-        try {
-          const deleteResult = await administrationService.ticketApproval.deleteByPersonAndLevel(
-            selectedApproval.personno, 
-            selectedApproval.approval_level
-          );
-          console.log('Deletion complete. Deleted count:', deleteResult.count);
-        } catch (deleteError: any) {
-          console.log('Delete error (may be expected if no existing approvals):', deleteError.message);
-          // Continue anyway - it's ok if there are no existing approvals to delete
-        }
-
-        // Create new approvals directly from formData hierarchies
-        const approvalsToCreate: CreateTicketApprovalRequest[] = formData.hierarchies.map(hierarchy => ({
-          personno: formData.personno,
+        const approvalsToReplace = formData.hierarchies.map(hierarchy => ({
           plant_code: hierarchy.plant_code,
           area_code: hierarchy.area_code || undefined,
           line_code: hierarchy.line_code || undefined,
           machine_code: hierarchy.machine_code || undefined,
-          approval_level: formData.approval_level,
           is_active: formData.is_active
         }));
+
+        // Deduplicate payload before sending to backend
+        const uniqueApprovalsMap = new Map<string, typeof approvalsToReplace[number]>();
+        approvalsToReplace.forEach(approval => {
+          const key = [
+            approval.plant_code,
+            approval.area_code || '',
+            approval.line_code || '',
+            approval.machine_code || ''
+          ].join('|');
+          if (!uniqueApprovalsMap.has(key)) {
+            uniqueApprovalsMap.set(key, approval);
+          }
+        });
+        const uniqueApprovalsToReplace = Array.from(uniqueApprovalsMap.values());
         
-        console.log('=== FRONTEND: Creating new approvals ===');
-        console.log('Approvals to create:', JSON.stringify(approvalsToCreate, null, 2));
-        console.log('Approvals count:', approvalsToCreate.length);
+        console.log('=== FRONTEND: Replacing approvals ===');
+        console.log('Approvals to replace:', JSON.stringify(uniqueApprovalsToReplace, null, 2));
+        console.log('Approvals count:', uniqueApprovalsToReplace.length);
         
-        // Use bulk create to insert all new approvals
-        const result = await administrationService.ticketApproval.createMultiple(approvalsToCreate);
-        console.log('=== FRONTEND: Bulk approval response ===');
+        const result = await administrationService.ticketApproval.replaceByPersonAndLevel(
+          selectedApproval.personno,
+          selectedApproval.approval_level,
+          {
+            approvals: uniqueApprovalsToReplace,
+            is_active: formData.is_active
+          }
+        );
+        console.log('=== FRONTEND: Replace approval response ===');
         console.log('Result:', result);
         
         toast({
           title: 'Success',
-          description: `Ticket approval updated successfully for ${result.count} location(s)`
+          description: `Ticket approval updated successfully for ${result.count} location(s)${result.duplicatesSkipped ? ` (${result.duplicatesSkipped} duplicates skipped)` : ''}`
         });
       }
       

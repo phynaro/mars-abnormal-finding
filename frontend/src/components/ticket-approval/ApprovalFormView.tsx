@@ -130,6 +130,7 @@ const ApprovalFormView: React.FC<ApprovalFormViewProps> = ({
                     value={personSearch}
                     onChange={(e) => onPersonSearchChange(e.target.value)}
                     onFocus={onPersonSearchFocus}
+                    disabled={viewMode === 'edit'}
                     placeholder="Search for person..."
                     required
                     className={!formData.personno ? "border-red-500" : ""}
@@ -197,7 +198,7 @@ const ApprovalFormView: React.FC<ApprovalFormViewProps> = ({
                 </Select>
                 {viewMode === 'edit' && (
                   <p className="text-sm text-gray-500 mt-1">
-                    Approval level cannot be changed when editing
+                    Person and approval level cannot be changed when editing
                   </p>
                 )}
                 {viewMode === 'create' && existingApprovalLevels.length > 0 && (

@@ -188,6 +188,17 @@ export interface BulkApprovalResponse {
   errors?: string[];
 }
 
+export interface ReplaceApprovalRequest {
+  approvals: Array<{
+    plant_code: string;
+    area_code?: string;
+    line_code?: string;
+    machine_code?: string;
+    is_active?: boolean;
+  }>;
+  is_active?: boolean;
+}
+
 interface ApiResponse<T> {
   success: boolean;
   data: T;
@@ -358,6 +369,20 @@ export const ticketApprovalService = {
     
     // Default to 0 if we can't determine count
     return { count: 0 };
+  },
+
+  async replaceByPersonAndLevel(
+    personno: number,
+    approvalLevel: number,
+    payload: ReplaceApprovalRequest
+  ): Promise<{ count: number; ids: number[]; duplicatesSkipped: number }> {
+    const response = await fetch(`${API_BASE_URL}/administration/ticket-approvals/person/${personno}/level/${approvalLevel}/replace`, {
+      method: 'PUT',
+      headers: getAuthHeadersUtil(),
+      body: JSON.stringify(payload)
+    });
+    const result: ApiResponse<{ count: number; ids: number[]; duplicatesSkipped: number }> = await handleApiResponse(response);
+    return result.data;
   },
 
   async getUsersForNotification(puno: number, approvalLevel: number, excludeUserId?: number): Promise<Person[]> {

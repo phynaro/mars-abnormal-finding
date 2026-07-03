@@ -558,6 +558,145 @@ const createMultipleTicketApprovals = async (req, res) => {
   }
 };
 
+// Replace all ticket approvals for a person and level in one transaction
+const replaceTicketApprovalsByPersonAndLevel = async (req, res) => {
+  let transaction = null;
+
+  try {
+    const personno = parseInt(req.params.personno, 10);
+    const approvalLevel = parseInt(req.params.approval_level, 10);
+    const { approvals, is_active = true } = req.body;
+
+    if (!personno || !approvalLevel) {
+      return res.status(400).json({
+        success: false,
+        message: 'Valid person number and approval level are required'
+      });
+    }
+
+    if (![1, 2, 3, 4].includes(approvalLevel)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Approval level must be 1, 2, 3, or 4'
+      });
+    }
+
+    if (!Array.isArray(approvals) || approvals.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Approvals array is required and must not be empty'
+      });
+    }
+
+    const uniqueApprovals = [];
+    const seenKeys = new Set();
+    for (const approval of approvals) {
+      const key = [
+        approval.plant_code || '',
+        approval.area_code || '',
+        approval.line_code || '',
+        approval.machine_code || ''
+      ].join('|');
+
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        uniqueApprovals.push(approval);
+      }
+    }
+
+    if (uniqueApprovals.some(a => !a.plant_code)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Each approval must include plant_code'
+      });
+    }
+
+    const pool = await getConnection();
+    transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    const personCheck = await transaction.request()
+      .input('personno', sql.Int, personno)
+      .query('SELECT PERSONNO FROM Person WHERE PERSONNO = @personno');
+
+    if (personCheck.recordset.length === 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: 'Person not found'
+      });
+    }
+
+    const plantCodes = [...new Set(uniqueApprovals.map(a => a.plant_code))];
+    const plantCodesStr = plantCodes.map(code => `'${code}'`).join(',');
+    const plantCheck = await transaction.request()
+      .query(`SELECT DISTINCT plant FROM IgxPUExtension WHERE plant IN (${plantCodesStr}) AND digit_count = 1`);
+    const existingPlantCodes = plantCheck.recordset.map(r => r.plant);
+    const missingPlantCodes = plantCodes.filter(code => !existingPlantCodes.includes(code));
+
+    if (missingPlantCodes.length > 0) {
+      await transaction.rollback();
+      return res.status(400).json({
+        success: false,
+        message: `Plants not found: ${missingPlantCodes.join(', ')}`
+      });
+    }
+
+    const deleteResult = await transaction.request()
+      .input('personno', sql.Int, personno)
+      .input('approval_level', sql.Int, approvalLevel)
+      .query('DELETE FROM IgxTicketApproval WHERE personno = @personno AND approval_level = @approval_level');
+
+    const createdIds = [];
+    for (const approval of uniqueApprovals) {
+      const result = await transaction.request()
+        .input('personno', sql.Int, personno)
+        .input('plant_code', sql.NVarChar, approval.plant_code)
+        .input('area_code', sql.NVarChar, approval.area_code || null)
+        .input('line_code', sql.NVarChar, approval.line_code || null)
+        .input('machine_code', sql.NVarChar, approval.machine_code || null)
+        .input('approval_level', sql.Int, approvalLevel)
+        .input('is_active', sql.Bit, approval.is_active !== undefined ? approval.is_active : is_active)
+        .query(`
+          INSERT INTO IgxTicketApproval 
+          (personno, plant_code, area_code, line_code, machine_code, approval_level, is_active, created_at, updated_at)
+          OUTPUT INSERTED.id
+          VALUES (@personno, @plant_code, @area_code, @line_code, @machine_code, @approval_level, @is_active, GETDATE(), GETDATE())
+        `);
+
+      createdIds.push(result.recordset[0].id);
+    }
+
+    await transaction.commit();
+
+    return res.json({
+      success: true,
+      data: {
+        personno,
+        approval_level: approvalLevel,
+        deletedCount: deleteResult.rowsAffected[0] || 0,
+        count: createdIds.length,
+        ids: createdIds,
+        duplicatesSkipped: approvals.length - uniqueApprovals.length
+      },
+      message: `Successfully replaced ${createdIds.length} ticket approval(s)`
+    });
+  } catch (error) {
+    if (transaction) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error('Rollback error in replaceTicketApprovalsByPersonAndLevel:', rollbackError);
+      }
+    }
+    console.error('Replace ticket approvals by person and level error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
 // Update ticket approval
 const updateTicketApproval = async (req, res) => {
   try {
@@ -928,7 +1067,12 @@ const getLookupData = async (req, res) => {
           puname as name,
           plant as code
         FROM IgxPUExtension 
-        WHERE digit_count = 1 AND plant IS NOT NULL
+        WHERE digit_count = 1
+          AND plant IS NOT NULL
+          AND plant NOT LIKE '%#%'
+          AND UPPER(plant) NOT LIKE '%DEL%'
+          AND ISNULL(puname, '') NOT LIKE '%#%'
+          AND UPPER(ISNULL(puname, '')) NOT LIKE '%DEL%'
         ORDER BY plant
       `),
       // Get distinct areas (digit_count >= 2) - ensure uniqueness by plant+area combination
@@ -1042,6 +1186,7 @@ module.exports = {
   getTicketApprovalsByPersonAndLevel,
   createTicketApproval,
   createMultipleTicketApprovals,
+  replaceTicketApprovalsByPersonAndLevel,
   updateTicketApproval,
   deleteTicketApproval,
   deleteTicketApprovalsByPersonAndLevel,

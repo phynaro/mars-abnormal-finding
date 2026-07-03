@@ -15,6 +15,7 @@ router.get('/ticket-approvals/:id', administrationController.getTicketApprovalBy
 router.get('/ticket-approvals/person/:personno/level/:approval_level', administrationController.getTicketApprovalsByPersonAndLevel);
 router.post('/ticket-approvals', administrationController.createTicketApproval);
 router.post('/ticket-approvals/bulk', administrationController.createMultipleTicketApprovals);
+router.put('/ticket-approvals/person/:personno/level/:approval_level/replace', administrationController.replaceTicketApprovalsByPersonAndLevel);
 router.put('/ticket-approvals/:id', administrationController.updateTicketApproval);
 router.delete('/ticket-approvals/:id', administrationController.deleteTicketApproval);
 router.delete('/ticket-approvals/person/:personno/level/:approval_level', administrationController.deleteTicketApprovalsByPersonAndLevel);
