@@ -180,7 +180,7 @@ class PersonnelController {
         params.push({ name: 'parentDept', type: sql.Int, value: parseInt(parentDept) });
       }
 
-      whereClause = whereClause ? `${whereClause} AND d.DEPTNO  IN (23,24,25,26,27,28,29,30)` : `WHERE d.DEPTNO  IN (23,24,26,29,30)`;
+      whereClause = whereClause ? `${whereClause} AND d.DEPTNO  IN (23,24,25,26,27,28,29,30,86)` : `WHERE d.DEPTNO  IN (23,24,25,26,27,28,29,30,86)`;
 
       // Get total count
       const countQuery = `
