@@ -843,6 +843,31 @@ exports.getPlantMatrix = async (req, res) => {
 
  */
 
+function emptyWoPeriodSlots() {
+  const byPeriod = new Map();
+  for (let p = 1; p <= 13; p += 1) {
+    byPeriod.set(p, { period: p, ontime: 0, late: 0, notFinish: 0, total: 0 });
+  }
+  return byPeriod;
+}
+
+function applyWoPeriodStatusCount(entry, status, cnt) {
+  switch (status) {
+    case 'ontime':
+      entry.ontime += cnt;
+      break;
+    case 'late':
+      entry.late += cnt;
+      break;
+    case 'not_finish':
+      entry.notFinish += cnt;
+      break;
+    default:
+      break;
+  }
+  entry.total += cnt;
+}
+
 exports.getWoPeriodStatus = async (req, res) => {
 
   try {
@@ -876,6 +901,8 @@ exports.getWoPeriodStatus = async (req, res) => {
     const schFinishExpr = dateExprFromColumn('wo.SCH_FINISH_D');
 
     const actFinishExpr = dateExprFromColumn('wo.ACT_FINISH_D');
+
+    const plantExpr = plantFromTagExpr('ext.tag_no');
 
     const periodExpr = `(DATEDIFF(day, @WoPeriodRangeStart, ${schFinishExpr}) / 28) + 1`;
 
@@ -923,6 +950,8 @@ exports.getWoPeriodStatus = async (req, res) => {
 
       SELECT
 
+        ${plantExpr} AS plant,
+
         ${periodExpr} AS period,
 
         ${statusExpr} AS status,
@@ -939,9 +968,9 @@ exports.getWoPeriodStatus = async (req, res) => {
 
       WHERE ${whereFragment}
 
-      GROUP BY ${periodExpr}, ${statusExpr}
+      GROUP BY ${plantExpr}, ${periodExpr}, ${statusExpr}
 
-      ORDER BY period, status
+      ORDER BY plant, period, status
 
     `;
 
@@ -949,63 +978,35 @@ exports.getWoPeriodStatus = async (req, res) => {
 
     const result = await request.query(sqlText);
 
-    const byPeriod = new Map();
-
-    for (let p = 1; p <= 13; p += 1) {
-
-      byPeriod.set(p, { period: p, ontime: 0, late: 0, notFinish: 0, total: 0 });
-
+    const allowedPlants = new Set(PM_CAL_PLANTS.map((p) => p.code));
+    const byPeriod = emptyWoPeriodSlots();
+    const byPlantMap = new Map();
+    for (const p of PM_CAL_PLANTS) {
+      byPlantMap.set(p.code, emptyWoPeriodSlots());
     }
-
-
 
     for (const row of result.recordset || []) {
-
       const period = Number(row.period);
-
       if (period < 1 || period > 13) continue;
 
+      const plant = String(row.plant || '').toUpperCase();
+      if (!allowedPlants.has(plant)) continue;
+
       const cnt = row.cnt ?? 0;
+      const aggEntry = byPeriod.get(period);
+      if (aggEntry) applyWoPeriodStatusCount(aggEntry, row.status, cnt);
 
-      const entry = byPeriod.get(period);
-
-      if (!entry) continue;
-
-      switch (row.status) {
-
-        case 'ontime':
-
-          entry.ontime += cnt;
-
-          break;
-
-        case 'late':
-
-          entry.late += cnt;
-
-          break;
-
-        case 'not_finish':
-
-          entry.notFinish += cnt;
-
-          break;
-
-        default:
-
-          break;
-
-      }
-
-      entry.total += cnt;
-
+      const plantPeriods = byPlantMap.get(plant);
+      if (!plantPeriods) continue;
+      const plantEntry = plantPeriods.get(period);
+      if (plantEntry) applyWoPeriodStatusCount(plantEntry, row.status, cnt);
     }
 
-
-
     const periods = Array.from(byPeriod.values());
-
-
+    const byPlant = PM_CAL_PLANTS.map((p) => ({
+      plant: p.code,
+      periods: Array.from(byPlantMap.get(p.code).values()),
+    }));
 
     res.json({
 
@@ -1020,6 +1021,8 @@ exports.getWoPeriodStatus = async (req, res) => {
         rangeEnd: range.rangeEnd,
 
         periods,
+
+        byPlant,
 
       },
 

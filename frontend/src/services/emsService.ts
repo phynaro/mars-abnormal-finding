@@ -250,11 +250,17 @@ export interface EmsWoPeriodStatusItem {
   total: number;
 }
 
+export interface EmsWoPeriodStatusByPlant {
+  plant: string;
+  periods: EmsWoPeriodStatusItem[];
+}
+
 export interface EmsWoPeriodStatusData {
   year: number;
   rangeStart: string;
   rangeEnd: string;
   periods: EmsWoPeriodStatusItem[];
+  byPlant: EmsWoPeriodStatusByPlant[];
 }
 
 export type EmsKpiBucket = 'overdue' | 'due_this_week' | 'due_soon';
