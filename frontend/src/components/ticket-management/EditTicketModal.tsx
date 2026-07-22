@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { ticketClassService, type TicketClass } from '@/services/ticketClassService';
+import { workGroupService, type WorkGroup } from '@/services/workGroupService';
 import { ticketService } from '@/services/ticketService';
 import type { FailureMode, Ticket, UpdateTicketDetailRequest } from '@/services/ticketService';
 import { useToast } from '@/hooks/useToast';
@@ -29,8 +30,9 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [failureModes, setFailureModes] = useState<FailureMode[]>([]);
   const [ticketClasses, setTicketClasses] = useState<TicketClass[]>([]);
+  const [workGroups, setWorkGroups] = useState<WorkGroup[]>([]);
   const { toast } = useToast();
-  const { language } = useLanguage();
+  const { language, t } = useLanguage();
 
   const [formData, setFormData] = useState({
     title: ticket.title ?? '',
@@ -45,6 +47,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
     downtime_avoidance_hours: ticket.downtime_avoidance_hours?.toString() ?? '',
     failure_mode_id: ticket.failure_mode_id?.toString() ?? 'none',
     ticketClass: ticket.ticketClass?.toString() ?? 'none',
+    work_group_id: ticket.work_group_id?.toString() ?? '',
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -75,14 +78,16 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
     const loadOptions = async () => {
       setOptionsLoading(true);
       try {
-        const [failureModeResponse, ticketClassResponse] = await Promise.all([
+        const [failureModeResponse, ticketClassResponse, workGroupResponse] = await Promise.all([
           ticketService.getFailureModes(),
           ticketClassService.getTicketClasses(),
+          workGroupService.getWorkGroups(),
         ]);
 
         if (!isActive) return;
         setFailureModes(failureModeResponse.data || []);
         setTicketClasses(ticketClassResponse || []);
+        setWorkGroups(workGroupResponse || []);
       } catch (error) {
         if (!isActive) return;
         toast({
@@ -112,6 +117,10 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
 
     if (!formData.description.trim()) {
       newErrors.description = 'Description is required';
+    }
+
+    if (!formData.work_group_id) {
+      newErrors.work_group_id = t('workGroup.required');
     }
 
     if (formData.schedule_start && formData.schedule_finish && new Date(formData.schedule_start) > new Date(formData.schedule_finish)) {
@@ -160,6 +169,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
         downtime_avoidance_hours: parseNullableNumber(formData.downtime_avoidance_hours),
         failure_mode_id: parseNullableInt(formData.failure_mode_id),
         ticketClass: parseNullableInt(formData.ticketClass),
+        work_group_id: parseNullableInt(formData.work_group_id),
       };
 
       await ticketService.updateTicketDetail(ticket.id, payload);
@@ -242,6 +252,27 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
                 onChange={(e) => handleInputChange('pucriticalno', e.target.value)}
                 placeholder="Enter critical level"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="work_group_id">{t('workGroup.label')} *</Label>
+              <Select
+                value={formData.work_group_id}
+                onValueChange={(value) => handleInputChange('work_group_id', value)}
+                disabled={optionsLoading}
+              >
+                <SelectTrigger className={errors.work_group_id ? 'border-red-500' : ''}>
+                  <SelectValue placeholder={optionsLoading ? t('common.loading') : t('workGroup.selectPlaceholder')} />
+                </SelectTrigger>
+                <SelectContent>
+                  {workGroups.map((group) => (
+                    <SelectItem key={group.id} value={group.id.toString()}>
+                      {language === 'en' ? group.name_en : group.name_th}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {errors.work_group_id && <p className="text-sm text-red-500">{errors.work_group_id}</p>}
             </div>
 
             <div className="space-y-2">

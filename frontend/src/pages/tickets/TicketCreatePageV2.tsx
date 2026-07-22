@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
 import { hierarchyService, type PUCritical } from '@/services/hierarchyService';
 import { ticketClassService, type TicketClass } from '@/services/ticketClassService';
+import { workGroupService, type WorkGroup } from '@/services/workGroupService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/ui/file-upload';
@@ -39,13 +40,14 @@ const TicketCreatePageV2: React.FC = () => {
 
   const [submitting, setSubmitting] = useState(false);
 
-  const [formData, setFormData] = useState<Pick<CreateTicketRequest, 'title' | 'description' | 'severity_level' | 'priority'> & { puno?: number; equipment_id?: number; pucriticalno?: number; ticketClass?: number | null }>({
+  const [formData, setFormData] = useState<Pick<CreateTicketRequest, 'title' | 'description' | 'severity_level' | 'priority'> & { puno?: number; equipment_id?: number; pucriticalno?: number; ticketClass?: number | null; work_group_id?: number }>({
     title: '',
     description: '',
     puno: undefined,
     equipment_id: undefined,
     pucriticalno: undefined,
     ticketClass: undefined,
+    work_group_id: undefined,
     severity_level: 'medium',
     priority: 'normal',
   });
@@ -83,6 +85,9 @@ const TicketCreatePageV2: React.FC = () => {
   // Ticket class state
   const [ticketClasses, setTicketClasses] = useState<TicketClass[]>([]);
   const [ticketClassesLoading, setTicketClassesLoading] = useState(false);
+
+  const [workGroups, setWorkGroups] = useState<WorkGroup[]>([]);
+  const [workGroupsLoading, setWorkGroupsLoading] = useState(false);
 
   // Create optimized preview images for faster loading
   useEffect(() => {
@@ -319,6 +324,7 @@ const TicketCreatePageV2: React.FC = () => {
     if (!formData.title.trim()) newErrors.title = t('ticket.titleRequired');
     if (!formData.description.trim()) newErrors.description = t('ticket.descriptionRequired');
     if (!selectedMachine) newErrors.machine = t('ticket.selectMachine');
+    if (!formData.work_group_id) newErrors.work_group_id = t('workGroup.required');
     if (selectedFiles.length === 0) newErrors.files = t('ticket.atLeastOneAttachment');
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -354,6 +360,7 @@ const TicketCreatePageV2: React.FC = () => {
   useEffect(() => {
     loadCriticalLevels();
     loadTicketClasses();
+    loadWorkGroups();
   }, []);
 
   // Load critical levels function
@@ -391,6 +398,23 @@ const TicketCreatePageV2: React.FC = () => {
       });
     } finally {
       setTicketClassesLoading(false);
+    }
+  };
+
+  const loadWorkGroups = async () => {
+    try {
+      setWorkGroupsLoading(true);
+      const groups = await workGroupService.getWorkGroups();
+      setWorkGroups(groups);
+    } catch (error) {
+      console.error('Error loading work groups:', error);
+      toast({
+        title: t('common.error'),
+        description: t('workGroup.loadFailed'),
+        variant: 'destructive'
+      });
+    } finally {
+      setWorkGroupsLoading(false);
     }
   };
 
@@ -499,6 +523,7 @@ const TicketCreatePageV2: React.FC = () => {
         equipment_id: formData.equipment_id,
         pucriticalno: formData.pucriticalno,
         ticketClass: formData.ticketClass,
+        work_group_id: formData.work_group_id,
         severity_level: formData.severity_level,
         priority: formData.priority,
       };
@@ -815,6 +840,35 @@ const TicketCreatePageV2: React.FC = () => {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              {/* Work Group */}
+              <div className="space-y-2">
+                <Label htmlFor="work_group_id">{t('workGroup.label')} *</Label>
+                <Select
+                  value={formData.work_group_id?.toString() || ''}
+                  onValueChange={(v) => handleInputChange('work_group_id', parseInt(v))}
+                  disabled={workGroupsLoading}
+                >
+                  <SelectTrigger className={errors.work_group_id ? 'border-red-500' : ''}>
+                    <SelectValue placeholder={workGroupsLoading ? t('common.loading') : t('workGroup.selectPlaceholder')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {workGroups.map((group) => (
+                      <SelectItem key={group.id} value={group.id.toString()}>
+                        {language === 'en' ? group.name_en : group.name_th}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {formData.work_group_id && (
+                  <p className="text-sm text-muted-foreground">
+                    {language === 'en'
+                      ? workGroups.find((g) => g.id === formData.work_group_id)?.description_en
+                      : workGroups.find((g) => g.id === formData.work_group_id)?.description_th}
+                  </p>
+                )}
+                {errors.work_group_id && <p className="text-sm text-red-500">{errors.work_group_id}</p>}
               </div>
 
               {/* Ticket Class */}

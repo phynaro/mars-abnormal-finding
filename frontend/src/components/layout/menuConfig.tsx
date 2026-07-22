@@ -174,6 +174,7 @@ export const menuItems: MenuItem[] = [
       { id: 'settings-targets', label: 'Target Management', icon: <Target className="h-4 w-4" />, path: '/settings/targets', permissionLevel: 1 },
       { id: 'settings-personal-targets', label: 'Personal Target Setting', icon: <Target className="h-4 w-4" />, path: '/settings/personal-targets', permissionLevel: 3 },
       { id: 'settings-notification-schedules', label: 'Notification Schedules', icon: <Bell className="h-4 w-4" />, path: '/settings/notification-schedules', permissionLevel: 1 },
+      { id: 'settings-work-groups', label: 'Work Groups', icon: <Users className="h-4 w-4" />, path: '/settings/work-groups', permissionLevel: 1 },
       { id: 'settings-notification-testing', label: 'Notification Testing', icon: <Bell className="h-4 w-4" />, path: '/settings/notification-testing', permissionLevel: 3 },
       { id: 'settings-user-management', label: 'User Management', icon: <Users className="h-4 w-4" />, path: '/settings/user-management', permissionLevel: 3 },
     ]

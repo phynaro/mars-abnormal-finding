@@ -13,6 +13,9 @@ export interface Ticket {
   ticketClass?: number | null; // New field for Ticket Class ID
   ticket_class_en?: string; // Ticket Class name in English
   ticket_class_th?: string; // Ticket Class name in Thai
+  work_group_id?: number | null;
+  work_group_name_en?: string;
+  work_group_name_th?: string;
   cedar_wocode?: string; // CEDAR work order code
   cedar_wono?: number; // CEDAR work order number
   cedar_sync_status?: string; // Cedar sync status (success, error, pending, syncing)
@@ -146,6 +149,7 @@ export interface CreateTicketRequest {
   equipment_id?: number; // New field for Equipment ID
   pucriticalno?: number; // New field for Critical Level
   ticketClass?: number | null; // New field for Ticket Class
+  work_group_id?: number; // Required on create
   plant_id?: number;
   area_id?: number;
   line_id?: number;
@@ -186,6 +190,7 @@ export interface UpdateTicketDetailRequest {
   downtime_avoidance_hours?: number | null;
   failure_mode_id?: number | null;
   ticketClass?: number | null;
+  work_group_id?: number | null;
 }
 
 export interface TicketFilters {
@@ -194,6 +199,7 @@ export interface TicketFilters {
   status?: string;
   pucriticalno?: number | string;  // Critical Level (supports comma-separated values)
   ticketClass?: number | string | null; // Ticket Class ID (supports comma-separated values)
+  workGroup?: number | string | null; // Work Group ID (supports comma-separated values + "default")
   assigned_to?: number | string;
   created_by?: number | string;
   search?: string;

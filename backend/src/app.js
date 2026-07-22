@@ -118,6 +118,7 @@ const personalTargetRoutes = require('./routes/personalTarget');
 const accessRequestRoutes = require('./routes/accessRequest');
 const notificationScheduleRoutes = require('./routes/notificationSchedule');
 const ticketClassRoutes = require('./routes/ticketClass');
+const workGroupRoutes = require('./routes/workGroup');
 const areaDashboardRoutes = require('./routes/areaDashboard');
 const emsRoutes = require('./routes/ems');
 const apiTokenRoutes = require('./routes/apiToken');
@@ -143,6 +144,7 @@ app.use('/api/targets', targetRoutes);
 app.use('/api/personal-targets', personalTargetRoutes);
 app.use('/api/notification-schedules', notificationScheduleRoutes);
 app.use('/api/ticketclass', ticketClassRoutes);
+app.use('/api/work-groups', workGroupRoutes);
 app.use('/api/dashboard/area', areaDashboardRoutes);
 app.use('/api/ems', emsRoutes);
 app.use('/api/api-tokens', apiTokenRoutes);
@@ -238,53 +240,53 @@ const emsNotificationJob = require('./jobs/emsNotificationJob');
 
 // Start server
 app.listen(PORT, async () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/api/health`);
-  console.log(`🔐 Auth endpoints: http://localhost:${PORT}/api/auth`);
-  console.log(`📚 API Documentation: http://localhost:${PORT}/api-docs`);
-  console.log(`📄 OpenAPI Spec: http://localhost:${PORT}/api-docs.json`);
+  console.log(`?? Server running on port ${PORT}`);
+  console.log(`?? Health check: http://localhost:${PORT}/api/health`);
+  console.log(`?? Auth endpoints: http://localhost:${PORT}/api/auth`);
+  console.log(`?? API Documentation: http://localhost:${PORT}/api-docs`);
+  console.log(`?? OpenAPI Spec: http://localhost:${PORT}/api-docs.json`);
   
   // Initialize scheduled jobs
   if (process.env.ENABLE_PENDING_TICKET_NOTIFICATIONS !== 'false') {
     await pendingTicketNotificationJob.initialize();
   } else {
-    console.log('⚠️  Pending ticket notifications are disabled via environment variable');
+    console.log('??  Pending ticket notifications are disabled via environment variable');
   }
   
   if (process.env.ENABLE_OLD_OPEN_TICKET_NOTIFICATIONS !== 'false') {
     await oldOpenTicketNotificationJob.initialize();
   } else {
-    console.log('⚠️  Old open ticket notifications are disabled via environment variable');
+    console.log('??  Old open ticket notifications are disabled via environment variable');
   }
 
   if (process.env.ENABLE_DUE_DATE_NOTIFICATIONS !== 'false') {
     await dueDateNotificationJob.initialize();
   } else {
-    console.log('⚠️  Due-date notifications are disabled via environment variable');
+    console.log('??  Due-date notifications are disabled via environment variable');
   }
 
   if (process.env.ENABLE_FINISHED_TICKET_REVIEW_NOTIFICATIONS !== 'false') {
     await finishedTicketReviewNotificationJob.initialize();
   } else {
-    console.log('⚠️  Finished ticket review notifications are disabled via environment variable');
+    console.log('??  Finished ticket review notifications are disabled via environment variable');
   }
 
   if (process.env.ENABLE_REVIEW_ESCALATION_NOTIFICATIONS !== 'false') {
     await reviewEscalationNotificationJob.initialize();
   } else {
-    console.log('⚠️  Review escalation notifications are disabled via environment variable');
+    console.log('??  Review escalation notifications are disabled via environment variable');
   }
 
   if (process.env.ENABLE_CALIBRATION_DUE_DATE_NOTIFICATIONS !== 'false') {
     await calibrationDueDateNotificationJob.initialize();
   } else {
-    console.log('⚠️  Calibration due-date notifications are disabled via environment variable');
+    console.log('??  Calibration due-date notifications are disabled via environment variable');
   }
 
   if (process.env.ENABLE_EMS_CALIBRATION_NOTIFICATIONS !== 'false') {
     await emsNotificationJob.initialize();
   } else {
-    console.log('⚠️  EMS calibration notifications are disabled via environment variable');
+    console.log('??  EMS calibration notifications are disabled via environment variable');
   }
 });
 

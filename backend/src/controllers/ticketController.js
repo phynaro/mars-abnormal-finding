@@ -27,6 +27,15 @@ const {
   runQuery,
 } = require("./ticketController/helpers");
 
+const getWorkGroupLabel = (ticketData = {}) => {
+  const name = ticketData.work_group_name_en || ticketData.work_group_name_th;
+  if (name && String(name).trim() !== "") return String(name).trim();
+  if (ticketData.work_group_id !== undefined && ticketData.work_group_id !== null) {
+    return `Group ${ticketData.work_group_id}`;
+  }
+  return "Default";
+};
+
 const createTicket = async (req, res) => {
     const fsPromises = fs.promises;
 
@@ -62,6 +71,7 @@ const createTicket = async (req, res) => {
         const equipmentIdInput = parseOptionalInt(rawBody.equipment_id);
         const pucriticalnoInput = parseOptionalInt(rawBody.pucriticalno);
         const ticketClassInput = parseOptionalInt(rawBody.ticketClass);
+        const workGroupIdInput = parseOptionalInt(rawBody.work_group_id);
         const severityLevel = typeof rawBody.severity_level === 'string' ? rawBody.severity_level : rawBody.severity_level?.toString?.();
         const priorityLevel = typeof rawBody.priority === 'string' ? rawBody.priority : rawBody.priority?.toString?.();
         const imageType = typeof rawBody.image_type === 'string' && rawBody.image_type.trim()
@@ -75,6 +85,13 @@ const createTicket = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Title, description, and PU ID are required'
+            });
+        }
+
+        if (!workGroupIdInput) {
+            return res.status(400).json({
+                success: false,
+                message: 'Work group is required'
             });
         }
 
@@ -122,16 +139,29 @@ const createTicket = async (req, res) => {
             validatedTicketClass = ticketClassInput;
         }
 
+        const workGroupCheck = await runQuery(pool, `
+            SELECT id FROM IgxWorkGroup WHERE id = @work_group_id AND is_active = 1
+        `, [
+            { name: 'work_group_id', type: sql.Int, value: workGroupIdInput }
+        ]);
+
+        if (mapRecordset(workGroupCheck).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid or inactive work group'
+            });
+        }
+
         // Create ticket record
         const ticketInsertResult = await runQuery(pool, `
             INSERT INTO IgxTickets (
-                ticket_number, title, description, puno, equipment_id, pucriticalno, ticketClass,
+                ticket_number, title, description, puno, equipment_id, pucriticalno, ticketClass, work_group_id,
                 severity_level, priority,
                 created_by,
                 status, created_at, updated_at
             )
             VALUES (
-                @ticket_number, @title, @description, @puno, @equipment_id, @pucriticalno, @ticketClass,
+                @ticket_number, @title, @description, @puno, @equipment_id, @pucriticalno, @ticketClass, @work_group_id,
                 @severity_level, @priority,
                 @created_by,
                 'open', GETDATE(), GETDATE()
@@ -145,6 +175,7 @@ const createTicket = async (req, res) => {
             { name: 'equipment_id', type: sql.Int, value: validatedEquipmentId },
             { name: 'pucriticalno', type: sql.Int, value: pucriticalnoInput },
             { name: 'ticketClass', type: sql.Int, value: validatedTicketClass },
+            { name: 'work_group_id', type: sql.Int, value: workGroupIdInput },
             { name: 'severity_level', type: sql.VarChar(20), value: severityLevel || 'medium' },
             { name: 'priority', type: sql.VarChar(20), value: priorityLevel || 'normal' },
             { name: 'created_by', type: sql.Int, value: created_by }
@@ -175,12 +206,15 @@ const createTicket = async (req, res) => {
                 eq.EQCODE as equipment_code,
                 eq.EQNAME as equipment_name,
                 tc.name_en as ticket_class_en,
-                tc.name_th as ticket_class_th
+                tc.name_th as ticket_class_th,
+                wg.name_en as work_group_name_en,
+                wg.name_th as work_group_name_th
             FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
             LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
             LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
             LEFT JOIN IgxTicketClass tc ON t.ticketClass = tc.id
+            LEFT JOIN IgxWorkGroup wg ON t.work_group_id = wg.id
             WHERE t.id = @ticket_id
         `, [
             { name: 'ticket_id', type: sql.Int, value: ticketId }
@@ -401,7 +435,8 @@ const createTicket = async (req, res) => {
                     const beforeImages = (imagesResult.recordset || []).filter(img => img.image_type === 'before');
                     const heroImageUrl = getHeroImageUrl(beforeImages.length > 0 ? beforeImages : (imagesResult.recordset || []));
                     const extraKVs = [
-                        { label: 'Critical Level', value: (getCriticalLevelText(ticketData.pucriticalno)).toUpperCase() }
+                        { label: 'Critical Level', value: (getCriticalLevelText(ticketData.pucriticalno)).toUpperCase() },
+                        { label: 'Work Group', value: getWorkGroupLabel(ticketData) }
                     ];
                     if (ticketData.ticket_class_th || ticketData.ticket_class_en) {
                         extraKVs.push({ label: 'Ticket Class', value: ticketData.ticket_class_th || ticketData.ticket_class_en });
@@ -487,6 +522,7 @@ const getTickets = async (req, res) => {
       status,
       pucriticalno,
       ticketClass,
+      workGroup,
       assigned_to,
       created_by,
       search,
@@ -661,6 +697,39 @@ const getTickets = async (req, res) => {
       }
     }
 
+    if (workGroup) {
+      const workGroupParts = String(workGroup)
+        .split(',')
+        .map((value) => value.trim())
+        .filter(Boolean);
+      const includeDefault = workGroupParts.some((value) => value.toLowerCase() === 'default');
+      const workGroupIdList = workGroupParts
+        .filter((value) => value.toLowerCase() !== 'default')
+        .map((value) => parseInt(value, 10))
+        .filter((value) => !isNaN(value));
+
+      if (includeDefault && workGroupIdList.length > 0) {
+        const workGroupPlaceholders = workGroupIdList.map((_, index) => `@workGroup${index}`).join(',');
+        whereClause += ` AND (t.work_group_id IS NULL OR t.work_group_id IN (${workGroupPlaceholders}))`;
+        workGroupIdList.forEach((workGroupValue, index) => {
+          params.push({ name: `workGroup${index}`, value: workGroupValue, type: sql.Int });
+        });
+      } else if (includeDefault) {
+        whereClause += ' AND t.work_group_id IS NULL';
+      } else if (workGroupIdList.length > 0) {
+        if (workGroupIdList.length === 1) {
+          whereClause += ' AND t.work_group_id = @workGroup0';
+          params.push({ name: 'workGroup0', value: workGroupIdList[0], type: sql.Int });
+        } else {
+          const workGroupPlaceholders = workGroupIdList.map((_, index) => `@workGroup${index}`).join(',');
+          whereClause += ` AND t.work_group_id IN (${workGroupPlaceholders})`;
+          workGroupIdList.forEach((workGroupValue, index) => {
+            params.push({ name: `workGroup${index}`, value: workGroupValue, type: sql.Int });
+          });
+        }
+      }
+    }
+
     if (assigned_to) {
       if (assigned_to.includes(',')) {
         const assignedToList = assigned_to
@@ -822,6 +891,8 @@ const getTickets = async (req, res) => {
                     -- Ticket Class information
                     tc.name_en as ticket_class_en,
                     tc.name_th as ticket_class_th,
+                    wg.name_en as work_group_name_en,
+                    wg.name_th as work_group_name_th,
                     -- First image URL for preview
                     (SELECT TOP 1 image_url 
                      FROM IgxTicketImages 
@@ -836,6 +907,7 @@ const getTickets = async (req, res) => {
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                 LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
                 LEFT JOIN IgxTicketClass tc ON t.ticketClass = tc.id
+                LEFT JOIN IgxWorkGroup wg ON t.work_group_id = wg.id
                 ${whereClause}
             ) AS paginated_results
             WHERE row_num > @offset AND row_num <= @offset + @limit
@@ -939,7 +1011,9 @@ const getTicketById = async (req, res) => {
                     wo.COSTCENTERNO as cedar_cost_center_no,
                     -- Ticket Class information
                     tc.name_en as ticket_class_en,
-                    tc.name_th as ticket_class_th
+                    tc.name_th as ticket_class_th,
+                    wg.name_en as work_group_name_en,
+                    wg.name_th as work_group_name_th
                 FROM IgxTickets t
                 LEFT JOIN Person r ON t.created_by = r.PERSONNO
                 LEFT JOIN Person a ON t.assigned_to = a.PERSONNO
@@ -956,6 +1030,7 @@ const getTicketById = async (req, res) => {
                 LEFT JOIN EQ eq ON t.equipment_id = eq.EQNO AND eq.FLAGDEL = 'F'
                 LEFT JOIN WO wo ON t.cedar_wono = wo.WONO
                 LEFT JOIN IgxTicketClass tc ON t.ticketClass = tc.id
+                LEFT JOIN IgxWorkGroup wg ON t.work_group_id = wg.id
                 WHERE t.id = @id
             `);
 
@@ -1117,10 +1192,13 @@ const updateTicket = async (req, res) => {
                     pe.area as area_code,
                     pe.line as line_code,
                     pe.machine as machine_code,
-                    pe.number as machine_number
+                    pe.number as machine_number,
+                    wg.name_en as work_group_name_en,
+                    wg.name_th as work_group_name_th
                 FROM IgxTickets t
                 LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
                 LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+                LEFT JOIN IgxWorkGroup wg ON t.work_group_id = wg.id
                 WHERE t.id = @ticket_id;
 
                 SELECT ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
@@ -1156,6 +1234,7 @@ const updateTicket = async (req, res) => {
             updateData.status_notes ||
             `สถานะเปลี่ยนจาก ${oldStatus} เป็น ${updateData.status}`,
           detailUrl: getTicketDetailUrl(ticketData.id),
+          extraKVs: [{ label: "Work Group", value: getWorkGroupLabel(ticketData) }],
         };
         await notificationQueue.addStatusUpdateTicketNotificationJob({
           ticketData,
@@ -1266,6 +1345,7 @@ const updateTicketDetail = async (req, res) => {
     let downtime_avoidance_hours;
     let failure_mode_id;
     let ticketClass;
+    let work_group_id;
 
     try {
       title = parseOptionalString(rawBody.title, { emptyAsNull: false });
@@ -1280,6 +1360,7 @@ const updateTicketDetail = async (req, res) => {
       downtime_avoidance_hours = parseOptionalDecimal(rawBody.downtime_avoidance_hours);
       failure_mode_id = parseOptionalInt(rawBody.failure_mode_id);
       ticketClass = parseOptionalInt(rawBody.ticketClass);
+      work_group_id = parseOptionalInt(rawBody.work_group_id);
     } catch (parseError) {
       return res.status(400).json({
         success: false,
@@ -1336,6 +1417,26 @@ const updateTicketDetail = async (req, res) => {
       }
     }
 
+    if (work_group_id !== undefined && work_group_id !== null) {
+      const workGroupCheck = await runQuery(
+        pool,
+        `
+          SELECT id
+          FROM IgxWorkGroup
+          WHERE id = @work_group_id
+            AND is_active = 1
+        `,
+        [{ name: "work_group_id", type: sql.Int, value: work_group_id }]
+      );
+
+      if (mapRecordset(workGroupCheck).length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or inactive work group",
+        });
+      }
+    }
+
     if (failure_mode_id !== undefined && failure_mode_id !== null) {
       const failureModeCheck = await runQuery(
         pool,
@@ -1373,6 +1474,7 @@ const updateTicketDetail = async (req, res) => {
       },
       { key: "failure_mode_id", value: failure_mode_id, type: sql.Int },
       { key: "ticketClass", value: ticketClass, type: sql.Int },
+      { key: "work_group_id", value: work_group_id, type: sql.Int },
     ].filter((field) => field.value !== undefined);
 
     if (updates.length === 0) {
@@ -1487,10 +1589,13 @@ const assignTicket = async (req, res) => {
                    pe.area as area_code,
                    pe.line as line_code,
                    pe.machine as machine_code,
-                   pe.number as machine_number
+                   pe.number as machine_number,
+                   wg.name_en as work_group_name_en,
+                   wg.name_th as work_group_name_th
             FROM IgxTickets t
             LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
             LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+            LEFT JOIN IgxWorkGroup wg ON t.work_group_id = wg.id
             WHERE t.id = @ticket_id;
 
             SELECT ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') AS PERSON_NAME, p.EMAIL, p.DEPTNO, ue.LineID
@@ -1520,6 +1625,7 @@ const assignTicket = async (req, res) => {
         actionBy: assigneeDisplayName,
         comment: notes || "งานได้รับการมอบหมายให้คุณแล้ว",
         detailUrl: getTicketDetailUrl(ticketData.id),
+        extraKVs: [{ label: "Work Group", value: getWorkGroupLabel(ticketData) }],
       };
       await notificationQueue.addAssignmentTicketNotificationJob({
         ticketData,
@@ -2249,6 +2355,7 @@ const acceptTicket = async (req, res) => {
           comment: notes || `งานได้รับการยอมรับแล้ว โดย ${acceptorName}`,
           extraKVs: [
             { label: "Status", value: "ACCEPTED" },
+            { label: "Work Group", value: getWorkGroupLabel(ticketData) },
             { label: "Accepted by", value: acceptorName },
           ],
         };
@@ -2590,6 +2697,7 @@ const planTicket = async (req, res) => {
           comment: notes || "งานได้รับการวางแผนและกำหนดตารางเวลาแล้ว",
           detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
           extraKVs: [
+            { label: "Work Group", value: getWorkGroupLabel(ticketData) },
             { label: "Assigned to", value: validAssignee.PERSON_NAME },
             { label: "Critical Level", value: (getCriticalLevelText(ticketData.pucriticalno) || "").toUpperCase() },
             {
@@ -2927,6 +3035,7 @@ const startTicket = async (req, res) => {
           comment: notes || "งานเริ่มดำเนินการแล้ว",
           detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
           extraKVs: [
+            { label: "Work Group", value: getWorkGroupLabel(ticketData) },
             {
               label: "Actual Start",
               value: new Date(actual_start_at).toLocaleString("th-TH"),
@@ -3184,6 +3293,7 @@ const rejectTicket = async (req, res) => {
         detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
         extraKVs: [
           { label: "Status", value: newStatus.toUpperCase() },
+          { label: "Work Group", value: getWorkGroupLabel(ticketData) },
           { label: "Rejected by", value: rejectorName },
         ],
       };
@@ -3565,6 +3675,7 @@ const finishTicket = async (req, res) => {
           heroImageUrl: heroImageUrl,
           detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
           extraKVs: [
+            { label: "Work Group", value: getWorkGroupLabel(ticketData) },
             {
               label: "Actual Start",
               value: actual_start_at
@@ -3801,6 +3912,7 @@ const escalateTicket = async (req, res) => {
         heroImageUrl: heroImageUrl,
         detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
         extraKVs: [
+          { label: "Work Group", value: getWorkGroupLabel(ticketData) },
           { label: "Severity", value: (ticketData.severity_level || "medium").toUpperCase() },
           { label: "Priority", value: (ticketData.priority || "normal").toUpperCase() },
           { label: "Escalated to", value: escalated_to },
@@ -3983,6 +4095,7 @@ const approveReview = async (req, res) => {
           detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
           extraKVs: [
             { label: "Satisfaction Rating", value: satisfaction_rating ? `${satisfaction_rating}/5 ⭐` : "ไม่ระบุ" },
+            { label: "Work Group", value: getWorkGroupLabel(ticketData) },
             { label: "Status", value: "REVIEWED" },
             { label: "Reviewed by", value: reviewerName },
           ],
@@ -4075,6 +4188,7 @@ const enqueueCloseNotifications = async ({
       comment: closeReason || "เคสถูกปิดโดยผู้จัดการ",
       extraKVs: [
         { label: "Status", value: "CLOSED" },
+        { label: "Work Group", value: getWorkGroupLabel(ticketData) },
         { label: "Closed by", value: closerName },
       ],
     };
@@ -4553,6 +4667,7 @@ const reassignTicket = async (req, res) => {
         comment: notes || "งานได้รับการมอบหมายและกำหนดตารางเวลาใหม่",
         detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
         extraKVs: [
+          { label: "Work Group", value: getWorkGroupLabel(ticketData) },
           { label: "Severity", value: (ticketData.severity_level || "medium").toUpperCase() },
           { label: "Priority", value: (ticketData.priority || "normal").toUpperCase() },
           { label: "New Assignee", value: validAssignee.PERSON_NAME },
@@ -4935,6 +5050,7 @@ const reopenTicket = async (req, res) => {
         detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
         extraKVs: [
           { label: "Status", value: "REOPENED_IN_PROGRESS" },
+          { label: "Work Group", value: getWorkGroupLabel(ticketData) },
           { label: "Reopened by", value: reopenerName },
         ],
       };

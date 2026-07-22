@@ -32,6 +32,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, TicketFilters, TicketFilterUser } from "@/services/ticketService";
 import { ticketClassService, type TicketClass } from "@/services/ticketClassService";
+import { workGroupService, type WorkGroup } from "@/services/workGroupService";
 import { hierarchyService, type PUCritical } from "@/services/hierarchyService";
 import { useToast } from "@/hooks/useToast";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -275,6 +276,8 @@ export const TicketList: React.FC = () => {
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
   const [ticketClasses, setTicketClasses] = useState<TicketClass[]>([]);
   const [ticketClassesLoading, setTicketClassesLoading] = useState(false);
+  const [workGroups, setWorkGroups] = useState<WorkGroup[]>([]);
+  const [workGroupsLoading, setWorkGroupsLoading] = useState(false);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportFilters, setExportFilters] = useState<TicketFilters | null>(null);
   const [exportLoading, setExportLoading] = useState(false);
@@ -303,6 +306,7 @@ export const TicketList: React.FC = () => {
       status: searchParams.get('status') || "",
       pucriticalno: (searchParams.get('pucriticalno') || undefined) as TicketFilters["pucriticalno"],
       ticketClass: (searchParams.get('ticketClass') || undefined) as TicketFilters["ticketClass"],
+      workGroup: (searchParams.get('workGroup') || undefined) as TicketFilters["workGroup"],
       search: searchParams.get('search') || "",
       plant: searchParams.get('plant') || undefined,
       area: searchParams.get('area') || undefined,
@@ -489,6 +493,44 @@ export const TicketList: React.FC = () => {
 
   const selectedTicketClasses = parseTicketClassFilter(filters.ticketClass);
 
+  const parseWorkGroupFilter = (workGroup?: number | string | null): string[] => {
+    if (workGroup === undefined || workGroup === null || workGroup === "") return [];
+    return String(workGroup)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  };
+
+  const serializeWorkGroupFilter = (groupValues: string[]): string => {
+    if (!groupValues.length) return "";
+    return groupValues.join(",");
+  };
+
+  const getWorkGroupFilterLabel = (value: string): string => {
+    if (value === "default") return t("workGroup.default");
+    const group = workGroups.find((item) => String(item.id) === value);
+    if (!group) return `Group ${value}`;
+    return language === "en" ? group.name_en : group.name_th;
+  };
+
+  const selectedWorkGroups = parseWorkGroupFilter(filters.workGroup);
+
+  const getWorkGroupDisplayLabel = (ticket: Ticket): string => {
+    if (ticket.work_group_id) {
+      if (ticket.work_group_name_en || ticket.work_group_name_th) {
+        return language === "en"
+          ? (ticket.work_group_name_en || ticket.work_group_name_th || "")
+          : (ticket.work_group_name_th || ticket.work_group_name_en || "");
+      }
+      const group = workGroups.find((item) => item.id === ticket.work_group_id);
+      if (group) {
+        return language === "en" ? group.name_en : group.name_th;
+      }
+      return `Group ${ticket.work_group_id}`;
+    }
+    return t("workGroup.default");
+  };
+
   const parseUserFilter = (userValue?: number | string): string[] => {
     if (userValue === undefined || userValue === null || userValue === "") return [];
     return String(userValue)
@@ -651,6 +693,19 @@ export const TicketList: React.FC = () => {
     }
   };
 
+  const fetchWorkGroups = async () => {
+    try {
+      setWorkGroupsLoading(true);
+      const response = await workGroupService.getWorkGroups();
+      setWorkGroups(response);
+    } catch (error) {
+      console.error('Failed to fetch work groups:', error);
+      setWorkGroups([]);
+    } finally {
+      setWorkGroupsLoading(false);
+    }
+  };
+
   // Handle URL parameter changes (e.g., when navigating from Area Dashboard)
   useEffect(() => {
     const urlFilters = initializeFiltersFromURL();
@@ -682,6 +737,7 @@ export const TicketList: React.FC = () => {
     fetchTicketFilterUsers();
     fetchCriticalLevels();
     fetchTicketClasses();
+    fetchWorkGroups();
   }, []);
 
   // Refetch areas when plant filter changes
@@ -841,6 +897,7 @@ export const TicketList: React.FC = () => {
       status: "",
       pucriticalno: undefined,
       ticketClass: undefined,
+      workGroup: undefined,
       search: "",
       plant: undefined,
       area: undefined,
@@ -861,7 +918,7 @@ export const TicketList: React.FC = () => {
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
+    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
   };
 
   const getTicketClassLabel = (ticketClassId?: number | string | null) => {
@@ -1063,6 +1120,7 @@ export const TicketList: React.FC = () => {
         t('ticket.criticalLevel'),
         'Ticket Class (EN)',
         'Ticket Class (TH)',
+        t('workGroup.label'),
         'Failure Mode Code',
         'Failure Mode Name',
         'Cost Avoidance',
@@ -1093,6 +1151,7 @@ export const TicketList: React.FC = () => {
         ticket.pucriticalno != null ? String(ticket.pucriticalno) : '',
         ticket.ticket_class_en || '',
         ticket.ticket_class_th || '',
+        getWorkGroupDisplayLabel(ticket),
         ticket.failure_mode_code || '',
         ticket.failure_mode_name || '',
         ticket.cost_avoidance != null ? String(ticket.cost_avoidance) : '',
@@ -1884,6 +1943,72 @@ export const TicketList: React.FC = () => {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
+                  {/* 7b. Work Group */}
+                  <div className="space-y-2">
+                    <Label htmlFor="workGroup">{t('workGroup.label')}</Label>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          id="workGroup"
+                          variant="outline"
+                          className="w-full justify-between"
+                          disabled={workGroupsLoading}
+                        >
+                          <span className="truncate">
+                            {workGroupsLoading
+                              ? t("common.loading")
+                              : selectedWorkGroups.length === 0
+                                ? t("workGroup.label")
+                                : selectedWorkGroups.length <= 2
+                                  ? selectedWorkGroups.map(getWorkGroupFilterLabel).join(", ")
+                                  : `${selectedWorkGroups.length} ${language === "th" ? "กลุ่มที่เลือก" : "groups selected"}`}
+                          </span>
+                          <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto">
+                        <DropdownMenuLabel>{t("workGroup.label")}</DropdownMenuLabel>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuCheckboxItem
+                          checked={selectedWorkGroups.includes("default")}
+                          onSelect={(e) => e.preventDefault()}
+                          onCheckedChange={(nextChecked) => {
+                            const groupSet = new Set(selectedWorkGroups);
+                            if (nextChecked) {
+                              groupSet.add("default");
+                            } else {
+                              groupSet.delete("default");
+                            }
+                            handleFilterChange("workGroup", serializeWorkGroupFilter(Array.from(groupSet)) as TicketFilters["workGroup"]);
+                          }}
+                        >
+                          {t("workGroup.default")}
+                        </DropdownMenuCheckboxItem>
+                        {workGroups.map((group) => {
+                          const value = group.id.toString();
+                          const checked = selectedWorkGroups.includes(value);
+                          return (
+                            <DropdownMenuCheckboxItem
+                              key={group.id}
+                              checked={checked}
+                              onSelect={(e) => e.preventDefault()}
+                              onCheckedChange={(nextChecked) => {
+                                const groupSet = new Set(selectedWorkGroups);
+                                if (nextChecked) {
+                                  groupSet.add(value);
+                                } else {
+                                  groupSet.delete(value);
+                                }
+                                handleFilterChange("workGroup", serializeWorkGroupFilter(Array.from(groupSet)) as TicketFilters["workGroup"]);
+                              }}
+                            >
+                              {language === 'en' ? group.name_en : group.name_th}
+                            </DropdownMenuCheckboxItem>
+                          );
+                        })}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
                   {/* 8. Critical Level */}
                   <div className="space-y-2">
                     <Label htmlFor="critical">{t('ticket.criticalLevel')}</Label>
@@ -2169,6 +2294,41 @@ export const TicketList: React.FC = () => {
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* Work Group */}
+                  <div className="space-y-2">
+                    <Label htmlFor="export_workGroup">{t('workGroup.label')}</Label>
+                    <Select
+                      value={
+                        getEffectiveExportFilters().workGroup
+                          ? String(getEffectiveExportFilters().workGroup)
+                          : "all"
+                      }
+                      onValueChange={(v) =>
+                        handleExportFilterChange(
+                          "workGroup",
+                          v === "all" ? undefined : (v === "default" ? "default" : parseInt(v))
+                        )
+                      }
+                      disabled={workGroupsLoading}
+                    >
+                      <SelectTrigger>
+                        <SelectValue
+                          placeholder={
+                            workGroupsLoading ? t('common.loading') : t('workGroup.label')
+                          }
+                        />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All</SelectItem>
+                        <SelectItem value="default">{t('workGroup.default')}</SelectItem>
+                        {workGroups.map((group) => (
+                          <SelectItem key={group.id} value={group.id.toString()}>
+                            {language === 'en' ? group.name_en : group.name_th}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   {/* Critical Level */}
                   <div className="space-y-2">
                     <Label htmlFor="export_critical">{t('ticket.criticalLevel')}</Label>
@@ -2280,6 +2440,15 @@ export const TicketList: React.FC = () => {
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("ticketClass")}
+              />
+            </Badge>
+          )}
+          {filters.workGroup && (
+            <Badge variant="secondary" className="gap-1">
+              {t('workGroup.label')}: {parseWorkGroupFilter(filters.workGroup).map(getWorkGroupFilterLabel).join(", ")}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("workGroup")}
               />
             </Badge>
           )}
@@ -2440,6 +2609,7 @@ export const TicketList: React.FC = () => {
                     <th className="px-4 py-2">{t('ticket.ticketNumber')}</th>
                     <th className="px-4 py-2">{t('ticket.title')}</th>
                     <th className="px-4 py-2">{t('ticket.status')}</th>
+                    <th className="px-4 py-2">{t('workGroup.label')}</th>
                     <th className="px-4 py-2">{t('ticket.critical')}</th>
                     {/* <th className="px-4 py-2">{t('ticket.priority')}</th>
                     <th className="px-4 py-2">{t('ticket.severity')}</th> */}
@@ -2472,6 +2642,9 @@ export const TicketList: React.FC = () => {
                         <div className={getTicketStatusClassModern(ticket.status)}>
                           <span>{ticket.status.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
                         </div>
+                      </td>
+                      <td className="px-4 py-2 whitespace-nowrap">
+                        {getWorkGroupDisplayLabel(ticket)}
                       </td>
                       <td className="px-4 py-2">
                         <div className="flex items-center gap-2">

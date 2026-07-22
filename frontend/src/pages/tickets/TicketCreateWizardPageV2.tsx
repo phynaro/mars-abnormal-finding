@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
 import { hierarchyService, type PUCritical } from '@/services/hierarchyService';
 import { ticketClassService, type TicketClass } from '@/services/ticketClassService';
+import { workGroupService, type WorkGroup } from '@/services/workGroupService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FileUpload } from '@/components/ui/file-upload';
@@ -95,6 +96,10 @@ const TicketCreateWizardPageV2: React.FC = () => {
   const [ticketClasses, setTicketClasses] = useState<TicketClass[]>([]);
   const [ticketClassesLoading, setTicketClassesLoading] = useState(false);
   const [ticketClass, setTicketClass] = useState<number | undefined>(undefined);
+
+  const [workGroups, setWorkGroups] = useState<WorkGroup[]>([]);
+  const [workGroupsLoading, setWorkGroupsLoading] = useState(false);
+  const [workGroupId, setWorkGroupId] = useState<number | undefined>(undefined);
 
   // Images
   const [beforeFiles, setBeforeFiles] = useState<File[]>([]);
@@ -220,6 +225,7 @@ const TicketCreateWizardPageV2: React.FC = () => {
   useEffect(() => {
     loadCriticalLevels();
     loadTicketClasses();
+    loadWorkGroups();
   }, []);
 
   // Load critical levels function
@@ -257,6 +263,23 @@ const TicketCreateWizardPageV2: React.FC = () => {
       });
     } finally {
       setTicketClassesLoading(false);
+    }
+  };
+
+  const loadWorkGroups = async () => {
+    try {
+      setWorkGroupsLoading(true);
+      const groups = await workGroupService.getWorkGroups();
+      setWorkGroups(groups);
+    } catch (error) {
+      console.error('Error loading work groups:', error);
+      toast({
+        title: t('common.error'),
+        description: t('workGroup.loadFailed'),
+        variant: 'destructive'
+      });
+    } finally {
+      setWorkGroupsLoading(false);
     }
   };
 
@@ -365,7 +388,7 @@ const TicketCreateWizardPageV2: React.FC = () => {
       case 'images': return beforeFiles.length > 0; // Force at least 1 image
       case 'title': return title.trim().length > 0;
       case 'description': return description.trim().length > 0;
-      case 'severity_priority': return true; // Always valid
+      case 'severity_priority': return !!workGroupId;
       default: return true;
     }
   };
@@ -401,6 +424,7 @@ const TicketCreateWizardPageV2: React.FC = () => {
         equipment_id: selectedEquipment?.EQNO,
         pucriticalno: pucriticalno,
         ticketClass: ticketClass,
+        work_group_id: workGroupId,
         severity_level: severity,
         priority,
         plant: plant ?? undefined
@@ -980,6 +1004,33 @@ const TicketCreateWizardPageV2: React.FC = () => {
               </div>
 
               <div>
+                <Label className="text-base font-semibold">{t('workGroup.label')} *</Label>
+                <Select
+                  value={workGroupId?.toString() || ''}
+                  onValueChange={(v) => setWorkGroupId(parseInt(v))}
+                  disabled={workGroupsLoading}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={workGroupsLoading ? t('common.loading') : t('workGroup.selectPlaceholder')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {workGroups.map((group) => (
+                      <SelectItem key={group.id} value={group.id.toString()}>
+                        {language === 'en' ? group.name_en : group.name_th}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {workGroupId && (
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {language === 'en'
+                      ? workGroups.find((g) => g.id === workGroupId)?.description_en
+                      : workGroups.find((g) => g.id === workGroupId)?.description_th}
+                  </p>
+                )}
+              </div>
+
+              <div>
                 <Label className="text-base font-semibold">{t('ticket.ticketClass')}</Label>
                 <Select
                   value={ticketClass?.toString() || 'none'}
@@ -1064,6 +1115,15 @@ const TicketCreateWizardPageV2: React.FC = () => {
                   <span className="text-gray-500">{t('ticket.criticalLevel')}:</span> 
                   <span className="font-medium">
                     {pucriticalno ? criticalLevels.find(level => level.PUCRITICALNO === pucriticalno)?.PUCRITICALNAME || `Level ${pucriticalno}` : '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t('workGroup.label')}:</span>
+                  <span className="font-medium">
+                    {workGroupId ? (language === 'en'
+                      ? workGroups.find((g) => g.id === workGroupId)?.name_en || '-'
+                      : workGroups.find((g) => g.id === workGroupId)?.name_th || '-')
+                      : '-'}
                   </span>
                 </div>
                 <div className="flex justify-between">

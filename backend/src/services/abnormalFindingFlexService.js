@@ -106,6 +106,33 @@ const STATE_LABELS_EN = Object.freeze({
   [TicketState.DUE_SOON]: "Due Soon",
 });
 
+const EXTRA_LABELS_TH = Object.freeze({
+  Problem: "ปัญหา",
+  "Critical Level": "ระดับความรุนแรง",
+  "Ticket Class": "ประเภทเคส",
+  "Reported by": "ผู้แจ้ง",
+  Status: "สถานะ",
+  "Accepted by": "ผู้รับงาน",
+  "Assigned to": "ผู้รับผิดชอบ",
+  "Schedule Start": "เริ่มตามแผน",
+  "Schedule Finish": "เสร็จตามแผน",
+  "Actual Start": "เริ่มจริง",
+  "Actual Finish": "เสร็จจริง",
+  "Started by": "ผู้เริ่มงาน",
+  "Rejected by": "ผู้ปฏิเสธ",
+  "Finished by": "ผู้ปิดงานซ่อม",
+  "Escalated to": "ส่งต่อถึง",
+  "Escalated by": "ผู้ส่งต่อ",
+  "Satisfaction Rating": "คะแนนความพึงพอใจ",
+  "Reviewed by": "ผู้ตรวจสอบ",
+  "Closed by": "ผู้ปิดเคส",
+  "New Assignee": "ผู้รับผิดชอบใหม่",
+  Severity: "ความรุนแรง",
+  Priority: "ความสำคัญ",
+  "Reopened by": "ผู้เปิดงานใหม่",
+  "Work Group": "กลุ่มงาน",
+});
+
 // ===== HELPER FUNCTIONS =====
 
 /**
@@ -157,6 +184,20 @@ const isValidLineUserId = (lineUserId) => {
 const getStateLabel = (state, language = 'th') => {
   const labels = language === 'en' ? STATE_LABELS_EN : STATE_LABELS_TH;
   return labels[state] || state;
+};
+
+const localizeExtraLabel = (label, language = "th") => {
+  if (language !== "th") return String(label || "-");
+  return EXTRA_LABELS_TH[String(label || "")] || String(label || "-");
+};
+
+const localizeExtraValue = (label, value, language = "th") => {
+  const labelText = String(label || "");
+  const valueText = String(value ?? "-");
+  if (language === "th" && labelText === "Work Group" && valueText.toLowerCase() === "default") {
+    return "ค่าเริ่มต้น";
+  }
+  return valueText;
 };
 
 // ===== MAIN FLEX MESSAGE BUILDER =====
@@ -228,10 +269,13 @@ function buildTicketFlexMessage(state, payload, options = {}) {
           layout: "vertical",
           spacing: "sm",
           contents: [
-            createKeyValueRow("Problem", payload.problem),
+            createKeyValueRow(localizeExtraLabel("Problem", language), payload.problem),
             //createKeyValueRow("Action by", payload.actionBy),
             ...(payload.extraKVs || []).map(({ label, value }) => 
-              createKeyValueRow(label, value)
+              createKeyValueRow(
+                localizeExtraLabel(label, language),
+                localizeExtraValue(label, value, language)
+              )
             )
           ]
         },
@@ -241,7 +285,12 @@ function buildTicketFlexMessage(state, payload, options = {}) {
         // Comment section
         ...(payload.comment
           ? [
-              { type: "text", text: "Comment", size: "sm", color: "#6B7280" },
+              {
+                type: "text",
+                text: language === "en" ? "Comment" : "หมายเหตุ",
+                size: "sm",
+                color: "#6B7280"
+              },
               {
                 type: "text",
                 text: String(payload.comment),

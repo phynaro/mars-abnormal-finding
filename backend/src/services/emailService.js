@@ -21,6 +21,17 @@ const isEmailServiceAvailable = () => {
   return true;
 };
 
+const getWorkGroupText = (ticketData = {}) => {
+  const groupName = ticketData.work_group_name_en || ticketData.work_group_name_th;
+  if (groupName && String(groupName).trim() !== '') {
+    return String(groupName).trim();
+  }
+  if (ticketData.work_group_id !== undefined && ticketData.work_group_id !== null) {
+    return `Group ${ticketData.work_group_id}`;
+  }
+  return 'Default';
+};
+
 /**
  * Send emails sequentially with rate limiting to avoid API rate limits
  * @param {Array} emailPromises - Array of email sending functions
@@ -321,6 +332,7 @@ const EMAIL_TEMPLATES = {
               <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
               <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
               <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+              <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
               <p><span class="highlight">Reported By:</span> ${reporterName}</p>
               <p><span class="highlight">Critical Level:</span> <span class="critical-level">${getCriticalLevelText(ticketData.pucriticalno)}</span></p>
               ${ticketData.estimated_downtime_hours ? `<p><span class="highlight">Estimated Downtime:</span> ${ticketData.estimated_downtime_hours} hours</p>` : ''}
@@ -436,6 +448,7 @@ const EMAIL_TEMPLATES = {
             
             <div class="ticket-info">
               <p><span class="highlight">Title:</span> ${ticketData.title}</p>
+              <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
               <p><span class="highlight">Critical Level:</span> ${getCriticalLevelText(ticketData.pucriticalno)}</p>
               ${ticketData.ticket_class_en || ticketData.ticket_class_th ? `<p><span class="highlight">Ticket Class:</span> ${ticketData.ticket_class_en || ticketData.ticket_class_th}</p>` : ''}
               <p><span class="highlight">Affected Point:</span> ${ticketData.affected_point_name} (${ticketData.affected_point_type})</p>
@@ -540,6 +553,7 @@ const EMAIL_TEMPLATES = {
             
             <div class="ticket-info">
               <p><span class="highlight">Title:</span> ${ticketData.title}</p>
+              <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
               <p><span class="highlight">Critical Level:</span> ${getCriticalLevelText(ticketData.pucriticalno)}</p>
               ${ticketData.ticket_class_en || ticketData.ticket_class_th ? `<p><span class="highlight">Ticket Class:</span> ${ticketData.ticket_class_en || ticketData.ticket_class_th}</p>` : ''}
             </div>
@@ -817,6 +831,7 @@ class EmailService {
                   <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                   <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+                  <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                   <p><span class="highlight">Accepted By:</span> ${acceptorName}</p>
                   <p><span class="highlight">Status:</span> <span class="status-green">Accepted</span></p>
                   ${ticketData.schedule_finish ? `<p><span class="highlight">Scheduled Finish:</span> ${new Date(ticketData.schedule_finish).toLocaleDateString()}</p>` : ''}
@@ -954,6 +969,7 @@ class EmailService {
                   <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                   <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+                  <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                   <p><span class="highlight">Rejected By:</span> ${rejectorName}</p>
                   <p><span class="highlight">Status:</span> <span class="status-red">${status}</span></p>
                   <p><span class="highlight">Reason:</span> ${rejectionReason || 'งานถูกปฏิเสธ'}</p>
@@ -1091,6 +1107,7 @@ class EmailService {
                   <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                   <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+                  <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                   <p><span class="highlight">Finished By:</span> ${finishrName}</p>
                   <p><span class="highlight">Status:</span> <span class="status-green">Finished</span></p>
                   <p><span class="highlight">Cost Avoidance:</span> ${costAvoidance ? `${costAvoidance.toLocaleString()} บาท` : '-'}</p>
@@ -1231,6 +1248,7 @@ class EmailService {
                   <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                   <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+                  <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                   <p><span class="highlight">Escalated By:</span> ${escalatorName}</p>
                   <p><span class="highlight">Status:</span> <span class="status-orange">Escalated to L3</span></p>
                   <p><span class="highlight">Reason:</span> ${escalationReason || 'งานถูกส่งต่อให้หัวหน้างานพิจารณา'}</p>
@@ -1359,6 +1377,7 @@ class EmailService {
                   <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                   <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+                  <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                   <p><span class="highlight">Escalated By:</span> ${escalatorName}</p>
                   <p><span class="highlight">Status:</span> <span class="status-orange">Escalated to L3</span></p>
                   <p><span class="highlight">Reason:</span> ${escalationReason || 'งานของคุณถูกส่งต่อให้หัวหน้างานพิจารณา'}</p>
@@ -1493,6 +1512,7 @@ class EmailService {
                   <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                   <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+                  <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                   <p><span class="highlight">Closed By:</span> ${closerName}</p>
                   <p><span class="highlight">Status:</span> <span class="status-green">Closed</span></p>
                   ${closeReason ? `<p><span class="highlight">Close Reason:</span> ${closeReason}</p>` : ''}
@@ -1633,6 +1653,7 @@ class EmailService {
                       <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                       <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                       <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+                      <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                       <p><span class="highlight">Reviewed By:</span> ${reviewerName}</p>
                       <p><span class="highlight">Status:</span> <span class="status-blue">Reviewed</span></p>
                       <p><span class="highlight">Satisfaction Rating:</span> ${satisfactionRating ? `${satisfactionRating}/5 ดาว` : 'ไม่ระบุ'}</p>
@@ -1751,6 +1772,7 @@ class EmailService {
               
               <div class="content">
                 <p><span class="highlight">Title:</span> ${ticketData.title}</p>
+                <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                 <p><span class="highlight">Reopened By:</span> ${reopenerName}</p>
                 <p><span class="highlight">Status:</span> <span class="status-blue">Reopened</span></p>
                 ${reopenReason ? `<p><span class="highlight">Reason:</span> ${reopenReason}</p>` : ''}
@@ -1853,6 +1875,7 @@ class EmailService {
               
               <div class="content">
                 <p><span class="highlight">Title:</span> ${ticketData.title}</p>
+                <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                 <p><span class="highlight">Reported By:</span> ${reporterName}</p>
                 <p><span class="highlight">Critical Level:</span> ${getCriticalLevelText(ticketData.pucriticalno)}</p>
                 <p><span class="highlight">Status:</span> <span class="status-blue">Pre-Assigned</span></p>
@@ -1983,6 +2006,7 @@ class EmailService {
                   <p><span class="highlight">Case Number:</span> ${ticketData.ticket_number}</p>
                   <p><span class="highlight">Asset Name:</span> ${ticketData.PUNAME || ticketData.machine_number || 'Unknown Asset'}</p>
                   <p><span class="highlight">Problem:</span> ${ticketData.title || 'No description'}</p>
+                  <p><span class="highlight">Work Group:</span> ${getWorkGroupText(ticketData)}</p>
                   <p><span class="highlight">Reassigned By:</span> ${reassignerName}</p>
                   <p><span class="highlight">Status:</span> <span class="status-blue">Reassigned</span></p>
                   <p><span class="highlight">Reason:</span> ${reassignmentReason || 'งานได้รับการมอบหมายให้คุณ'}</p>
