@@ -32,6 +32,13 @@ const getPermissionLevelColor = (level: number) => {
   }
 };
 
+const getInitial = (value?: string) => (value || '').trim().charAt(0).toUpperCase();
+
+const getUserInitials = (user: User) => {
+  const initials = `${getInitial(user.firstName)}${getInitial(user.lastName)}`;
+  return initials || 'U';
+};
+
 export const UserList: React.FC<UserListProps> = ({
   users,
   onViewUser,
@@ -72,12 +79,12 @@ export const UserList: React.FC<UserListProps> = ({
                             onError={(e) => {
                               // Fallback to initials if image fails to load
                               e.currentTarget.style.display = 'none';
-                              e.currentTarget.parentElement!.innerHTML = `<span class="text-primary-foreground font-semibold text-sm">${user.firstName.charAt(0)}${user.lastName.charAt(0)}</span>`;
+                              e.currentTarget.parentElement!.innerHTML = `<span class="text-primary-foreground font-semibold text-sm">${getUserInitials(user)}</span>`;
                             }}
                           />
                         ) : (
                           <span className="text-primary-foreground font-semibold text-sm">
-                            {user.firstName.charAt(0)}{user.lastName.charAt(0)}
+                            {getUserInitials(user)}
                           </span>
                         )}
                       </div>

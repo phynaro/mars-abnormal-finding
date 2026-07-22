@@ -49,8 +49,10 @@ const ApprovalListView: React.FC<ApprovalListViewProps> = ({
   )).sort();
 
   const filteredApprovals = approvals.filter(approval => {
+    const searchLower = searchTerm.toLowerCase();
     const matchesSearch = approval.personno.toString().includes(searchTerm) ||
-                         approval.person_name?.toLowerCase().includes(searchTerm.toLowerCase());
+                         approval.person_name?.toLowerCase().includes(searchLower) ||
+                         approval.PERSONCODE?.toLowerCase().includes(searchLower);
     const matchesActive = filterActive === 'all' || 
                          (filterActive === 'active' && approval.is_active) ||
                          (filterActive === 'inactive' && !approval.is_active);
@@ -87,7 +89,7 @@ const ApprovalListView: React.FC<ApprovalListViewProps> = ({
               <Input
                 value={searchTerm}
                 onChange={(event) => onSearchChange(event.target.value)}
-                placeholder="Search by person or ID"
+                placeholder="Search by name, person code, or ID"
                 className="pl-9"
               />
             </div>
@@ -169,7 +171,9 @@ const ApprovalListView: React.FC<ApprovalListViewProps> = ({
                       <div className="font-medium">
                         {approval.person_name || `Person #${approval.personno}`}
                       </div>
-                      <div className="text-xs text-muted-foreground">#{approval.personno}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {approval.PERSONCODE ? approval.PERSONCODE : `#${approval.personno}`}
+                      </div>
                     </td>
                     <td className="px-3 py-3">
                       <div className="font-medium">Level {approval.approval_level}</div>

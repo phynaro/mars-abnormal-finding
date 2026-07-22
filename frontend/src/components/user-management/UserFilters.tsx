@@ -38,7 +38,7 @@ export const UserFilters: React.FC<UserFiltersProps> = ({
               <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
               <Input
                 id="search"
-                placeholder="Search by name, username, or email..."
+                placeholder="Search by name, person code, username, or email..."
                 value={searchTerm}
                 onChange={(e) => onSearchChange(e.target.value)}
                 className="pl-10"

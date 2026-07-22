@@ -127,12 +127,14 @@ const UserManagementPage: React.FC = () => {
   };
 
   const filteredUsers = users.filter(user => {
+    const searchLower = searchTerm.toLowerCase();
     const matchesSearch = 
-      (user.firstName && user.firstName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.lastName && user.lastName.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.username && user.username.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.email && user.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
-      (user.fullName && user.fullName.toLowerCase().includes(searchTerm.toLowerCase()));
+      (user.firstName && user.firstName.toLowerCase().includes(searchLower)) ||
+      (user.lastName && user.lastName.toLowerCase().includes(searchLower)) ||
+      (user.username && user.username.toLowerCase().includes(searchLower)) ||
+      (user.email && user.email.toLowerCase().includes(searchLower)) ||
+      (user.fullName && user.fullName.toLowerCase().includes(searchLower)) ||
+      (user.personCode && user.personCode.toLowerCase().includes(searchLower));
     
     const matchesGroup = filterGroup === 'all' || user.groupNo.toString() === filterGroup;
     const matchesStatus = filterStatus === 'all' || 
