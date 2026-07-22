@@ -67,6 +67,27 @@ import {
   getCriticalLevelText,
 } from "@/utils/ticketBadgeStyles";
 import { StarRatingDisplay } from "@/components/ui/star-rating";
+import { calculatePeriodForDate, getDateRangeForFilter } from "@/utils/periodCalculations";
+
+type TimeFilterValue = "all" | "this-year" | "last-year" | "this-period" | "select-period" | "custom";
+
+const getCurrentPeriod = (year: number = new Date().getFullYear()) =>
+  calculatePeriodForDate(new Date(), year).period;
+
+const sortPeriods = (periods: number[]) => [...periods].sort((a, b) => a - b);
+
+const isContiguousPeriods = (periods: number[]) => {
+  if (periods.length <= 1) return true;
+  const sorted = sortPeriods(periods);
+  return sorted.every((period, index) => index === 0 || period === sorted[index - 1] + 1);
+};
+
+const formatPeriodSelection = (periods: number[]) => {
+  if (periods.length === 0) return "";
+  const sorted = sortPeriods(periods);
+  if (sorted.length === 1) return `P${sorted[0]}`;
+  return `P${sorted[0]}-P${sorted[sorted.length - 1]}`;
+};
 
 /** Plant codes for the quick filter toggle group (most used). "All" = no plant filter. */
 const QUICK_PLANT_OPTIONS = ['DP', 'DJ', 'SN', 'ST', 'PS', 'PP'] as const;
@@ -296,11 +317,93 @@ export const TicketList: React.FC = () => {
       overdue: searchParams.get('overdue') === 'true' ? true : undefined,
       team: (searchParams.get('team') as 'operator' | 'reliability') || undefined,
     };
+
+    const tf = searchParams.get("timeFilter");
+    if (
+      (!urlFilters.startDate || !urlFilters.endDate) &&
+      (tf === "this-year" || tf === "last-year" || tf === "this-period" || tf === "select-period")
+    ) {
+      const periodYear = parseInt(
+        searchParams.get("periodYear") || String(new Date().getFullYear()),
+        10
+      );
+      const periodsParam = searchParams.get("periods");
+      const parsedPeriods = periodsParam
+        ? periodsParam
+            .split(",")
+            .map((p) => parseInt(p.trim(), 10))
+            .filter((n) => !Number.isNaN(n) && n >= 1 && n <= 13)
+        : [getCurrentPeriod(periodYear)];
+      const dateRange = getDateRangeForFilter(
+        tf,
+        periodYear,
+        parsedPeriods[0] ?? getCurrentPeriod(periodYear),
+        parsedPeriods
+      );
+      urlFilters.startDate = dateRange.startDate;
+      urlFilters.endDate = dateRange.endDate;
+    }
+
     return urlFilters;
   };
 
   // Filters
   const [filters, setFilters] = useState<TicketFilters>(initializeFiltersFromURL());
+
+  const initializePeriodFromURL = (): {
+    timeFilter: TimeFilterValue;
+    selectedYear: number;
+    selectedPeriods: number[];
+  } => {
+    const tf = searchParams.get("timeFilter");
+    const startDate = searchParams.get("startDate");
+    const endDate = searchParams.get("endDate");
+    const periodYear = parseInt(
+      searchParams.get("periodYear") || String(new Date().getFullYear()),
+      10
+    );
+    const periodsParam = searchParams.get("periods");
+    const parsedPeriods = periodsParam
+      ? periodsParam
+          .split(",")
+          .map((p) => parseInt(p.trim(), 10))
+          .filter((n) => !Number.isNaN(n) && n >= 1 && n <= 13)
+      : [];
+
+    if (
+      tf === "all" ||
+      tf === "this-year" ||
+      tf === "last-year" ||
+      tf === "this-period" ||
+      tf === "select-period"
+    ) {
+      return {
+        timeFilter: tf,
+        selectedYear: periodYear,
+        selectedPeriods:
+          parsedPeriods.length > 0 ? sortPeriods(parsedPeriods) : [getCurrentPeriod(periodYear)],
+      };
+    }
+
+    if (startDate && endDate) {
+      return {
+        timeFilter: "custom",
+        selectedYear: new Date().getFullYear(),
+        selectedPeriods: [getCurrentPeriod()],
+      };
+    }
+
+    return {
+      timeFilter: "all",
+      selectedYear: new Date().getFullYear(),
+      selectedPeriods: [getCurrentPeriod()],
+    };
+  };
+
+  const initialPeriod = initializePeriodFromURL();
+  const [timeFilter, setTimeFilter] = useState<TimeFilterValue>(initialPeriod.timeFilter);
+  const [selectedYear, setSelectedYear] = useState<number>(initialPeriod.selectedYear);
+  const [selectedPeriods, setSelectedPeriods] = useState<number[]>(initialPeriod.selectedPeriods);
 
   const parseStatusFilter = (status?: string): string[] => {
     if (!status) return [];
@@ -561,6 +664,11 @@ export const TicketList: React.FC = () => {
     if (filtersChanged) {
       setFilters(urlFilters);
     }
+
+    const periodFromUrl = initializePeriodFromURL();
+    setTimeFilter(periodFromUrl.timeFilter);
+    setSelectedYear(periodFromUrl.selectedYear);
+    setSelectedPeriods(periodFromUrl.selectedPeriods);
   }, [searchParams.toString()]); // Only when search params string changes
 
   useEffect(() => {
@@ -588,7 +696,12 @@ export const TicketList: React.FC = () => {
   }, [filters.plant]);
 
   // Sync filters to URL parameters
-  const syncFiltersToURL = (newFilters: TicketFilters) => {
+  const syncFiltersToURL = (
+    newFilters: TicketFilters,
+    nextTimeFilter: TimeFilterValue = timeFilter,
+    nextYear: number = selectedYear,
+    nextPeriods: number[] = selectedPeriods
+  ) => {
     const params = new URLSearchParams();
     
     Object.entries(newFilters).forEach(([key, value]) => {
@@ -602,8 +715,93 @@ export const TicketList: React.FC = () => {
         }
       }
     });
+
+    if (
+      nextTimeFilter === "this-year" ||
+      nextTimeFilter === "last-year" ||
+      nextTimeFilter === "this-period" ||
+      nextTimeFilter === "select-period"
+    ) {
+      params.set("timeFilter", nextTimeFilter);
+      if (nextTimeFilter === "select-period") {
+        params.set("periodYear", String(nextYear));
+        params.set("periods", sortPeriods(nextPeriods).join(","));
+      }
+    }
     
     setSearchParams(params, { replace: true });
+  };
+
+  const applyTimeFilter = (
+    nextTimeFilter: TimeFilterValue,
+    nextYear: number = selectedYear,
+    nextPeriods: number[] = selectedPeriods
+  ) => {
+    setTimeFilter(nextTimeFilter);
+    setSelectedYear(nextYear);
+    setSelectedPeriods(sortPeriods(nextPeriods));
+
+    let startDate: string | undefined;
+    let endDate: string | undefined;
+
+    if (nextTimeFilter !== "all" && nextTimeFilter !== "custom") {
+      const dateRange = getDateRangeForFilter(
+        nextTimeFilter,
+        nextYear,
+        nextPeriods[0] ?? getCurrentPeriod(nextYear),
+        nextPeriods
+      );
+      startDate = dateRange.startDate;
+      endDate = dateRange.endDate;
+    }
+
+    const updatedFilters: TicketFilters = {
+      ...filters,
+      startDate,
+      endDate,
+      page: 1,
+    };
+    setFilters(updatedFilters);
+    syncFiltersToURL(updatedFilters, nextTimeFilter, nextYear, nextPeriods);
+  };
+
+  const handleTimeFilterChange = (value: string) => {
+    const next = value as TimeFilterValue;
+    let year = selectedYear;
+    let periods = selectedPeriods;
+
+    if (next === "this-year") {
+      year = new Date().getFullYear();
+    } else if (next === "last-year") {
+      year = new Date().getFullYear() - 1;
+    } else if (next === "this-period") {
+      year = new Date().getFullYear();
+      periods = [getCurrentPeriod(year)];
+    } else if (next === "select-period") {
+      if (timeFilter !== "select-period" || periods.length === 0) {
+        periods = [getCurrentPeriod(year)];
+      }
+    }
+
+    applyTimeFilter(next, year, periods);
+  };
+
+  const toggleSelectedPeriod = (period: number) => {
+    const exists = selectedPeriods.includes(period);
+    const next = exists
+      ? selectedPeriods.filter((value) => value !== period)
+      : [...selectedPeriods, period];
+    if (next.length === 0) return;
+    const sortedNext = sortPeriods(next);
+    if (!isContiguousPeriods(sortedNext)) {
+      toast({
+        title: t("dashboard.period"),
+        description: "Only contiguous period ranges are allowed",
+        variant: "destructive",
+      });
+      return;
+    }
+    applyTimeFilter("select-period", selectedYear, sortedNext);
   };
 
   const handleFilterChange = <K extends keyof TicketFilters>(key: K, value: TicketFilters[K]) => {
@@ -630,7 +828,13 @@ export const TicketList: React.FC = () => {
     syncFiltersToURL(updatedFilters);
   };
 
+  const clearDateRangeFilter = () => {
+    applyTimeFilter("all");
+  };
+
   const clearAllFilters = () => {
+    const clearedYear = new Date().getFullYear();
+    const clearedPeriods = [getCurrentPeriod(clearedYear)];
     const clearedFilters: TicketFilters = {
       page: 1,
       limit: 12,
@@ -649,8 +853,11 @@ export const TicketList: React.FC = () => {
       overdue: undefined,
       team: undefined,
     };
+    setTimeFilter("all");
+    setSelectedYear(clearedYear);
+    setSelectedPeriods(clearedPeriods);
     setFilters(clearedFilters);
-    syncFiltersToURL(clearedFilters);
+    syncFiltersToURL(clearedFilters, "all", clearedYear, clearedPeriods);
   };
 
   const hasActiveFilters = () => {
@@ -1347,6 +1554,93 @@ export const TicketList: React.FC = () => {
               </DialogHeader>
               <div className="overflow-y-auto lg:overflow-visible flex-1 min-h-0 pr-2 -mr-2">
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {/* Time Range (created_at) */}
+                  <div className="space-y-2">
+                    <Label htmlFor="timeRange">{t('dashboard.timeRange')}</Label>
+                    <Select value={timeFilter} onValueChange={handleTimeFilterChange}>
+                      <SelectTrigger id="timeRange">
+                        <SelectValue placeholder={t('dashboard.selectPeriod')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('dashboard.allTime')}</SelectItem>
+                        <SelectItem value="this-year">{t('dashboard.thisYear')}</SelectItem>
+                        <SelectItem value="last-year">{t('dashboard.lastYear')}</SelectItem>
+                        <SelectItem value="this-period">{t('dashboard.thisPeriod')}</SelectItem>
+                        <SelectItem value="select-period">{t('dashboard.selectPeriod')}</SelectItem>
+                        {timeFilter === "custom" && (
+                          <SelectItem value="custom">
+                            {filters.startDate && filters.endDate
+                              ? `${filters.startDate} – ${filters.endDate}`
+                              : "Custom range"}
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {timeFilter === "select-period" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="periodYear">{t('dashboard.year')}</Label>
+                        <Select
+                          value={selectedYear.toString()}
+                          onValueChange={(value) =>
+                            applyTimeFilter("select-period", parseInt(value, 10), selectedPeriods)
+                          }
+                        >
+                          <SelectTrigger id="periodYear">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from(
+                              { length: new Date().getFullYear() - 2022 + 1 },
+                              (_, i) => {
+                                const year = 2022 + i;
+                                return (
+                                  <SelectItem key={year} value={year.toString()}>
+                                    {year}
+                                  </SelectItem>
+                                );
+                              }
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>{t('dashboard.period')}</Label>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between">
+                              <span className="truncate">{formatPeriodSelection(selectedPeriods)}</span>
+                              <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent
+                            align="start"
+                            className="w-[var(--radix-dropdown-menu-trigger-width)] max-h-72 overflow-y-auto"
+                          >
+                            <DropdownMenuLabel>{t('dashboard.period')}</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {Array.from({ length: 13 }, (_, i) => {
+                              const periodNo = i + 1;
+                              return (
+                                <DropdownMenuCheckboxItem
+                                  key={periodNo}
+                                  checked={selectedPeriods.includes(periodNo)}
+                                  onSelect={(e) => e.preventDefault()}
+                                  onCheckedChange={() => toggleSelectedPeriod(periodNo)}
+                                >
+                                  {`P${periodNo}`}
+                                </DropdownMenuCheckboxItem>
+                              );
+                            })}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                        <p className="text-xs text-muted-foreground">
+                          Only contiguous period ranges are allowed
+                        </p>
+                      </div>
+                    </>
+                  )}
                   {/* 1. Search */}
                   <div className="space-y-2">
                     <Label htmlFor="search">{t('common.search')}</Label>
@@ -2039,10 +2333,7 @@ export const TicketList: React.FC = () => {
               Date Range: {new Date(filters.startDate).toLocaleDateString()} - {new Date(filters.endDate).toLocaleDateString()}
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
-                onClick={() => {
-                  clearFilter("startDate");
-                  clearFilter("endDate");
-                }}
+                onClick={clearDateRangeFilter}
               />
             </Badge>
           )}
