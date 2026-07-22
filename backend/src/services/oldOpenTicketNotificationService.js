@@ -17,7 +17,11 @@ const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
 const abnFlexService = require('./abnormalFindingFlexService');
 const { getCriticalLevelText } = require('../utils/criticalMapping');
-const { getFrontendBaseUrl, getNotificationApproversWithLineId } = require('../controllers/ticketController/helpers');
+const {
+  getFrontendBaseUrl,
+  getNotificationApproversWithLineId,
+  filterApproversByWorkGroupDepartments,
+} = require('../controllers/ticketController/helpers');
 
 class OldOpenTicketNotificationService {
   /**
@@ -104,6 +108,7 @@ class OldOpenTicketNotificationService {
           t.priority,
           t.created_at,
           t.puno,
+          t.work_group_id,
           t.pucriticalno,
           pe.pudescription,
           eq.EQNAME as equipment_name,
@@ -282,7 +287,12 @@ class OldOpenTicketNotificationService {
 
           // Combine L2 and L3 approvers, then filter for LineID
           const allApprovers = [...(l2Approvers || []), ...(l3Approvers || [])];
-          const lineApprovers = allApprovers.filter(a => a.LineID);
+          const scopedApprovers = await filterApproversByWorkGroupDepartments(
+            pool,
+            allApprovers,
+            ticket.work_group_id
+          );
+          const lineApprovers = scopedApprovers.filter(a => a.LineID);
 
           // Add ticket to each approver's list (deduplication handled by Map)
           for (const a of lineApprovers) {

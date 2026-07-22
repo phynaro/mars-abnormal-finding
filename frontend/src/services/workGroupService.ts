@@ -10,8 +10,15 @@ export interface WorkGroup {
   description_th?: string | null;
   sort_order?: number;
   is_active?: boolean;
+  department_count?: number;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface WorkGroupDepartment {
+  deptno: number;
+  deptCode: string;
+  deptName: string;
 }
 
 export interface WorkGroupResponse {
@@ -23,6 +30,12 @@ export interface WorkGroupResponse {
 export interface WorkGroupMutationResponse {
   success: boolean;
   data?: WorkGroup;
+  message?: string;
+}
+
+interface WorkGroupDepartmentResponse {
+  success: boolean;
+  data: WorkGroupDepartment[];
   message?: string;
 }
 
@@ -123,6 +136,37 @@ class WorkGroupService {
     }
 
     return data;
+  }
+
+  async getWorkGroupDepartments(id: number): Promise<WorkGroupDepartment[]> {
+    const response = await fetch(`${API_BASE_URL}/work-groups/${id}/departments`, {
+      method: 'GET',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch work group departments: ${response.statusText}`);
+    }
+
+    const data: WorkGroupDepartmentResponse = await response.json();
+    if (!data.success) {
+      throw new Error(data.message || 'Failed to fetch work group departments');
+    }
+
+    return data.data || [];
+  }
+
+  async updateWorkGroupDepartments(id: number, deptNos: number[]): Promise<void> {
+    const response = await fetch(`${API_BASE_URL}/work-groups/${id}/departments`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ dept_nos: deptNos }),
+    });
+
+    const data: WorkGroupMutationResponse = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Failed to update work group departments');
+    }
   }
 }
 

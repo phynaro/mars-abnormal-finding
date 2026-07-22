@@ -4,6 +4,7 @@ const abnFlexService = require('./abnormalFindingFlexService');
 const { getCriticalLevelText } = require('../utils/criticalMapping');
 const {
   addStatusChangeComment,
+  filterApproversByWorkGroupDepartments,
   getFrontendBaseUrl,
   getNotificationApproversWithLineId,
   insertStatusHistory,
@@ -87,6 +88,7 @@ class ReviewEscalationNotificationService {
           t.actual_finish_at,
           t.updated_at,
           t.puno,
+          t.work_group_id,
           t.pucriticalno,
           pe.pudescription,
           eq.EQNAME as equipment_name,
@@ -189,7 +191,12 @@ class ReviewEscalationNotificationService {
           escalated += 1;
 
           const approvers = await getNotificationApproversWithLineId(pool, ticket.puno, 4, null);
-          const lineApprovers = (approvers || []).filter((approver) => approver.LineID);
+          const scopedApprovers = await filterApproversByWorkGroupDepartments(
+            pool,
+            approvers || [],
+            ticket.work_group_id
+          );
+          const lineApprovers = scopedApprovers.filter((approver) => approver.LineID);
 
           for (const approver of lineApprovers) {
             const key = approver.PERSONNO;

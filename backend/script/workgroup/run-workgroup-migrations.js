@@ -13,6 +13,7 @@ const MIGRATION_FILES = [
   '001-create-igx-work-group.sql',
   '002-add-work-group-id-to-igx-tickets.sql',
   '003-seed-work-groups.sql',
+  '004-create-igx-work-group-department.sql',
 ];
 
 async function runBatch(pool, filePath) {

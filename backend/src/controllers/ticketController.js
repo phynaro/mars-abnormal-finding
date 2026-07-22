@@ -6023,7 +6023,7 @@ const sendPendingTicketNotificationsToAll = async (req, res) => {
 // Test notification recipients for a PU and action type (admin testing tool)
 const testNotificationRecipients = async (req, res) => {
   try {
-    const { puno, actionType, created_by, assigned_to } = req.body;
+    const { puno, actionType, created_by, assigned_to, work_group_id } = req.body;
 
     // Validate required fields
     if (!puno || !actionType) {
@@ -6052,7 +6052,8 @@ const testNotificationRecipients = async (req, res) => {
       puno,
       actionType,
       created_by || null,
-      assigned_to || null
+      assigned_to || null,
+      work_group_id || null
     );
 
     res.json({

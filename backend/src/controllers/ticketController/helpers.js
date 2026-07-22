@@ -10,6 +10,7 @@ const ACTION_MAPPING = {
     L3: ['reassign', 'reject_final'],
     L4: ['approve_close', 'review_and_close']
 };
+const WORK_GROUP_APPROVER_TYPES = new Set(['L2ForPU', 'L3ForPU', 'L4ForPU']);
 
 //const getBackendBaseUrl = () => process.env.BACKEND_URL || process.env.FRONTEND_URL || DEFAULT_BACKEND_BASE_URL;
 const getFrontendBaseUrl = () => process.env.FRONTEND_URL || DEFAULT_FRONTEND_BASE_URL;
@@ -210,6 +211,111 @@ const getNotificationApproversWithLineId = async (pool, puno, approvalLevel, exc
     }
 };
 
+const getAllowedDeptNosForWorkGroup = async (pool, workGroupId) => {
+    if (!workGroupId) {
+        return null;
+    }
+
+    const result = await pool.request()
+        .input('work_group_id', sql.Int, workGroupId)
+        .query(`
+            SELECT deptno
+            FROM dbo.IgxWorkGroupDepartment
+            WHERE work_group_id = @work_group_id
+        `);
+
+    if (!result.recordset.length) {
+        return null;
+    }
+
+    return result.recordset
+        .map((row) => row.deptno)
+        .filter((deptNo) => Number.isInteger(deptNo) && deptNo > 0);
+};
+
+const filterApproversByWorkGroupDepartments = async (pool, approvers = [], workGroupId = null) => {
+    if (!Array.isArray(approvers) || approvers.length === 0 || !workGroupId) {
+        return approvers;
+    }
+
+    const allowedDeptNos = await getAllowedDeptNosForWorkGroup(pool, workGroupId);
+    if (!allowedDeptNos || allowedDeptNos.length === 0) {
+        return approvers;
+    }
+
+    const candidateIds = [...new Set(
+        approvers
+            .map((user) => user.PERSONNO)
+            .filter((personNo) => Number.isInteger(personNo))
+    )];
+    if (!candidateIds.length) {
+        return approvers;
+    }
+
+    const placeholders = candidateIds.map((_, index) => `@person${index}`).join(', ');
+    const request = pool.request();
+    candidateIds.forEach((personNo, index) => {
+        request.input(`person${index}`, sql.Int, personNo);
+    });
+
+    const personDeptResult = await request.query(`
+        SELECT PERSONNO, DEPTNO
+        FROM dbo.Person
+        WHERE FLAGDEL != 'Y'
+          AND PERSONNO IN (${placeholders})
+    `);
+
+    const personDeptMap = new Map(
+        personDeptResult.recordset.map((row) => [row.PERSONNO, row.DEPTNO])
+    );
+    const allowedDeptSet = new Set(allowedDeptNos);
+
+    let filteredOutCount = 0;
+    const filtered = approvers.filter((user) => {
+        const deptNo = personDeptMap.get(user.PERSONNO);
+        const isAllowed = Number.isInteger(deptNo) && deptNo > 0 && allowedDeptSet.has(deptNo);
+        if (!isAllowed) {
+            filteredOutCount += 1;
+        }
+        return isAllowed;
+    });
+
+    console.log(
+        `[WorkGroupDeptFilter] workGroup=${workGroupId} allowedDeptCount=${allowedDeptNos.length} approvers ${approvers.length} -> ${filtered.length} (filteredOut=${filteredOutCount})`
+    );
+    return filtered;
+};
+
+const filterRecipientsByWorkGroupDepartments = async (pool, recipients = [], workGroupId = null) => {
+    if (!Array.isArray(recipients) || recipients.length === 0 || !workGroupId) {
+        return recipients;
+    }
+
+    const allowedDeptNos = await getAllowedDeptNosForWorkGroup(pool, workGroupId);
+    if (!allowedDeptNos || allowedDeptNos.length === 0) {
+        return recipients;
+    }
+
+    const approverRecipients = recipients.filter((user) => WORK_GROUP_APPROVER_TYPES.has(user.recipient_type));
+    if (approverRecipients.length === 0) {
+        return recipients;
+    }
+
+    const filteredApprovers = await filterApproversByWorkGroupDepartments(pool, approverRecipients, workGroupId);
+    const allowedApproverIds = new Set(filteredApprovers.map((user) => user.PERSONNO));
+    const merged = recipients.filter((user) => {
+        if (!WORK_GROUP_APPROVER_TYPES.has(user.recipient_type)) {
+            return true;
+        }
+        return allowedApproverIds.has(user.PERSONNO);
+    });
+
+    console.log(
+        `[WorkGroupDeptFilter] recipients ${recipients.length} -> ${merged.length} for workGroup=${workGroupId}`
+    );
+    return merged;
+};
+
 // Main function to get all notification recipients for ticket actions (unified notification system)
 const getTicketNotificationRecipients = async (ticketId, actionType, actorPersonno = null) => {
     try {
@@ -220,7 +326,7 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
         const ticketResult = await pool.request()
             .input('ticket_id', sql.Int, ticketId)
             .query(`
-                SELECT puno, created_by, assigned_to
+                SELECT puno, created_by, assigned_to, work_group_id
                 FROM IgxTickets 
                 WHERE id = @ticket_id
             `);
@@ -228,7 +334,7 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
         const ticket = ticketResult.recordset[0];
         if (!ticket) return [];
         
-        const { puno, created_by, assigned_to } = ticket;
+        const { puno, created_by, assigned_to, work_group_id } = ticket;
         
         // 2. Get approvers based on action type using optimized query with LineID
         let approvers = [];
@@ -429,18 +535,20 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
             }
         }
         
+        const filteredUsers = await filterRecipientsByWorkGroupDepartments(pool, allUsers, work_group_id);
+
         // 6. Remove duplicates based on PERSONNO (most wins strategy)
         const uniqueUsers = [];
         const seenUserIds = new Set();
         
-        allUsers.forEach(user => {
+        filteredUsers.forEach(user => {
             if (!seenUserIds.has(user.PERSONNO)) {
                 seenUserIds.add(user.PERSONNO);
                 uniqueUsers.push(user);
             }
         });
         
-        console.log(`📊 Deduplication: ${allUsers.length} total → ${uniqueUsers.length} unique users`);
+        console.log(`📊 Deduplication: ${filteredUsers.length} total → ${uniqueUsers.length} unique users`);
         
         return uniqueUsers;
         
@@ -493,7 +601,7 @@ const getUserByIdWithAvatar = async (pool, userId) => {
 };
 
 // Get notification recipients for PU without ticket ID (for testing)
-const getNotificationRecipientsForPU = async (puno, actionType, createdBy = null, assignedTo = null) => {
+const getNotificationRecipientsForPU = async (puno, actionType, createdBy = null, assignedTo = null, workGroupId = null) => {
     try {
         const pool = await sql.connect(dbConfig);
         const allUsers = [];
@@ -729,18 +837,20 @@ const getNotificationRecipientsForPU = async (puno, actionType, createdBy = null
         
         allUsers.push(...specificUsers);
         
+        const filteredUsers = await filterRecipientsByWorkGroupDepartments(pool, allUsers, workGroupId);
+
         // 4. Remove duplicates based on PERSONNO (most wins strategy)
         const uniqueUsers = [];
         const seenUserIds = new Set();
         
-        allUsers.forEach(user => {
+        filteredUsers.forEach(user => {
             if (!seenUserIds.has(user.PERSONNO)) {
                 seenUserIds.add(user.PERSONNO);
                 uniqueUsers.push(user);
             }
         });
         
-        console.log(`📊 Test Notification Recipients: ${allUsers.length} total → ${uniqueUsers.length} unique users`);
+        console.log(`📊 Test Notification Recipients: ${filteredUsers.length} total → ${uniqueUsers.length} unique users`);
         
         return uniqueUsers;
         
@@ -884,6 +994,9 @@ module.exports = {
     getTicketNotificationRecipients,
     getNotificationRecipientsForPU,
     getNotificationApproversWithLineId,
+    getAllowedDeptNosForWorkGroup,
+    filterApproversByWorkGroupDepartments,
+    filterRecipientsByWorkGroupDepartments,
     getUserDisplayNameFromRequest,
     getUserMaxApprovalLevelForPU,
     getAvailableAssigneesForPU,

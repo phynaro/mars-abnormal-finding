@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,6 +27,7 @@ import {
   type CreateWorkGroupRequest,
   type UpdateWorkGroupRequest,
 } from '@/services/workGroupService';
+import { userManagementService, type Department } from '@/services/userManagementService';
 import { Edit2, Plus, Trash2 } from 'lucide-react';
 
 type FormState = {
@@ -56,8 +57,10 @@ const WorkGroupTable: React.FC = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup] = useState<WorkGroup | null>(null);
   const [formData, setFormData] = useState<FormState>(emptyForm);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [selectedDeptNos, setSelectedDeptNos] = useState<number[]>([]);
 
-  const loadGroups = async () => {
+  const loadGroups = useCallback(async () => {
     try {
       setLoading(true);
       const data = await workGroupService.getAllWorkGroups();
@@ -71,19 +74,33 @@ const WorkGroupTable: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [t, toast]);
 
   useEffect(() => {
     loadGroups();
-  }, []);
+    const loadDepartments = async () => {
+      try {
+        const data = await userManagementService.getDepartments();
+        setDepartments(data);
+      } catch (error) {
+        toast({
+          title: t('common.error'),
+          description: error instanceof Error ? error.message : t('workGroup.settings.departmentLoadFailed'),
+          variant: 'destructive',
+        });
+      }
+    };
+    loadDepartments();
+  }, [loadGroups, t, toast]);
 
   const openCreateDialog = () => {
     setEditingGroup(null);
     setFormData(emptyForm);
+    setSelectedDeptNos([]);
     setDialogOpen(true);
   };
 
-  const openEditDialog = (group: WorkGroup) => {
+  const openEditDialog = async (group: WorkGroup) => {
     setEditingGroup(group);
     setFormData({
       name_en: group.name_en,
@@ -93,7 +110,26 @@ const WorkGroupTable: React.FC = () => {
       sort_order: String(group.sort_order ?? 0),
       is_active: group.is_active !== false,
     });
+    try {
+      const mappedDepartments = await workGroupService.getWorkGroupDepartments(group.id);
+      setSelectedDeptNos(mappedDepartments.map((item) => item.deptno));
+    } catch (error) {
+      toast({
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('workGroup.settings.departmentLoadFailed'),
+        variant: 'destructive',
+      });
+      setSelectedDeptNos([]);
+    }
     setDialogOpen(true);
+  };
+
+  const toggleDepartment = (deptNo: number) => {
+    setSelectedDeptNos((prev) => (
+      prev.includes(deptNo)
+        ? prev.filter((item) => item !== deptNo)
+        : [...prev, deptNo]
+    ));
   };
 
   const handleSave = async () => {
@@ -118,18 +154,25 @@ const WorkGroupTable: React.FC = () => {
 
     try {
       setSaving(true);
+      let targetWorkGroupId: number | null = editingGroup?.id ?? null;
       if (editingGroup) {
         await workGroupService.updateWorkGroup(editingGroup.id, payload);
+        targetWorkGroupId = editingGroup.id;
         toast({
           title: t('common.success'),
           description: t('workGroup.settings.updated'),
         });
       } else {
-        await workGroupService.createWorkGroup(payload as CreateWorkGroupRequest);
+        const createResponse = await workGroupService.createWorkGroup(payload as CreateWorkGroupRequest);
+        targetWorkGroupId = createResponse.data?.id ?? null;
         toast({
           title: t('common.success'),
           description: t('workGroup.settings.created'),
         });
+      }
+
+      if (targetWorkGroupId) {
+        await workGroupService.updateWorkGroupDepartments(targetWorkGroupId, selectedDeptNos);
       }
       setDialogOpen(false);
       await loadGroups();
@@ -182,6 +225,7 @@ const WorkGroupTable: React.FC = () => {
                 <TableHead>{t('workGroup.settings.sortOrder')}</TableHead>
                 <TableHead>{language === 'en' ? 'Name (EN)' : 'ชื่อ (EN)'}</TableHead>
                 <TableHead>{language === 'en' ? 'Name (TH)' : 'ชื่อ (TH)'}</TableHead>
+                <TableHead>{t('workGroup.settings.departments')}</TableHead>
                 <TableHead>{t('workGroup.description')}</TableHead>
                 <TableHead>{t('workGroup.settings.status')}</TableHead>
                 <TableHead className="text-right w-[100px]" />
@@ -190,7 +234,7 @@ const WorkGroupTable: React.FC = () => {
             <TableBody>
               {groups.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     {t('workGroup.settings.empty')}
                   </TableCell>
                 </TableRow>
@@ -200,6 +244,7 @@ const WorkGroupTable: React.FC = () => {
                     <TableCell>{group.sort_order ?? 0}</TableCell>
                     <TableCell className="font-medium">{group.name_en}</TableCell>
                     <TableCell>{group.name_th}</TableCell>
+                    <TableCell>{group.department_count ?? 0}</TableCell>
                     <TableCell className="max-w-xs truncate text-muted-foreground">
                       {language === 'en' ? group.description_en : group.description_th}
                     </TableCell>
@@ -212,7 +257,7 @@ const WorkGroupTable: React.FC = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="sm" onClick={() => openEditDialog(group)}>
+                        <Button variant="outline" size="sm" onClick={() => void openEditDialog(group)}>
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => handleDelete(group)}>
@@ -289,6 +334,31 @@ const WorkGroupTable: React.FC = () => {
                   checked={formData.is_active}
                   onCheckedChange={(checked) => setFormData((prev) => ({ ...prev, is_active: checked }))}
                 />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>{t('workGroup.settings.departments')}</Label>
+              <p className="text-xs text-muted-foreground">{t('workGroup.settings.departmentsHelper')}</p>
+              <div className="max-h-40 overflow-y-auto rounded-md border p-2 space-y-1">
+                {departments.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('workGroup.settings.departmentEmpty')}</p>
+                ) : (
+                  departments.map((department) => (
+                    <label
+                      key={department.deptNo}
+                      className="flex items-center gap-2 text-sm py-1"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedDeptNos.includes(department.deptNo)}
+                        onChange={() => toggleDepartment(department.deptNo)}
+                      />
+                      <span>
+                        {department.deptCode} - {department.deptName}
+                      </span>
+                    </label>
+                  ))
+                )}
               </div>
             </div>
             <div className="flex justify-end gap-2">

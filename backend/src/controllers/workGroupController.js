@@ -22,6 +22,14 @@ const trimOrNull = (value) => {
   return trimmed === '' ? null : trimmed;
 };
 
+const normalizeDeptNos = (deptNos = []) => {
+  if (!Array.isArray(deptNos)) return [];
+  const parsed = deptNos
+    .map((value) => parseOptionalInt(value))
+    .filter((value) => Number.isInteger(value) && value > 0);
+  return [...new Set(parsed)];
+};
+
 /**
  * GET /api/work-groups — active groups for dropdowns
  */
@@ -30,7 +38,7 @@ const getWorkGroups = async (req, res) => {
     const pool = await sql.connect(dbConfig);
     const result = await pool.request().query(`
       SELECT id, name_en, name_th, description_en, description_th, sort_order, is_active
-      FROM dbo.IgxWorkGroup
+      FROM dbo.IgxWorkGroup wg
       WHERE is_active = 1
       ORDER BY sort_order ASC, name_en ASC
     `);
@@ -56,9 +64,30 @@ const getAllWorkGroups = async (req, res) => {
   try {
     const pool = await sql.connect(dbConfig);
     const result = await pool.request().query(`
-      SELECT id, name_en, name_th, description_en, description_th, sort_order, is_active, created_at, updated_at
-      FROM dbo.IgxWorkGroup
-      ORDER BY sort_order ASC, name_en ASC
+      SELECT
+        wg.id,
+        wg.name_en,
+        wg.name_th,
+        wg.description_en,
+        wg.description_th,
+        wg.sort_order,
+        wg.is_active,
+        wg.created_at,
+        wg.updated_at,
+        COUNT(wgd.id) AS department_count
+      FROM dbo.IgxWorkGroup wg
+      LEFT JOIN dbo.IgxWorkGroupDepartment wgd ON wgd.work_group_id = wg.id
+      GROUP BY
+        wg.id,
+        wg.name_en,
+        wg.name_th,
+        wg.description_en,
+        wg.description_th,
+        wg.sort_order,
+        wg.is_active,
+        wg.created_at,
+        wg.updated_at
+      ORDER BY wg.sort_order ASC, wg.name_en ASC
     `);
 
     return res.status(200).json({
@@ -285,9 +314,13 @@ const deleteWorkGroup = async (req, res) => {
 
     const result = await pool.request()
       .input('id', sql.Int, id)
-      .query('DELETE FROM dbo.IgxWorkGroup WHERE id = @id');
+      .query(`
+        DELETE FROM dbo.IgxWorkGroupDepartment WHERE work_group_id = @id;
+        DELETE FROM dbo.IgxWorkGroup WHERE id = @id;
+      `);
 
-    if (result.rowsAffected[0] === 0) {
+    const workGroupDeleteCount = result.rowsAffected[result.rowsAffected.length - 1] || 0;
+    if (workGroupDeleteCount === 0) {
       return res.status(404).json({
         success: false,
         message: 'Work group not found',
@@ -308,10 +341,148 @@ const deleteWorkGroup = async (req, res) => {
   }
 };
 
+/**
+ * GET /api/work-groups/:id/departments — mapped departments for a work group (admin)
+ */
+const getWorkGroupDepartments = async (req, res) => {
+  try {
+    const id = parseOptionalInt(req.params.id);
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid work group ID',
+      });
+    }
+
+    const pool = await sql.connect(dbConfig);
+    const existing = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT id FROM dbo.IgxWorkGroup WHERE id = @id');
+
+    if (existing.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Work group not found',
+      });
+    }
+
+    const result = await pool.request()
+      .input('id', sql.Int, id)
+      .query(`
+        SELECT
+          m.deptno,
+          d.DEPTCODE AS deptCode,
+          d.DEPTNAME AS deptName
+        FROM dbo.IgxWorkGroupDepartment m
+        LEFT JOIN dbo.Dept d ON d.DEPTNO = m.deptno AND d.FLAGDEL != 'Y'
+        WHERE m.work_group_id = @id
+        ORDER BY d.DEPTCODE ASC, d.DEPTNAME ASC
+      `);
+
+    return res.status(200).json({
+      success: true,
+      data: result.recordset,
+    });
+  } catch (error) {
+    console.error('Error fetching work group departments:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch work group departments',
+      error: error.message,
+    });
+  }
+};
+
+/**
+ * PUT /api/work-groups/:id/departments — replace mapped departments for a work group (admin)
+ */
+const updateWorkGroupDepartments = async (req, res) => {
+  try {
+    const id = parseOptionalInt(req.params.id);
+    if (!id) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid work group ID',
+      });
+    }
+
+    const deptNos = normalizeDeptNos(req.body?.dept_nos);
+    const pool = await sql.connect(dbConfig);
+
+    const existing = await pool.request()
+      .input('id', sql.Int, id)
+      .query('SELECT id FROM dbo.IgxWorkGroup WHERE id = @id');
+    if (existing.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Work group not found',
+      });
+    }
+
+    if (deptNos.length > 0) {
+      const placeholders = deptNos.map((_, index) => `@dept${index}`).join(', ');
+      const request = pool.request();
+      deptNos.forEach((deptNo, index) => {
+        request.input(`dept${index}`, sql.Int, deptNo);
+      });
+
+      const validDeptResult = await request.query(`
+        SELECT DEPTNO
+        FROM dbo.Dept
+        WHERE FLAGDEL != 'Y'
+          AND DEPTNO IN (${placeholders})
+      `);
+      const validDeptSet = new Set(validDeptResult.recordset.map((row) => row.DEPTNO));
+      const invalidDeptNos = deptNos.filter((deptNo) => !validDeptSet.has(deptNo));
+
+      if (invalidDeptNos.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Invalid department IDs: ${invalidDeptNos.join(', ')}`,
+        });
+      }
+    }
+
+    await pool.request()
+      .input('work_group_id', sql.Int, id)
+      .query('DELETE FROM dbo.IgxWorkGroupDepartment WHERE work_group_id = @work_group_id');
+
+    if (deptNos.length > 0) {
+      for (const deptNo of deptNos) {
+        await pool.request()
+          .input('work_group_id', sql.Int, id)
+          .input('deptno', sql.Int, deptNo)
+          .query(`
+            INSERT INTO dbo.IgxWorkGroupDepartment (work_group_id, deptno)
+            VALUES (@work_group_id, @deptno)
+          `);
+      }
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: 'Work group departments updated successfully',
+      data: {
+        work_group_id: id,
+        dept_nos: deptNos,
+      },
+    });
+  } catch (error) {
+    console.error('Error updating work group departments:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to update work group departments',
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   getWorkGroups,
   getAllWorkGroups,
   createWorkGroup,
   updateWorkGroup,
   deleteWorkGroup,
+  getWorkGroupDepartments,
+  updateWorkGroupDepartments,
 };
