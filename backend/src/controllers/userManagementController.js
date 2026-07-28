@@ -497,10 +497,24 @@ const userManagementController = {
 
       try {
         // Update Person table if personal info is provided
-        if (updateData.firstName || updateData.lastName || updateData.email || updateData.phone || updateData.title || 
-            updateData.department !== undefined || updateData.craft !== undefined || updateData.crew !== undefined || 
+        if (updateData.firstName || updateData.lastName || updateData.email || updateData.phone || updateData.title ||
+            updateData.personCode !== undefined ||
+            updateData.department !== undefined || updateData.craft !== undefined || updateData.crew !== undefined ||
             updateData.siteNo !== undefined) {
-          
+
+          if (updateData.personCode !== undefined && updateData.personCode !== null && String(updateData.personCode).length > 20) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'Person code must be 20 characters or less'
+            });
+          }
+
+          // Empty string clears PERSONCODE; undefined leaves existing value (COALESCE)
+          const personCodeValue = updateData.personCode === undefined
+            ? null
+            : (updateData.personCode === '' ? '' : updateData.personCode);
+
           await transaction.request()
             .input('personNo', sql.Int, personNo)
             .input('firstName', sql.NVarChar(30), updateData.firstName || null)
@@ -508,6 +522,7 @@ const userManagementController = {
             .input('email', sql.NVarChar(200), updateData.email || null)
             .input('phone', sql.NVarChar(30), updateData.phone || null)
             .input('title', sql.NVarChar(200), updateData.title || null)
+            .input('personCode', sql.NVarChar(20), personCodeValue)
             .input('department', sql.Int, updateData.department || null)
             .input('craft', sql.Int, updateData.craft || null)
             .input('crew', sql.Int, updateData.crew || null)
@@ -521,6 +536,7 @@ const userManagementController = {
                   EMAIL = COALESCE(@email, EMAIL),
                   PHONE = COALESCE(@phone, PHONE),
                   TITLE = COALESCE(@title, TITLE),
+                  PERSONCODE = CASE WHEN @personCode IS NULL THEN PERSONCODE ELSE @personCode END,
                   DEPTNO = COALESCE(@department, DEPTNO),
                   CRAFTNO = COALESCE(@craft, CRAFTNO),
                   CREWNO = COALESCE(@crew, CREWNO),
