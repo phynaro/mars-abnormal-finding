@@ -74,7 +74,7 @@ export function EmsKpiStat({
 
 interface EmsKpiGridProps {
   children: React.ReactNode;
-  columns?: '3' | '5';
+  columns?: '2' | '3' | '5';
   className?: string;
 }
 
@@ -83,9 +83,11 @@ export function EmsKpiGrid({ children, columns = '5', className }: EmsKpiGridPro
     <div
       className={cn(
         'grid gap-4',
-        columns === '3'
-          ? 'grid-cols-1 sm:grid-cols-3'
-          : 'grid-cols-2 lg:grid-cols-5',
+        columns === '2'
+          ? 'grid-cols-2'
+          : columns === '3'
+            ? 'grid-cols-1 sm:grid-cols-3'
+            : 'grid-cols-2 lg:grid-cols-5',
         className
       )}
     >

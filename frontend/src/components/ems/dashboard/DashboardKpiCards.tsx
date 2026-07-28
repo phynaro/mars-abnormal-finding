@@ -77,7 +77,7 @@ const DashboardKpiCards: React.FC<Props> = ({ data, loading, plant, compact }) =
 
   if (loading && !data) {
     return (
-      <EmsKpiGrid columns="3" className={cn('grid-cols-2 h-full', compact && 'gap-2')}>
+      <EmsKpiGrid columns="2" className={cn('h-full', compact && 'gap-2')}>
         {Array.from({ length: 4 }).map((_, i) => (
           <Skeleton key={i} className={cn('w-full rounded-xl', compact ? 'h-full min-h-[72px]' : 'h-[104px]')} />
         ))}
@@ -86,7 +86,7 @@ const DashboardKpiCards: React.FC<Props> = ({ data, loading, plant, compact }) =
   }
 
   return (
-    <EmsKpiGrid columns="3" className={cn('grid-cols-2 h-full', compact && 'gap-2')}>
+    <EmsKpiGrid columns="2" className={cn('h-full', compact && 'gap-2')}>
       {tiles.map((tile) => {
         const Icon = TILE_ICONS[tile.key];
         return (
