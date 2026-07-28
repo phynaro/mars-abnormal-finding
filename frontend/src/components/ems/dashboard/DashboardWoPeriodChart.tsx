@@ -41,6 +41,29 @@ const STATUS_COLORS: Record<StatusKey, string> = {
   notFinish: '#94a3b8',
 };
 
+/** Shared Late fill for every plant in multi-plant mode. */
+const LATE_COLOR = '#ef4444';
+
+/** Fixed plant palette (keyed by code, not selection order). */
+const PLANT_COLORS: Record<string, { ontime: string; notFinish: string }> = {
+  PP: { ontime: '#2563eb', notFinish: '#93c5fd' },
+  DJ: { ontime: '#0d9488', notFinish: '#99f6e4' },
+  DP: { ontime: '#7c3aed', notFinish: '#c4b5fd' },
+  SN: { ontime: '#0284c7', notFinish: '#7dd3fc' },
+  CT: { ontime: '#0891b2', notFinish: '#67e8f9' },
+  PS: { ontime: '#059669', notFinish: '#6ee7b7' },
+  ST: { ontime: '#65a30d', notFinish: '#bef264' },
+  PIP: { ontime: '#4f46e5', notFinish: '#a5b4fc' },
+};
+
+const FALLBACK_PLANT_COLORS = { ontime: '#64748b', notFinish: '#cbd5e1' };
+
+function getPlantFill(plant: string, status: StatusKey): string {
+  if (status === 'late') return LATE_COLOR;
+  const colors = PLANT_COLORS[plant] ?? FALLBACK_PLANT_COLORS;
+  return status === 'ontime' ? colors.ontime : colors.notFinish;
+}
+
 function statusDataKey(plant: string, status: StatusKey): string {
   return `${plant}__${status}`;
 }
@@ -252,15 +275,24 @@ const DashboardWoPeriodChart: React.FC<Props> = ({ timeTravel }) => {
             const late = Number(row[statusDataKey(plant, 'late')] ?? 0);
             const notFinish = Number(row[statusDataKey(plant, 'notFinish')] ?? 0);
             const plantTotal = ontime + late + notFinish;
+            const plantColors = PLANT_COLORS[plant] ?? FALLBACK_PLANT_COLORS;
             return (
               <div key={plant} className="space-y-0.5">
-                <p className="font-medium text-xs">{plant}</p>
+                <p className="font-medium text-xs flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
+                    style={{ backgroundColor: plantColors.ontime }}
+                    aria-hidden
+                  />
+                  {plant}
+                </p>
                 <p className="text-xs">
-                  <span className="text-green-600">{statusLabels.ontime}</span> {ontime}
+                  <span style={{ color: plantColors.ontime }}>{statusLabels.ontime}</span> {ontime}
                   {' · '}
-                  <span className="text-amber-600">{statusLabels.late}</span> {late}
+                  <span style={{ color: LATE_COLOR }}>{statusLabels.late}</span> {late}
                   {' · '}
-                  <span className="text-muted-foreground">{statusLabels.notFinish}</span> {notFinish}
+                  <span style={{ color: plantColors.notFinish }}>{statusLabels.notFinish}</span>{' '}
+                  {notFinish}
                   {' · '}
                   <span className="font-medium">{t('ems.dashboard.v2.woStatusTotal')}</span> {plantTotal}
                 </p>
@@ -325,7 +357,7 @@ const DashboardWoPeriodChart: React.FC<Props> = ({ timeTravel }) => {
               <XAxis dataKey="period" tick={{ fontSize: 12 }} />
               <YAxis allowDecimals={false} tick={{ fontSize: 12 }} />
               <Tooltip content={<CustomTooltip />} />
-              <Legend />
+              {isAllMode && <Legend />}
               {isAllMode ? (
                 <>
                   {STATUS_KEYS.map((status) => (
@@ -352,8 +384,9 @@ const DashboardWoPeriodChart: React.FC<Props> = ({ timeTravel }) => {
                       key={statusDataKey(plant, status)}
                       dataKey={statusDataKey(plant, status)}
                       stackId={plant}
-                      fill={STATUS_COLORS[status]}
+                      fill={getPlantFill(plant, status)}
                       name={`${plant} · ${statusLabels[status]}`}
+                      legendType="none"
                       cursor="pointer"
                       onClick={(data) => {
                         const periodNumber = Number(data?.payload?.periodNumber);
@@ -367,6 +400,42 @@ const DashboardWoPeriodChart: React.FC<Props> = ({ timeTravel }) => {
               )}
             </BarChart>
           </ResponsiveContainer>
+        )}
+
+        {!loading && hasData && !isAllMode && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-muted-foreground">
+            {selectedPlants.map((plant) => {
+              const colors = PLANT_COLORS[plant] ?? FALLBACK_PLANT_COLORS;
+              return (
+                <span key={plant} className="inline-flex items-center gap-1.5">
+                  <span
+                    className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
+                    style={{ backgroundColor: colors.ontime }}
+                    aria-hidden
+                  />
+                  <span className="font-medium text-foreground">{plant}</span>
+                </span>
+              );
+            })}
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
+                style={{
+                  backgroundColor: (PLANT_COLORS[selectedPlants[0]] ?? FALLBACK_PLANT_COLORS).notFinish,
+                }}
+                aria-hidden
+              />
+              {statusLabels.notFinish}
+            </span>
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                className="inline-block h-2.5 w-2.5 rounded-sm shrink-0"
+                style={{ backgroundColor: LATE_COLOR }}
+                aria-hidden
+              />
+              {statusLabels.late}
+            </span>
+          </div>
         )}
       </EmsContentCard>
     </section>
