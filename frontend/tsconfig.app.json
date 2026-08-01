@@ -15,8 +15,7 @@
     "noEmit": true,
     "jsx": "react",
 
-    /* Path mapping */
-    "baseUrl": ".",
+    /* Path mapping — baseUrl omitted (deprecated in TS 6; paths resolve from this config dir) */
     "paths": {
       "@/*": ["./src/*"]
     },
