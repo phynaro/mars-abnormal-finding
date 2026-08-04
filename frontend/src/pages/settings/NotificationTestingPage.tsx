@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useToast } from '@/hooks/useToast';
-import { useLanguage } from '@/contexts/LanguageContext';
 import { ticketService } from '@/services/ticketService';
 import { userManagementService, type User } from '@/services/userManagementService';
 import { authService } from '@/services/authService';
@@ -14,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { PageHeader } from '@/components/common/PageHeader';
-import { Mail, MessageSquare, User as UserIcon, CheckCircle2, XCircle } from 'lucide-react';
+import { Mail, MessageSquare } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Search } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -73,7 +72,6 @@ const ACTION_TYPES = [
 
 const NotificationTestingPage: React.FC = () => {
   const { toast } = useToast();
-  const { t } = useLanguage();
   
   // Machine selection state
   const [selectionMode, setSelectionMode] = useState<'search' | 'hierarchy'>('hierarchy');
@@ -82,7 +80,7 @@ const NotificationTestingPage: React.FC = () => {
   const [machineSearchLoading, setMachineSearchLoading] = useState(false);
   const [machineSearchDropdownOpen, setMachineSearchDropdownOpen] = useState(false);
   const [selectedMachine, setSelectedMachine] = useState<SelectedMachine | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
+  const [, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const skipNextSearchRef = useRef(false);
@@ -92,8 +90,7 @@ const NotificationTestingPage: React.FC = () => {
   const [createdBy, setCreatedBy] = useState<number | undefined>(undefined);
   const [assignedTo, setAssignedTo] = useState<number | undefined>(undefined);
   const [users, setUsers] = useState<User[]>([]);
-  const [usersLoading, setUsersLoading] = useState(false);
-  const [userSearchQuery, setUserSearchQuery] = useState({ created: '', assigned: '' });
+  const [, setUsersLoading] = useState(false);
 
   // Results state
   const [recipients, setRecipients] = useState<NotificationRecipient[]>([]);
@@ -108,6 +105,8 @@ const NotificationTestingPage: React.FC = () => {
   useEffect(() => {
     loadUsers();
     loadRelayConfig();
+  // Load service data once when the testing page mounts.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadUsers = async () => {
@@ -253,6 +252,8 @@ const NotificationTestingPage: React.FC = () => {
         clearTimeout(searchTimeoutRef.current);
       }
     };
+  // The debounce is keyed by the query and intentionally does not restart for helper identity changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machineSearchQuery]);
 
   // Click outside handler
@@ -313,7 +314,7 @@ const NotificationTestingPage: React.FC = () => {
     }
   };
 
-  const onHierarchicalMachineSelect = (machine: any) => {
+  const onHierarchicalMachineSelect = (machine: SelectedMachine) => {
     const selected: SelectedMachine = {
       puno: machine.puno,
       pucode: machine.pucode,
@@ -375,19 +376,6 @@ const NotificationTestingPage: React.FC = () => {
     }
   };
 
-  // Filter users for search
-  const filterUsers = (query: string) => {
-    if (!query) return users;
-    const lowerQuery = query.toLowerCase();
-    return users.filter(user => 
-      user.fullName?.toLowerCase().includes(lowerQuery) ||
-      user.firstName?.toLowerCase().includes(lowerQuery) ||
-      user.lastName?.toLowerCase().includes(lowerQuery) ||
-      user.username?.toLowerCase().includes(lowerQuery) ||
-      user.email?.toLowerCase().includes(lowerQuery)
-    );
-  };
-
   const getRecipientTypeBadgeColor = (type: string) => {
     switch (type) {
       case 'L2ForPU':
@@ -403,9 +391,6 @@ const NotificationTestingPage: React.FC = () => {
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200';
     }
   };
-
-  const filteredCreatedByUsers = filterUsers(userSearchQuery.created);
-  const filteredAssignedToUsers = filterUsers(userSearchQuery.assigned);
 
   return (
     <div className="container mx-auto p-6 space-y-6">
