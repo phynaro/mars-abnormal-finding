@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { useAuth } from '@/contexts/useAuth';
+import type { User } from '@/services/authService';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -9,11 +10,11 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import Cropper from 'react-easy-crop';
+import Cropper, { type Area } from 'react-easy-crop';
 
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { HelpCircle, Key, Gauge, MapPin, MessageSquare, User, Unlink, LogOut } from 'lucide-react';
+import { Key, Gauge, MapPin, MessageSquare, User as UserIcon, Unlink, LogOut } from 'lucide-react';
 import { getApiBaseUrl, getAvatarUrl } from '@/utils/url';
 import { compressImage, formatFileSize, isFileSizeValid } from '@/utils/imageCompression';
 import userManagementService, { type Department } from '@/services/userManagementService';
@@ -34,19 +35,22 @@ function formatApprovalLocation(approval: TicketApproval): string {
   return parts.join('-');
 }
 
+type ProfileUser = Omit<User, 'department'> & { department?: string | number; phone?: string; personCode?: string };
+type LineProfile = { pictureUrl?: string; displayName?: string };
+
 const ProfilePage: React.FC = () => {
   const { user, refreshUser } = useAuth();
   const { t } = useLanguage();
   const { emsRoles, loading: emsRolesLoading } = useEmsAccess();
+  const profileUser = user as ProfileUser | null;
   const [firstName, setFirstName] = useState(user?.firstName || '');
   const [lastName, setLastName] = useState(user?.lastName || '');
   const [email, setEmail] = useState(user?.email || '');
-  const [phone, setPhone] = useState((user as any)?.phone || '');
-  const [deptNo, setDeptNo] = useState<number | undefined>((user as any)?.department);
-  const [personCode, setPersonCode] = useState((user as any)?.personCode || '');
+  const [phone, setPhone] = useState(profileUser?.phone || '');
+  const [deptNo, setDeptNo] = useState<number | undefined>(typeof profileUser?.department === 'number' ? profileUser.department : undefined);
+  const [personCode, setPersonCode] = useState(profileUser?.personCode || '');
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
-  const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [departmentsLoading, setDepartmentsLoading] = useState(false);
@@ -56,9 +60,9 @@ const ProfilePage: React.FC = () => {
     firstName: user?.firstName || '',
     lastName: user?.lastName || '',
     email: user?.email || '',
-    phone: (user as any)?.phone || '',
-    deptNo: (user as any)?.department,
-    personCode: (user as any)?.personCode || ''
+    phone: profileUser?.phone || '',
+    deptNo: typeof profileUser?.department === 'number' ? profileUser.department : undefined,
+    personCode: profileUser?.personCode || ''
   });
   // Cropper state
   const [showCropper, setShowCropper] = useState(false);
@@ -66,11 +70,10 @@ const ProfilePage: React.FC = () => {
   const [crop, setCrop] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
-  const [showLineHelp, setShowLineHelp] = useState(false);
   const fileInputRef = useRef<FileUploadRef>(null);
   
   // LINE profile and unlink state
-  const [lineProfile, setLineProfile] = useState<any>(null);
+  const [lineProfile, setLineProfile] = useState<LineProfile | null>(null);
   const [lineProfileLoading, setLineProfileLoading] = useState(false);
   const [showUnlinkConfirm, setShowUnlinkConfirm] = useState(false);
   const [showLogoutInstruction, setShowLogoutInstruction] = useState(false);
@@ -79,8 +82,6 @@ const ProfilePage: React.FC = () => {
   const [approvalAreaGroups, setApprovalAreaGroups] = useState<
     Array<{ summary: TicketApprovalSummary; locations: TicketApproval[] }>
   >([]);
-
-  const uploadsBase = getApiBaseUrl().replace(/\/$/, '').replace(/\/api$/, '');
 
   // Check if profile fields have changed
   const hasProfileChanges = () => {
@@ -99,7 +100,7 @@ const ProfilePage: React.FC = () => {
     
     // Validate personCode length
     if (personCode && personCode.length > 20) {
-      alert(t('profile.personCodeTooLong') || 'Person code must be 20 characters or less');
+      alert(t('profile.personCodeTooLong'));
       return;
     }
     
@@ -109,7 +110,7 @@ const ProfilePage: React.FC = () => {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         },
         body: JSON.stringify({ 
           firstName, 
@@ -149,7 +150,7 @@ const ProfilePage: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         },
         body: JSON.stringify({ currentPassword, newPassword })
       });
@@ -166,7 +167,7 @@ const ProfilePage: React.FC = () => {
   };
 
   // Fetch LINE profile information
-  const fetchLineProfile = async () => {
+  const fetchLineProfile = useCallback(async () => {
     if (!user?.lineId) return;
     
     setLineProfileLoading(true);
@@ -174,7 +175,7 @@ const ProfilePage: React.FC = () => {
       const res = await fetch(`${getApiBaseUrl()}/users/profile/line-profile`, {
         method: 'GET',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }
       });
       const result = await res.json();
@@ -190,7 +191,7 @@ const ProfilePage: React.FC = () => {
     } finally {
       setLineProfileLoading(false);
     }
-  };
+  }, [user?.lineId]);
 
   // Unlink LINE account
   const unlinkLineAccount = async () => {
@@ -199,7 +200,7 @@ const ProfilePage: React.FC = () => {
       const res = await fetch(`${getApiBaseUrl()}/users/profile/line-account`, {
         method: 'DELETE',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }
       });
       const result = await res.json();
@@ -222,7 +223,7 @@ const ProfilePage: React.FC = () => {
       await fetch(`${getApiBaseUrl()}/auth/logout`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         }
       });
     } catch (e) {
@@ -235,8 +236,7 @@ const ProfilePage: React.FC = () => {
 
 
   // Avatar crop handlers
-  const onSelectAvatar: React.ChangeEventHandler<HTMLInputElement> = async (e) => {
-    const file = e.target.files?.[0];
+  const onSelectAvatarFile = async (file?: File) => {
     if (!file) {
       return;
     }
@@ -268,7 +268,7 @@ const ProfilePage: React.FC = () => {
     }
   };
 
-  const onCropComplete = useCallback((_: any, croppedPixels: any) => {
+  const onCropComplete = useCallback((_: Area, croppedPixels: Area) => {
     setCroppedAreaPixels(croppedPixels);
   }, []);
 
@@ -282,7 +282,7 @@ const ProfilePage: React.FC = () => {
         resolve(image);
       };
       
-      image.onerror = (error) => {
+      image.onerror = () => {
         reject(new Error('Failed to load image for cropping'));
       };
       
@@ -319,7 +319,7 @@ const ProfilePage: React.FC = () => {
           0.85
         );
       });
-    } catch (error) {
+    } catch {
       throw new Error('Failed to process image crop');
     }
   }
@@ -356,7 +356,7 @@ const ProfilePage: React.FC = () => {
       const res = await fetch(`${getApiBaseUrl()}/users/profile/avatar`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}` || ''
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`
         },
         body: form
       });
@@ -365,7 +365,6 @@ const ProfilePage: React.FC = () => {
       if (!res.ok) throw new Error(result.message || t('profile.failedToUploadAvatar'));
       
       await refreshUser();
-      setAvatarFile(null);
       alert(t('profile.avatarUpdated'));
       
       // Reset the file input so the same file can be selected again
@@ -410,7 +409,7 @@ const ProfilePage: React.FC = () => {
     } else {
       setLineProfile(null);
     }
-  }, [user?.lineId]);
+  }, [user?.lineId, fetchLineProfile]);
 
   // Fetch current user's ticket approval areas
   useEffect(() => {
@@ -454,19 +453,19 @@ const ProfilePage: React.FC = () => {
       setFirstName(user.firstName || '');
       setLastName(user.lastName || '');
       setEmail(user.email || '');
-      setPhone((user as any)?.phone || '');
-      setDeptNo((user as any)?.department);
-      setPersonCode((user as any)?.personCode || '');
+      setPhone(profileUser?.phone || '');
+      setDeptNo(typeof profileUser?.department === 'number' ? profileUser.department : undefined);
+      setPersonCode(profileUser?.personCode || '');
       setOriginalValues({
         firstName: user.firstName || '',
         lastName: user.lastName || '',
         email: user.email || '',
-        phone: (user as any)?.phone || '',
-        deptNo: (user as any)?.department,
-        personCode: (user as any)?.personCode || ''
+        phone: profileUser?.phone || '',
+        deptNo: typeof profileUser?.department === 'number' ? profileUser.department : undefined,
+        personCode: profileUser?.personCode || ''
       });
     }
-  }, [user]);
+  }, [profileUser?.department, profileUser?.personCode, profileUser?.phone, user]);
 
 
   return (
@@ -476,7 +475,7 @@ const ProfilePage: React.FC = () => {
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
+              <UserIcon className="h-5 w-5" />
               {t('profile.profileInformation')}
             </CardTitle>
           </CardHeader>
@@ -495,7 +494,7 @@ const ProfilePage: React.FC = () => {
                   <FileUpload 
                     ref={fileInputRef}
                     accept="image/*" 
-                    onChange={(files) => onSelectAvatar({ target: { files } } as any)} 
+                    onChange={(files) => onSelectAvatarFile(files?.[0])} 
                     placeholder={t('profile.chooseFile')}
                   />
                 </div>
@@ -525,7 +524,7 @@ const ProfilePage: React.FC = () => {
               <div className="space-y-2">
                 <Label>{t('profile.department')}</Label>
                 <Select
-                  value={deptNo !== null ? deptNo.toString() : undefined}
+                  value={deptNo !== undefined ? deptNo.toString() : undefined}
                   onValueChange={(value) => {
                     if (value === 'none') {
                       setDeptNo(undefined);
@@ -536,10 +535,10 @@ const ProfilePage: React.FC = () => {
                   disabled={departmentsLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={departmentsLoading ? t('common.loading') : t('profile.selectDepartment') || 'Select Department'} />
+                    <SelectValue placeholder={departmentsLoading ? t('common.loading') : t('profile.selectDepartment')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">{t('profile.noDepartment') || 'No Department'}</SelectItem>
+                    <SelectItem value="none">{t('profile.noDepartment')}</SelectItem>
                     {departments.map((dept) => (
                       <SelectItem key={dept.deptNo} value={dept.deptNo.toString()}>
                         {dept.deptName} ({dept.deptCode})
@@ -554,7 +553,7 @@ const ProfilePage: React.FC = () => {
                   value={personCode} 
                   onChange={(e) => setPersonCode(e.target.value)} 
                   maxLength={20}
-                  placeholder={t('profile.personCodePlaceholder') || 'Employee code (max 20 characters)'}
+                  placeholder={t('profile.personCodePlaceholder')}
                 />
               </div>
             </div>
@@ -666,7 +665,7 @@ const ProfilePage: React.FC = () => {
                             <AvatarImage src={lineProfile.pictureUrl} alt="LINE profile" />
                           ) : null}
                           <AvatarFallback>
-                            {lineProfile.displayName?.[0] || 'L'}
+                            {lineProfile.displayName?.[0] ?? 'L'}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
@@ -687,7 +686,7 @@ const ProfilePage: React.FC = () => {
                               const res = await fetch(`${getApiBaseUrl()}/users/line/test`, {
                                 method: 'POST',
                                 headers: { 
-                                  'Authorization': `Bearer ${localStorage.getItem('token')}` || '',
+          'Authorization': `Bearer ${localStorage.getItem('token') || ''}`,
                                   'Content-Type': 'application/json'
                                 },
                                 body: JSON.stringify({})
