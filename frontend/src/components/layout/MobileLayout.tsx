@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { useBottomNavigation } from '../../hooks/useBottomNavigation';
 import TopNavbar from './TopNavbar';
 import BottomNavigation from './BottomNavigation';

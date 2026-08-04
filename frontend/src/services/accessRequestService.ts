@@ -32,6 +32,12 @@ export interface AccessRequestResponse {
   createdAt?: string;
 }
 
+export interface AccessRequestListResponse {
+  success: boolean;
+  data: AccessRequestStatus['request'][];
+  message?: string;
+}
+
 // Export the service as default as well
 const accessRequestService = {
   /**
@@ -88,7 +94,7 @@ const accessRequestService = {
   /**
    * Get all access requests (admin only)
    */
-  async getAllRequests(): Promise<any> {
+  async getAllRequests(): Promise<AccessRequestListResponse> {
     try {
       const token = localStorage.getItem('token');
       if (!token) {

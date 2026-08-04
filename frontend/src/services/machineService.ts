@@ -1,4 +1,3 @@
-import authService from './authService';
 import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface Machine {

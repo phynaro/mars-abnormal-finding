@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import emsService from '@/services/emsService';
 import type { EmsRole } from '@/utils/permissionChecker';
 import { checkEmsAccess, checkEmsAdmin } from '@/utils/permissionChecker';
@@ -58,6 +58,8 @@ export const EmsAccessProvider: React.FC<{ children: ReactNode }> = ({ children 
   );
 };
 
+// Provider and hook intentionally stay together because the hook consumes this module's private state shape.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useEmsAccess() {
   const ctx = useContext(EmsAccessContext);
   if (!ctx) {

@@ -1,4 +1,3 @@
-import authService from './authService';
 import { getAuthHeaders } from '../utils/authHeaders';
 import type { HierarchySiteOverview, HierarchyDepartmentDetailsResponse } from '@/types/hierarchy';
 

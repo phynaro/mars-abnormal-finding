@@ -1,7 +1,7 @@
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { menuItems, isMenuChildPathActive, type MenuItem } from './menuConfig';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { useEmsAccess } from '@/contexts/EmsAccessContext';
 
 interface SubmenuPanelProps {

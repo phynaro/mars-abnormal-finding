@@ -26,7 +26,7 @@ export async function handleApiError(
 
   try {
     errorData = await response.json();
-  } catch (parseError) {
+  } catch {
     // If JSON parsing fails, create a default error object
     errorData = {
       success: false,

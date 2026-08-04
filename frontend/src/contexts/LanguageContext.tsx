@@ -16,6 +16,8 @@ const defaultLanguageContext: LanguageContextType = {
   t: (key: string) => key,
 };
 
+// Provider and hook intentionally stay together with the translation catalog.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useLanguage = () => {
   const context = useContext(LanguageContext);
   if (context === undefined) {

@@ -1,4 +1,3 @@
-import authService from '@/services/authService';
 import { getAuthHeaders } from '@/utils/authHeaders';
 
 export interface WorkOrderVolumeItem {

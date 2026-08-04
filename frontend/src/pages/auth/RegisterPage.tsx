@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Eye, EyeOff, Lock, User, Mail, UserCheck, Building, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';

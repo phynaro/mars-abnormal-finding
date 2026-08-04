@@ -5,7 +5,7 @@
  * and how to implement the validation logic.
  */
 
-import { checkPermission, hasAnyPermission, hasAllPermissions, PERMISSION_CONFIG } from './permissionChecker';
+import { checkPermission, hasAnyPermission, hasAllPermissions } from './permissionChecker';
 
 // ============================================
 // EXAMPLE 1: Basic Permission Check
@@ -70,7 +70,7 @@ export function Example4_AllPermissions() {
 
 /*
 import { checkPermission } from '@/utils/permissionChecker';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 
 export function MyComponent() {
   const { user } = useAuth();
@@ -110,7 +110,7 @@ export function AdminPanel() {
 /*
 import { Navigate } from 'react-router-dom';
 import { checkPermission } from '@/utils/permissionChecker';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 
 export function ProtectedRoute({ children, requiredPermission }) {
   const { user } = useAuth();

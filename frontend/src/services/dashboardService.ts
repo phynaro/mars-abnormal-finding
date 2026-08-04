@@ -1,6 +1,5 @@
-import authService from './authService';
 import { getAuthHeaders } from '../utils/authHeaders';
-import type { PersonalKPIComparisonDataPoint, PersonalKPIComparisonResponse } from '../types/personalKPIComparison';
+import type { PersonalKPIComparisonResponse } from '../types/personalKPIComparison';
 import type { DepartmentUserKPIResponse } from '../types/departmentUserKPI';
 
 export type GroupBy = 'daily' | 'weekly' | 'period';
@@ -39,7 +38,7 @@ export interface WorkOrderTrendResponse {
       totalWorkOrders: number;
       dateRange: { start: string | null; end: string | null };
       groupBy: GroupBy;
-      appliedFilters: Record<string, any>;
+      appliedFilters: Record<string, unknown>;
     };
   };
 }
