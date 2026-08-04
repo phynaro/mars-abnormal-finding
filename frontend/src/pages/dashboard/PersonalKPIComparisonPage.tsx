@@ -8,7 +8,7 @@ import dashboardService from '@/services/dashboardService';
 import type { PersonalKPIComparisonDataPoint, Department } from '@/types/personalKPIComparison';
 import PersonalKPIComparisonFilter from '@/components/dashboard/PersonalKPIComparisonFilter';
 import PersonalKPIComparisonChart from '@/components/dashboard/PersonalKPIComparisonChart';
-import { getDateRangeForFilter, calculatePeriodForDate, getCompanyYearDateRange, getPeriodDateRange, formatLocalDate } from '@/utils/periodCalculations';
+import { calculatePeriodForDate, getCompanyYearDateRange, getPeriodDateRange, formatLocalDate } from '@/utils/periodCalculations';
 
 const PersonalKPIComparisonPage: React.FC = () => {
   const { t } = useLanguage();
@@ -121,7 +121,7 @@ const PersonalKPIComparisonPage: React.FC = () => {
     };
 
     fetchData();
-  }, [dateRange.startDate, dateRange.endDate, t]);
+  }, [dateRange.startDate, dateRange.endDate, t, selectedDepartments.length, selectedUsers.length]);
 
   // Keyboard shortcut for toggling filter panel (Escape key)
   useEffect(() => {

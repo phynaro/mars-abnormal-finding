@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Users, RefreshCw, AlertCircle, Filter, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Users, RefreshCw, AlertCircle, Filter, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useLanguage } from '@/contexts/LanguageContext';
 import dashboardService from '@/services/dashboardService';

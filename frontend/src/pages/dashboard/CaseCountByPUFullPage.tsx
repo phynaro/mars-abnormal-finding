@@ -15,6 +15,15 @@ import { AlertTriangle } from 'lucide-react';
 import dashboardService from '@/services/dashboardService';
 import { useLanguage } from '@/contexts/LanguageContext';
 
+type BarShapeProps = {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  fill?: string;
+  payload?: { puno: number };
+};
+
 const CaseCountByPUFullPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const { t } = useLanguage();
@@ -139,7 +148,7 @@ const CaseCountByPUFullPage: React.FC = () => {
                   <Bar
                     dataKey="caseCount"
                     fill="hsl(var(--primary))"
-                    shape={(props: any) => {
+                    shape={(props: BarShapeProps) => {
                       const { x, y, width, height, fill, payload } = props;
                       return (
                         <g>

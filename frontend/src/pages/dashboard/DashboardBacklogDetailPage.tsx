@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useNavigate, useParams, useLocation } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -9,7 +9,6 @@ type Mode = 'department' | 'user';
 
 const DashboardBacklogDetailPage: React.FC = () => {
   const navigate = useNavigate();
-  const location = useLocation();
   const params = useParams<{ deptCode?: string; personName?: string }>();
 
   const mode: Mode = params.deptCode ? 'department' : 'user';
@@ -34,8 +33,8 @@ const DashboardBacklogDetailPage: React.FC = () => {
           setDetails(res.data.details || []);
           setSummary(res.data.summary);
         }
-      } catch (e: any) {
-        setError(e.message || 'Failed to load details');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load details');
         setDetails([]);
         setSummary(null);
       } finally {
@@ -51,7 +50,7 @@ const DashboardBacklogDetailPage: React.FC = () => {
     return Object.keys(first);
   }, [details]);
 
-  const formatValue = (v: any) => {
+  const formatValue = (v: unknown) => {
     if (v === null || v === undefined || v === '') return '-';
     return String(v);
   };
@@ -101,7 +100,7 @@ const DashboardBacklogDetailPage: React.FC = () => {
                 {details.map((row, idx) => (
                   <tr key={idx} className="border-t">
                     {columns.map(col => (
-                      <td key={col} className="px-3 py-2 whitespace-nowrap">{formatValue((row as any)[col])}</td>
+                      <td key={col} className="px-3 py-2 whitespace-nowrap">{formatValue((row as unknown as Record<string, unknown>)[col])}</td>
                     ))}
                   </tr>
                 ))}
@@ -120,7 +119,7 @@ const DashboardBacklogDetailPage: React.FC = () => {
                   {columns.map(col => (
                     <React.Fragment key={col}>
                       <div className="text-[11px] text-muted-foreground">{col}</div>
-                      <div className="text-[12px]">{formatValue((row as any)[col])}</div>
+                      <div className="text-[12px]">{formatValue((row as unknown as Record<string, unknown>)[col])}</div>
                     </React.Fragment>
                   ))}
                 </div>
