@@ -6,11 +6,35 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { workRequestService } from '@/services/workRequestService';
 
+type DetailValue = string | number | boolean | null | undefined;
+type DetailGroup = Record<string, DetailValue>;
+
+interface WorkRequestData {
+  allFields?: DetailGroup;
+  id?: DetailValue;
+  wrCode?: DetailValue;
+  description?: DetailValue;
+  date?: DetailValue;
+  time?: DetailValue;
+  requester?: DetailGroup;
+  status?: DetailGroup;
+  urgency?: DetailGroup;
+  requestType?: DetailGroup;
+  wrType?: DetailGroup;
+  budgetCost?: DetailValue;
+  equipment?: DetailGroup;
+  productionUnit?: DetailGroup;
+  site?: DetailGroup;
+  departments?: DetailGroup & { requesting?: DetailGroup; receiving?: DetailGroup };
+  remark?: DetailValue;
+  note?: DetailValue;
+}
+
 const WorkRequestDetailsPage: React.FC = () => {
   const { wrId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<WorkRequestData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,21 +45,21 @@ const WorkRequestDetailsPage: React.FC = () => {
         setLoading(true);
         const res = await workRequestService.getById(Number(wrId));
         const payload = res?.data || res;
-        setData(payload);
+        setData(payload as WorkRequestData);
         const wrCode = payload?.wrCode || payload?.allFields?.WRCODE || `WR-${wrId}`;
         // Ensure breadcrumb shows WR code; replace state so back nav works
         navigate(location.pathname, { replace: true, state: { breadcrumbExtra: wrCode } });
-      } catch (e: any) {
-        setError(e.message || 'Failed to load work request');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load work request');
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [wrId]);
+  }, [wrId, location.pathname, navigate]);
   const wrCode = data?.wrCode || data?.allFields?.WRCODE || `WR-${wrId}`;
 
-  const fmtDateTime = (d?: string | null, t?: string | null) => {
+  const fmtDateTime = (d?: DetailValue, t?: DetailValue) => {
     if (!d && !t) return '-';
     return `${d || ''}${t ? ` ${t}` : ''}`.trim();
   };
@@ -48,7 +72,7 @@ const WorkRequestDetailsPage: React.FC = () => {
   );
 
   // Normalize fields from top-level or nested raw DB record at data.allFields
-  const raw = (data?.allFields || {}) as any;
+  const raw = data?.allFields || {};
   const view = data ? {
     id: data.id ?? raw.WRNO,
     code: data.wrCode ?? raw.WRCODE,
@@ -250,7 +274,7 @@ const WorkRequestDetailsPage: React.FC = () => {
               <Row label="Approved" value={fmtDateTime(view?.approvals.approvedDate, view?.approvals.approvedTime)} />
               <Row label="Approved By" value={view?.approvals.approvedBy} />
               <Row label="Not Approved" value={view?.approvals.notApproved ? 'Yes' : 'No'} />
-              <Row label="Flags" value={<span className="text-xs">{Object.entries(view?.flags || {}).filter(([k,v]) => !!v).map(([k]) => k).join(', ') || '-'}</span>} />
+              <Row label="Flags" value={<span className="text-xs">{Object.entries(view?.flags || {}).filter(([, value]) => !!value).map(([key]) => key).join(', ') || '-'}</span>} />
             </Card>
             <Card className="p-4 space-y-2">
               <div className="text-sm text-muted-foreground">Identifiers</div>

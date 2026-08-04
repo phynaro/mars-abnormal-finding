@@ -6,11 +6,38 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { workOrderService } from '@/services/workOrderService';
 
+type DetailValue = string | number | boolean | null | undefined;
+type DetailGroup = Record<string, DetailValue>;
+
+interface WorkOrderData {
+  allFields?: DetailGroup;
+  woCode?: DetailValue;
+  problem?: DetailValue;
+  requester?: DetailGroup;
+  equipment?: DetailGroup;
+  productionUnit?: DetailGroup;
+  site?: DetailGroup;
+  department?: DetailGroup;
+  related?: DetailGroup;
+  status?: DetailGroup;
+  type?: DetailGroup;
+  priority?: DetailGroup;
+  date?: DetailValue;
+  time?: DetailValue;
+  createdDate?: DetailValue;
+  updatedDate?: DetailValue;
+  schedule?: DetailGroup;
+  actual?: DetailGroup;
+  safety?: DetailGroup;
+  costs?: DetailGroup;
+  evaluation?: DetailGroup;
+}
+
 const WorkOrderDetailsPage: React.FC = () => {
   const { woId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<WorkOrderData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -22,19 +49,19 @@ const WorkOrderDetailsPage: React.FC = () => {
         const res = await workOrderService.getById(Number(woId));
         const payload = res?.data || res;
        // console.log(payload);
-        setData(payload);
+        setData(payload as WorkOrderData);
         const code = payload?.woCode || payload?.allFields?.WOCODE || `WO-${woId}`;
         navigate(location.pathname, { replace: true, state: { breadcrumbExtra: code } });
-      } catch (e: any) {
-        setError(e.message || 'Failed to load work order');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load work order');
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [woId]);
+  }, [woId, location.pathname, navigate]);
 
-  const fmtDateTime = (d?: string | null, t?: string | null) => {
+  const fmtDateTime = (d?: DetailValue, t?: DetailValue) => {
     if (!d && !t) return '-';
     return `${d || ''}${t ? ` ${t}` : ''}`.trim();
   };
@@ -46,7 +73,7 @@ const WorkOrderDetailsPage: React.FC = () => {
     </div>
   );
 
-  const raw = (data?.allFields || {}) as any;
+  const raw = data?.allFields || {};
   const code = (data?.woCode || raw.WOCODE || `WO-${woId}`);
   return (
     <div className="p-4 sm:p-6 space-y-4">

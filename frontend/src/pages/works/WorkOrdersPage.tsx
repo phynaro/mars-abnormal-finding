@@ -6,9 +6,23 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
-import { workOrderService } from '@/services/workOrderService';
+import { workOrderService, type WorkOrderListItem } from '@/services/workOrderService';
 
 interface Option { id: number | string; code?: string | null; name: string | null; }
+type ApiRecord = Record<string, unknown>;
+
+const asRecord = (value: unknown): ApiRecord => (
+  typeof value === 'object' && value !== null ? value as ApiRecord : {}
+);
+
+const extractOptions = (value: unknown): Option[] => {
+  if (Array.isArray(value)) return value as Option[];
+  const record = asRecord(value);
+  const data = asRecord(record.data);
+  if (Array.isArray(record.data)) return record.data as Option[];
+  if (Array.isArray(data.data)) return data.data as Option[];
+  return [];
+};
 
 const StatusPill: React.FC<{ name?: string | null; code?: string | null }>
   = ({ name, code }) => {
@@ -37,7 +51,7 @@ const WorkOrdersPage: React.FC = () => {
   const [typeOptions, setTypeOptions] = useState<Option[]>([]);
   const [priorityOptions, setPriorityOptions] = useState<Option[]>([]);
 
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<WorkOrderListItem[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -51,17 +65,10 @@ const WorkOrdersPage: React.FC = () => {
           workOrderService.getTypes(),
           workOrderService.getPriorities(),
         ]);
-        const extractArray = (res: any) => Array.isArray(res)
-          ? res
-          : Array.isArray(res?.data)
-            ? res.data
-            : Array.isArray(res?.data?.data)
-              ? res.data.data
-              : [];
-        setStatusOptions(extractArray(st));
-        setTypeOptions(extractArray(ty));
-        setPriorityOptions(extractArray(pr));
-      } catch (e) {
+        setStatusOptions(extractOptions(st));
+        setTypeOptions(extractOptions(ty));
+        setPriorityOptions(extractOptions(pr));
+      } catch {
         // ignore lookup errors for now
       }
     };
@@ -82,26 +89,28 @@ const WorkOrdersPage: React.FC = () => {
           startDate: filters.startDate || undefined,
           endDate: filters.endDate || undefined,
         });
-        const extractPayload = (r: any) => {
-          if (r?.data?.workOrders) return r.data;
-          if (r?.data?.data?.workOrders) return r.data.data;
-          if (r?.workOrders) return r;
-          return { workOrders: [], pagination: r?.data?.pagination || r?.pagination || { page: 1, totalPages: 1 } };
+        const extractPayload = (value: unknown): ApiRecord => {
+          const record = asRecord(value);
+          const data = asRecord(record.data);
+          if (data.workOrders) return data;
+          if (asRecord(data.data).workOrders) return asRecord(data.data);
+          if (record.workOrders) return record;
+          return { workOrders: [], pagination: data.pagination || record.pagination || { page: 1, totalPages: 1 } };
         };
         const payload = extractPayload(res);
         const list = Array.isArray(payload.workOrders)
-          ? payload.workOrders
+          ? payload.workOrders as WorkOrderListItem[]
           : (payload.workOrders && typeof payload.workOrders === 'object')
-            ? Object.values(payload.workOrders)
+            ? Object.values(payload.workOrders) as WorkOrderListItem[]
             : Array.isArray(payload.data)
-              ? payload.data
+              ? payload.data as WorkOrderListItem[]
               : [];
         setRows(list);
-        const pgn = payload.pagination || res?.data?.pagination || {};
+        const pgn = asRecord(payload.pagination || asRecord(res.data).pagination);
         setPage(Number(pgn.page) || 1);
         setPages(Number(pgn.totalPages || pgn.pages) || 1);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load work orders');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load work orders');
       } finally {
         setLoading(false);
       }

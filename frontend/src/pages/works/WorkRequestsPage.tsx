@@ -9,10 +9,24 @@ import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { workRequestService } from '@/services/workRequestService';
+import { workRequestService, type WorkRequestListItem } from '@/services/workRequestService';
 import { useToast } from '@/hooks/useToast';
 
 interface Option { id: number | string; code?: string | null; name: string | null; }
+type ApiRecord = Record<string, unknown>;
+
+const asRecord = (value: unknown): ApiRecord => (
+  typeof value === 'object' && value !== null ? value as ApiRecord : {}
+);
+
+const extractOptions = (value: unknown): Option[] => {
+  if (Array.isArray(value)) return value as Option[];
+  const record = asRecord(value);
+  const data = asRecord(record.data);
+  if (Array.isArray(record.data)) return record.data as Option[];
+  if (Array.isArray(data.data)) return data.data as Option[];
+  return [];
+};
 
 const StatusPill: React.FC<{ name?: string | null; code?: string | null }>
   = ({ name, code }) => {
@@ -41,7 +55,7 @@ const WorkRequestsPage: React.FC = () => {
   const [urgencyOptions, setUrgencyOptions] = useState<Option[]>([]);
   const [typeOptions, setTypeOptions] = useState<Option[]>([]);
 
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<WorkRequestListItem[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -102,17 +116,10 @@ const WorkRequestsPage: React.FC = () => {
           workRequestService.getUrgencies(),
           workRequestService.getCategories(),
         ]);
-        const extractArray = (res: any) => Array.isArray(res)
-          ? res
-          : Array.isArray(res?.data)
-            ? res.data
-            : Array.isArray(res?.data?.data)
-              ? res.data.data
-              : [];
-        setStatusOptions(extractArray(st));
-        setUrgencyOptions(extractArray(ur));
-        setTypeOptions(extractArray(ct));
-      } catch (e) {
+        setStatusOptions(extractOptions(st));
+        setUrgencyOptions(extractOptions(ur));
+        setTypeOptions(extractOptions(ct));
+      } catch {
         // ignore lookup errors for now
       }
     };
@@ -133,26 +140,28 @@ const WorkRequestsPage: React.FC = () => {
           startDate: filters.startDate || undefined,
           endDate: filters.endDate || undefined,
         });
-        const extractPayload = (r: any) => {
-          if (r?.data?.workRequests) return r.data;
-          if (r?.data?.data?.workRequests) return r.data.data;
-          if (r?.workRequests) return r;
-          return { workRequests: [], pagination: r?.data?.pagination || r?.pagination || { page: 1, totalPages: 1 } };
+        const extractPayload = (value: unknown): ApiRecord => {
+          const record = asRecord(value);
+          const data = asRecord(record.data);
+          if (data.workRequests) return data;
+          if (asRecord(data.data).workRequests) return asRecord(data.data);
+          if (record.workRequests) return record;
+          return { workRequests: [], pagination: data.pagination || record.pagination || { page: 1, totalPages: 1 } };
         };
         const payload = extractPayload(res);
         const list = Array.isArray(payload.workRequests)
-          ? payload.workRequests
+          ? payload.workRequests as WorkRequestListItem[]
           : (payload.workRequests && typeof payload.workRequests === 'object')
-            ? Object.values(payload.workRequests)
+            ? Object.values(payload.workRequests) as WorkRequestListItem[]
             : Array.isArray(payload.data)
-              ? payload.data
+              ? payload.data as WorkRequestListItem[]
               : [];
         setRows(list);
-        const pgn = payload.pagination || res?.data?.pagination || {};
+        const pgn = asRecord(payload.pagination || asRecord(res.data).pagination);
         setPage(Number(pgn.page) || 1);
         setPages(Number(pgn.totalPages || pgn.pages) || 1);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load work requests');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load work requests');
       } finally {
         setLoading(false);
       }
@@ -398,7 +407,7 @@ const WorkRequestsPage: React.FC = () => {
 
                         try {
                           setCreating(true);
-                          const payload: any = {
+                          const payload = {
                             description: createForm.description.trim(),
                             urgencyId: Number(createForm.urgencyId),
                             requestTypeId: Number(createForm.requestTypeId),
@@ -446,8 +455,8 @@ const WorkRequestsPage: React.FC = () => {
                           if (created?.id) {
                             navigate(`/maintenance/work-requests/${created.id}`, { state: { breadcrumbExtra: created.wrCode } });
                           }
-                        } catch (e: any) {
-                          toast({ title: 'Error', description: e.message || 'Failed to create work request', variant: 'destructive' });
+                        } catch (e: unknown) {
+                          toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to create work request', variant: 'destructive' });
                         } finally {
                           setCreating(false);
                         }
