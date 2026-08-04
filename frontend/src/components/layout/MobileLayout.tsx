@@ -1,12 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
-import { useAuth } from '../../contexts/useAuth';
+import { useLocation } from 'react-router-dom';
 import { useBottomNavigation } from '../../hooks/useBottomNavigation';
 import TopNavbar from './TopNavbar';
 import BottomNavigation from './BottomNavigation';
 import { cn } from '@/lib/utils';
-import { Plus, Menu, PlusIcon } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 
 interface MobileLayoutProps {
   children: React.ReactNode;
@@ -15,8 +12,6 @@ interface MobileLayoutProps {
 const MobileLayout: React.FC<MobileLayoutProps> = ({ children }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const location = useLocation();
-  const navigate = useNavigate();
-  const { user } = useAuth();
   
   // Bottom navigation hook
   const { isVisible: isBottomNavVisible } = useBottomNavigation({
@@ -33,33 +28,6 @@ const MobileLayout: React.FC<MobileLayoutProps> = ({ children }) => {
     setIsMobileMenuOpen(false);
   }, [location.pathname]);
 
-  // Show floating action button on certain pages
-  const showFAB = () => {
-    const fabPaths = ['/tickets', '/dashboard', '/home'];
-    const shouldShow = fabPaths.some(path => location.pathname.startsWith(path));
-    
-    // Debug logging
-    console.log('FAB Debug:', {
-      currentPath: location.pathname,
-      fabPaths,
-      shouldShow,
-      isBottomNavVisible,
-      willShow: shouldShow && isBottomNavVisible
-    });
-    
-    return shouldShow;
-  };
-
-  const getFABAction = () => {
-    if (location.pathname.startsWith('/tickets')) {
-       
-      return { label: 'Create Ticket', path: '/tickets/create/wizard' };
-    }
-    if (location.pathname.startsWith('/dashboard')) {
-      return { label: 'Quick Report', path: '/reports/quick' };
-    }
-    return { label: 'Quick Action', path: '/home' };
-  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col lg:hidden">

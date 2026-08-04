@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils';
 
 export type EmsEquipmentStatus = 'OVERDUE' | 'DUE SOON' | 'OK' | 'NO WO' | string;
 
+// Shared status helpers are intentionally exported for non-UI feature consumers.
+// eslint-disable-next-line react-refresh/only-export-components
 export function emsStatusBadgeClass(status: string): string {
   switch (status) {
     case 'OVERDUE':
@@ -17,6 +19,7 @@ export function emsStatusBadgeClass(status: string): string {
   }
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function emsStatusLabel(status: string, t: (key: string) => string): string {
   switch (status) {
     case 'OVERDUE':

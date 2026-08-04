@@ -21,7 +21,9 @@ export interface ScheduleFilters {
   dueTo: string;
 }
 
-export const EMPTY_SCHEDULE_FILTERS: ScheduleFilters = {
+// Shared filter defaults are intentionally exported for feature state initialization.
+// eslint-disable-next-line react-refresh/only-export-components
+export const EMPTY_SCHEDULE_FILTERS: ScheduleFilters = {
   plant: '',
   area: '',
   woStatus: '',

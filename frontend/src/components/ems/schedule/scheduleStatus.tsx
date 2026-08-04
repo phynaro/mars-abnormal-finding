@@ -2,6 +2,8 @@ import React from 'react';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
+// Shared status helper is intentionally exported for non-UI feature consumers.
+// eslint-disable-next-line react-refresh/only-export-components
 export function emsWoStatusBadgeClass(status: string): string {
   switch (status) {
     case 'Done':
@@ -22,6 +24,7 @@ export function EmsWoStatusBadge({ status }: { status: string }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function formatScheduleDueDays(
   daysUntilDue: number | null | undefined,
   t: (key: string) => string

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useState, useEffect } from 'react';
 import MobileLayout from './MobileLayout';
 import { ChevronLeft, Menu } from 'lucide-react';
 import IconRail from './IconRail';
@@ -35,10 +35,10 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
   }, []);
 
   const location = useLocation();
-  const findActiveId = () => {
+  const findActiveId = useCallback(() => {
     const match = menuItems.find(m => location.pathname.startsWith(m.path));
     return match ? match.id : null;
-  };
+  }, [location.pathname]);
   const [activeId, setActiveId] = useState<string | null>(findActiveId());
   const [submenuCollapsed, setSubmenuCollapsed] = useState<boolean>(() => {
     const v = localStorage.getItem('submenu-collapsed-global');
@@ -47,7 +47,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   useEffect(() => {
     setActiveId(findActiveId());
-  }, [location.pathname]);
+  }, [findActiveId]);
 
   useEffect(() => {
     localStorage.setItem('submenu-collapsed-global', submenuCollapsed ? '1' : '0');

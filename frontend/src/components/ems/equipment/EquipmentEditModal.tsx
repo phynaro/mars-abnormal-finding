@@ -30,7 +30,8 @@ import emsService, {
   type EmsEquipmentUpdatePayload,
 } from '@/services/emsService';
 import { compressImage } from '@/utils/imageCompression';
-import EquipmentImageCard, { EQUIPMENT_THUMB_PX } from './EquipmentImageCard';
+import EquipmentImageCard from './EquipmentImageCard';
+import { EQUIPMENT_THUMB_PX } from './equipmentImageConstants';
 
 interface EquipmentEditModalProps {
   open: boolean;

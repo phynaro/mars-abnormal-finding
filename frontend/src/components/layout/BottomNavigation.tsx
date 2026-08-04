@@ -71,6 +71,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
 
   const canAccess = (permissionLevel: number) => {
     // Bottom navigation doesn't require any permissions
+    void permissionLevel;
     return true;
   };
 
