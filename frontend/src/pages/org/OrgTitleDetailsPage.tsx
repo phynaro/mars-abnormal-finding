@@ -3,7 +3,9 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Card } from '@/components/ui/card';
 import personnelService from '@/services/personnelService';
-import type { OrgRow } from './orgTypes';
+import type { Title } from '@/services/personnelService';
+
+type TitleDetails = Title & { allFields?: unknown };
 
 const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
   <div className="flex text-sm"><div className="w-36 text-muted-foreground">{label}</div><div>{value ?? '-'}</div></div>
@@ -13,14 +15,14 @@ const OrgTitleDetailsPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [data, setData] = useState<OrgRow | null>(null);
+  const [data, setData] = useState<TitleDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { (async () => {
     if (!id) return; setLoading(true);
     try {
       const res = await personnelService.getTitle(id);
-      const payload = res?.data || res;
+      const payload = res.data;
       setData(payload);
       const label = payload?.TITLECODE || `#${id}`;
       navigate(location.pathname, { replace: true, state: { breadcrumbExtra: label } });
@@ -40,7 +42,7 @@ const OrgTitleDetailsPage: React.FC = () => {
             <Row label="Name" value={data.TITLENAME} />
             <Row label="Parent" value={data.PARENT_TITLECODE || data.TITLEPARENT} />
           </Card>
-          {data.allFields && (
+          {data.allFields != null && (
             <Card className="p-4 space-y-2">
               <div className="text-sm text-muted-foreground">Raw Record</div>
               <pre className="text-xs overflow-auto max-h-80 bg-muted/30 p-2 rounded">{JSON.stringify(data.allFields, null, 2)}</pre>
@@ -53,4 +55,3 @@ const OrgTitleDetailsPage: React.FC = () => {
 };
 
 export default OrgTitleDetailsPage;
-

@@ -18,8 +18,8 @@ import { useAuth } from '@/contexts/useAuth';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 const PERIODS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13'];
-const TARGET_TYPES = ['report', 'fix', 'closure'] as const;
-const UNITS = ['case', 'THB', 'percent'] as const;
+//const TARGET_TYPES = ['report', 'fix', 'closure'] as const;
+//const UNITS = ['case', 'THB', 'percent'] as const;
 
 interface PersonalKPISetupModalProps {
   open: boolean;
@@ -103,11 +103,13 @@ const PersonalKPISetupModal: React.FC<PersonalKPISetupModalProps> = ({
     }
   };
 
-  // Initialize data when modal opens
+  // Initialize data when modal opens. The callback reads this same modal context.
   useEffect(() => {
     if (open && effectivePersonno != null) {
       fetchExistingTargets();
     }
+    // The callback reads the same modal context as this effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, selectedYear, targetType, effectivePersonno]);
 
   // Handle save targets

@@ -69,7 +69,7 @@ const TicketCreateWizardPageV2: React.FC = () => {
   const [selectedMachine, setSelectedMachine] = useState<SelectedMachine | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextSearchRef = useRef(false);
 
   // Data state (mirrors CreateTicketRequest with extras)
@@ -79,6 +79,8 @@ const TicketCreateWizardPageV2: React.FC = () => {
   const [puno, setPuno] = useState<number | undefined>(undefined);
   const [plant, setPlant] = useState<string | undefined>(undefined);
   const [pucriticalno, setPucriticalno] = useState<number | undefined>(undefined);
+  const severity = 'medium' as const;
+  const priority = 'normal' as const;
 
   // Equipment selection state
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);

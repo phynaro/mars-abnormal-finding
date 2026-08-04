@@ -61,10 +61,6 @@ const NotificationScheduleManagementPage: React.FC = () => {
     description: ''
   });
 
-  useEffect(() => {
-    loadSchedules();
-  }, [loadSchedules]);
-
   const loadSchedules = useCallback(async () => {
     try {
       setLoading(true);
@@ -83,6 +79,10 @@ const NotificationScheduleManagementPage: React.FC = () => {
       setLoading(false);
     }
   }, [toast]);
+
+  useEffect(() => {
+    loadSchedules();
+  }, [loadSchedules]);
 
   const handleEdit = (schedule: NotificationSchedule) => {
     setSelectedSchedule(schedule);

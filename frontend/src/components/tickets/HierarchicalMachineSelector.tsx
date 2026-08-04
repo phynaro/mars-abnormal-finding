@@ -1,9 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
-import { X } from 'lucide-react';
 import { hierarchyService } from '@/services/hierarchyService';
 import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -48,7 +45,6 @@ interface HierarchicalMachineSelectorProps {
 const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = ({
   onMachineSelect,
   onClear,
-  selectedMachineData,
   disabled = false
 }) => {
   const { toast } = useToast();
@@ -72,12 +68,7 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
   const [loadingLines, setLoadingLines] = useState(false);
   const [loadingMachines, setLoadingMachines] = useState(false);
 
-  // Load plants on mount
-  useEffect(() => {
-    loadPlants();
-  }, []);
-
-  const loadPlants = async () => {
+  const loadPlants = useCallback(async () => {
     try {
       setLoadingPlants(true);
       const response = await hierarchyService.getDistinctPlants();
@@ -94,7 +85,12 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
     } finally {
       setLoadingPlants(false);
     }
-  };
+  }, [t, toast]);
+
+  // Load plants on mount
+  useEffect(() => {
+    loadPlants();
+  }, [loadPlants]);
 
   const loadAreas = async (plant: string) => {
     try {
@@ -299,38 +295,6 @@ const HierarchicalMachineSelector: React.FC<HierarchicalMachineSelectorProps> = 
         // Don't clear selections - keep them visible to show what was selected
       }
     }
-  };
-
-  const clearAllSelections = () => {
-    setSelectedPlant('');
-    setSelectedArea('');
-    setSelectedLine('');
-    setSelectedMachine('');
-    setAreas([]);
-    setLines([]);
-    setMachines([]);
-    onClear();
-  };
-
-  const getSelectedPath = () => {
-    const path = [];
-    if (selectedPlant) {
-      const plant = plants.find(p => p.code === selectedPlant);
-      path.push(plant?.name || selectedPlant);
-    }
-    if (selectedArea) {
-      const area = areas.find(a => a.code === selectedArea);
-      path.push(area?.name || selectedArea);
-    }
-    if (selectedLine && selectedLine !== 'none') {
-      const line = lines.find(l => l.code === selectedLine);
-      path.push(line?.name || selectedLine);
-    }
-    if (selectedMachine) {
-      const machine = machines.find(m => m.code === selectedMachine);
-      path.push(machine?.name || selectedMachine);
-    }
-    return path.join(' → ');
   };
 
   return (

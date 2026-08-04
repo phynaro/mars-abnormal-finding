@@ -84,10 +84,6 @@ const HierarchyViewPage: React.FC = () => {
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
-  useEffect(() => {
-    loadHierarchyData();
-  }, [loadHierarchyData]);
-
   const loadHierarchyData = useCallback(async () => {
     try {
       setLoading(true);
@@ -107,6 +103,10 @@ const HierarchyViewPage: React.FC = () => {
       setLoading(false);
     }
   }, [toast]);
+
+  useEffect(() => {
+    loadHierarchyData();
+  }, [loadHierarchyData]);
 
   const toggleExpanded = (itemKey: string) => {
     setExpandedItems(prev => {

@@ -84,9 +84,6 @@ class PersonnelService {
     });
 
     const url = `${this.baseURL}/persons?${queryParams.toString()}`;
-    console.log('🔍 Personnel Service - Request URL:', url);
-    console.log('🔍 Personnel Service - Request params:', params);
-
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -94,10 +91,6 @@ class PersonnelService {
         'Content-Type': 'application/json',
       },
     });
-
-    console.log('🔍 Personnel Service - Response status:', response.status);
-    console.log('🔍 Personnel Service - Response headers:', Object.fromEntries(response.headers.entries()));
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error('🔍 Personnel Service - Error response:', errorText);
@@ -113,7 +106,6 @@ class PersonnelService {
     }
 
     const data = await response.json();
-    console.log('🔍 Personnel Service - Response data:', data);
     return data;
   }
 
@@ -142,9 +134,6 @@ class PersonnelService {
     });
 
     const url = `${this.baseURL}/departments?${queryParams.toString()}`;
-    console.log('🔍 Personnel Service - Departments Request URL:', url);
-    console.log('🔍 Personnel Service - Departments Request params:', params);
-
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -152,10 +141,6 @@ class PersonnelService {
         'Content-Type': 'application/json',
       },
     });
-
-    console.log('🔍 Personnel Service - Departments Response status:', response.status);
-    console.log('🔍 Personnel Service - Departments Response headers:', Object.fromEntries(response.headers.entries()));
-
     if (!response.ok) {
       const errorText = await response.text();
       console.error('🔍 Personnel Service - Departments Error response:', errorText);
@@ -171,7 +156,6 @@ class PersonnelService {
     }
 
     const data = await response.json();
-    console.log('🔍 Personnel Service - Departments Response data:', data);
     return data;
   }
 
@@ -200,9 +184,6 @@ class PersonnelService {
     });
 
     const url = `${this.baseURL}/titles?${queryParams.toString()}`;
-    console.log('🔍 Personnel Service - Titles Request URL:', url);
-    console.log('🔍 Personnel Service - Titles Request params:', params);
-
     const response = await fetch(url, {
       method: 'GET',
       headers: {
@@ -210,9 +191,6 @@ class PersonnelService {
         'Content-Type': 'application/json',
       },
     });
-
-    console.log('🔍 Personnel Service - Titles Response status:', response.status);
-    console.log('🔍 Personnel Service - Titles Response headers:', Object.fromEntries(response.headers.entries()));
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -229,7 +207,6 @@ class PersonnelService {
     }
 
     const data = await response.json();
-    console.log('🔍 Personnel Service - Titles Response data:', data);
     return data;
   }
 
