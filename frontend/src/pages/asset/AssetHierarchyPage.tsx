@@ -23,8 +23,8 @@ const AssetHierarchyPage: React.FC = () => {
       try {
         const res = await assetService.getSites();
         setSites(res.data || []);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load sites');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load sites');
       }
     };
     init();
@@ -36,8 +36,8 @@ const AssetHierarchyPage: React.FC = () => {
         setLoading(true);
         const sites = await hierarchyService.getHierarchyOverview(siteNo);
         setOverview((sites && sites.length > 0) ? sites[0] : null);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load hierarchy overview');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load hierarchy overview');
       } finally {
         setLoading(false);
       }
@@ -61,8 +61,8 @@ const AssetHierarchyPage: React.FC = () => {
         setDeptLoading(prev => ({ ...prev, [deptKey]: true }));
         const resp = await hierarchyService.getDepartmentDetails(deptNo === 0 ? 'general' : deptNo, siteNo as number, 1, 50, true);
         setDeptData(prev => ({ ...prev, [deptKey]: resp }));
-      } catch (e: any) {
-        setError(e.message || 'Failed to load department details');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load department details');
         return;
       } finally {
         setDeptLoading(prev => ({ ...prev, [deptKey]: false }));
