@@ -124,6 +124,7 @@ const CalibrationOverduePanel: React.FC = () => {
   );
 
   const load = useCallback(async () => {
+    void tick;
     setLoading(true);
     setError(null);
     try {
@@ -165,7 +166,8 @@ const CalibrationOverduePanel: React.FC = () => {
   const toggleBucket = (key: BucketKey) =>
     setOpenBuckets((prev) => {
       const next = new Set(prev);
-      next.has(key) ? next.delete(key) : next.add(key);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
 

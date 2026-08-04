@@ -1,17 +1,18 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
-  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend,
+  ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip,
   LabelList
 } from 'recharts';
-import { Download, Users, TrendingUp, Calendar, MapPin } from 'lucide-react';
+import { Users, TrendingUp, Calendar, MapPin } from 'lucide-react';
 import dashboardService, { type UserActivityResponse } from '@/services/dashboardService';
 import { getAvatarUrl } from '@/utils/url';
 
 // Custom tooltip component for user chart with avatar
-const UserTooltip = ({ active, payload }: any) => {
+type UserActivityRow = UserActivityResponse['data']['userActivityData'][number];
+
+const UserTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: UserActivityRow }> }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
@@ -47,7 +48,7 @@ const SVGAvatar: React.FC<{
   x: number;
   y: number;
   size: number;
-  user: any;
+  user: UserActivityRow;
   clipPrefix?: string;
 }> = ({ x, y, size, user, clipPrefix = '' }) => {
   const [imageLoaded, setImageLoaded] = useState(false);
@@ -147,8 +148,8 @@ const SVGAvatar: React.FC<{
 };
 
 // SVG-based avatar label component for horizontal bars
-const AvatarLabel = ({ data, maxAvatar = 40, clipPrefix = '' }: { data: any[], maxAvatar?: number, clipPrefix?: string }) => {
-  return (props: any) => {
+const AvatarLabel = ({ data, maxAvatar = 40, clipPrefix = '' }: { data: UserActivityRow[], maxAvatar?: number, clipPrefix?: string }) => {
+  return (props: { x: number; y: number; width: number; height: number; index?: number }) => {
     const { x, y, width, height, index } = props;
     const row = data[index];
     
@@ -202,8 +203,8 @@ const UserActivityChartPage: React.FC = () => {
       const response = await dashboardService.getUserActivityData(params);
       setUserActivityData(response.data.userActivityData);
       
-    } catch (err: any) {
-      setError(err.message || 'Failed to fetch user activity data');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to fetch user activity data');
       console.error('Error fetching user activity data:', err);
     } finally {
       setLoading(false);
@@ -224,9 +225,11 @@ const UserActivityChartPage: React.FC = () => {
       }));
     }
     return [];
-  }, [userActivityData, getAvatarUrl]);
+  }, [userActivityData]);
 
   // Export data to CSV
+  // Kept for the legacy export control until it is reintroduced in the chart toolbar.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const exportToCSV = () => {
     if (userActivityChartData.length === 0) return;
 

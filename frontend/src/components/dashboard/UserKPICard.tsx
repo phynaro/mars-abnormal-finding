@@ -11,8 +11,7 @@ import {
   Line,
 } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { BarChart3, Target, TrendingUp } from "lucide-react";
+import { BarChart3 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { getPeriodDateRange } from "@/utils/periodCalculations";
 import type { DepartmentUserKPIUserData } from "@/types/departmentUserKPI";
@@ -21,6 +20,11 @@ export type UserKPICardProps = {
   user: DepartmentUserKPIUserData;
   selectedYear: number;
   kpiType: 'created' | 'assigned' | 'closure';
+};
+
+type UserKpiTooltipProps = {
+  active?: boolean;
+  payload?: Array<{ payload: { period: string; [key: string]: number | string | undefined } }>;
 };
 
 const UserKPICard: React.FC<UserKPICardProps> = ({
@@ -32,7 +36,7 @@ const UserKPICard: React.FC<UserKPICardProps> = ({
 
   const isClosure = kpiType === 'closure';
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: UserKpiTooltipProps) => {
     if (active && payload && payload.length) {
       const dataPoint = payload[0].payload;
       const period = dataPoint.period;
@@ -139,10 +143,6 @@ const UserKPICard: React.FC<UserKPICardProps> = ({
     ? Math.max(...chartData.map((d: { total?: number }) => d.total ?? 0), 1)
     : 1;
 
-  const totalTickets = user.periods.reduce((sum, period) => sum + period.tickets, 0);
-  const totalTarget = user.periods.reduce((sum, period) => sum + period.target, 0);
-  const avgPerPeriod = isClosure ? totalTickets / 13 : totalTickets / 13;
-  const targetAchievement = totalTarget > 0 ? (totalTickets / totalTarget) * 100 : 0;
 
   return (
     <Card className="h-[310px]">

@@ -5,8 +5,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { AlertTriangle, CheckCircle, DollarSign, TrendingDown, TrendingUp } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+type GrowthMetric = { percentage: number; description: string; type: string };
+export type PersonalKpiData = {
+  userRole: string;
+  reporterMetrics: { totalReportsThisPeriod: number; downtimeAvoidedByReportsThisPeriod: number; costAvoidedByReportsThisPeriod: number };
+  actionPersonMetrics?: { totalCasesFixedThisPeriod: number; downtimeAvoidedByFixesThisPeriod: number; costAvoidedByFixesThisPeriod: number };
+  summary: { reporterComparisonMetrics: Record<string, GrowthMetric>; actionPersonComparisonMetrics: Record<string, GrowthMetric> };
+};
+
 export type PersonalKPITilesProps = {
-  kpiData: any;
+  kpiData: PersonalKpiData;
   loading: boolean;
   error: string | null;
   dateRange?: { startDate: string; endDate: string };
@@ -239,7 +247,7 @@ const PersonalKPITiles: React.FC<PersonalKPITilesProps> = ({
       ]
     : [];
 
-  const renderKpiTile = (kpi: any, index: number) => {
+  const renderKpiTile = (kpi: { title: string; value: string | number; change: number; changeDescription: string; changeType: string; icon: React.ReactNode; color: string; clickable?: boolean; filterType?: 'created_by' | 'assigned_to' }, index: number) => {
     const isClickable = kpi.clickable && userId && dateRange;
     
     return (

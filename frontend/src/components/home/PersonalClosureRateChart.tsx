@@ -43,7 +43,7 @@ const PersonalClosureRateChart: React.FC<PersonalClosureRateChartProps> = ({
 }) => {
   const { t } = useLanguage();
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: PersonalClosureRateChartDataPoint }> }) => {
     if (active && payload && payload.length) {
       const dataPoint = payload[0].payload;
       const period = dataPoint.period;

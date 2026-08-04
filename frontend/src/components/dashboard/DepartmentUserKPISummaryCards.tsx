@@ -1,6 +1,5 @@
 import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Users, Calendar, Building, BarChart3 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { DepartmentUserKPISummary, DepartmentUserKPIUserData } from "@/types/departmentUserKPI";

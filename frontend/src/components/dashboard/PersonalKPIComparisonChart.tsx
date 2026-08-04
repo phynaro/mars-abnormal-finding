@@ -45,7 +45,6 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
   // Get the selected KPI option
   const selectedKPIOption = KPI_OPTIONS.find(option => option.value === selectedKPI);
   const kpiLabel = selectedKPIOption ? t(selectedKPIOption.label) : selectedKPI;
-  const kpiUnit = selectedKPIOption?.unit || '';
 
   // Sort data by selected KPI value in descending order
   const sortedData = React.useMemo(() => {
@@ -132,7 +131,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
   };
 
   // Custom tooltip component
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: PersonalKPIComparisonDataPoint }> }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload as PersonalKPIComparisonDataPoint;
       const value = data[selectedKPI as keyof PersonalKPIComparisonDataPoint] as number;
@@ -171,7 +170,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
   };
 
   // Custom label component for values on top of bars
-  const CustomLabel = (props: any) => {
+  const CustomLabel = (props: { x?: number; y?: number; width?: number; value?: number }) => {
     const { x, y, width, value } = props;
     const formattedValue = formatValue(value);
     

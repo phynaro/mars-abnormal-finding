@@ -7,9 +7,7 @@ import type { PendingTicket as APIPendingTicket } from "@/services/ticketService
 import {
   getTicketPriorityClass,
   getTicketSeverityClass,
-  getTicketStatusClass,
   getTicketStatusClassModern,
-  getCriticalLevelClass,
   getCriticalLevelClassModern,
   getCriticalLevelIconClass,
   getCriticalLevelText,
@@ -288,6 +286,8 @@ const getRelationshipConfig = (
   return configs[relationship] ?? configs.viewer;
 };
 
+// Retained for the legacy mobile schema until that view is removed.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const renderMobileCardContent = (
   ticket: APIPendingTicket,
   fieldKey: string,

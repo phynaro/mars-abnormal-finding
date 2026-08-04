@@ -33,7 +33,7 @@ const PersonalTicketCountChart: React.FC<PersonalTicketCountChartProps> = ({
 }) => {
   const { t } = useLanguage();
 
-  const CustomTooltip = ({ active, payload }: any) => {
+  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: { period: string; tickets: number; target: number } }> }) => {
     if (active && payload && payload.length) {
       const dataPoint = payload[0].payload;
       const period = dataPoint.period;

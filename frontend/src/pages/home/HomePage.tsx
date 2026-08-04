@@ -12,10 +12,10 @@ import {
 import personalTargetService from "@/services/personalTargetService";
 import PersonalKPISetupModal from "@/components/personal/PersonalKPISetupModal";
 import PersonalFilterModal from "@/components/personal/PersonalFilterModal";
-import { getAvatarUrl } from "@/utils/url";
-import { formatLocalDate, calculatePeriodForDate, getDateRangeForFilter } from "@/utils/periodCalculations";
+import { calculatePeriodForDate, getDateRangeForFilter } from "@/utils/periodCalculations";
 import PendingTicketsSection from "@/components/home/PendingTicketsSection";
 import PersonalKPISection from "@/components/home/PersonalKPISection";
+import type { PersonalKpiData } from "@/components/home/PersonalKPITiles";
 
 const HomePage: React.FC = () => {
   const { user, isAuthenticated } = useAuth();
@@ -46,7 +46,7 @@ const HomePage: React.FC = () => {
   const [personalClosureRateError, setPersonalClosureRateError] = useState<string | null>(null);
 
   // Personal KPI data state
-  const [personalKPIData, setPersonalKPIData] = useState<any>(null);
+  const [personalKPIData, setPersonalKPIData] = useState<PersonalKpiData | null>(null);
   const [personalKPILoading, setPersonalKPILoading] = useState<boolean>(false);
   const [personalKPIError, setPersonalKPIError] = useState<string | null>(null);
 
@@ -88,21 +88,26 @@ const HomePage: React.FC = () => {
     };
 
     fetchPendingTickets();
+  // Fetch handlers are intentionally declared below the render setup; keep the existing request trigger contract.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, user]);
 
   // Fetch personal ticket data when filters change
   useEffect(() => {
     fetchPersonalTicketData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
   // Fetch personal closure rate data when filters change (L2+ users only)
   useEffect(() => {
     fetchPersonalClosureRateData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
   // Fetch personal KPI data when filters change
   useEffect(() => {
     fetchPersonalKPIData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personalTimeFilter, personalSelectedYear, personalSelectedPeriod, isAuthenticated, user]);
 
   // Initialize pending personal filters when modal opens
@@ -110,6 +115,7 @@ const HomePage: React.FC = () => {
     if (personalFilterModalOpen) {
       resetPendingPersonalFilters();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personalFilterModalOpen]);
 
 
@@ -121,8 +127,6 @@ const HomePage: React.FC = () => {
   const subtitle = userTitle
     ? `${userTitle} • ${departmentName}`
     : departmentName;
-  const avatarSrc = getAvatarUrl(user?.avatarUrl);
-  const avatarInitials = `${user?.firstName?.[0] ?? ""}${user?.lastName?.[0] ?? ""}`;
 
   const handleTicketClick = (ticketId: number) => {
     navigate(`/tickets/${ticketId}`, { state: { from: '/home' } });
@@ -308,7 +312,7 @@ const HomePage: React.FC = () => {
       const response = await ticketService.getPersonalKPIData(params);
       
       if (response.success) {
-        setPersonalKPIData(response.data);
+        setPersonalKPIData(response.data as PersonalKpiData);
       } else {
         setPersonalKPIError(t('homepage.failedToFetchPersonalKPIData'));
       }
