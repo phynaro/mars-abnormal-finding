@@ -57,7 +57,7 @@ const corsOptions = {
   optionsSuccessStatus: 200
 };
 
-//app.use(cors(corsOptions));
+app.use(cors(corsOptions));
 // Middleware to handle large headers and prevent HTTP 431 errors
 app.use((req, res, next) => {
   // Set larger header limits
