@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/useToast';
 import { 
@@ -18,8 +17,6 @@ import {
   RefreshCw
 } from 'lucide-react';
 import targetService, { type Target, type CreateTargetRequest } from '@/services/targetService';
-import dashboardService, { type AreaData } from '@/services/dashboardService';
-import authService from '@/services/authService';
 
 const PERIODS = ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'P8', 'P9', 'P10', 'P11', 'P12', 'P13'];
 const TARGET_TYPES = ['open case', 'close case'] as const;
@@ -51,8 +48,6 @@ const TargetManagementPage: React.FC = () => {
   
   // Dialog states
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [selectedTarget, setSelectedTarget] = useState<Target | null>(null);
   
   // Form states
   const [createForm, setCreateForm] = useState<CreateTargetRequest>({
@@ -78,7 +73,7 @@ const TargetManagementPage: React.FC = () => {
   }>({});
 
   // Fetch plants
-  const fetchPlants = async () => {
+  const fetchPlants = useCallback(async () => {
     try {
       setPlantsLoading(true);
       const response = await targetService.getPlants();
@@ -99,10 +94,10 @@ const TargetManagementPage: React.FC = () => {
     } finally {
       setPlantsLoading(false);
     }
-  };
+  }, [toast]);
 
   // Fetch areas
-  const fetchAreas = async (plantCode: string) => {
+  const fetchAreas = useCallback(async (plantCode: string) => {
     try {
       setAreasLoading(true);
       const response = await targetService.getAreas(plantCode);
@@ -128,10 +123,10 @@ const TargetManagementPage: React.FC = () => {
     } finally {
       setAreasLoading(false);
     }
-  };
+  }, [toast]);
 
   // Fetch available years
-  const fetchAvailableYears = async () => {
+  const fetchAvailableYears = useCallback(async () => {
     try {
       const response = await targetService.getAvailableYears();
       if (response.success) {
@@ -143,10 +138,10 @@ const TargetManagementPage: React.FC = () => {
       console.error('Error fetching years:', error);
       setAvailableYears([]);
     }
-  };
+  }, []);
 
   // Fetch targets
-  const fetchTargets = async () => {
+  const fetchTargets = useCallback(async () => {
     try {
       setLoading(true);
       const filters = {
@@ -174,18 +169,18 @@ const TargetManagementPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [areaFilter, plantFilter, toast, typeFilter, yearFilter]);
 
   // Initialize data
   useEffect(() => {
     fetchPlants();
     // Don't fetch areas on mount - wait for plant selection
     fetchAvailableYears();
-  }, []);
+  }, [fetchPlants, fetchAvailableYears]);
 
   useEffect(() => {
     fetchTargets();
-  }, [plantFilter, areaFilter, yearFilter, typeFilter]);
+  }, [fetchTargets]);
 
   // Refetch areas when plant filter changes
   useEffect(() => {
@@ -196,7 +191,7 @@ const TargetManagementPage: React.FC = () => {
       setAreas([]);
       setAreaFilter('all'); // Reset area filter
     }
-  }, [plantFilter]);
+  }, [fetchAreas, plantFilter]);
 
   // Refetch areas when selected plant changes in create modal
   useEffect(() => {
@@ -206,7 +201,7 @@ const TargetManagementPage: React.FC = () => {
       // Clear areas when no plant is selected
       setAreas([]);
     }
-  }, [selectedPlantId]);
+  }, [fetchAreas, selectedPlantId]);
 
   // Group targets by location for matrix display
   const targetsByLocation = useMemo(() => {
