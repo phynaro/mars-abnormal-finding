@@ -42,6 +42,8 @@ const MachineList: React.FC<MachineListProps> = ({
 
   useEffect(() => {
     fetchMachines();
+    // fetchMachines uses the current page and filter values by design.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, filters]);
 
   const handleFilterChange = (key: keyof MachineFilters, value: string) => {

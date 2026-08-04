@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/useAuth';
-import userManagementService from '@/services/userManagementService';
-import type { Role } from '@/services/userManagementService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -16,6 +14,14 @@ import {
   CheckCircle,
   AlertTriangle
 } from 'lucide-react';
+
+interface Role {
+  id: string;
+  name: string;
+  description: string;
+  permissionLevel: number;
+  permissions: string[];
+}
 
 const RoleManagementPage: React.FC = () => {
   const { user: currentUser } = useAuth();
@@ -59,8 +65,8 @@ const RoleManagementPage: React.FC = () => {
   const loadRoles = async () => {
     try {
       setLoading(true);
-      const fetchedRoles = await userManagementService.getRoles();
-      setRoles(fetchedRoles);
+      // Role CRUD is local UI state only; no roles API exists yet.
+      setRoles([]);
     } catch (error) {
       console.error('Failed to load roles:', error);
       setRoles([]);

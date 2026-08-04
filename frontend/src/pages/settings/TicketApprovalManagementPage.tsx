@@ -63,10 +63,6 @@ const TicketApprovalManagementPage: React.FC = () => {
   const [copyFromPersonno, setCopyFromPersonno] = useState<number | null>(null);
   const [copyFromApprovalLevel, setCopyFromApprovalLevel] = useState<number | null>(null);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
-
   // Check existing approval levels for selected user
   const checkExistingApprovalLevels = async (personno: number) => {
     if (personno === 0) {
@@ -255,7 +251,7 @@ const TicketApprovalManagementPage: React.FC = () => {
         administrationService.ticketApproval.getAll(),
         administrationService.lookup.getLookupData()
       ]);
-      
+
       setApprovals(approvalsData);
       setPlants(lookupData.plants);
       setAreas(lookupData.areas);
@@ -272,6 +268,10 @@ const TicketApprovalManagementPage: React.FC = () => {
       setLoading(false);
     }
   }, [toast]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Hierarchical selection handlers
   const handlePlantSelection = (plantCode: string, checked: boolean) => {

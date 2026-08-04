@@ -463,7 +463,18 @@ const TicketCreatePage: React.FC = () => {
   };
 
   // Handle machine selection from hierarchical selector
-  const onHierarchicalMachineSelect = (machine: { pucode: string; pudescription?: string; puname?: string; puno: number; pucriticalno?: number }) => {
+  const onHierarchicalMachineSelect = (machine: {
+    pucode: string;
+    pudescription?: string;
+    puname?: string;
+    puno: number;
+    plant: string;
+    area: string;
+    line: string;
+    machine: string;
+    number: string;
+    pucriticalno?: number;
+  }) => {
     // Convert hierarchical machine data to PUCODEResult format
     const pucodeResult: PUCODEResult = {
       PUCODE: machine.pucode,

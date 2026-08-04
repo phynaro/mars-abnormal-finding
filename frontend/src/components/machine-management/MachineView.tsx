@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowLeft, Edit, Trash2, Calendar, MapPin, Settings, Activity, DollarSign, FileText } from 'lucide-react';
+import { Edit, Trash2, Calendar, MapPin, Settings, Activity, DollarSign, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,7 +17,6 @@ const MachineView: React.FC<MachineViewProps> = ({
   machine,
   onEdit,
   onDelete,
-  onClose
 }) => {
   const getStatusBadge = (status: string) => {
     const variants: Record<string, "default" | "secondary" | "destructive" | "outline"> = {

@@ -19,7 +19,6 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  Trash2,
   Clock,
   User,
   AlertTriangle,
@@ -58,11 +57,7 @@ import { formatTimelineTime } from "@/utils/timezone";
 import { getFileUrl } from "@/utils/url";
 import { LazyCardImage } from "@/components/ui/lazy-card-image";
 import {
-  getTicketPriorityClass,
-  getTicketSeverityClass,
-  getTicketStatusClass,
   getTicketStatusClassModern,
-  getCriticalLevelClass,
   getCriticalLevelClassModern,
   getCriticalLevelIconClass,
   getCriticalLevelText,
@@ -261,7 +256,7 @@ export const TicketList: React.FC = () => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { t, language } = useLanguage();
-  const { user } = useAuth();
+  useAuth();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
@@ -291,9 +286,9 @@ export const TicketList: React.FC = () => {
   });
 
   // Helper function to check if user is L3/Admin (permission level 3 or higher)
-  const isL3User = () => {
-    return (user?.permissionLevel || 0) >= 3;
-  };
+  // const isL3User = () => {
+  //   return (user?.permissionLevel || 0) >= 3;
+  // };
 
   // Modal states
   // Removed view modal state
@@ -597,7 +592,6 @@ export const TicketList: React.FC = () => {
     try {
       setLoading(true);
       const response = await ticketService.getTickets(filters);
-      console.log(response);
       setTickets(response.data.tickets);
       setTotalPages(response.data.pagination.pages);
       setTotalTickets(response.data.pagination.total);
@@ -724,10 +718,14 @@ export const TicketList: React.FC = () => {
     setTimeFilter(periodFromUrl.timeFilter);
     setSelectedYear(periodFromUrl.selectedYear);
     setSelectedPeriods(periodFromUrl.selectedPeriods);
+  // This effect intentionally reacts to URL changes and updates local filter state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams.toString()]); // Only when search params string changes
 
   useEffect(() => {
     fetchTickets();
+  // fetchTickets is intentionally recreated with the current filter state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters]);
 
 
@@ -921,12 +919,12 @@ export const TicketList: React.FC = () => {
     return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
   };
 
-  const getTicketClassLabel = (ticketClassId?: number | string | null) => {
-    if (!ticketClassId) return '';
-    const selectedClass = ticketClasses.find((ticketClass) => String(ticketClass.id) === String(ticketClassId));
-    if (!selectedClass) return `Class ${ticketClassId}`;
-    return language === 'en' ? selectedClass.name_en : selectedClass.name_th;
-  };
+  // const getTicketClassLabel = (ticketClassId?: number | string | null) => {
+  //   if (!ticketClassId) return '';
+  //   const selectedClass = ticketClasses.find((ticketClass) => String(ticketClass.id) === String(ticketClassId));
+  //   if (!selectedClass) return `Class ${ticketClassId}`;
+  //   return language === 'en' ? selectedClass.name_en : selectedClass.name_th;
+  // };
 
   const getEffectiveExportFilters = (): TicketFilters => {
     if (exportFilters) {
@@ -974,28 +972,28 @@ export const TicketList: React.FC = () => {
     navigate(`/tickets/${ticket.id}`, { state: { from: listUrl } });
   };
 
-  const handleDeleteTicket = async (ticketId: number) => {
-    if (!confirm(t('ticket.deleteConfirm'))) {
-      return;
-    }
+  // const handleDeleteTicket = async (ticketId: number) => {
+  //   if (!confirm(t('ticket.deleteConfirm'))) {
+  //     return;
+  //   }
 
-    try {
-      await ticketService.deleteTicket(ticketId);
-      toast({
-        title: t('common.success'),
-        description: t('ticket.ticketDeletedSuccess'),
-        variant: "default",
-      });
-      fetchTickets();
-    } catch (error) {
-      toast({
-        title: t('common.error'),
-        description:
-          error instanceof Error ? error.message : t('ticket.failedToDeleteTicket'),
-        variant: "destructive",
-      });
-    }
-  };
+  //   try {
+  //     await ticketService.deleteTicket(ticketId);
+  //     toast({
+  //       title: t('common.success'),
+  //       description: t('ticket.ticketDeletedSuccess'),
+  //       variant: "default",
+  //     });
+  //     fetchTickets();
+  //   } catch (error) {
+  //     toast({
+  //       title: t('common.error'),
+  //       description:
+  //         error instanceof Error ? error.message : t('ticket.failedToDeleteTicket'),
+  //       variant: "destructive",
+  //     });
+  //   }
+  // };
 
   const formatDate = (dateString: string) => {
     return formatTimelineTime(dateString);
@@ -1213,23 +1211,6 @@ export const TicketList: React.FC = () => {
       });
     } finally {
       setExportLoading(false);
-    }
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "open":
-        return <AlertTriangle className="w-4 h-4" />;
-      case "assigned":
-        return <User className="w-4 h-4" />;
-      case "in_progress":
-        return <Clock className="w-4 h-4" />;
-      case "resolved":
-        return <AlertTriangle className="w-4 h-4" />;
-      case "closed":
-        return <AlertTriangle className="w-4 h-4" />;
-      default:
-        return <AlertTriangle className="w-4 h-4" />;
     }
   };
 

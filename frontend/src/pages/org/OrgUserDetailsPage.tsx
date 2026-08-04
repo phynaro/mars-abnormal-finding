@@ -3,19 +3,27 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Card } from '@/components/ui/card';
 import personnelService from '@/services/personnelService';
+import type { Person } from '@/services/personnelService';
 import userManagementService from '@/services/userManagementService';
+import type { User } from '@/services/userManagementService';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
-import type { OrgRow } from './orgTypes';
 
 type UserUpdatePayload = {
   firstName?: string; lastName?: string; email?: string; phone?: string; title?: string;
   department?: number; siteNo?: number; lineId?: string; groupNo?: number;
 };
-type UserOption = OrgRow & { userId?: string | number; lineId?: string; groupNo?: string | number };
+
+type PersonDetails = Person & {
+  PHONE?: string;
+  TITLE?: string;
+  DEPTNO?: number | string;
+  SiteNo?: number | string;
+  allFields?: unknown;
+};
 
 const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
   <div className="flex text-sm"><div className="w-36 text-muted-foreground">{label}</div><div>{value ?? '-'}</div></div>
@@ -25,7 +33,7 @@ const OrgUserDetailsPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [data, setData] = useState<OrgRow | null>(null);
+  const [data, setData] = useState<PersonDetails | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -53,7 +61,7 @@ const OrgUserDetailsPage: React.FC = () => {
     if (!id) return; setLoading(true);
     try {
       const res = await personnelService.getPerson(id);
-      const payload = res?.data || res;
+      const payload = res.data as PersonDetails;
       setData(payload);
       const label = payload?.PERSONCODE || `#${id}`;
       navigate(location.pathname, { replace: true, state: { breadcrumbExtra: label } });
@@ -70,7 +78,7 @@ const OrgUserDetailsPage: React.FC = () => {
       // Try to find corresponding userId (UserID string) via admin listing
       try {
         const allUsers = await userManagementService.getAllUsers();
-        const match = Array.isArray(allUsers) ? allUsers.find((u: UserOption) => String(u.id) === String(payload?.PERSONNO)) : null;
+        const match = Array.isArray(allUsers) ? allUsers.find((u: User) => String(u.id) === String(payload?.PERSONNO)) : null;
         if (match?.userId) setUserIdStr(String(match.userId));
         if (match?.lineId) setLineId(String(match.lineId));
         if (match?.groupNo) setGroupNo(String(match.groupNo));
@@ -90,10 +98,10 @@ const OrgUserDetailsPage: React.FC = () => {
           personnelService.getDepartments({ page: 1, limit: 500 }),
           personnelService.getTitles({ page: 1, limit: 500 })
         ]);
-        const depArr = Array.isArray(deps?.data) ? deps.data : (Array.isArray(deps) ? deps : []);
-        const titArr = Array.isArray(titles?.data) ? titles.data : (Array.isArray(titles) ? titles : []);
-        setDeptOptions(depArr.map((d: OrgRow) => ({ id: Number(d.DEPTNO), code: String(d.DEPTCODE || ''), name: String(d.DEPTNAME || '') })));
-        setTitleOptions(titArr.map((t: OrgRow) => ({ id: Number(t.TITLENO), code: String(t.TITLECODE || ''), name: String(t.TITLENAME || '') })));
+        const depArr = deps.data || [];
+        const titArr = titles.data || [];
+        setDeptOptions(depArr.map((d) => ({ id: Number(d.DEPTNO), code: String(d.DEPTCODE || ''), name: String(d.DEPTNAME || '') })));
+        setTitleOptions(titArr.map((t) => ({ id: Number(t.TITLENO), code: String(t.TITLECODE || ''), name: String(t.TITLENAME || '') })));
       } catch { /* Optional editor metadata. */ }
       try {
         const groups = await userManagementService.getGroups();
@@ -127,7 +135,7 @@ const OrgUserDetailsPage: React.FC = () => {
       // Refresh details
       try {
         const res = await personnelService.getPerson(id!);
-        setData(res?.data || res);
+        setData(res.data as PersonDetails);
       } catch { /* Preserve the updated view when refresh is unavailable. */ }
       alert('User updated');
     } catch (e: unknown) {
@@ -157,7 +165,7 @@ const OrgUserDetailsPage: React.FC = () => {
             <Row label="Department" value={`${data.DEPTCODE || ''} ${data.DEPTNAME ? `- ${data.DEPTNAME}` : ''}`} />
             <Row label="Title" value={`${data.TITLECODE || ''} ${data.TITLENAME ? `- ${data.TITLENAME}` : ''}`} />
           </Card>
-          {data.allFields && (
+          {data.allFields != null && (
             <Card className="p-4 space-y-2">
               <div className="text-sm text-muted-foreground">Raw Record</div>
               <pre className="text-xs overflow-auto max-h-80 bg-muted/30 p-2 rounded">{JSON.stringify(data.allFields, null, 2)}</pre>

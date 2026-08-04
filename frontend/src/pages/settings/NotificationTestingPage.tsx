@@ -82,7 +82,7 @@ const NotificationTestingPage: React.FC = () => {
   const [selectedMachine, setSelectedMachine] = useState<SelectedMachine | null>(null);
   const [, setIsSearching] = useState(false);
   const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const searchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextSearchRef = useRef(false);
 
   // Form state

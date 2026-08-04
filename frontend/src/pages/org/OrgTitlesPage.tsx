@@ -5,14 +5,14 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import personnelService from '@/services/personnelService';
-import type { OrgRow } from './orgTypes';
+import type { Title } from '@/services/personnelService';
 
 const OrgTitlesPage: React.FC = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-  const [rows, setRows] = useState<OrgRow[]>([]);
+  const [rows, setRows] = useState<Title[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,11 +21,8 @@ const OrgTitlesPage: React.FC = () => {
       try {
         setLoading(true);
         const res = await personnelService.getTitles({ page, limit: 20, search: search || undefined });
-        const payload = res?.data || res;
-        const arr = Array.isArray(payload) ? payload : (payload.data || []);
-        setRows(Array.isArray(arr) ? arr : []);
-        const pgn = res?.pagination || payload?.pagination || {};
-        setPages(Number(pgn.totalPages || pgn.pages) || 1);
+        setRows(res.data || []);
+        setPages(Number(res.pagination?.totalPages) || 1);
       } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load titles'); }
       finally { setLoading(false); }
     };
@@ -84,4 +81,3 @@ const OrgTitlesPage: React.FC = () => {
 };
 
 export default OrgTitlesPage;
-

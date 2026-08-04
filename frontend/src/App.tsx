@@ -80,7 +80,7 @@ import RoleSettingsPage from './pages/ems/RoleSettingsPage';
 const AppContent: React.FC = () => {
   // Protected Route Component (moved inside to access auth context)
   const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { isAuthenticated, isLoading, liffLoading, liffError, storeRedirectUrl, user } = useAuth();
+    const { isAuthenticated, isLoading, liffLoading, storeRedirectUrl, user } = useAuth();
     const location = useLocation();
     
     // Check if we have LINE login callback params and user needs lineId setup

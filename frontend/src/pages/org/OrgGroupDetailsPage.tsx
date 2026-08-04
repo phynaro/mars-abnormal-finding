@@ -4,14 +4,19 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import personnelService from '@/services/personnelService';
-import type { OrgRow } from './orgTypes';
+import type { Person, UserGroup } from '@/services/personnelService';
+
+type GroupMember = Person & {
+  USERGROUPNO?: string | number;
+  PERSON?: string | number;
+};
 
 const OrgGroupDetailsPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [group, setGroup] = useState<OrgRow | null>(null);
-  const [members, setMembers] = useState<OrgRow[]>([]);
+  const [group, setGroup] = useState<UserGroup | null>(null);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
   const [, setLoading] = useState(false);
@@ -21,7 +26,7 @@ const OrgGroupDetailsPage: React.FC = () => {
     if (!id) return; setLoading(true);
     try {
       const res = await personnelService.getUserGroup(id);
-      const payload = res?.data || res;
+      const payload = res.data;
       setGroup(payload);
       const label = payload?.USERGROUPCODE || `#${id}`;
       navigate(location.pathname, { replace: true, state: { breadcrumbExtra: label } });
@@ -33,11 +38,8 @@ const OrgGroupDetailsPage: React.FC = () => {
     if (!id) return; setLoading(true);
     try {
       const res = await personnelService.getUserGroupMembers(id, page, 20);
-      const payload = res?.data || res;
-      const arr = Array.isArray(payload) ? payload : (payload.data || []);
-      setMembers(Array.isArray(arr) ? arr : []);
-      const pgn = res?.pagination || payload?.pagination || {};
-      setPages(Number(pgn.totalPages || pgn.pages) || 1);
+      setMembers(res.data || []);
+      setPages(Number(res.pagination?.totalPages) || 1);
     } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load members'); }
     finally { setLoading(false); }
   })(); }, [id, page]);
@@ -97,4 +99,3 @@ const OrgGroupDetailsPage: React.FC = () => {
 };
 
 export default OrgGroupDetailsPage;
-

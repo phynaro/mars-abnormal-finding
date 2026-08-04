@@ -250,12 +250,12 @@ export const canUserPerformAction = (
 };
 
 
-const handleApiResponse = async (response: Response): Promise<unknown> => {
+const handleApiResponse = async <T>(response: Response): Promise<T> => {
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(errorText || `HTTP error! status: ${response.status}`);
   }
-  return response.json();
+  return response.json() as Promise<T>;
 };
 
 // ==================== TICKET APPROVAL API ====================
@@ -353,7 +353,11 @@ export const ticketApprovalService = {
       method: 'DELETE',
       headers: getAuthHeadersUtil()
     });
-    const result = await handleApiResponse(response);
+    const result = await handleApiResponse<{
+      success?: boolean;
+      count?: number;
+      data?: { count?: number };
+    }>(response);
     
     // Handle different response structures
     if (result && result.data && typeof result.data.count !== 'undefined') {
