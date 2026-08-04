@@ -8,7 +8,6 @@ import {
   Eye, 
   Mail, 
   Building, 
-  Clock, 
   Calendar, 
   CheckCircle, 
   XCircle 

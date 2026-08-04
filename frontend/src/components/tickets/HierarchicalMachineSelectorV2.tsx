@@ -1,7 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { X } from 'lucide-react';
 import { hierarchyService } from '@/services/hierarchyService';
 import { useToast } from '@/hooks/useToast';
@@ -59,7 +58,7 @@ const HierarchicalMachineSelectorV2: React.FC<HierarchicalMachineSelectorV2Props
   const [selectedPath, setSelectedPath] = useState<PUChildItem[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const loadChildren = async (parentPuno: number) => {
+  const loadChildren = useCallback(async (parentPuno: number) => {
     setLoading(true);
     try {
       const response = await hierarchyService.getPUChildrenByParent(parentPuno);
@@ -78,7 +77,7 @@ const HierarchicalMachineSelectorV2: React.FC<HierarchicalMachineSelectorV2Props
     } finally {
       setLoading(false);
     }
-  };
+  }, [t, toast]);
 
   useEffect(() => {
     let cancelled = false;
@@ -93,7 +92,7 @@ const HierarchicalMachineSelectorV2: React.FC<HierarchicalMachineSelectorV2Props
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [loadChildren]);
 
   useEffect(() => {
     if (!selectedMachineData) {
