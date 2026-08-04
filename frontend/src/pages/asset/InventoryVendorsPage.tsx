@@ -5,11 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import inventoryService from '@/services/inventoryService';
 
+type VendorRow = { id: string | number; vendorCode?: string; vendorName?: string; phone?: string; email?: string; isActive?: boolean; totalParts?: number };
+
 const InventoryVendorsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<VendorRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,8 +25,8 @@ const InventoryVendorsPage: React.FC = () => {
         setRows(Array.isArray(arr) ? arr : []);
         const pgn = payload.pagination || res?.data?.pagination || {};
         setPages(Number(pgn.totalPages || pgn.pages) || 1);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load vendors');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load vendors');
       } finally {
         setLoading(false);
       }
@@ -56,7 +58,7 @@ const InventoryVendorsPage: React.FC = () => {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r: any) => (
+                {rows.map((r: VendorRow) => (
                   <tr key={r.id} className="border-t">
                     <td className="px-4 py-2 whitespace-nowrap font-medium">{r.vendorCode}</td>
                     <td className="px-4 py-2">{r.vendorName}</td>
@@ -70,7 +72,7 @@ const InventoryVendorsPage: React.FC = () => {
             </table>
           </div>
           <div className="grid grid-cols-1 gap-3 lg:hidden">
-            {rows.map((r: any) => (
+            {rows.map((r: VendorRow) => (
               <Card key={r.id} className="p-4 space-y-1">
                 <div className="flex items-center justify-between">
                   <div className="font-medium">{r.vendorCode}</div>

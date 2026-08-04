@@ -5,11 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import inventoryService from '@/services/inventoryService';
 
+type StoreRow = { id: string | number; storeCode?: string; storeName?: string; storeType?: string; isActive?: boolean; totalItems?: number; totalValue?: number };
+
 const InventoryStoresPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<StoreRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -23,8 +25,8 @@ const InventoryStoresPage: React.FC = () => {
         setRows(Array.isArray(stores) ? stores : []);
         const pgn = payload.pagination || res?.data?.pagination || {};
         setPages(Number(pgn.totalPages || pgn.pages) || 1);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load stores');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load stores');
       } finally {
         setLoading(false);
       }
