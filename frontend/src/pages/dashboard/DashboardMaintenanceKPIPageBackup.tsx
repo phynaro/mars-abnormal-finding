@@ -6,8 +6,12 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import dashboardService, { type GroupBy, type TrendPoint } from '@/services/dashboardService';
 import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
-import personnelService from '@/services/personnelService';
+import personnelService, { type Person } from '@/services/personnelService';
 import { SearchableCombobox } from '@/components/ui/searchable-combobox';
+
+type FilterOption = { id: string | number; code?: string; name: string };
+type Period = { period: number; label: string; startDate: string; endDate: string };
+type PeriodYearInfo = { periods: Period[] };
 
 const DashboardMaintenanceKPIPageBackup: React.FC = () => {
   const today = new Date();
@@ -24,14 +28,14 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
   const [assign, setAssign] = useState<string>('');
 
   const [trend, setTrend] = useState<TrendPoint[]>([]);
-  const [filters, setFilters] = useState<{ woTypes: any[]; departments: any[]; sites: any[] }>({ woTypes: [], departments: [], sites: [] });
-  const [periodInfo, setPeriodInfo] = useState<Record<string, any>>({});
+  const [filters, setFilters] = useState<{ woTypes: FilterOption[]; departments: FilterOption[]; sites: FilterOption[] }>({ woTypes: [], departments: [], sites: [] });
+  const [periodInfo, setPeriodInfo] = useState<Record<string, PeriodYearInfo>>({});
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   // Personnel data for assign filter
-  const [personnel, setPersonnel] = useState<any[]>([]);
+  const [personnel, setPersonnel] = useState<Person[]>([]);
   const [personnelLoading, setPersonnelLoading] = useState<boolean>(false);
 
   // Period range selectors
@@ -50,7 +54,7 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
       console.log('🔍 Dashboard - Personnel response:', response);
       console.log('🔍 Dashboard - Personnel count:', response.data?.length || 0);
       setPersonnel(response.data);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('🔍 Dashboard - Error loading personnel:', error);
     } finally {
       setPersonnelLoading(false);
@@ -61,7 +65,7 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
     try {
       const date = new Date(dateString);
       return date.toISOString().split('T')[0]; // Convert to YYYY-MM-DD format
-    } catch (error) {
+    } catch {
       console.warn('Invalid date format:', dateString);
       return dateString; // Return original if parsing fails
     }
@@ -121,8 +125,8 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
       if (groupBy !== 'daily' && selectedYear && fromPeriod && toPeriod) {
         const yearInfo = periodInfo[selectedYear];
         if (yearInfo) {
-          const fromPeriodInfo = yearInfo.periods.find((p: any) => p.period === parseInt(fromPeriod));
-          const toPeriodInfo = yearInfo.periods.find((p: any) => p.period === parseInt(toPeriod));
+          const fromPeriodInfo = yearInfo.periods.find(p => p.period === parseInt(fromPeriod));
+          const toPeriodInfo = yearInfo.periods.find(p => p.period === parseInt(toPeriod));
           
           if (fromPeriodInfo && toPeriodInfo) {
             finalStartDate = fromPeriodInfo.startDate;
@@ -162,9 +166,9 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
       setPeriodInfo(payload?.periodInfo || {});
       setTotal(payload?.summary?.totalWorkOrders || 0);
       
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Dashboard load error:', e);
-      setError(e.message || 'Failed to load trend');
+      setError(e instanceof Error ? e.message : 'Failed to load trend');
       setTrend([]);
       setTotal(0);
     } finally {
@@ -308,7 +312,7 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
               <Select value={fromPeriod} onValueChange={setFromPeriod}>
                 <SelectTrigger className="w-[140px]"><SelectValue placeholder="From" /></SelectTrigger>
                 <SelectContent>
-                  {selectedYear && periodInfo[selectedYear]?.periods.map((p: any) => (
+                  {selectedYear && periodInfo[selectedYear]?.periods.map((p) => (
                     <SelectItem key={p.period} value={String(p.period)}>{p.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -319,7 +323,7 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
               <Select value={toPeriod} onValueChange={setToPeriod}>
                 <SelectTrigger className="w-[140px]"><SelectValue placeholder="To" /></SelectTrigger>
                 <SelectContent>
-                  {selectedYear && periodInfo[selectedYear]?.periods.map((p: any) => (
+                  {selectedYear && periodInfo[selectedYear]?.periods.map((p) => (
                     <SelectItem key={p.period} value={String(p.period)}>{p.label}</SelectItem>
                   ))}
                 </SelectContent>
@@ -333,7 +337,7 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
             <SelectTrigger className="w-[220px]"><SelectValue placeholder="All types" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Types</SelectItem>
-              {filters.woTypes.map((t: any) => (
+              {filters.woTypes.map((t) => (
                 <SelectItem key={t.id} value={String(t.id)}>{t.code ? `${t.code} - ` : ''}{t.name}</SelectItem>
               ))}
             </SelectContent>
@@ -345,7 +349,7 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
             <SelectTrigger className="w-[220px]"><SelectValue placeholder="All departments" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Departments</SelectItem>
-              {filters.departments.map((d: any) => (
+              {filters.departments.map((d) => (
                 <SelectItem key={d.id} value={String(d.id)}>{d.code ? `${d.code} - ` : ''}{d.name}</SelectItem>
               ))}
             </SelectContent>
@@ -357,7 +361,7 @@ const DashboardMaintenanceKPIPageBackup: React.FC = () => {
             <SelectTrigger className="w-[200px]"><SelectValue placeholder="All sites" /></SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Sites</SelectItem>
-              {filters.sites.map((s: any) => (
+              {filters.sites.map((s) => (
                 <SelectItem key={s.id} value={String(s.id)}>{s.code ? `${s.code} - ` : ''}{s.name}</SelectItem>
               ))}
             </SelectContent>
