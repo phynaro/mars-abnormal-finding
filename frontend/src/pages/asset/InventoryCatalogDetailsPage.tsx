@@ -4,6 +4,24 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Card } from '@/components/ui/card';
 import inventoryService from '@/services/inventoryService';
 
+type CatalogLocation = {
+  storeCode?: string; storeName?: string; binLocation?: string; shelf?: string;
+  quantities?: { onHand?: number; reserved?: number; available?: number; pending?: number };
+  stockLevels?: { minStock?: number; maxStock?: number; reorderPoint?: number; reorderQuantity?: number; leadTime?: number };
+  costs?: { unitCost?: number; totalValue?: number };
+  lastActivity?: { lastIssueDate?: string; lastReceiveDate?: string };
+};
+type CatalogDetail = {
+  partCode?: string; partName?: string; description?: string; partType?: string; manufacturer?: string; isActive?: boolean;
+  group?: { name?: string }; type?: { name?: string }; unit?: { name?: string };
+  vendor?: { code?: string; name?: string; address?: string; phone?: string; email?: string };
+  costs?: { unitCost?: number; averageCost?: number; standardCost?: number; lastPurchaseCost?: number; fifoCost?: number; totalValue?: number };
+  stockSummary?: { totalOnHand?: number; totalReserved?: number; totalAvailable?: number; totalValue?: number; locationCount?: number };
+  locations?: CatalogLocation[]; createdDate?: string; updatedDate?: string;
+  recordInfo?: { creator?: RecordInfo; updater?: RecordInfo }; allFields?: Record<string, string | number | null | undefined>;
+};
+type RecordInfo = { name?: string; firstName?: string; lastName?: string; email?: string };
+
 const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
   <div className="flex text-sm">
     <div className="w-36 shrink-0 text-muted-foreground">{label}</div>
@@ -15,7 +33,7 @@ const InventoryCatalogDetailsPage: React.FC = () => {
   const { itemId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<CatalogDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,18 +47,18 @@ const InventoryCatalogDetailsPage: React.FC = () => {
         setData(payload);
         const code = payload?.partCode || payload?.allFields?.PARTCODE || `#${itemId}`;
         navigate(location.pathname, { replace: true, state: { breadcrumbExtra: code } });
-      } catch (e: any) {
-        setError(e.message || 'Failed to load item');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load item');
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [itemId]);
+  }, [itemId, location.pathname, navigate]);
 
   const code = data?.partCode || `#${itemId}`;
-  const raw: any = data?.allFields || {};
-  const manufacturer = (raw.MANUFACTURER || raw.MANUFACTURERNAME || raw.MFG || raw.MFGNAME || raw.MANUFACTURE || raw.MANUFAC || (data as any)?.manufacturer) || '-';
+  const raw = data?.allFields || {};
+  const manufacturer = raw.MANUFACTURER || raw.MANUFACTURERNAME || raw.MFG || raw.MFGNAME || raw.MANUFACTURE || raw.MANUFAC || data?.manufacturer || '-';
   
 
   return (
@@ -128,7 +146,7 @@ const InventoryCatalogDetailsPage: React.FC = () => {
                           </tr>
                         </thead>
                         <tbody>
-                          {data.locations.map((loc: any, idx: number) => (
+                          {data.locations.map((loc: CatalogLocation, idx: number) => (
                             <tr key={idx} className="border-t">
                               <td className="px-3 py-1 whitespace-nowrap">{loc.storeCode} {loc.storeName ? `- ${loc.storeName}` : ''}</td>
                               <td className="px-3 py-1">{loc.binLocation || '-'}</td>
@@ -150,7 +168,7 @@ const InventoryCatalogDetailsPage: React.FC = () => {
                       </table>
                     </div>
                     <div className="grid grid-cols-1 gap-2 lg:hidden">
-                      {data.locations.map((loc: any, idx: number) => (
+                      {data.locations.map((loc: CatalogLocation, idx: number) => (
                         <Card key={idx} className="p-3 space-y-1">
                           <div className="text-sm font-medium">{loc.storeCode} {loc.storeName ? `- ${loc.storeName}` : ''}</div>
                           <div className="text-xs text-muted-foreground">Bin: {loc.binLocation || '-'} • Shelf: {loc.shelf || '-'}</div>
