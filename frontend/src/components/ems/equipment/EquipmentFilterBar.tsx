@@ -34,6 +34,8 @@ export interface EquipmentFilters {
   kpiBucket: EmsKpiBucket | '';
 }
 
+// Shared filter defaults are intentionally exported for feature state initialization.
+// eslint-disable-next-line react-refresh/only-export-components
 export const EMPTY_EQUIPMENT_FILTERS: EquipmentFilters = {
   plant: '',
   area: '',

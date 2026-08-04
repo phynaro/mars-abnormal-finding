@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsScheduleItem } from '@/services/emsService';
-import { formatEmsDate, displayEffectiveDue } from '@/components/ems/equipment/formatEmsValues';
+import { displayEffectiveDue } from '@/components/ems/equipment/formatEmsValues';
 import { EmsWoStatusBadge, formatScheduleDueDays } from './scheduleStatus';
 import { cn } from '@/lib/utils';
 

@@ -21,10 +21,7 @@ interface TopNavbarProps {
   isMobile?: boolean;
 }
 
-const TopNavbar: React.FC<TopNavbarProps> = ({
-  onMobileMenuToggle,
-  isMobile = false
-}) => {
+const TopNavbar: React.FC<TopNavbarProps> = () => {
   const navigate = useNavigate();
   const { theme, toggleTheme } = useTheme();
   const { language, setLanguage, t } = useLanguage();

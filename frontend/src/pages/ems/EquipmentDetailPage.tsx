@@ -11,7 +11,7 @@ import SpecSection from '@/components/ems/equipment/SpecSection';
 import WoStatusSection from '@/components/ems/equipment/WoStatusSection';
 import EquipmentChangeHistorySection from '@/components/ems/equipment/EquipmentChangeHistorySection';
 import EquipmentEditModal from '@/components/ems/equipment/EquipmentEditModal';
-import { EQUIPMENT_THUMB_PX } from '@/components/ems/equipment/EquipmentImageCard';
+import { EQUIPMENT_THUMB_PX } from '@/components/ems/equipment/equipmentImageConstants';
 import { EmsPageStack } from '@/components/ems/shared/emsLayoutPrimitives';
 
 const CHANGE_HISTORY_PREVIEW = 5;

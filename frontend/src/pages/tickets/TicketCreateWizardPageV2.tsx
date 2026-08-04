@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
 import { hierarchyService, type PUCritical } from '@/services/hierarchyService';
@@ -79,8 +79,6 @@ const TicketCreateWizardPageV2: React.FC = () => {
   const [puno, setPuno] = useState<number | undefined>(undefined);
   const [plant, setPlant] = useState<string | undefined>(undefined);
   const [pucriticalno, setPucriticalno] = useState<number | undefined>(undefined);
-  const [severity, setSeverity] = useState<'low'|'medium'|'high'|'critical'>('medium');
-  const [priority, setPriority] = useState<'low'|'normal'|'high'|'urgent'>('normal');
 
   // Equipment selection state
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
@@ -112,6 +110,8 @@ const TicketCreateWizardPageV2: React.FC = () => {
     return () => {
       previewUrls.forEach(url => URL.revokeObjectURL(url));
     };
+  // Cleanup reads the current preview URLs only when unmounting.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Improved machine search function with better UX
@@ -187,6 +187,8 @@ const TicketCreateWizardPageV2: React.FC = () => {
         clearTimeout(searchTimeoutRef.current);
       }
     };
+  // Debounced lookup is keyed by query state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machineSearchQuery]);
 
   // Improved click outside handler
@@ -219,6 +221,8 @@ const TicketCreateWizardPageV2: React.FC = () => {
       setEquipmentList([]);
       setSelectedEquipment(null);
     }
+  // Equipment is loaded when the selected machine changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMachine]);
 
   // Load critical levels on component mount
@@ -226,6 +230,8 @@ const TicketCreateWizardPageV2: React.FC = () => {
     loadCriticalLevels();
     loadTicketClasses();
     loadWorkGroups();
+  // Lookup functions intentionally run once on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load critical levels function
@@ -507,6 +513,8 @@ const TicketCreateWizardPageV2: React.FC = () => {
       // Only clean up URLs when leaving both images and review steps
       cleanupPreviewUrls();
     }
+  // Preview generation is driven by file-count transitions.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beforeFiles, needsPreviews, previewFiles.length, previewUrls.length]);
   
   // Clean up URLs when files change (but keep them if we're on a step that needs them)
@@ -523,6 +531,8 @@ const TicketCreateWizardPageV2: React.FC = () => {
         createPreviewImages();
       }
     }
+  // Rebuild previews only when the selected file count changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beforeFiles.length]);
   
   const createPreviewImages = async () => {
@@ -605,8 +615,6 @@ const TicketCreateWizardPageV2: React.FC = () => {
               {stages.map((stageItem, index) => {
                 const isCompleted = index < currentStageIndex;
                 const isCurrent = index === currentStageIndex;
-                const isPending = index > currentStageIndex;
-                
                 return (
                   <div key={stageItem.key} className="flex items-center gap-3">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { ticketService } from "@/services/ticketService";
 import type { Ticket, SingleTicketResponse } from "@/services/ticketService";
@@ -54,18 +54,14 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/useToast";
 import authService from "@/services/authService";
-import { formatTimelineTime, formatUITime, timestampToDatetimeLocal } from "@/utils/timezone";
+import { formatUITime, timestampToDatetimeLocal } from "@/utils/timezone";
 import {
-  getTicketPriorityClass,
-  getTicketSeverityClass,
-  getTicketStatusClass,
   getTicketStatusClassModern,
   getCriticalLevelText,
-  getCriticalLevelClass,
   getCriticalLevelClassModern,
   getCriticalLevelIconClass,
   getCedarSyncStatusClass,
@@ -78,6 +74,9 @@ import { cn } from "@/lib/utils";
 import { EditTicketModal } from "@/components/ticket-management/EditTicketModal";
 
 type TicketCacheEntry = { data: Ticket; timestamp: number };
+type SelectedMachine = { puno: number; pucode: string; pudescription?: string; pucriticalno?: number };
+type EquipmentOption = { EQNO: number; EQCODE: string; EQNAME: string };
+type CriticalLevelOption = { PUCRITICALNO: number; PUCRITICALNAME: string; PUCRITICALDESCRIPTION?: string; PUCRITICALDESC?: string; PUCRITICALCODE?: string };
 
 const TICKET_CACHE_DURATION_MS = 5000;
 const ticketDataCache = new Map<number, TicketCacheEntry>();
@@ -122,6 +121,8 @@ const TicketDetailsPage: React.FC = () => {
       cleanupBeforePreviewUrls();
       setBeforePreviewFiles([]);
     }
+  // Preview helpers intentionally run from the file-length state machine.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [beforeFiles.length, beforePreviewFiles.length, beforePreviewUrls.length]);
   
   // Create optimized preview images for after files
@@ -137,6 +138,8 @@ const TicketDetailsPage: React.FC = () => {
       cleanupAfterPreviewUrls();
       setAfterPreviewFiles([]);
     }
+  // Preview helpers intentionally run from the file-length state machine.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [afterFiles.length, afterPreviewFiles.length, afterPreviewUrls.length]);
   
   const createBeforePreviewImages = async () => {
@@ -227,6 +230,8 @@ const TicketDetailsPage: React.FC = () => {
       beforePreviewUrls.forEach(url => URL.revokeObjectURL(url));
       afterPreviewUrls.forEach(url => URL.revokeObjectURL(url));
     };
+  // Cleanup reads the latest URLs only during unmount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -262,12 +267,12 @@ const TicketDetailsPage: React.FC = () => {
   
   // Equipment selector state for accept action
   const [showEquipmentSelector, setShowEquipmentSelector] = useState(false);
-  const [selectedNewMachine, setSelectedNewMachine] = useState<any | null>(null);
-  const [equipmentList, setEquipmentList] = useState<any[]>([]);
+  const [selectedNewMachine, setSelectedNewMachine] = useState<SelectedMachine | null>(null);
+  const [equipmentList, setEquipmentList] = useState<EquipmentOption[]>([]);
   const [equipmentLoading, setEquipmentLoading] = useState(false);
-  const [selectedEquipment, setSelectedEquipment] = useState<any | null>(null);
+  const [selectedEquipment, setSelectedEquipment] = useState<EquipmentOption | null>(null);
   const [selectedCriticalLevel, setSelectedCriticalLevel] = useState<number | null>(null);
-  const [criticalLevels, setCriticalLevels] = useState<any[]>([]);
+  const [criticalLevels, setCriticalLevels] = useState<CriticalLevelOption[]>([]);
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
   
   // Plan action specific state
@@ -287,7 +292,7 @@ const TicketDetailsPage: React.FC = () => {
     Array<{ id: number; code: string; name: string }>
   >([]);
 
-  const getCriticalLevelOptionLabel = (level: any) => {
+  const getCriticalLevelOptionLabel = (level: CriticalLevelOption) => {
     const description =
       level?.PUCRITICALDESCRIPTION ||
       level?.PUCRITICALDESC ||
@@ -299,7 +304,6 @@ const TicketDetailsPage: React.FC = () => {
 
   // Use area-specific approval levels instead of global permission levels
   const isCreator = ticket?.user_relationship === "creator";
-  const isApprover = ticket?.user_relationship === "approver";
   const userApprovalLevel = ticket?.user_approval_level || 0;
   const isL2Plus = userApprovalLevel >= 2;
   const isL3Plus = userApprovalLevel >= 3;
@@ -478,7 +482,7 @@ const TicketDetailsPage: React.FC = () => {
           escalationOnly,
         );
         if (!cancelled) setAssignees(res.data || []);
-      } catch (e) {
+      } catch {
         if (!cancelled) setAssignees([]);
       } finally {
         if (!cancelled) setAssigneesLoading(false);
@@ -927,7 +931,7 @@ const TicketDetailsPage: React.FC = () => {
             selectedCriticalLevel // new_pucriticalno (always use selected critical level if changed)
           );
           break;
-        case "plan":
+        case "plan": {
           if (!scheduleStart || !scheduleFinish) {
             throw new Error("Schedule start and schedule finish are required");
           }
@@ -947,6 +951,7 @@ const TicketDetailsPage: React.FC = () => {
             actionComment || undefined
           );
           break;
+        }
         case "start":
           if (!actualStartAt) {
             throw new Error("Actual start time is required");
@@ -2310,15 +2315,15 @@ const TicketDetailsPage: React.FC = () => {
                     <div>
                       <Label className="text-sm font-medium mb-2">Select New Production Unit</Label>
                       <HierarchicalMachineSelector
-                        onMachineSelect={(machine) => {
+                        onMachineSelect={(machine: SelectedMachine) => {
                           setSelectedNewMachine(machine);
                           // Load equipment for the selected PU
                           if (machine.puno) {
                             loadEquipmentForAccept(machine.puno);
                           }
                           // Preselect critical level if available from machine
-                          if ((machine as any).pucriticalno) {
-                            setSelectedCriticalLevel((machine as any).pucriticalno);
+                          if (machine.pucriticalno) {
+                            setSelectedCriticalLevel(machine.pucriticalno);
                           }
                         }}
                         onClear={() => {

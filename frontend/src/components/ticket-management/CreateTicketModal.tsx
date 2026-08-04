@@ -101,7 +101,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
     }
   };
 
-  const handleInputChange = (field: keyof CreateTicketRequest, value: any) => {
+  const handleInputChange = (field: keyof CreateTicketRequest, value: string | number | undefined) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     // Clear error when user starts typing
     if (errors[field]) {

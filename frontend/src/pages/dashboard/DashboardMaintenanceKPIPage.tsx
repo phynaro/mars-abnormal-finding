@@ -201,7 +201,7 @@ const IndividualPersonChart: React.FC<{
     });
     
     return allPeriods;
-  }, [personData, personName]);
+  }, [personData]);
 
   // Don't render if no data
   if (!chartData || chartData.length === 0) {
@@ -401,6 +401,8 @@ const DashboardMaintenanceKPIPage: React.FC = () => {
       }
     };
     init();
+  // Initialization intentionally runs once; subsequent filter changes use the dedicated handlers.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load filter options based on current filter state
@@ -415,7 +417,7 @@ const DashboardMaintenanceKPIPage: React.FC = () => {
       };
       const json = await workorderVolumeService.getWorkOrderVolumeFilterOptions(params);
       setFilters(json.data.filters);
-    } catch (e: any) {
+    } catch (e: unknown) {
       console.error('Error loading filter options:', e);
     }
   };
@@ -444,8 +446,8 @@ const DashboardMaintenanceKPIPage: React.FC = () => {
         onTimeRate: json.data.summary?.onTimeRate || 0,
       });
       console.log('Data:', json.data);
-    } catch (e: any) {
-      setError(e?.message || 'Error fetching data');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Error fetching data');
       setData([]);
     } finally {
       setLoading(false);
@@ -478,8 +480,8 @@ const DashboardMaintenanceKPIPage: React.FC = () => {
       };
       const json = await workorderVolumeService.getPersonalWorkOrderVolume(params);
       setPersonalData(json.data.statistics || []);
-    } catch (e: any) {
-      setPersonalError(e?.message || 'Error fetching personal data');
+    } catch (e: unknown) {
+      setPersonalError(e instanceof Error ? e.message : 'Error fetching personal data');
       setPersonalData([]);
     } finally {
       setPersonalLoading(false);
@@ -512,8 +514,8 @@ const DashboardMaintenanceKPIPage: React.FC = () => {
       };
       const json = await workorderVolumeService.getPersonalWorkOrderVolumeByPeriod(params);
       setPersonalPeriodData(json.data.statistics || []);
-    } catch (e: any) {
-      setPersonalPeriodError(e?.message || 'Error fetching personal period data');
+    } catch (e: unknown) {
+      setPersonalPeriodError(e instanceof Error ? e.message : 'Error fetching personal period data');
       setPersonalPeriodData([]);
     } finally {
       setPersonalPeriodLoading(false);

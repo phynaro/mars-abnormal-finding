@@ -36,7 +36,7 @@ import { workGroupService, type WorkGroup } from "@/services/workGroupService";
 import { hierarchyService, type PUCritical } from "@/services/hierarchyService";
 import { useToast } from "@/hooks/useToast";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { useAuth } from "@/contexts/AuthContext";
+import { useAuth } from "@/contexts/useAuth";
 // Removed ViewTicketModal per requirement
 import {
   Dialog,

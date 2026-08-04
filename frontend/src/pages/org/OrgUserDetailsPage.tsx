@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Card } from '@/components/ui/card';
@@ -9,6 +9,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectTrigger, SelectContent, SelectItem, SelectValue } from '@/components/ui/select';
+import type { OrgRow } from './orgTypes';
+
+type UserUpdatePayload = {
+  firstName?: string; lastName?: string; email?: string; phone?: string; title?: string;
+  department?: number; siteNo?: number; lineId?: string; groupNo?: number;
+};
+type UserOption = OrgRow & { userId?: string | number; lineId?: string; groupNo?: string | number };
 
 const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
   <div className="flex text-sm"><div className="w-36 text-muted-foreground">{label}</div><div>{value ?? '-'}</div></div>
@@ -18,7 +25,7 @@ const OrgUserDetailsPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<OrgRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -63,16 +70,16 @@ const OrgUserDetailsPage: React.FC = () => {
       // Try to find corresponding userId (UserID string) via admin listing
       try {
         const allUsers = await userManagementService.getAllUsers();
-        const match = Array.isArray(allUsers) ? allUsers.find((u: any) => String(u.id) === String(payload?.PERSONNO)) : null;
+        const match = Array.isArray(allUsers) ? allUsers.find((u: UserOption) => String(u.id) === String(payload?.PERSONNO)) : null;
         if (match?.userId) setUserIdStr(String(match.userId));
         if (match?.lineId) setLineId(String(match.lineId));
         if (match?.groupNo) setGroupNo(String(match.groupNo));
       } catch {
         // ignore if not admin or cannot fetch
       }
-    } catch (e: any) { setError(e.message || 'Failed to load user'); }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load user'); }
     finally { setLoading(false); }
-  })(); }, [id]);
+  })(); }, [id, location.pathname, navigate]);
 
   // Load options when opening editor
   useEffect(() => {
@@ -85,13 +92,13 @@ const OrgUserDetailsPage: React.FC = () => {
         ]);
         const depArr = Array.isArray(deps?.data) ? deps.data : (Array.isArray(deps) ? deps : []);
         const titArr = Array.isArray(titles?.data) ? titles.data : (Array.isArray(titles) ? titles : []);
-        setDeptOptions(depArr.map((d: any) => ({ id: d.DEPTNO, code: d.DEPTCODE, name: d.DEPTNAME })));
-        setTitleOptions(titArr.map((t: any) => ({ id: t.TITLENO, code: t.TITLECODE, name: t.TITLENAME })));
-      } catch {}
+        setDeptOptions(depArr.map((d: OrgRow) => ({ id: Number(d.DEPTNO), code: String(d.DEPTCODE || ''), name: String(d.DEPTNAME || '') })));
+        setTitleOptions(titArr.map((t: OrgRow) => ({ id: Number(t.TITLENO), code: String(t.TITLECODE || ''), name: String(t.TITLENAME || '') })));
+      } catch { /* Optional editor metadata. */ }
       try {
         const groups = await userManagementService.getGroups();
         setGroupOptions(groups);
-      } catch {}
+      } catch { /* Optional editor metadata. */ }
     })();
   }, [editOpen]);
 
@@ -104,7 +111,7 @@ const OrgUserDetailsPage: React.FC = () => {
     }
     setSaving(true);
     try {
-      const payload: any = {
+      const payload: UserUpdatePayload = {
         firstName: firstName || undefined,
         lastName: lastName || undefined,
         email: email || undefined,
@@ -121,10 +128,10 @@ const OrgUserDetailsPage: React.FC = () => {
       try {
         const res = await personnelService.getPerson(id!);
         setData(res?.data || res);
-      } catch {}
+      } catch { /* Preserve the updated view when refresh is unavailable. */ }
       alert('User updated');
-    } catch (e: any) {
-      alert(e?.message || 'Failed to update user');
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : 'Failed to update user');
     } finally {
       setSaving(false);
     }

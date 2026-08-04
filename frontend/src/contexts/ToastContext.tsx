@@ -42,6 +42,8 @@ export const ToastProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   );
 };
 
+// Provider and hook intentionally stay together with the toast state contract.
+// eslint-disable-next-line react-refresh/only-export-components
 export const useToastContext = (): ToastContextValue => {
   const ctx = useContext(ToastContext);
   if (!ctx) {

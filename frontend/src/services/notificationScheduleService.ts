@@ -78,7 +78,7 @@ class NotificationScheduleService {
    * Trigger a test run for a specific notification schedule type.
    * @param notificationType - e.g. 'pending_tickets', 'old_open_tickets', 'due_date_reminder'
    */
-  async test(notificationType: string): Promise<{ success: boolean; message: string; data: any }> {
+  async test(notificationType: string): Promise<{ success: boolean; message: string; data: unknown }> {
     const response = await fetch(`${API_BASE_URL}/test`, {
       method: 'POST',
       headers: {

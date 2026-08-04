@@ -1,5 +1,6 @@
 import React from "react";
 import PersonalKPITiles from "./PersonalKPITiles";
+import type { PersonalKpiData } from "./PersonalKPITiles";
 import PersonalTicketCountChart from "./PersonalTicketCountChart";
 import PersonalClosureRateChart from "./PersonalClosureRateChart";
 
@@ -10,7 +11,7 @@ export type PersonalKPISectionProps = {
   personalClosureRateData: Array<{ period: string; rate: number; target?: number; total?: number; onTime?: number; closedLate?: number; open?: number }>;
   personalClosureRateLoading: boolean;
   personalClosureRateError: string | null;
-  personalKPIData: any;
+  personalKPIData: PersonalKpiData | null;
   personalKPILoading: boolean;
   personalKPIError: string | null;
   selectedYear: number;

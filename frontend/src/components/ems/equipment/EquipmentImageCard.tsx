@@ -3,13 +3,9 @@ import { ImageIcon } from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import { resolveEquipmentImageSrc } from './equipmentImageUtils';
+import { EQUIPMENT_THUMB_PX } from './equipmentImageConstants';
 
 /** Fixed square (px) — must not grow inside flex layouts. */
-export const EQUIPMENT_THUMB_PX = {
-  base: 220,
-  sm: 220,
-} as const;
-
 interface EquipmentImageCardProps {
   imageUrl?: string | null;
   tagNo: string;

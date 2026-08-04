@@ -14,7 +14,7 @@ function getTrail(pathname: string) {
 
 export const Breadcrumbs: React.FC = () => {
   const location = useLocation();
-  const state = (location.state || {}) as any;
+  const state = (location.state || {}) as { breadcrumbHideParent?: boolean; breadcrumbExtra?: unknown };
   let trail = getTrail(location.pathname);
   // Allow pages to tweak breadcrumb via navigation state
   if (state?.breadcrumbHideParent && trail.length > 1) {

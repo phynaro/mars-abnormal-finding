@@ -6,12 +6,14 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import inventoryService from '@/services/inventoryService';
 
+type CatalogRow = { id: string | number; partCode?: string; partName?: string; group?: { name?: string; code?: string }; type?: { name?: string; code?: string }; unit?: { code?: string }; vendor?: { name?: string; code?: string }; stock?: { available?: number; onHand?: number; value?: number } };
+
 const InventoryCatalogPage: React.FC = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<CatalogRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [activeOnly, setActiveOnly] = useState<'all' | 'active'>('active');
@@ -26,14 +28,14 @@ const InventoryCatalogPage: React.FC = () => {
         setRows(Array.isArray(items) ? items : []);
         const pgn = payload.pagination || res?.data?.pagination || {};
         setPages(Number(pgn.totalPages || pgn.pages) || 1);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load catalog');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load catalog');
       } finally {
         setLoading(false);
       }
     };
     load();
-  }, [page, search]);
+  }, [activeOnly, page, search]);
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
@@ -42,7 +44,7 @@ const InventoryCatalogPage: React.FC = () => {
         <Input placeholder="Search part code/name/description" value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} />
         <div>
           <label className="text-xs text-muted-foreground">Filter</label>
-          <select className="border rounded px-2 py-1 text-sm w-full bg-background" value={activeOnly} onChange={(e) => { setActiveOnly(e.target.value as any); setPage(1); }}>
+          <select className="border rounded px-2 py-1 text-sm w-full bg-background" value={activeOnly} onChange={(e) => { setActiveOnly(e.target.value === 'active' ? 'active' : 'all'); setPage(1); }}>
             <option value="active">Active Only</option>
             <option value="all">All Items</option>
           </select>

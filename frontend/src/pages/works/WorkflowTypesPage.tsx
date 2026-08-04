@@ -2,8 +2,20 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
 import workflowService, { type WorkflowType } from '@/services/workflowService';
+
+const columns: { key: string; label: string; variants: string[] }[] = [
+  { key: 'WFTypeNo', label: 'WF Type No', variants: ['WFTypeNo', 'WFTYPENO'] },
+  { key: 'WFTypeCode', label: 'WF Type Code', variants: ['WFTypeCode', 'WFTYPECODE'] },
+  { key: 'WFTypeName', label: 'WF Type Name', variants: ['WFTypeName', 'WFTYPENAME'] },
+  { key: 'StatusTable', label: 'Status Table', variants: ['StatusTable', 'STATUSTABLE'] },
+  { key: 'StatusFieldCode', label: 'Status Field Code', variants: ['StatusFieldCode', 'STATUSFIELDCODE'] },
+  { key: 'StatusFieldName', label: 'Status Field Name', variants: ['StatusFieldName', 'STATUSFIELDNAME'] },
+  { key: 'JobTypeTable', label: 'Job Type Table', variants: ['JobTypeTable', 'JOBTYPETABLE'] },
+  { key: 'JobTypeFieldCode', label: 'Job Type Field Code', variants: ['JobTypeFieldCode', 'JOBTYPEFIELDCODE'] },
+  { key: 'JobTypeFieldName', label: 'Job Type Field Name', variants: ['JobTypeFieldName', 'JOBTYPEFIELDNAME'] },
+  { key: 'START_FLOW', label: 'Start Flow', variants: ['START_FLOW'] },
+];
 
 const WorkflowTypesPage: React.FC = () => {
   const [rows, setRows] = useState<WorkflowType[]>([]);
@@ -18,8 +30,8 @@ const WorkflowTypesPage: React.FC = () => {
         const res = await workflowService.getTypes();
         const list = Array.isArray(res?.data) ? res.data : [];
         setRows(list);
-      } catch (e: any) {
-        setError(e?.message || 'Failed to load workflow types');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load workflow types');
       } finally {
         setLoading(false);
       }
@@ -28,25 +40,12 @@ const WorkflowTypesPage: React.FC = () => {
   }, []);
 
   // Flexible getter to support different key casings coming from API
-  const gv = (row: WorkflowType, keys: string[], fallback: any = '-') => {
+  const gv = (row: WorkflowType, keys: string[], fallback: unknown = '-') => {
     for (const k of keys) {
       if (row[k] !== undefined && row[k] !== null) return row[k];
     }
     return fallback;
   };
-
-  const columns: { key: string; label: string; variants: string[] }[] = [
-    { key: 'WFTypeNo', label: 'WF Type No', variants: ['WFTypeNo', 'WFTYPENO'] },
-    { key: 'WFTypeCode', label: 'WF Type Code', variants: ['WFTypeCode', 'WFTYPECODE'] },
-    { key: 'WFTypeName', label: 'WF Type Name', variants: ['WFTypeName', 'WFTYPENAME'] },
-    { key: 'StatusTable', label: 'Status Table', variants: ['StatusTable', 'STATUSTABLE'] },
-    { key: 'StatusFieldCode', label: 'Status Field Code', variants: ['StatusFieldCode', 'STATUSFIELDCODE'] },
-    { key: 'StatusFieldName', label: 'Status Field Name', variants: ['StatusFieldName', 'STATUSFIELDNAME'] },
-    { key: 'JobTypeTable', label: 'Job Type Table', variants: ['JobTypeTable', 'JOBTYPETABLE'] },
-    { key: 'JobTypeFieldCode', label: 'Job Type Field Code', variants: ['JobTypeFieldCode', 'JOBTYPEFIELDCODE'] },
-    { key: 'JobTypeFieldName', label: 'Job Type Field Name', variants: ['JobTypeFieldName', 'JOBTYPEFIELDNAME'] },
-    { key: 'START_FLOW', label: 'Start Flow', variants: ['START_FLOW'] },
-  ];
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();

@@ -1,11 +1,10 @@
-import authService from './authService';
 import { getAuthHeaders } from '../utils/authHeaders';
 
 export interface WorkflowType {
   WFTYPENO?: number;
   WFTYPECODE?: string;
   WFTYPENAME?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export interface WorkflowTypesResponse {

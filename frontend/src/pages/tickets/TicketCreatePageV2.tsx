@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
 import { hierarchyService, type PUCritical } from '@/services/hierarchyService';
@@ -6,11 +6,10 @@ import { ticketClassService, type TicketClass } from '@/services/ticketClassServ
 import { workGroupService, type WorkGroup } from '@/services/workGroupService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FileUpload } from '@/components/ui/file-upload';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Upload, X, Search, Building2 } from 'lucide-react';
@@ -105,6 +104,8 @@ const TicketCreatePageV2: React.FC = () => {
       cleanupPreviewUrls();
       setPreviewFiles([]);
     }
+  // Preview generation is driven by file-count transitions.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFiles.length, previewFiles.length, previewUrls.length]);
   
   // Clean up URLs when files change
@@ -119,6 +120,8 @@ const TicketCreatePageV2: React.FC = () => {
       setPreviewFiles([]);
       createPreviewImages();
     }
+  // Rebuild previews only when the selected file count changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFiles.length]);
   
   const createPreviewImages = async () => {
@@ -173,6 +176,8 @@ const TicketCreatePageV2: React.FC = () => {
     return () => {
       previewUrls.forEach(url => URL.revokeObjectURL(url));
     };
+  // Cleanup reads the current preview URLs only when unmounting.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Global drag and drop handlers for the entire page
@@ -195,7 +200,7 @@ const TicketCreatePageV2: React.FC = () => {
     };
   }, []);
 
-  const handleInputChange = (field: keyof typeof formData, value: any) => {
+  const handleInputChange = (field: keyof typeof formData, value: string | number | undefined | null) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     console.log("formData", formData);
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }));
@@ -344,6 +349,8 @@ const TicketCreatePageV2: React.FC = () => {
       }
     }, 300);
     return () => clearTimeout(t);
+  // Debounced lookup is keyed by query state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machineSearchQuery, isProgrammaticUpdate]);
 
   // Load equipment when machine is selected
@@ -354,6 +361,8 @@ const TicketCreatePageV2: React.FC = () => {
       setEquipmentList([]);
       setSelectedEquipment(null);
     }
+  // Equipment is loaded when the selected machine changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMachine]);
 
   // Load critical levels on component mount
@@ -361,6 +370,8 @@ const TicketCreatePageV2: React.FC = () => {
     loadCriticalLevels();
     loadTicketClasses();
     loadWorkGroups();
+  // Lookup functions intentionally run once on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load critical levels function

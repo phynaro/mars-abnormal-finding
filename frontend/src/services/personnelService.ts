@@ -1,4 +1,3 @@
-import authService from './authService';
 import { getAuthHeaders } from '../utils/authHeaders';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -247,7 +246,6 @@ class PersonnelService {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       throw new Error(`Failed to fetch person: ${response.status} ${response.statusText}`);
     }
 
@@ -268,7 +266,6 @@ class PersonnelService {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       throw new Error(`Failed to fetch department: ${response.status} ${response.statusText}`);
     }
 
@@ -289,7 +286,6 @@ class PersonnelService {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       throw new Error(`Failed to fetch title: ${response.status} ${response.statusText}`);
     }
 
@@ -330,7 +326,6 @@ class PersonnelService {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       throw new Error(`Failed to fetch user groups: ${response.status} ${response.statusText}`);
     }
 
@@ -351,7 +346,6 @@ class PersonnelService {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       throw new Error(`Failed to fetch user group: ${response.status} ${response.statusText}`);
     }
 
@@ -383,7 +377,6 @@ class PersonnelService {
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
       throw new Error(`Failed to fetch user group members: ${response.status} ${response.statusText}`);
     }
 

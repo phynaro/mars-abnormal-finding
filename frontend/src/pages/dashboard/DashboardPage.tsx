@@ -1,12 +1,14 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   PieChart, Pie, Cell
 } from 'recharts';
+
+const DASHBOARD_AREAS = ['Line A', 'Line B', 'Warehouse', 'Utilities'];
+const DASHBOARD_ASSIGNEES: string[] = [];
 
 const DashboardPage: React.FC = () => {
   // Filters
@@ -19,15 +21,15 @@ const DashboardPage: React.FC = () => {
   const [selectedArea, setSelectedArea] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<string>(() => `P${getWeekOfYear(now)}`);
   const [selectedRow, setSelectedRow] = useState<number | null>(null);
-  const areas = ['Line A', 'Line B', 'Warehouse', 'Utilities'];
+  const areas = DASHBOARD_AREAS;
 
 
   function getWeekOfYear(date: Date) {
-    const target: any = new Date(date.valueOf());
+    const target = new Date(date.valueOf());
     const dayNr = (date.getDay() + 6) % 7;
     target.setDate(target.getDate() - dayNr + 3);
-    const firstThursday: any = new Date(target.getFullYear(), 0, 4);
-    const diff = target - firstThursday;
+    const firstThursday = new Date(target.getFullYear(), 0, 4);
+    const diff = target.getTime() - firstThursday.getTime();
     return 1 + Math.round(diff / (7 * 24 * 3600 * 1000));
   }
 
@@ -43,8 +45,6 @@ const DashboardPage: React.FC = () => {
   }, [periods]);
 
   // KPI calculations - using real data
-  const thisMonth = now.getMonth();
-  const lastMonth = (thisMonth + 11) % 12;
   const totalThisMonth = 0;
   const totalLastMonth = 0;
   const openActive = 0;
@@ -64,7 +64,7 @@ const DashboardPage: React.FC = () => {
   // Mini table data based on selected donut segment
   const selectedAreaTickets = useMemo(() => {
     if (!selectedArea) return [] as Array<{ machine: string; title: string; images: string[]; risk: 'high'|'medium'|'low'; status: 'open'|'closed' }>; 
-  }, [selectedArea, year, ticketStatus, riskLevel]);
+  }, [selectedArea]);
 
   // Reset row selection when area changes or list changes
   useEffect(() => {
@@ -72,13 +72,12 @@ const DashboardPage: React.FC = () => {
   }, [selectedArea, selectedAreaTickets.length]);
 
   // Horizontal bar for assignees by period
-  const assignees: string[] = [];
   const assigneeData = useMemo(() => {
-    return assignees.map(u => ({
+    return DASHBOARD_ASSIGNEES.map(u => ({
       user: u,
       count: 0
     }));
-  }, [assignees]);
+  }, []);
 
   // Colors aligned to theme (muted minimal palette)
   const colors = {
@@ -201,7 +200,11 @@ const DashboardPage: React.FC = () => {
                   nameKey="name"
                   innerRadius={60}
                   outerRadius={100}
-                  onClick={(d) => setSelectedArea((d && (d as any).name) || null)}
+                  onClick={(d) => {
+                    if (d && typeof d === 'object' && 'name' in d && typeof d.name === 'string') {
+                      setSelectedArea(d.name);
+                    }
+                  }}
                 >
                   {donutData.map((_, idx) => (
                     <Cell key={idx} fill={colors.pie[idx % colors.pie.length]} />

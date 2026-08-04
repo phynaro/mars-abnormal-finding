@@ -17,8 +17,8 @@ declare module '@line/liff' {
       url: string;
       external?: boolean;
     }): void;
-    sendMessages(messages: any[]): Promise<void>;
-    shareTargetPicker(messages: any[]): Promise<boolean>;
+    sendMessages(messages: unknown[]): Promise<void>;
+    shareTargetPicker(messages: unknown[]): Promise<boolean>;
     isApiAvailable(apiName: string): boolean;
     isInClient(): boolean;
     getOS(): string;

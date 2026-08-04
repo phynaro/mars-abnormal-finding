@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { 
   Home, 
@@ -71,6 +71,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
 
   const canAccess = (permissionLevel: number) => {
     // Bottom navigation doesn't require any permissions
+    void permissionLevel;
     return true;
   };
 

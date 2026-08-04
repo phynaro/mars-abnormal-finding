@@ -2,9 +2,9 @@ import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { TooltipProvider, Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip';
 import { menuItems, type MenuItem } from './menuConfig';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { usePeriodWeek } from '@/hooks/usePeriodWeek';
-import { Globe, Sun, Moon, Settings as SettingsIcon } from 'lucide-react';
+import { Globe, Sun, Moon } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -125,7 +125,7 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, submenuCollapsed =
               <DropdownMenuLabel>{user?.firstName} {user?.lastName}</DropdownMenuLabel>
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate('/profile')}>Profile</DropdownMenuItem>
-              <DropdownMenuItem onClick={async () => { try { await logout(); } catch {} }}>Logout</DropdownMenuItem>
+              <DropdownMenuItem onClick={async () => { try { await logout(); } catch { return; } }}>Logout</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
 

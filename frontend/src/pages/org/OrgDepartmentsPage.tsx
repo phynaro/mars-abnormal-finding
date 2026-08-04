@@ -25,7 +25,7 @@ const OrgDepartmentsPage: React.FC = () => {
         setRows(Array.isArray(arr) ? arr : []);
         const pgn = res?.pagination || payload?.pagination || {};
         setPages(Number(pgn.totalPages || pgn.pages) || 1);
-      } catch (e: any) { setError(e.message || 'Failed to load departments'); }
+      } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load departments'); }
       finally { setLoading(false); }
     };
     load();

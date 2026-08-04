@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,24 +9,20 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { ResponsiveContainer, PieChart, Pie, Cell, Tooltip, Legend } from 'recharts';
 import { 
   calculatePeriodForDate, 
-  getDateRangeForAreaDashboard,
-  getPeriodDateRange 
+  getDateRangeForAreaDashboard
 } from '@/utils/periodCalculations';
 import areaDashboardService, { 
-  type AreaDashboardConfig, 
   type AreaMetrics 
 } from '@/services/areaDashboardService';
-import { useLanguage } from '@/contexts/LanguageContext';
 import { useParams } from 'react-router-dom';
 import { getAreaConfig } from '@/config/areaDashboardConfig';
 
 const AreaDashboardPage: React.FC = () => {
-  const { t } = useLanguage();
   const navigate = useNavigate();
   const { areaName } = useParams<{ areaName: string }>();
   
   // Get configuration for the current area
-  const areaConfig = areaName ? getAreaConfig(areaName) : [];
+  const areaConfig = useMemo(() => areaName ? getAreaConfig(areaName) : [], [areaName]);
 
   // Time range filters
   const now = new Date();
@@ -64,7 +60,7 @@ const AreaDashboardPage: React.FC = () => {
   }, [currentYear]);
 
   // Fetch area metrics
-  const fetchAreaMetrics = async () => {
+  const fetchAreaMetrics = useCallback(async () => {
     if (!areaName) {
       setError('Area name is required');
       return;
@@ -101,18 +97,18 @@ const AreaDashboardPage: React.FC = () => {
       } else {
         setError('Failed to fetch area metrics');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching area metrics:', err);
-      setError(err.message || 'Failed to fetch area metrics');
+      setError(err instanceof Error ? err.message : 'Failed to fetch area metrics');
     } finally {
       setLoading(false);
     }
-  };
+  }, [areaConfig, areaName, selectedDate, selectedPeriod, selectedWeek, selectedYear, timeFilter]);
 
   // Fetch data when filters change
   useEffect(() => {
     fetchAreaMetrics();
-  }, [selectedYear, timeFilter, selectedPeriod, selectedWeek, selectedDate]);
+  }, [fetchAreaMetrics]);
 
   // Handle cell click for drill-down
   const handleCellClick = (

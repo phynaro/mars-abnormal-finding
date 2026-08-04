@@ -22,8 +22,8 @@ const ProductionUnitPage: React.FC = () => {
       try {
         const res = await assetService.getSites();
         setSites(res.data || []);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load sites');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load sites');
       }
     };
     init();
@@ -35,8 +35,8 @@ const ProductionUnitPage: React.FC = () => {
       try {
         const res = await assetService.getDepartmentsBySite(siteNo);
         setDepartments(res.data || []);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load departments');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load departments');
       }
     };
     loadDepts();
@@ -49,8 +49,8 @@ const ProductionUnitPage: React.FC = () => {
         const res = await assetService.getProductionUnits({ siteNo, deptNo, search, page, limit: 20 });
         setData(res.data || []);
         setPages(res.pagination?.pages || 1);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load production units');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load production units');
       } finally {
         setLoading(false);
       }

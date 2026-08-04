@@ -52,7 +52,7 @@ const MachineDashboardPage: React.FC = () => {
   if (error) return <div className="text-red-500 text-center p-4">{error}</div>;
   if (!stats) return <div className="text-center p-4">No data available</div>;
 
-  const getStatusColor = (daysUntilMaintenance: number) => {
+  const getStatusColor = (daysUntilMaintenance: number): 'destructive' | 'secondary' | 'outline' => {
     if (daysUntilMaintenance <= 7) return 'destructive';
     if (daysUntilMaintenance <= 14) return 'secondary';
     return 'outline';
@@ -160,7 +160,7 @@ const MachineDashboardPage: React.FC = () => {
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
-                      <Badge variant={getStatusColor(daysUntil) as any}>
+                      <Badge variant={getStatusColor(daysUntil)}>
                         {daysUntil === 0 ? 'Due Today' : 
                          daysUntil === 1 ? 'Due Tomorrow' : 
                          `Due in ${daysUntil} days`}

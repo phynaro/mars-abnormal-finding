@@ -29,7 +29,6 @@ const getRandomAnimationSet = () => {
 };
 
 export const Loading: React.FC<LoadingProps> = ({ 
-  message = 'Loading...', 
   size = 'xs',
   showCat = true
 }) => {

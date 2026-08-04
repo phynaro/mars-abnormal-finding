@@ -21,8 +21,8 @@ const EquipmentPage: React.FC = () => {
       try {
         const res = await assetService.getSites();
         setSites(res.data || []);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load sites');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load sites');
       }
     };
     init();
@@ -35,8 +35,8 @@ const EquipmentPage: React.FC = () => {
         const res = await assetService.getEquipment({ siteNo, puNo, search, page, limit: 20 });
         setData(res.data || []);
         setPages(res.pagination?.pages || 1);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load equipment');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load equipment');
       } finally {
         setLoading(false);
       }

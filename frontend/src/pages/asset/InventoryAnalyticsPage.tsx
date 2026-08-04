@@ -3,8 +3,11 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Card } from '@/components/ui/card';
 import inventoryService from '@/services/inventoryService';
 
+type InventoryRecord = Record<string, string | number | null | undefined>;
+type InventoryStats = { byGroup?: InventoryRecord[]; byVendor?: InventoryRecord[] };
+
 const InventoryAnalyticsPage: React.FC = () => {
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<InventoryStats | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,8 +17,8 @@ const InventoryAnalyticsPage: React.FC = () => {
         setLoading(true);
         const res = await inventoryService.getStatsOverview();
         setData(res?.data || res);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load analytics');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load analytics');
       } finally {
         setLoading(false);
       }
@@ -46,7 +49,7 @@ const InventoryAnalyticsPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {byGroup.map((g: any, idx: number) => (
+                  {byGroup.map((g: InventoryRecord, idx: number) => (
                     <tr key={idx} className="border-t">
                       <td className="px-4 py-2">{g.IVGROUPNAME || g.groupName || '-'}</td>
                       <td className="px-4 py-2">{g.itemCount ?? '-'}</td>
@@ -57,7 +60,7 @@ const InventoryAnalyticsPage: React.FC = () => {
               </table>
             </div>
             <div className="grid grid-cols-1 gap-3 lg:hidden">
-              {byGroup.map((g: any, idx: number) => (
+              {byGroup.map((g: InventoryRecord, idx: number) => (
                 <Card key={idx} className="p-4">
                   <div className="font-medium">{g.IVGROUPNAME || g.groupName || '-'}</div>
                   <div className="text-xs text-muted-foreground">Items: {g.itemCount ?? '-'}</div>
@@ -78,7 +81,7 @@ const InventoryAnalyticsPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {byVendor.map((v: any, idx: number) => (
+                  {byVendor.map((v: InventoryRecord, idx: number) => (
                     <tr key={idx} className="border-t">
                       <td className="px-4 py-2">{v.vendorName || v.VENDORNAME || '-'}</td>
                       <td className="px-4 py-2">{v.itemCount ?? '-'}</td>
@@ -89,7 +92,7 @@ const InventoryAnalyticsPage: React.FC = () => {
               </table>
             </div>
             <div className="grid grid-cols-1 gap-3 lg:hidden">
-              {byVendor.map((v: any, idx: number) => (
+              {byVendor.map((v: InventoryRecord, idx: number) => (
                 <Card key={idx} className="p-4">
                   <div className="font-medium">{v.vendorName || v.VENDORNAME || '-'}</div>
                   <div className="text-xs text-muted-foreground">Items: {v.itemCount ?? '-'}</div>

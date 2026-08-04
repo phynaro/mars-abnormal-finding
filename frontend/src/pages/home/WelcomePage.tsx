@@ -1,21 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, ArrowRight, User, Settings, BarChart3, Smartphone, AlertCircle, Link, X } from 'lucide-react';
+import { CheckCircle, User, Settings, BarChart3, Smartphone, AlertCircle, Link } from 'lucide-react';
 import { getApiBaseUrl } from '@/utils/url';
 import LineProfileDisplay from '@/components/LineProfileDisplay';
 
 const WelcomePage: React.FC = () => {
-  const { user, refreshUser, lineProfile, liffTokenVerified, liffObject, lineLogin } = useAuth();
-  const { t } = useLanguage();
+  const { user, refreshUser, lineProfile, liffTokenVerified, liffObject } = useAuth();
   const navigate = useNavigate();
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [showLineLinking, setShowLineLinking] = useState(false);
   const [isLineLoginLoading, setIsLineLoginLoading] = useState(false);
   const [externalLineProfile, setExternalLineProfile] = useState<{
     userId: string;

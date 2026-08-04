@@ -15,8 +15,8 @@ const AssetSitesPage: React.FC = () => {
         setLoading(true);
         const res = await assetService.getSites();
         setSites(res.data || []);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load sites');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load sites');
       } finally {
         setLoading(false);
       }

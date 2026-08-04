@@ -1,5 +1,5 @@
 import React from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { useEmsAccess } from '@/contexts/EmsAccessContext';
 import { checkEmsAdmin } from '@/utils/permissionChecker';
 import Loading from '@/components/common/Loading';

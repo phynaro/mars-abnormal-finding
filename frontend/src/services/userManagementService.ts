@@ -1,4 +1,3 @@
-import authService from './authService';
 import { getAuthHeaders } from '../utils/authHeaders';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -90,7 +89,7 @@ export interface Department {
 export interface UserManagementResponse {
   success: boolean;
   message: string;
-  data?: any;
+  data?: unknown;
 }
 
 export interface AvailableGroup {
@@ -286,7 +285,7 @@ class UserManagementService {
   }
 
   // Get user activity logs
-  async getUserActivityLogs(userId: number | string, limit: number = 50): Promise<any[]> {
+  async getUserActivityLogs(userId: number | string, limit: number = 50): Promise<unknown[]> {
     try {
       const response = await fetch(`${API_BASE_URL}/users/${userId}/activity?limit=${limit}`, {
         method: 'GET',

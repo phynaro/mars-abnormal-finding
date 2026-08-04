@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/useAuth';
 import { useEmsAccess } from '@/contexts/EmsAccessContext';
 import { checkEmsAccess } from '@/utils/permissionChecker';
 import Loading from '@/components/common/Loading';

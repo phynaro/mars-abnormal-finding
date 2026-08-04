@@ -28,6 +28,8 @@ interface GroupRow {
   total: number;
 }
 
+const STATUS_PALETTE = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#ec4899','#22c55e','#6366f1'];
+
 const DashboardBacklogPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabKey>('department');
   const [loading, setLoading] = useState(false);
@@ -51,8 +53,8 @@ const DashboardBacklogPage: React.FC = () => {
           const res = await backlogService.getBacklogAssignTo({ siteNo: 3 });
           setRaw(res.data.backlog || []);
         }
-      } catch (e: any) {
-        setError(e.message || 'Failed to load backlog');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load backlog');
         setRaw([]);
       } finally {
         setLoading(false);
@@ -67,7 +69,7 @@ const DashboardBacklogPage: React.FC = () => {
       try {
         const res = await personnelService.getPersons({ page: 1, limit: 1000 });
         setPersons(res.data || []);
-      } catch (e) {
+      } catch {
         // Non-blocking for backlog view
       }
     };
@@ -265,17 +267,16 @@ const StackedChart: React.FC<{ rows: GroupRow[]; statuses: string[] }> = ({ rows
   // Prepare chart data
   const data = useMemo(() => {
     return rows.map(r => {
-      const item: Record<string, any> = { name: r.key };
+      const item: Record<string, unknown> = { name: r.key };
       statuses.forEach(st => { item[st] = r.counts[st] || 0; });
       return item;
     });
   }, [rows, statuses]);
 
   // Colors per status
-  const palette = ['#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#84cc16','#f97316','#ec4899','#22c55e','#6366f1'];
   const statusColors = useMemo(() => {
     const m: Record<string, string> = {};
-    statuses.forEach((st, i) => { m[st] = palette[i % palette.length]; });
+    statuses.forEach((st, i) => { m[st] = STATUS_PALETTE[i % STATUS_PALETTE.length]; });
     return m;
   }, [statuses]);
 
@@ -310,7 +311,8 @@ const StackedChart: React.FC<{ rows: GroupRow[]; statuses: string[] }> = ({ rows
 const SunburstByDept: React.FC<{ hiddenStatuses: Set<string> }> = ({ hiddenStatuses }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [data, setData] = useState<any[]>([]);
+  type SunburstNode = { name: string; value: number; children?: SunburstNode[] };
+  const [data, setData] = useState<SunburstNode[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -344,8 +346,8 @@ const SunburstByDept: React.FC<{ hiddenStatuses: Set<string> }> = ({ hiddenStatu
           return { name: dept, value: deptValue, children: typeChildren };
         });
         setData(toSunburst);
-      } catch (e: any) {
-        setError(e.message || 'Failed to load sunburst');
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : 'Failed to load sunburst');
         setData([]);
       } finally {
         setLoading(false);
@@ -359,7 +361,10 @@ const SunburstByDept: React.FC<{ hiddenStatuses: Set<string> }> = ({ hiddenStatu
   if (!data.length) return <div className="text-sm text-muted-foreground">No data</div>;
 
   const option = {
-    tooltip: { trigger: 'item', formatter: (p: any) => `${p.name}: ${p.value}` },
+    tooltip: {
+      trigger: 'item',
+      formatter: (p: { name?: string; value?: number }) => `${p.name}: ${p.value}`,
+    },
     series: [
       {
         type: 'sunburst',
@@ -370,7 +375,7 @@ const SunburstByDept: React.FC<{ hiddenStatuses: Set<string> }> = ({ hiddenStatu
         label: { rotate: 'radial' },
       }
     ]
-  } as any;
+  };
 
   return (
     <Card className="p-4">

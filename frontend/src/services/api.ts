@@ -29,7 +29,7 @@ class ApiService {
     return response.json();
   }
 
-  async post<T>(endpoint: string, data?: any): Promise<T> {
+  async post<T>(endpoint: string, data?: unknown): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const response = await fetch(url, {
       method: 'POST',
@@ -45,7 +45,7 @@ class ApiService {
     return response.json();
   }
 
-  async put<T>(endpoint: string, data?: any): Promise<T> {
+  async put<T>(endpoint: string, data?: unknown): Promise<T> {
     const url = `${this.baseURL}${endpoint}`;
     const response = await fetch(url, {
       method: 'PUT',

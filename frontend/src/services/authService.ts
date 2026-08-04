@@ -49,7 +49,7 @@ export interface LiffTokenVerificationResponse {
     client_id: string;
     expires_in: number;
   };
-  error?: any;
+  error?: unknown;
 }
 
 export interface LineProfileResponse {
@@ -61,7 +61,7 @@ export interface LineProfileResponse {
     pictureUrl: string;
     statusMessage: string;
   };
-  error?: any;
+  error?: unknown;
 }
 
 export interface LineLoginData {

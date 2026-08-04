@@ -12,13 +12,7 @@ import emsService, {
   type EmsPagination,
 } from '@/services/emsService';
 
-import EquipmentFilterBar, {
-
-  EMPTY_EQUIPMENT_FILTERS,
-
-  type EquipmentFilters,
-
-} from '@/components/ems/equipment/EquipmentFilterBar';
+import EquipmentFilterBar, { type EquipmentFilters } from '@/components/ems/equipment/EquipmentFilterBar';
 
 import EquipmentTable from '@/components/ems/equipment/EquipmentTable';
 
@@ -233,7 +227,7 @@ const EquipmentListPage: React.FC = () => {
 
     };
 
-  }, [queryKey, page, filters, t]);
+  }, [queryKey, page, filters, sortOrder, t]);
 
 
 

@@ -1,13 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useToast } from '@/hooks/useToast';
 import administrationService, { 
-  type TicketApproval,
   type TicketApprovalSummary,
   type CreateTicketApprovalRequest,
-  type Area, 
-  type Line, 
-  type Plant, 
   type Person,
   type LookupData
 } from '@/services/administrationService';
@@ -69,7 +65,7 @@ const TicketApprovalManagementPage: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Check existing approval levels for selected user
   const checkExistingApprovalLevels = async (personno: number) => {
@@ -186,13 +182,6 @@ const TicketApprovalManagementPage: React.FC = () => {
     });
   }
 
-  const removePlantFromHierarchy = (plantCode: string) => {
-    setFormData(prev => ({
-      ...prev,
-      hierarchies: prev.hierarchies.filter(h => h.plant_code !== plantCode)
-    }));
-  }
-
   const addAreaToHierarchy = (plantCode: string, areaCode: string) => {
     setFormData(prev => {
       const newHierarchies = [...prev.hierarchies];
@@ -209,13 +198,6 @@ const TicketApprovalManagementPage: React.FC = () => {
       
       return { ...prev, hierarchies: newHierarchies }
     });
-  }
-
-  const removeAreaFromHierarchy = (plantCode: string, areaCode: string) => {
-    setFormData(prev => ({
-      ...prev,
-      hierarchies: prev.hierarchies.filter(h => !(h.plant_code === plantCode && h.area_code === areaCode))
-    }));
   }
 
   const addLineToHierarchy = (plantCode: string, areaCode: string, lineCode: string) => {
@@ -236,47 +218,6 @@ const TicketApprovalManagementPage: React.FC = () => {
     });
   }
 
-  const removeLineFromHierarchy = (plantCode: string, areaCode: string, lineCode: string) => {
-    setFormData(prev => ({
-      ...prev,
-      hierarchies: prev.hierarchies.filter(h => 
-        !(h.plant_code === plantCode && h.area_code === areaCode && h.line_code === lineCode)
-      )
-    }));
-  }
-
-  const addMachineToHierarchy = (plantCode: string, areaCode: string, lineCode: string, machineCode: string) => {
-    setFormData(prev => {
-      const newHierarchies = [...prev.hierarchies];
-      
-      // Check if this specific machine already exists
-      const existingMachineIndex = newHierarchies.findIndex(h => 
-        h.plant_code === plantCode && h.area_code === areaCode && h.line_code === lineCode && h.machine_code === machineCode
-      );
-      
-      if (existingMachineIndex === -1) {
-        // Add new machine-level entry (keep plant, area, and line level entries)
-        newHierarchies.push({ 
-          plant_code: plantCode, 
-          area_code: areaCode, 
-          line_code: lineCode, 
-          machine_code: machineCode 
-        });
-      }
-      
-      return { ...prev, hierarchies: newHierarchies }
-    });
-  }
-
-  const removeMachineFromHierarchy = (plantCode: string, areaCode: string, lineCode: string, machineCode: string) => {
-    setFormData(prev => ({
-      ...prev,
-      hierarchies: prev.hierarchies.filter(h => 
-        !(h.plant_code === plantCode && h.area_code === areaCode && h.line_code === lineCode && h.machine_code === machineCode)
-      )
-    }));
-  }
-
   // Check if a hierarchy level is selected
   const isPlantSelected = (plantCode: string) => {
     return formData.hierarchies.some(h => h.plant_code === plantCode);
@@ -289,12 +230,6 @@ const TicketApprovalManagementPage: React.FC = () => {
   const isLineSelected = (plantCode: string, areaCode: string, lineCode: string) => {
     return formData.hierarchies.some(h => 
       h.plant_code === plantCode && h.area_code === areaCode && h.line_code === lineCode
-    );
-  }
-
-  const isMachineSelected = (plantCode: string, areaCode: string, lineCode: string, machineCode: string) => {
-    return formData.hierarchies.some(h => 
-      h.plant_code === plantCode && h.area_code === areaCode && h.line_code === lineCode && h.machine_code === machineCode
     );
   }
 
@@ -313,7 +248,7 @@ const TicketApprovalManagementPage: React.FC = () => {
     }
   }, []);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     try {
       setLoading(true);
       const [approvalsData, lookupData] = await Promise.all([
@@ -327,7 +262,7 @@ const TicketApprovalManagementPage: React.FC = () => {
       setLines(lookupData.lines);
       setFilteredAreas(lookupData.areas);
       setFilteredLines(lookupData.lines);
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to load data',
@@ -336,7 +271,7 @@ const TicketApprovalManagementPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }
+  }, [toast]);
 
   // Hierarchical selection handlers
   const handlePlantSelection = (plantCode: string, checked: boolean) => {
@@ -557,70 +492,6 @@ const TicketApprovalManagementPage: React.FC = () => {
     setViewMode('create');
   }
 
-  const handleEdit = async (approval: TicketApprovalSummary) => {
-    try {
-      setLoading(true);
-      
-      // Load all approvals for this person and level
-      const allApprovalsForPersonLevel = await administrationService.ticketApproval.getByPersonAndLevel(
-        approval.personno, 
-        approval.approval_level
-      );
-      
-      console.log('Loaded approvals for edit:', allApprovalsForPersonLevel);
-      
-    setSelectedApproval(approval);
-      
-      // Convert existing approvals to hierarchy objects
-      const hierarchies = allApprovalsForPersonLevel.map(approval => ({
-        plant_code: approval.plant_code,
-        area_code: approval.area_code || undefined,
-        line_code: approval.line_code || undefined,
-        machine_code: approval.machine_code || undefined
-      }));
-      
-    setFormData({
-        personno: approval.personno,
-        approval_level: approval.approval_level,
-        is_active: approval.is_active,
-        hierarchies: hierarchies
-      });
-      
-      // Set person search
-    if (approval.person_name) {
-        setPersonSearch(approval.person_name);
-    } else {
-      setPersonSearch(`Person #${approval.personno}`);
-    }
-      
-      // Check existing approval levels for this user
-      checkExistingApprovalLevels(approval.personno);
-      
-      // Filter areas and lines based on selected plants
-      const selectedPlantCodes = [...new Set(hierarchies.map(h => h.plant_code))];
-      if (selectedPlantCodes.length > 0) {
-        const selectedPlantIds = selectedPlantCodes.map(code => 
-          plants.find(p => p.code === code)?.id
-        ).filter(Boolean) as number[];
-        
-        setFilteredAreas(areas.filter(area => selectedPlantIds.includes(area.plant_id)));
-        setFilteredLines(lines.filter(line => selectedPlantIds.includes(line.plant_id)));
-      }
-      
-    setViewMode('edit');
-    } catch (error) {
-      console.error('Error loading approvals for edit:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load approval data for editing',
-        variant: 'destructive'
-      });
-    } finally {
-      setLoading(false);
-    }
-  }
-
-
   const searchPersons = async (search: string) => {
     if (search.length < 2) {
       setPersons([]);
@@ -702,7 +573,7 @@ const TicketApprovalManagementPage: React.FC = () => {
               (existing.machine_code || '') === (newApproval.machine_code || '')
             );
           });
-        } catch (error) {
+        } catch {
           console.log('No existing approvals found, creating all');
         }
         
@@ -796,15 +667,15 @@ const TicketApprovalManagementPage: React.FC = () => {
       await loadData();
       setViewMode('list');
       setPersonSearch('');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.log('=== FRONTEND: Error occurred ===');
       console.error('Error details:', error);
-      console.error('Error message:', error.message || 'Unknown error');
-      console.error('Error stack:', error.stack || 'No stack trace');
+      console.error('Error message:', error instanceof Error ? error.message : 'Unknown error');
+      console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
       
       toast({
         title: 'Error',
-        description: error.message || 'Failed to save ticket approval',
+        description: error instanceof Error ? error.message : 'Failed to save ticket approval',
         variant: 'destructive'
       });
     } finally {
@@ -904,10 +775,10 @@ const TicketApprovalManagementPage: React.FC = () => {
           description: `Successfully deleted ${allApprovalsForPersonLevel.length} approval(s) for ${personName}`
         });
         await loadData();
-      } catch (error: any) {
+      } catch (error: unknown) {
         toast({
           title: 'Error',
-          description: error.message || 'Failed to delete ticket approvals',
+          description: error instanceof Error ? error.message : 'Failed to delete ticket approvals',
           variant: 'destructive'
         });
       } finally {

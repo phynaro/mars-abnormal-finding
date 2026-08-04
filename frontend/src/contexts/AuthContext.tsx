@@ -1,11 +1,13 @@
-import React, { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
-import authService, { type User, type LiffTokenVerificationResponse, type LineProfileResponse, type LineLoginData } from '../services/authService';
+import React, { useEffect, useState, type ReactNode } from 'react';
+import authService, { type User, type LiffTokenVerificationResponse, type LineProfileResponse, type LineLoginData, type RegisterData } from '../services/authService';
 import liff from "@line/liff";
+
+import { AuthContext } from './authStore';
 
 interface AuthContextType {
   user: User | null;
-  liffObject: any | null;
-  liffError: any | null;
+  liffObject: typeof liff | null;
+  liffError: string | null;
   liffLoading: boolean;
   liffTokenVerified: boolean;
   liffTokenVerificationResult: LiffTokenVerificationResponse | null;
@@ -17,23 +19,13 @@ interface AuthContextType {
   clearRedirectUrl: () => void;
   login: (username: string, password: string) => Promise<void>;
   lineLogin: (lineProfile: LineLoginData) => Promise<void>;
-  register: (userData: any) => Promise<void>;
+  register: (userData: RegisterData) => Promise<void>;
   logout: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   refreshUser: () => Promise<void>;
   verifyLiffToken: (accessToken: string) => Promise<LiffTokenVerificationResponse>;
   getLineProfile: (accessToken: string) => Promise<LineProfileResponse>;
 }
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
 
 interface AuthProviderProps {
   children: ReactNode;
@@ -43,8 +35,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [redirectUrl, setRedirectUrl] = useState<string | null>(null);
-  const [liffObject, setLiffObject] = useState<any | null>(null);
-  const [liffError, setLiffError] = useState<any | null>(null);
+  const [liffObject, setLiffObject] = useState<typeof liff | null>(null);
+  const [liffError, setLiffError] = useState<string | null>(null);
   const [liffLoading, setLiffLoading] = useState(true);
   const [liffTokenVerified, setLiffTokenVerified] = useState(false);
   const [liffTokenVerificationResult, setLiffTokenVerificationResult] = useState<LiffTokenVerificationResponse | null>(null);
@@ -199,7 +191,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
     }, REFRESH_INTERVAL_MS);
     return () => clearInterval(intervalId);
-  }, [user]);
+  }, [user, REFRESH_INTERVAL_MS]);
 
   const storeRedirectUrl = (url: string) => {
     setRedirectUrl(url);
@@ -220,8 +212,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         throw new Error(response.message || 'Login failed');
       }
-    } catch (error) {
-      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -238,22 +228,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       } else {
         throw new Error(response.message || 'LINE login failed');
       }
-    } catch (error) {
-      throw error;
     } finally {
       setIsLoading(false);
     }
   };
 
-  const register = async (userData: any) => {
+  const register = async (userData: RegisterData) => {
     try {
       setIsLoading(true);
       const response = await authService.register(userData);
       if (!response.success) {
         throw new Error(response.message || 'Registration failed');
       }
-    } catch (error) {
-      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -282,8 +268,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (!response.success) {
         throw new Error(response.message || 'Password change failed');
       }
-    } catch (error) {
-      throw error;
     } finally {
       setIsLoading(false);
     }

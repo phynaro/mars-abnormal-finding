@@ -1,4 +1,3 @@
-import authService from './authService';
 import { getAuthHeaders as getAuthHeadersUtil } from '../utils/authHeaders';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
@@ -244,15 +243,14 @@ export const getActionsForLevel = (level: number): ActionType[] => {
 
 export const canUserPerformAction = (
   userLevel: number,
-  action: ActionType,
-  ticketLevel?: number
+  action: ActionType
 ): boolean => {
   const userActions = getActionsForLevel(userLevel);
   return userActions.includes(action);
 };
 
 
-const handleApiResponse = async (response: Response): Promise<any> => {
+const handleApiResponse = async (response: Response): Promise<unknown> => {
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(errorText || `HTTP error! status: ${response.status}`);

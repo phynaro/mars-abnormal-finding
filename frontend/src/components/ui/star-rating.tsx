@@ -31,7 +31,7 @@ export const StarRating: React.FC<StarRatingProps> = ({
     }
   };
 
-  const handleMouseEnter = (rating: number) => {
+  const handleMouseEnter = () => {
     if (!disabled) {
       // Optional: Add hover effect
     }
@@ -52,7 +52,7 @@ export const StarRating: React.FC<StarRatingProps> = ({
               disabled && "cursor-not-allowed opacity-50"
             )}
             onClick={() => handleClick(rating)}
-            onMouseEnter={() => handleMouseEnter(rating)}
+            onMouseEnter={handleMouseEnter}
             disabled={disabled}
           >
             <Star

@@ -1,15 +1,14 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ticketService, type CreateTicketRequest, type Equipment } from '@/services/ticketService';
 import { hierarchyService, type PUCritical } from '@/services/hierarchyService';
 import { ticketClassService, type TicketClass } from '@/services/ticketClassService';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FileUpload } from '@/components/ui/file-upload';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { useToast } from '@/hooks/useToast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Upload, X, Search, Building2 } from 'lucide-react';
@@ -101,6 +100,8 @@ const TicketCreatePage: React.FC = () => {
       cleanupPreviewUrls();
       setPreviewFiles([]);
     }
+  // Preview generation is driven by file-count transitions.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFiles.length, previewFiles.length, previewUrls.length]);
   
   // Clean up URLs when files change
@@ -115,6 +116,8 @@ const TicketCreatePage: React.FC = () => {
       setPreviewFiles([]);
       createPreviewImages();
     }
+  // Rebuild previews only when the selected file count changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFiles.length]);
   
   const createPreviewImages = async () => {
@@ -169,6 +172,8 @@ const TicketCreatePage: React.FC = () => {
     return () => {
       previewUrls.forEach(url => URL.revokeObjectURL(url));
     };
+  // Cleanup reads the current preview URLs only when unmounting.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Global drag and drop handlers for the entire page
@@ -191,7 +196,7 @@ const TicketCreatePage: React.FC = () => {
     };
   }, []);
 
-  const handleInputChange = (field: keyof typeof formData, value: any) => {
+  const handleInputChange = (field: keyof typeof formData, value: string | number | undefined | null) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
     if (errors[field]) setErrors((prev) => ({ ...prev, [field]: '' }));
   };
@@ -336,6 +341,8 @@ const TicketCreatePage: React.FC = () => {
       }
     }, 300);
     return () => clearTimeout(t);
+  // Debounced lookup is keyed by query state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [machineSearchQuery, isProgrammaticUpdate]);
 
   // Load equipment when machine is selected
@@ -346,12 +353,16 @@ const TicketCreatePage: React.FC = () => {
       setEquipmentList([]);
       setSelectedEquipment(null);
     }
+  // Equipment is loaded when the selected machine changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedMachine]);
 
   // Load critical levels on component mount
   useEffect(() => {
     loadCriticalLevels();
     loadTicketClasses();
+  // Lookup functions intentionally run once on mount.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load critical levels function
@@ -452,7 +463,7 @@ const TicketCreatePage: React.FC = () => {
   };
 
   // Handle machine selection from hierarchical selector
-  const onHierarchicalMachineSelect = (machine: any) => {
+  const onHierarchicalMachineSelect = (machine: { pucode: string; pudescription?: string; puname?: string; puno: number; pucriticalno?: number }) => {
     // Convert hierarchical machine data to PUCODEResult format
     const pucodeResult: PUCODEResult = {
       PUCODE: machine.pucode,

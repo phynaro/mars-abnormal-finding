@@ -1,5 +1,3 @@
-import { authService } from './authService';
-import { canUserPerformAction, getActionsForLevel, type ActionType } from './administrationService';
 import { getAuthHeaders, getAuthHeadersNoContentType } from '../utils/authHeaders';
 
 export interface Ticket {
@@ -526,7 +524,7 @@ class TicketService {
     return response.json();
   }
 
-  async addComment(ticketId: number, comment: string): Promise<{ success: boolean; message: string; data: any }> {
+  async addComment(ticketId: number, comment: string): Promise<{ success: boolean; message: string; data: unknown }> {
     const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/${ticketId}/comments`, {
       method: 'POST',
@@ -582,7 +580,7 @@ class TicketService {
     file: File,
     imageType: 'before' | 'after' | 'other' = 'other',
     imageName?: string,
-  ): Promise<{ success: boolean; message: string; data: any }> {
+  ): Promise<{ success: boolean; message: string; data: unknown }> {
     const headers = getAuthHeadersNoContentType();
     const form = new FormData();
     form.append('image', file);
@@ -638,7 +636,7 @@ class TicketService {
     new_pucriticalno?: number
   ): Promise<{ success: boolean; message: string }> {
     const headers = getAuthHeaders();
-    const body: any = { notes, schedule_finish };
+    const body: Record<string, unknown> = { notes, schedule_finish };
     
     if (new_puno !== undefined) {
       body.new_puno = new_puno;
@@ -838,7 +836,7 @@ class TicketService {
     year: number;
     startDate: string;
     endDate: string;
-  }): Promise<{ success: boolean; data: any }> {
+  }): Promise<{ success: boolean; data: unknown }> {
     const headers = getAuthHeaders();
     const queryParams = new URLSearchParams();
     queryParams.set('year', params.year.toString());
@@ -856,7 +854,7 @@ class TicketService {
     year: number;
     startDate: string;
     endDate: string;
-  }): Promise<{ success: boolean; data: any }> {
+  }): Promise<{ success: boolean; data: unknown }> {
     const headers = getAuthHeaders();
     const queryParams = new URLSearchParams();
     queryParams.set('year', params.year.toString());
@@ -892,7 +890,7 @@ class TicketService {
     endDate: string;
     compare_startDate: string;
     compare_endDate: string;
-  }): Promise<{ success: boolean; data: any }> {
+  }): Promise<{ success: boolean; data: unknown }> {
     const headers = getAuthHeaders();
     const queryParams = new URLSearchParams();
     queryParams.set('startDate', params.startDate);
@@ -948,7 +946,7 @@ class TicketService {
   }
 
   // Test endpoints (for development)
-  async testL2UsersForArea(areaId: number): Promise<{ success: boolean; data: any[]; message: string }> {
+  async testL2UsersForArea(areaId: number): Promise<{ success: boolean; data: unknown[]; message: string }> {
     const headers = getAuthHeaders();
     const response = await fetch(`${API_BASE_URL}/tickets/test-l2-users/${areaId}`, {
       headers

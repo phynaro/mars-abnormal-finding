@@ -40,6 +40,7 @@ export function formatTimelineTime(timestamp: string): string {
  * @returns Formatted string: "01/01/2025 14:30:45"
  */
 export function formatUITime(timestamp: string, language: 'en' | 'th' = 'en'): string {
+  void language;
   // The timestamp from database is already in local time (UTC+7)
   // But it has 'Z' suffix which makes JavaScript think it's UTC
   // We need to remove the 'Z' and replace with '+07:00' to indicate it's already in UTC+7

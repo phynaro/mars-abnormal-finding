@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { PageHeader } from '@/components/common/PageHeader';
 import { Card } from '@/components/ui/card';
 import personnelService from '@/services/personnelService';
+import type { OrgRow } from './orgTypes';
 
 const Row: React.FC<{ label: string; value?: React.ReactNode }> = ({ label, value }) => (
   <div className="flex text-sm"><div className="w-36 text-muted-foreground">{label}</div><div>{value ?? '-'}</div></div>
@@ -12,7 +13,7 @@ const OrgDepartmentDetailsPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [data, setData] = useState<any | null>(null);
+  const [data, setData] = useState<OrgRow | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => { (async () => {
@@ -23,9 +24,9 @@ const OrgDepartmentDetailsPage: React.FC = () => {
       setData(payload);
       const label = payload?.DEPTCODE || `#${id}`;
       navigate(location.pathname, { replace: true, state: { breadcrumbExtra: label } });
-    } catch (e: any) { setError(e.message || 'Failed to load department'); }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load department'); }
     finally { setLoading(false); }
-  })(); }, [id]);
+  })(); }, [id, location.pathname, navigate]);
 
   return (
     <div className="p-4 sm:p-6 space-y-4">
