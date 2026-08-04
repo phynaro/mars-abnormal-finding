@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
-import { useLanguage } from '../../contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,9 +8,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { User, Mail, Phone, Clock, CheckCircle, AlertCircle, ArrowLeft } from 'lucide-react';
 import { accessRequestService, type AccessRequestData } from '../../services/accessRequestService';
 
+type PendingRequest = { firstName: string; lastName: string; email: string; telephone?: string; createdAt: string };
+
 const RequestAccessPage: React.FC = () => {
-  const { liffObject, liffTokenVerified } = useAuth();
-  const { t } = useLanguage();
+  const { liffObject } = useAuth();
   const navigate = useNavigate();
   
   const [formData, setFormData] = useState({
@@ -26,7 +26,7 @@ const RequestAccessPage: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
-  const [pendingRequest, setPendingRequest] = useState<any>(null);
+  const [pendingRequest, setPendingRequest] = useState<PendingRequest | null>(null);
   const [liffError, setLiffError] = useState('');
 
   // Initialize LIFF and get LINE profile

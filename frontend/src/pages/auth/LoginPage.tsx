@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/LanguageContext';
 import { Eye, EyeOff, Lock, User } from 'lucide-react';
@@ -10,7 +9,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 
 const LoginPage: React.FC = () => {
   const { login } = useAuth();
-  const navigate = useNavigate();
   const { t } = useLanguage();
   const [formData, setFormData] = useState({
     username: '',
