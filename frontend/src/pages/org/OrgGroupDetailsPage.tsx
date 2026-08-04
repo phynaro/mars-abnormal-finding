@@ -4,16 +4,17 @@ import { PageHeader } from '@/components/common/PageHeader';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import personnelService from '@/services/personnelService';
+import type { OrgRow } from './orgTypes';
 
 const OrgGroupDetailsPage: React.FC = () => {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const [group, setGroup] = useState<any | null>(null);
-  const [members, setMembers] = useState<any[]>([]);
+  const [group, setGroup] = useState<OrgRow | null>(null);
+  const [members, setMembers] = useState<OrgRow[]>([]);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { (async () => {
@@ -24,9 +25,9 @@ const OrgGroupDetailsPage: React.FC = () => {
       setGroup(payload);
       const label = payload?.USERGROUPCODE || `#${id}`;
       navigate(location.pathname, { replace: true, state: { breadcrumbExtra: label } });
-    } catch (e: any) { setError(e.message || 'Failed to load group'); }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load group'); }
     finally { setLoading(false); }
-  })(); }, [id]);
+  })(); }, [id, location.pathname, navigate]);
 
   useEffect(() => { (async () => {
     if (!id) return; setLoading(true);
@@ -37,7 +38,7 @@ const OrgGroupDetailsPage: React.FC = () => {
       setMembers(Array.isArray(arr) ? arr : []);
       const pgn = res?.pagination || payload?.pagination || {};
       setPages(Number(pgn.totalPages || pgn.pages) || 1);
-    } catch (e: any) { setError(e.message || 'Failed to load members'); }
+    } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load members'); }
     finally { setLoading(false); }
   })(); }, [id, page]);
 

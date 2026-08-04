@@ -5,13 +5,14 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import personnelService from '@/services/personnelService';
+import type { OrgRow } from './orgTypes';
 
 const OrgGroupsPage: React.FC = () => {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(1);
-  const [rows, setRows] = useState<any[]>([]);
+  const [rows, setRows] = useState<OrgRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -25,7 +26,7 @@ const OrgGroupsPage: React.FC = () => {
         setRows(Array.isArray(arr) ? arr : []);
         const pgn = res?.pagination || payload?.pagination || {};
         setPages(Number(pgn.totalPages || pgn.pages) || 1);
-      } catch (e: any) { setError(e.message || 'Failed to load groups'); }
+      } catch (e: unknown) { setError(e instanceof Error ? e.message : 'Failed to load groups'); }
       finally { setLoading(false); }
     };
     load();
