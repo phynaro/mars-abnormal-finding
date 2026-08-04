@@ -44,6 +44,7 @@ npm run build        # production build
 | File | Purpose |
 |---|---|
 | `docker-compose.local.yml` | **Local dev** — builds images locally, mounts src for hot-reload, includes Redis |
+| `docker-compose.local-preview.yml` | **Local customer preview** — same backend/worker/redis hot-reload as local, but frontend is a production build served by nginx. Use `-p mars-preview`. Stop the Vite local stack first (ports 80/443/6379). |
 | `docker-compose.yml` | Pulls GHCR pre-built images (dev/staging) |
 | `docker-compose.deploy.yml` | Deploys locally-tagged images to production |
 | `docker-compose.production.yml` | Production image composition |

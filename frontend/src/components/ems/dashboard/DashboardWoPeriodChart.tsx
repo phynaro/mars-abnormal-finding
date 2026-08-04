@@ -17,6 +17,7 @@ import { EmsContentCard } from '@/components/ems/shared/emsLayoutPrimitives';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import emsService, {
+  type EmsWorkOrderStatus,
   type EmsWoPeriodStatusByPlant,
   type EmsWoPeriodStatusItem,
 } from '@/services/emsService';
@@ -57,6 +58,11 @@ const PLANT_COLORS: Record<string, { ontime: string; notFinish: string }> = {
 };
 
 const FALLBACK_PLANT_COLORS = { ontime: '#64748b', notFinish: '#cbd5e1' };
+
+function toWorkOrderStatus(status: StatusKey): EmsWorkOrderStatus {
+  if (status === 'notFinish') return 'not_finish';
+  return status;
+}
 
 function getPlantFill(plant: string, status: StatusKey): string {
   if (status === 'late') return LATE_COLOR;
@@ -202,14 +208,15 @@ const DashboardWoPeriodChart: React.FC<Props> = ({ timeTravel }) => {
 
   const hasData = chartData.some((row) => row.total > 0);
 
-  const navigateToSchedule = useCallback(
-    (periodNumber: number, plant?: string) => {
+  const navigateToWorkOrders = useCallback(
+    (periodNumber: number, status: EmsWorkOrderStatus, plant?: string) => {
       const { startDate, endDate } = getPeriodDateRange(timeTravel.year, periodNumber);
       const params = new URLSearchParams();
       if (plant) params.set('plant', plant);
-      params.set('dueFrom', formatLocalDate(startDate));
-      params.set('dueTo', formatLocalDate(endDate));
-      navigate(`/ems/schedule?${params.toString()}`);
+      params.set('status', status);
+      params.set('schFrom', formatLocalDate(startDate));
+      params.set('schTo', formatLocalDate(endDate));
+      navigate(`/ems/work-orders?${params.toString()}`);
     },
     [navigate, timeTravel.year]
   );
@@ -371,7 +378,7 @@ const DashboardWoPeriodChart: React.FC<Props> = ({ timeTravel }) => {
                       onClick={(data) => {
                         const periodNumber = Number(data?.payload?.periodNumber);
                         if (periodNumber >= 1 && periodNumber <= 13) {
-                          navigateToSchedule(periodNumber);
+                          navigateToWorkOrders(periodNumber, toWorkOrderStatus(status));
                         }
                       }}
                     />
@@ -391,7 +398,7 @@ const DashboardWoPeriodChart: React.FC<Props> = ({ timeTravel }) => {
                       onClick={(data) => {
                         const periodNumber = Number(data?.payload?.periodNumber);
                         if (periodNumber >= 1 && periodNumber <= 13) {
-                          navigateToSchedule(periodNumber, plant);
+                          navigateToWorkOrders(periodNumber, toWorkOrderStatus(status), plant);
                         }
                       }}
                     />

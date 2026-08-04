@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { Gauge, LayoutDashboard, Wrench, CalendarDays, Settings } from 'lucide-react';
+import { Gauge, LayoutDashboard, Wrench, CalendarDays, ClipboardList, Settings } from 'lucide-react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEmsAccess } from '@/contexts/EmsAccessContext';
@@ -15,6 +15,7 @@ const EmsLayout: React.FC = () => {
     { to: '/ems/dashboard', label: t('ems.nav.dashboard'), icon: LayoutDashboard },
     { to: '/ems/equipment', label: t('ems.nav.equipment'), icon: Wrench },
     { to: '/ems/schedule', label: t('ems.nav.schedule'), icon: CalendarDays },
+    { to: '/ems/work-orders', label: t('ems.nav.workOrders'), icon: ClipboardList },
     ...(canAdmin
       ? [{ to: '/ems/settings/roles', label: t('ems.nav.settings'), icon: Settings }]
       : []),

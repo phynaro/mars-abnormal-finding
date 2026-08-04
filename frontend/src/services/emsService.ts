@@ -221,6 +221,29 @@ export interface EmsScheduleKpi {
   remaining: number;
 }
 
+export type EmsWorkOrderStatus = 'ontime' | 'late' | 'not_finish';
+
+export interface EmsWorkOrderItem {
+  woNo: number | null;
+  woCode: string | null;
+  tagNo: string;
+  description: string | null;
+  plant: string;
+  area: string | null;
+  status: EmsWorkOrderStatus;
+  schFinishDate: string | null;
+  actFinishDate: string | null;
+  assigneeName: string | null;
+  assigneeId: number | null;
+}
+
+export interface EmsWorkOrderKpi {
+  total: number;
+  ontime: number;
+  late: number;
+  notFinish: number;
+}
+
 export interface EmsPlantMatrixItem {
   plant: string;
   plantLabel: string;
@@ -492,6 +515,35 @@ const emsService = {
     return emsFetch<{ success: boolean; data: { users: Array<{ id: number; name: string }> } }>(
       '/schedule/assignees'
     );
+  },
+
+  async getWorkOrderList(params?: {
+    page?: number;
+    limit?: number;
+    plant?: string;
+    area?: string;
+    status?: EmsWorkOrderStatus;
+    schFrom?: string;
+    schTo?: string;
+    q?: string;
+  }) {
+    return emsFetch<{ success: boolean; data: { items: EmsWorkOrderItem[]; pagination: EmsPagination } }>(
+      `/work-orders${toQuery(params || {})}`
+    );
+  },
+
+  async getWorkOrderKpi(params?: {
+    plant?: string;
+    area?: string;
+    status?: EmsWorkOrderStatus;
+    schFrom?: string;
+    schTo?: string;
+    q?: string;
+  }) {
+    const res = await emsFetch<{ success: boolean; data: EmsWorkOrderKpi }>(
+      `/work-orders/kpi${toQuery(params || {})}`
+    );
+    return res.data;
   },
 
   async getUserEvents(params: CalibrationUserEventQueryParams = {}) {

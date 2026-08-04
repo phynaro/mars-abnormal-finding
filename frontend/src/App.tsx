@@ -73,6 +73,7 @@ import EmsDashboardPage from './pages/ems/DashboardPageV2';
 import EquipmentListPage from './pages/ems/EquipmentListPage';
 import EquipmentDetailPage from './pages/ems/EquipmentDetailPage';
 import SchedulePage from './pages/ems/SchedulePage';
+import EmsWorkOrdersPage from './pages/ems/WorkOrdersPage';
 import RoleSettingsPage from './pages/ems/RoleSettingsPage';
 
 // Main App Component with Routing
@@ -251,6 +252,7 @@ const AppContent: React.FC = () => {
             <Route path="equipment" element={<EquipmentListPage />} />
             <Route path="equipment/:tagNo" element={<EquipmentDetailPage />} />
             <Route path="schedule" element={<SchedulePage />} />
+            <Route path="work-orders" element={<EmsWorkOrdersPage />} />
             <Route path="settings/roles" element={
               <EmsAdminRoute>
                 <RoleSettingsPage />

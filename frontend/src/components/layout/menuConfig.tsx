@@ -20,6 +20,7 @@ import {
   Gauge,
   Wrench,
   CalendarDays,
+  ClipboardList,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -104,6 +105,14 @@ export const menuItems: MenuItem[] = [
         label: 'Schedule',
         icon: <CalendarDays className="h-4 w-4" />,
         path: '/ems/schedule',
+        permissionLevel: 1,
+        emsMenu: true,
+      },
+      {
+        id: 'ems-work-orders',
+        label: 'Work Orders',
+        icon: <ClipboardList className="h-4 w-4" />,
+        path: '/ems/work-orders',
         permissionLevel: 1,
         emsMenu: true,
       },

@@ -6,6 +6,7 @@ const { uploadEquipmentMemory } = require('../middleware/upload');
 
 const dashboardController = require('../controllers/ems/dashboardController');
 const scheduleController = require('../controllers/ems/scheduleController');
+const workOrderController = require('../controllers/ems/workOrderController');
 const equipmentController = require('../controllers/ems/equipmentController');
 const roleController = require('../controllers/ems/roleController');
 const calibrationUserEventsController = require('../controllers/calibrationUserEventsController');
@@ -41,6 +42,8 @@ router.get('/schedule', scheduleController.getScheduleList);
 router.get('/schedule/kpi', scheduleController.getScheduleKpi);
 router.get('/schedule/calendar-range', scheduleController.getScheduleCalendarRange);
 router.get('/schedule/assignees', scheduleController.getScheduleAssignees);
+router.get('/work-orders', workOrderController.getWorkOrderList);
+router.get('/work-orders/kpi', workOrderController.getWorkOrderKpi);
 
 router.get('/user-events', calibrationUserEventsController.getCalibrationUserEvents);
 router.get('/user-events/calendar-range', calibrationUserEventsController.getCalibrationUserEventsCalendarRange);

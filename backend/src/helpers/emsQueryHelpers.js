@@ -75,6 +75,29 @@ function woTargetDateTimeExpr(woAlias = 'openWo') {
   )`;
 }
 
+/** Parsed scheduled finish date from WO. */
+function woSchFinishDateExpr(woAlias = 'wo') {
+  return dateExprFromColumn(`${woAlias}.SCH_FINISH_D`);
+}
+
+/** Parsed actual finish date from WO. */
+function woActFinishDateExpr(woAlias = 'wo') {
+  return dateExprFromColumn(`${woAlias}.ACT_FINISH_D`);
+}
+
+/** WO completion status used by EMS calibration WO analytics and drill-down. */
+function woCompletionStatusExpr(woAlias = 'wo') {
+  const schFinishExpr = woSchFinishDateExpr(woAlias);
+  const actFinishExpr = woActFinishDateExpr(woAlias);
+  return `(
+    CASE
+      WHEN ${actFinishExpr} IS NULL THEN 'not_finish'
+      WHEN ${actFinishExpr} <= ${schFinishExpr} THEN 'ontime'
+      ELSE 'late'
+    END
+  )`;
+}
+
 /** PMSched due with PM.NEXTDUE_D fallback. */
 function scheduleDueDateExpr(schedAlias = 's', pmAlias = 'pm') {
   const schedDue = dateExprFromColumn(`${schedAlias}.DUEDATE`);
@@ -325,6 +348,9 @@ module.exports = {
   openWoApplySql,
   openCalNotFinishedWhere,
   woTargetDateTimeExpr,
+  woSchFinishDateExpr,
+  woActFinishDateExpr,
+  woCompletionStatusExpr,
   scheduleDueDateExpr,
   effectiveDueDateTimeExpr,
   dueDateSourceExpr,

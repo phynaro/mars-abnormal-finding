@@ -50,6 +50,10 @@ const {
 
   dateExprFromColumn,
 
+  woSchFinishDateExpr,
+
+  woCompletionStatusExpr,
+
   eqActiveWhere,
 
 } = require('../../helpers/emsQueryHelpers');
@@ -898,27 +902,13 @@ exports.getWoPeriodStatus = async (req, res) => {
 
 
 
-    const schFinishExpr = dateExprFromColumn('wo.SCH_FINISH_D');
-
-    const actFinishExpr = dateExprFromColumn('wo.ACT_FINISH_D');
+    const schFinishExpr = woSchFinishDateExpr('wo');
 
     const plantExpr = plantFromTagExpr('ext.tag_no');
 
     const periodExpr = `(DATEDIFF(day, @WoPeriodRangeStart, ${schFinishExpr}) / 28) + 1`;
 
-    const statusExpr = `(
-
-      CASE
-
-        WHEN ${actFinishExpr} IS NULL THEN 'not_finish'
-
-        WHEN ${actFinishExpr} <= ${schFinishExpr} THEN 'ontime'
-
-        ELSE 'late'
-
-      END
-
-    )`;
+    const statusExpr = woCompletionStatusExpr('wo');
 
 
 
