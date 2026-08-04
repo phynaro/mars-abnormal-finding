@@ -18,7 +18,7 @@ import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { AccessDenied } from '@/components/common/AccessDenied';
 
 const UserManagementPage: React.FC = () => {
-  const { user: currentUser } = useAuth();
+  useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [groups, setGroups] = useState<Group[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);

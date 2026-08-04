@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
@@ -63,9 +63,9 @@ const NotificationScheduleManagementPage: React.FC = () => {
 
   useEffect(() => {
     loadSchedules();
-  }, []);
+  }, [loadSchedules]);
 
-  const loadSchedules = async () => {
+  const loadSchedules = useCallback(async () => {
     try {
       setLoading(true);
       const response = await notificationScheduleService.getAll();
@@ -82,7 +82,7 @@ const NotificationScheduleManagementPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const handleEdit = (schedule: NotificationSchedule) => {
     setSelectedSchedule(schedule);
@@ -114,11 +114,11 @@ const NotificationScheduleManagementPage: React.FC = () => {
       
       // Note: The scheduled job will reload the schedule on the next server restart
       // or we could trigger a reload here if needed
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error updating schedule:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to update notification schedule',
+        description: error instanceof Error ? error.message : 'Failed to update notification schedule',
         variant: 'destructive'
       });
     } finally {
@@ -142,11 +142,11 @@ const NotificationScheduleManagementPage: React.FC = () => {
           : `Test (${schedule.notification_type}) queued successfully. Worker will process it shortly.`
       });
       await loadSchedules();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error testing notification:', error);
       toast({
         title: 'Error',
-        description: error.message || 'Failed to test notification',
+        description: error instanceof Error ? error.message : 'Failed to test notification',
         variant: 'destructive'
       });
     } finally {
