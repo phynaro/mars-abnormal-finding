@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -37,24 +37,24 @@ export const ViewTicketModal: React.FC<ViewTicketModalProps> = ({
   const { toast } = useToast();
 
   // Fetch fresh ticket data when modal opens
-  useEffect(() => {
-    if (open && ticket.id) {
-      fetchTicketDetails();
-    }
-  }, [open, ticket.id]);
-
-  const fetchTicketDetails = async () => {
+  const fetchTicketDetails = useCallback(async () => {
     try {
       const response = await ticketService.getTicketById(ticket.id);
       setCurrentTicket(response.data);
-    } catch (error) {
+    } catch {
       toast({
         title: 'Error',
         description: 'Failed to fetch ticket details',
         variant: 'destructive'
       });
     }
-  };
+  }, [ticket.id, toast]);
+
+  useEffect(() => {
+    if (open && ticket.id) {
+      void fetchTicketDetails();
+    }
+  }, [fetchTicketDetails, open, ticket.id]);
 
   const handleAddComment = async (e: React.FormEvent) => {
     e.preventDefault();
