@@ -114,3 +114,4 @@ mars-images-latest.tar.gz
 nul
 .claude/
 .mcp.json
+.worktrees/
