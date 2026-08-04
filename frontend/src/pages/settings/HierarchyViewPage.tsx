@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Search, ChevronDown, ChevronRight, Factory, Building2, Cog, Wrench, TrendingUp } from 'lucide-react';
+import { Search, ChevronDown, ChevronRight, Factory, Building2, Cog, Wrench } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useToast } from '@/hooks/useToast';
@@ -74,6 +73,10 @@ interface HierarchyViewResponse {
   };
 }
 
+type PlantData = HierarchyData['plants'][string];
+type AreaData = PlantData['areas'][string];
+type LineData = AreaData['lines'][string];
+
 const HierarchyViewPage: React.FC = () => {
   const [hierarchyData, setHierarchyData] = useState<HierarchyViewResponse | null>(null);
   const [loading, setLoading] = useState(false);
@@ -83,9 +86,9 @@ const HierarchyViewPage: React.FC = () => {
 
   useEffect(() => {
     loadHierarchyData();
-  }, []);
+  }, [loadHierarchyData]);
 
-  const loadHierarchyData = async () => {
+  const loadHierarchyData = useCallback(async () => {
     try {
       setLoading(true);
       const data = await administrationService.hierarchy.getHierarchyView();
@@ -103,7 +106,7 @@ const HierarchyViewPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   const toggleExpanded = (itemKey: string) => {
     setExpandedItems(prev => {
@@ -118,7 +121,7 @@ const HierarchyViewPage: React.FC = () => {
   };
 
   // Function to check if a plant matches the search term
-  const plantMatchesSearch = (plant: any): boolean => {
+  const plantMatchesSearch = (plant: PlantData): boolean => {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     
@@ -129,11 +132,11 @@ const HierarchyViewPage: React.FC = () => {
     }
     
     // Check if any area matches
-    return Object.values(plant.areas).some((area: any) => areaMatchesSearch(area, term));
+    return Object.values(plant.areas).some((area) => areaMatchesSearch(area, term));
   };
 
   // Function to check if an area matches the search term
-  const areaMatchesSearch = (area: any, term: string): boolean => {
+  const areaMatchesSearch = (area: AreaData, term: string): boolean => {
     // Check area level
     if ((area.name?.toLowerCase().includes(term) ?? false) || 
         (area.code?.toLowerCase().includes(term) ?? false)) {
@@ -141,11 +144,11 @@ const HierarchyViewPage: React.FC = () => {
     }
     
     // Check if any line matches
-    const lineMatches = Object.values(area.lines).some((line: any) => lineMatchesSearch(line, term));
+    const lineMatches = Object.values(area.lines).some((line) => lineMatchesSearch(line, term));
     
     // Check if any area-level machine matches
     const areaMachineMatches = area.machines ? 
-      Object.values(area.machines).some((machine: any) => 
+      Object.values(area.machines).some((machine) => 
         (machine.name?.toLowerCase().includes(term) ?? false) ||
         (machine.code?.toLowerCase().includes(term) ?? false)
       ) : false;
@@ -154,7 +157,7 @@ const HierarchyViewPage: React.FC = () => {
   };
 
   // Function to check if a line matches the search term
-  const lineMatchesSearch = (line: any, term: string): boolean => {
+  const lineMatchesSearch = (line: LineData, term: string): boolean => {
     // Check line level
     if ((line.name?.toLowerCase().includes(term) ?? false) || 
         (line.code?.toLowerCase().includes(term) ?? false)) {
@@ -162,7 +165,7 @@ const HierarchyViewPage: React.FC = () => {
     }
     
     // Check if any machine matches
-    return Object.values(line.machines).some((machine: any) => 
+    return Object.values(line.machines).some((machine) => 
       (machine.name?.toLowerCase().includes(term) ?? false) ||
       (machine.code?.toLowerCase().includes(term) ?? false)
     );
@@ -172,7 +175,7 @@ const HierarchyViewPage: React.FC = () => {
   const filteredPlants = hierarchyData?.hierarchy.plants ? 
     Object.entries(hierarchyData.hierarchy.plants).filter(([, plant]) => plantMatchesSearch(plant)) : [];
 
-  const PlantCard: React.FC<{ plantCode: string; plant: any }> = ({ plantCode, plant }) => {
+  const PlantCard: React.FC<{ plantCode: string; plant: PlantData }> = ({ plantCode, plant }) => {
     const isExpanded = expandedItems.has(`plant-${plantCode}`);
     // Filter areas based on search term
     const filteredAreas = Object.entries(plant.areas).filter(([, area]) => 
@@ -223,7 +226,7 @@ const HierarchyViewPage: React.FC = () => {
     );
   };
 
-  const AreaCard: React.FC<{ areaCode: string; area: any; plantCode: string }> = ({ areaCode, area, plantCode }) => {
+  const AreaCard: React.FC<{ areaCode: string; area: AreaData; plantCode: string }> = ({ areaCode, area, plantCode }) => {
     const isExpanded = expandedItems.has(`area-${plantCode}-${areaCode}`);
     // Filter lines based on search term
     const filteredLines = Object.entries(area.lines).filter(([, line]) => 
@@ -301,7 +304,7 @@ const HierarchyViewPage: React.FC = () => {
     );
   };
 
-  const LineCard: React.FC<{ lineCode: string; line: any; areaCode: string; plantCode: string }> = ({ lineCode, line, areaCode, plantCode }) => {
+  const LineCard: React.FC<{ lineCode: string; line: LineData; areaCode: string; plantCode: string }> = ({ lineCode, line, areaCode, plantCode }) => {
     const isExpanded = expandedItems.has(`line-${plantCode}-${areaCode}-${lineCode}`);
     // Filter machines based on search term
     const filteredMachines = Object.entries(line.machines).filter(([, machine]: [string, HierarchyItem]) => 
@@ -354,7 +357,7 @@ const HierarchyViewPage: React.FC = () => {
     );
   };
 
-  const MachineCard: React.FC<{ machineCode: string; machine: any }> = ({ machineCode, machine }) => (
+  const MachineCard: React.FC<{ machineCode: string; machine: HierarchyItem }> = ({ machine }) => (
     <Card className="mb-1 ml-3">
       <CardHeader className="py-1">
         <div className="flex items-center justify-between">
