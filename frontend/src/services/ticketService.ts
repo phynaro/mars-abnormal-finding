@@ -211,6 +211,9 @@ export interface TicketFilters {
   delay?: boolean | string;  // Filter for delayed tickets
   overdue?: boolean | string;  // Filter for overdue (in_progress/planed with schedule_finish < now)
   team?: 'operator' | 'reliability';  // Team-based filter
+  finished_by?: number | string;
+  timeliness?: 'ontime' | 'late';
+  machine?: string;
 }
 
 // Legacy hierarchy interfaces (deprecated - use PUExtension data instead)
@@ -461,7 +464,7 @@ class TicketService {
     return response.json();
   }
 
-  async getTicketFilterUsers(role: 'created_by' | 'assigned_to'): Promise<{ success: boolean; data: TicketFilterUser[] }> {
+  async getTicketFilterUsers(role: 'created_by' | 'assigned_to' | 'finished_by'): Promise<{ success: boolean; data: TicketFilterUser[] }> {
     const headers = getAuthHeaders();
     const queryParams = new URLSearchParams({ role });
     const response = await fetch(`${API_BASE_URL}/tickets/filter-users?${queryParams}`, {

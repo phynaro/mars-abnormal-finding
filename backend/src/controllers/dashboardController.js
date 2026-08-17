@@ -1,5 +1,11 @@
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
+const {
+  EQUIPMENT_DISPLAY_SQL,
+  ontimePopulationSql,
+  ontimeCountSql,
+  lateCountSql,
+} = require('../helpers/ticketTimelinessQuery');
 
 /**
  * Convert period range to date range
@@ -2652,19 +2658,18 @@ exports.getOntimeRateByArea = async (req, res) => {
         SELECT 
           pe.plant as display_name,
           COUNT(t.id) as total_finished,
-          COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_finished,
+          ${ontimeCountSql()} as ontime_finished,
+          ${lateCountSql()} as late_finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
-              ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
+              ROUND((${ontimeCountSql()} * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
         FROM IgxTickets t
         LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
-        WHERE t.created_at >= '${startDate}' 
-          AND t.created_at <= '${endDate}' 
-          AND t.status = 'closed' 
-          AND t.finished_at IS NOT NULL
-          AND t.schedule_finish IS NOT NULL
+        WHERE CAST(t.created_at AS DATE) >= '${startDate}' 
+          AND CAST(t.created_at AS DATE) <= '${endDate}' 
+          AND ${ontimePopulationSql()}
           AND pe.plant IS NOT NULL
         GROUP BY pe.plant
         HAVING COUNT(t.id) > 0
@@ -2683,19 +2688,18 @@ exports.getOntimeRateByArea = async (req, res) => {
             ELSE pe.area
           END as display_name,
           COUNT(t.id) as total_finished,
-          COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_finished,
+          ${ontimeCountSql()} as ontime_finished,
+          ${lateCountSql()} as late_finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
-              ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
+              ROUND((${ontimeCountSql()} * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
         FROM IgxTickets t
         LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
-        WHERE t.created_at >= '${startDate}' 
-          AND t.created_at <= '${endDate}' 
-          AND t.status = 'closed' 
-          AND t.finished_at IS NOT NULL
-          AND t.schedule_finish IS NOT NULL
+        WHERE CAST(t.created_at AS DATE) >= '${startDate}' 
+          AND CAST(t.created_at AS DATE) <= '${endDate}' 
+          AND ${ontimePopulationSql()}
           AND pe.plant = '${plant}'
         GROUP BY pe.area
         HAVING COUNT(t.id) > 0
@@ -2709,33 +2713,24 @@ exports.getOntimeRateByArea = async (req, res) => {
       
       ontimeRateQuery = `
         SELECT 
-          CASE 
-            WHEN pe.machine IS NOT NULL THEN pe.machine
-            WHEN pe.line IS NOT NULL THEN pe.line
-            ELSE 'Unknown Equipment'
-          END as display_name,
+          ${EQUIPMENT_DISPLAY_SQL} as display_name,
           COUNT(t.id) as total_finished,
-          COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_finished,
+          ${ontimeCountSql()} as ontime_finished,
+          ${lateCountSql()} as late_finished,
           CASE 
             WHEN COUNT(t.id) > 0 THEN 
-              ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
+              ROUND((${ontimeCountSql()} * 100.0) / COUNT(t.id), 2)
             ELSE 0 
           END as ontime_rate_percentage
         FROM IgxTickets t
         LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
-        WHERE t.created_at >= '${startDate}' 
-          AND t.created_at <= '${endDate}' 
-          AND t.status = 'closed' 
-          AND t.finished_at IS NOT NULL
-          AND t.schedule_finish IS NOT NULL
+        WHERE CAST(t.created_at AS DATE) >= '${startDate}' 
+          AND CAST(t.created_at AS DATE) <= '${endDate}' 
+          AND ${ontimePopulationSql()}
           AND pe.plant = '${plant}'
           AND pe.area = '${area}'
         GROUP BY 
-          CASE 
-            WHEN pe.machine IS NOT NULL THEN pe.machine
-            WHEN pe.line IS NOT NULL THEN pe.line
-            ELSE 'Unknown Equipment'
-          END
+          ${EQUIPMENT_DISPLAY_SQL}
         HAVING COUNT(t.id) > 0
         ORDER BY ontime_rate_percentage DESC
       `;
@@ -2748,7 +2743,8 @@ exports.getOntimeRateByArea = async (req, res) => {
       display_name: row.display_name,
       ontimeRate: row.ontime_rate_percentage,
       totalFinished: row.total_finished,
-      ontimeFinished: row.ontime_finished
+      ontimeFinished: row.ontime_finished,
+      lateFinished: row.late_finished
     }));
 
     res.json({
@@ -2811,11 +2807,9 @@ exports.getOntimeRateByUser = async (req, res) => {
     }
 
     // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
-    let whereClause = `WHERE t.created_at >= '${startDate}' 
-        AND t.created_at <= '${endDate}' 
-        AND t.status = 'closed' 
-        AND t.actual_finish_at IS NOT NULL
-        AND t.schedule_finish IS NOT NULL
+    let whereClause = `WHERE CAST(t.created_at AS DATE) >= '${startDate}' 
+        AND CAST(t.created_at AS DATE) <= '${endDate}' 
+        AND ${ontimePopulationSql()}
         AND t.finished_by IS NOT NULL`;
     
     if (plant && plant !== 'all') {
@@ -2833,10 +2827,11 @@ exports.getOntimeRateByUser = async (req, res) => {
         ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as user_name,
         ue.AvatarUrl as avatar_url,
         COUNT(t.id) as total_finished,
-        COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) as ontime_finished,
+        ${ontimeCountSql()} as ontime_finished,
+        ${lateCountSql()} as late_finished,
         CASE
           WHEN COUNT(t.id) > 0 THEN
-            ROUND((COUNT(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0) / COUNT(t.id), 2)
+            ROUND((${ontimeCountSql()} * 100.0) / COUNT(t.id), 2)
           ELSE 0
         END as ontime_rate_percentage
       FROM IgxTickets t
@@ -2874,7 +2869,8 @@ exports.getOntimeRateByUser = async (req, res) => {
         avatar: row.avatar_url,
         ontimeRate: row.ontime_rate_percentage,
         totalFinished: row.total_finished,
-        ontimeFinished: row.ontime_finished
+        ontimeFinished: row.ontime_finished,
+        lateFinished: row.late_finished
       };
     });
 
@@ -4122,7 +4118,7 @@ const getPersonalKPIComparison = async (req, res) => {
           -- Ontime Percentage - assigned_to and status = 'closed'
           CASE 
             WHEN COUNT(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' THEN 1 END) > 0 
-            THEN CAST(COUNT(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' AND t.actual_finish_at < t.schedule_finish THEN 1 END) * 100.0 / 
+            THEN CAST(COUNT(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' AND t.actual_finish_at <= t.schedule_finish THEN 1 END) * 100.0 / 
                      COUNT(CASE WHEN t.assigned_to = p.PERSONNO AND t.status = 'closed' THEN 1 END) AS DECIMAL(5,2))
             ELSE 0 
           END as ontimePercentage,
@@ -4534,8 +4530,8 @@ const getDepartmentUserKPIClosureRate = async (req, res) => {
         SELECT
           t.assigned_to AS PERSONNO,
           dd.PeriodNo,
-          SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) AS on_time_count,
-          SUM(CASE WHEN t.actual_finish_at >= t.schedule_finish THEN 1 ELSE 0 END) AS closed_late_count
+          SUM(CASE WHEN t.actual_finish_at <= t.schedule_finish THEN 1 ELSE 0 END) AS on_time_count,
+          SUM(CASE WHEN t.actual_finish_at > t.schedule_finish THEN 1 ELSE 0 END) AS closed_late_count
         FROM IgxTickets t
         INNER JOIN Person p ON p.PERSONNO = t.assigned_to AND p.DEPTNO = @deptNo AND p.FLAGDEL != 'Y'
         INNER JOIN IgxDateDim dd ON dd.DateKey = CAST(t.schedule_finish AS DATE) AND dd.CompanyYear = @year

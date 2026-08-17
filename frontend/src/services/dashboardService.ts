@@ -405,6 +405,7 @@ export interface OntimeRateByAreaDataPoint {
   ontimeRate: number;
   totalFinished: number;
   ontimeFinished: number;
+  lateFinished: number;
 }
 
 export interface OntimeRateByAreaResponse {
@@ -436,6 +437,7 @@ export interface OntimeRateByUserDataPoint {
   ontimeRate: number;
   totalFinished: number;
   ontimeFinished: number;
+  lateFinished: number;
 }
 
 export interface OntimeRateByUserResponse {

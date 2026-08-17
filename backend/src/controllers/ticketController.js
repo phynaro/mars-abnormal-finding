@@ -7,6 +7,12 @@ const fs = require("fs");
 const path = require("path");
 
 const {
+  timelinessSql,
+  machineFilterSql,
+  unknownAreaFilterSql,
+} = require("../helpers/ticketTimelinessQuery");
+
+const {
   addStatusChangeComment,
   checkUserActionPermission,
   createSqlRequest,
@@ -536,6 +542,9 @@ const getTickets = async (req, res) => {
       delay,
       overdue,
       team,
+      finished_by,
+      timeliness,
+      machine,
     } = req.query;
 
     const offset = (page - 1) * limit;
@@ -607,6 +616,35 @@ const getTickets = async (req, res) => {
     // Overdue filter: status in_progress or planed, and schedule_finish before now
     if (overdue === 'true' || overdue === true) {
       whereClause += " AND t.status IN ('in_progress', 'planed') AND t.schedule_finish IS NOT NULL AND t.schedule_finish < GETDATE()";
+    }
+
+    if (finished_by) {
+      if (String(finished_by).includes(',')) {
+        const finishedByList = String(finished_by)
+          .split(',')
+          .map((value) => parseInt(value.trim(), 10))
+          .filter((value) => !isNaN(value));
+        if (finishedByList.length > 0) {
+          const finishedByPlaceholders = finishedByList.map((_, index) => `@finished_by${index}`).join(',');
+          whereClause += ` AND t.finished_by IN (${finishedByPlaceholders})`;
+          finishedByList.forEach((finishedByValue, index) => {
+            params.push({ name: `finished_by${index}`, value: finishedByValue, type: sql.Int });
+          });
+        }
+      } else {
+        const finishedByValue = parseInt(finished_by, 10);
+        if (!isNaN(finishedByValue)) {
+          whereClause += " AND t.finished_by = @finished_by";
+          params.push({ name: "finished_by", value: finishedByValue, type: sql.Int });
+        }
+      }
+    }
+
+    whereClause += timelinessSql(timeliness);
+
+    if (machine) {
+      whereClause += machineFilterSql();
+      params.push({ name: "machine", value: String(machine), type: sql.NVarChar(255) });
     }
 
     // Team filter - requires department identification
@@ -795,7 +833,9 @@ const getTickets = async (req, res) => {
     }
 
     if (area) {
-      if (area.includes(',')) {
+      if (area === 'Unknown Area') {
+        whereClause += unknownAreaFilterSql();
+      } else if (area.includes(',')) {
         const areaList = area.split(',').map(a => a.trim()).filter(Boolean);
         if (areaList.length > 0) {
           const areaPlaceholders = areaList.map((_, index) => `@area${index}`).join(',');
@@ -4714,6 +4754,7 @@ const reassignTicket = async (req, res) => {
 const TICKET_USER_FILTER_COLUMNS = {
   created_by: "created_by",
   assigned_to: "assigned_to",
+  finished_by: "finished_by",
 };
 
 const getTicketFilterUsers = async (req, res) => {
@@ -5531,8 +5572,8 @@ const getUserClosureRatePerPeriod = async (req, res) => {
       ClosedInPeriod AS (
         SELECT
           dd.PeriodNo,
-          SUM(CASE WHEN t.actual_finish_at < t.schedule_finish THEN 1 ELSE 0 END) AS on_time_count,
-          SUM(CASE WHEN t.actual_finish_at >= t.schedule_finish THEN 1 ELSE 0 END) AS closed_late_count
+          SUM(CASE WHEN t.actual_finish_at <= t.schedule_finish THEN 1 ELSE 0 END) AS on_time_count,
+          SUM(CASE WHEN t.actual_finish_at > t.schedule_finish THEN 1 ELSE 0 END) AS closed_late_count
         FROM IgxTickets t
         INNER JOIN IgxDateDim dd ON dd.DateKey = CAST(t.schedule_finish AS DATE)
         WHERE t.assigned_to = @userId

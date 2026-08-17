@@ -21,7 +21,19 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
     allowedHosts: ['localhost', '127.0.0.1', '192.168.0.241', 'pch.trazor.cloud'],
-    hmr: false
+    hmr: false,
+    // frontend/.env sets VITE_API_URL=/api (same as Docker/nginx).
+    // Without this proxy, login hits Vite on :3000 and 404s.
+    proxy: {
+      '/api': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+      '/uploads': {
+        target: 'http://127.0.0.1:3001',
+        changeOrigin: true,
+      },
+    },
   },
   build: {
     // Ensure proper handling of canvas and blob operations in production

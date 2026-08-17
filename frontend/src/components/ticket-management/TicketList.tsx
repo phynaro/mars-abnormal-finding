@@ -266,6 +266,7 @@ export const TicketList: React.FC = () => {
   const [areas, setAreas] = useState<HierarchyOption[]>([]);
   const [createdByUsers, setCreatedByUsers] = useState<TicketFilterUser[]>([]);
   const [assignedToUsers, setAssignedToUsers] = useState<TicketFilterUser[]>([]);
+  const [finishedByUsers, setFinishedByUsers] = useState<TicketFilterUser[]>([]);
   const [ticketUsersLoading, setTicketUsersLoading] = useState(false);
   const [criticalLevels, setCriticalLevels] = useState<PUCritical[]>([]);
   const [criticalLevelsLoading, setCriticalLevelsLoading] = useState(false);
@@ -307,6 +308,11 @@ export const TicketList: React.FC = () => {
       area: searchParams.get('area') || undefined,
       created_by: (searchParams.get('created_by') || undefined) as TicketFilters["created_by"],
       assigned_to: (searchParams.get('assigned_to') || undefined) as TicketFilters["assigned_to"],
+      finished_by: (searchParams.get('finished_by') || undefined) as TicketFilters["finished_by"],
+      timeliness: (searchParams.get('timeliness') === 'ontime' || searchParams.get('timeliness') === 'late'
+        ? searchParams.get('timeliness')
+        : undefined) as TicketFilters["timeliness"],
+      machine: searchParams.get('machine') || undefined,
       startDate: searchParams.get('startDate') || undefined,
       endDate: searchParams.get('endDate') || undefined,
       finishedStartDate: searchParams.get('finishedStartDate') || undefined,
@@ -540,14 +546,15 @@ export const TicketList: React.FC = () => {
   };
 
   const getUserFilterLabel = (userId: string): string => {
-    const selectedUser = [...createdByUsers, ...assignedToUsers].find((user) => String(user.id) === userId);
+    const selectedUser = [...createdByUsers, ...assignedToUsers, ...finishedByUsers].find((user) => String(user.id) === userId);
     return selectedUser?.name || `User ${userId}`;
   };
 
   const selectedCreatedByUsers = parseUserFilter(filters.created_by);
   const selectedAssignedToUsers = parseUserFilter(filters.assigned_to);
+  const selectedFinishedByUsers = parseUserFilter(filters.finished_by);
 
-  const getUserFilterSummary = (selectedUserIds: string[], type: "created_by" | "assigned_to"): string => {
+  const getUserFilterSummary = (selectedUserIds: string[], type: "created_by" | "assigned_to" | "finished_by"): string => {
     if (selectedUserIds.length === 0) {
       return t("ticket.allUsers");
     }
@@ -557,14 +564,14 @@ export const TicketList: React.FC = () => {
     }
 
     if (language === "th") {
-      return type === "created_by"
-        ? `${selectedUserIds.length} ผู้สร้างที่เลือก`
-        : `${selectedUserIds.length} ผู้รับผิดชอบที่เลือก`;
+      if (type === "created_by") return `${selectedUserIds.length} ผู้สร้างที่เลือก`;
+      if (type === "assigned_to") return `${selectedUserIds.length} ผู้รับผิดชอบที่เลือก`;
+      return `${selectedUserIds.length} ผู้ปิดที่เลือก`;
     }
 
-    return type === "created_by"
-      ? `${selectedUserIds.length} creators selected`
-      : `${selectedUserIds.length} assignees selected`;
+    if (type === "created_by") return `${selectedUserIds.length} creators selected`;
+    if (type === "assigned_to") return `${selectedUserIds.length} assignees selected`;
+    return `${selectedUserIds.length} closers selected`;
   };
 
   const parseCriticalFilter = (critical?: number | string): string[] => {
@@ -644,16 +651,19 @@ export const TicketList: React.FC = () => {
   const fetchTicketFilterUsers = async () => {
     try {
       setTicketUsersLoading(true);
-      const [createdByResponse, assignedToResponse] = await Promise.all([
+      const [createdByResponse, assignedToResponse, finishedByResponse] = await Promise.all([
         ticketService.getTicketFilterUsers("created_by"),
         ticketService.getTicketFilterUsers("assigned_to"),
+        ticketService.getTicketFilterUsers("finished_by"),
       ]);
       setCreatedByUsers(createdByResponse.data || []);
       setAssignedToUsers(assignedToResponse.data || []);
+      setFinishedByUsers(finishedByResponse.data || []);
     } catch (error) {
       console.error('Failed to fetch ticket filter users:', error);
       setCreatedByUsers([]);
       setAssignedToUsers([]);
+      setFinishedByUsers([]);
     } finally {
       setTicketUsersLoading(false);
     }
@@ -901,6 +911,9 @@ export const TicketList: React.FC = () => {
       area: undefined,
       created_by: undefined,
       assigned_to: undefined,
+      finished_by: undefined,
+      timeliness: undefined,
+      machine: undefined,
       startDate: undefined,
       endDate: undefined,
       puno: undefined,
@@ -916,7 +929,7 @@ export const TicketList: React.FC = () => {
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
+    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.finished_by || filters.timeliness || filters.machine || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
   };
 
   // const getTicketClassLabel = (ticketClassId?: number | string | null) => {
@@ -1733,6 +1746,23 @@ export const TicketList: React.FC = () => {
                       )
                     }
                   />
+                  <SearchableMultiSelectUserFilter
+                    id="finished_by"
+                    label={t('ticket.finishedBy')}
+                    options={finishedByUsers}
+                    selectedValues={selectedFinishedByUsers}
+                    triggerLabel={getUserFilterSummary(selectedFinishedByUsers, "finished_by")}
+                    searchPlaceholder={t('ticket.searchUsers')}
+                    loadingText={t('ticket.searching')}
+                    emptyText={t('ticket.noUsersFound')}
+                    loading={ticketUsersLoading}
+                    onChange={(nextValues) =>
+                      handleFilterChange(
+                        "finished_by",
+                        serializeUserFilter(nextValues) as TicketFilters["finished_by"]
+                      )
+                    }
+                  />
                   {/* 4. Plant */}
                   <div className="space-y-2">
                     <Label htmlFor="plant">Plant</Label>
@@ -2056,6 +2086,27 @@ export const TicketList: React.FC = () => {
                       </Label>
                     </div>
                   </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="timeliness">{t('ticket.completion')}</Label>
+                    <Select
+                      value={filters.timeliness || 'all'}
+                      onValueChange={(v) =>
+                        handleFilterChange(
+                          'timeliness',
+                          v === 'all' ? undefined : (v as TicketFilters['timeliness'])
+                        )
+                      }
+                    >
+                      <SelectTrigger id="timeliness">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('ticket.allCompletion')}</SelectItem>
+                        <SelectItem value="ontime">{t('ticket.ontime')}</SelectItem>
+                        <SelectItem value="late">{t('ticket.late')}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
               </div>
             </DialogContent>
@@ -2245,6 +2296,27 @@ export const TicketList: React.FC = () => {
                         <SelectItem value="reopened_in_progress">
                           {t('ticket.reopenedInProgress')}
                         </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="export_timeliness">{t('ticket.completion')}</Label>
+                    <Select
+                      value={getEffectiveExportFilters().timeliness || "all"}
+                      onValueChange={(v) =>
+                        handleExportFilterChange(
+                          "timeliness",
+                          v === "all" ? undefined : (v as TicketFilters["timeliness"])
+                        )
+                      }
+                    >
+                      <SelectTrigger id="export_timeliness">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">{t('ticket.allCompletion')}</SelectItem>
+                        <SelectItem value="ontime">{t('ticket.ontime')}</SelectItem>
+                        <SelectItem value="late">{t('ticket.late')}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -2512,6 +2584,24 @@ export const TicketList: React.FC = () => {
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("overdue")}
               />
+            </Badge>
+          )}
+          {filters.timeliness && (
+            <Badge variant="secondary" className="gap-1">
+              {t('ticket.completion')}: {filters.timeliness === 'ontime' ? t('ticket.ontime') : t('ticket.late')}
+              <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => clearFilter("timeliness")} />
+            </Badge>
+          )}
+          {filters.finished_by && (
+            <Badge variant="secondary" className="gap-1">
+              {t('ticket.finishedBy')}: {getUserFilterSummary(selectedFinishedByUsers, "finished_by")}
+              <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => clearFilter("finished_by")} />
+            </Badge>
+          )}
+          {filters.machine && (
+            <Badge variant="secondary" className="gap-1">
+              {t('ticket.machine')}: {filters.machine}
+              <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => clearFilter("machine")} />
             </Badge>
           )}
           {filters.team && (

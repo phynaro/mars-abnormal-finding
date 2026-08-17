@@ -32,6 +32,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import hierarchyService from '@/services/hierarchyService';
 import { getAvatarUrl } from '@/utils/url';
 import { formatLocalDate, calculatePeriodForDate, getDateRangeForFilter, getCompanyYearDateRange } from '@/utils/periodCalculations';
+import { openOntimeTicketList } from '@/utils/ontimeChartDrilldown';
 
 // Utility function for dynamic currency formatting
 const formatCurrencyDynamic = (amount: number): { display: string; tooltip: string } => {
@@ -1584,15 +1585,45 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   }, [resolveDurationByUserData]);
 
   const ontimeRateByAreaChartData = useMemo(() => {
-    return ontimeRateByAreaData;
+    return ontimeRateByAreaData.map((item) => ({
+      ...item,
+      lateFinished: item.lateFinished ?? Math.max(0, item.totalFinished - item.ontimeFinished),
+    }));
   }, [ontimeRateByAreaData]);
 
   const ontimeRateByUserChartData = useMemo(() => {
     return ontimeRateByUserData.map(item => ({
       ...item,
-      avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
+      avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined,
+      lateFinished: item.lateFinished ?? Math.max(0, item.totalFinished - item.ontimeFinished),
     }));
   }, [ontimeRateByUserData]);
+
+  const openOntimeDrilldown = (
+    timeliness: 'ontime' | 'late',
+    extra: { plant?: string; area?: string; finished_by?: string; machine?: string }
+  ) => {
+    const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
+    openOntimeTicketList({
+      timeliness,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
+      plant: extra.plant ?? (plantFilter !== 'all' ? plantFilter : undefined),
+      area: extra.area ?? (areaFilter !== 'all' ? areaFilter : undefined),
+      finished_by: extra.finished_by,
+      machine: extra.machine,
+    });
+  };
+
+  const getOntimeAreaExtras = (displayName: string) => {
+    if (!plantFilter || plantFilter === 'all') {
+      return { plant: displayName };
+    }
+    if (!areaFilter || areaFilter === 'all') {
+      return { plant: plantFilter, area: displayName };
+    }
+    return { plant: plantFilter, area: areaFilter, machine: displayName };
+  };
 
   // Pad the axis domain so avatars rendered as labels have enough room and are not clipped
   const downtimeImpactReporterXAxisDomain = useMemo<[number | 'auto', number | 'auto']>(() => {
@@ -3211,9 +3242,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: t('dashboard.percentage'), position: 'insideBottom', offset: -10 }}
-                        tickFormatter={(value) => `${value}%`}
-                        domain={[0, 100]}
+                        label={{ value: t('dashboard.tickets'), position: 'insideBottom', offset: -10 }}
                         tick={{ dy: 5 }}
                       />
                       <YAxis 
@@ -3222,23 +3251,43 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         width={80}
                       />
                       <RechartsTooltip 
-                        formatter={(value, name) => {
-                          if (name === 'ontimeRate') {
-                            return [`${value}%`, t('dashboard.ontimeRate')];
-                          } else if (name === 'totalFinished') {
-                            return [`${value} ${t('dashboard.tickets')}`, t('dashboard.totalFinished')];
-                          } else if (name === 'ontimeFinished') {
-                            return [`${value} ${t('dashboard.tickets')}`, t('dashboard.ontimeFinished')];
-                          }
-                          return [value, name];
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          const row = payload[0].payload;
+                          return (
+                            <div className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm">
+                              <p className="mb-1 font-medium">{label}</p>
+                              <p>{t('dashboard.ontimeFinished')}: {row.ontimeFinished} {t('dashboard.tickets')}</p>
+                              <p>{t('dashboard.lateFinished')}: {row.lateFinished} {t('dashboard.tickets')}</p>
+                              <p>{t('dashboard.ontimeRate')}: {row.ontimeRate}%</p>
+                            </div>
+                          );
                         }}
-                        labelFormatter={(label) => `Area: ${label}`}
                       />
                       <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                      <Bar 
-                        dataKey="ontimeRate" 
-                        fill="hsl(var(--success))" 
-                        name={t('dashboard.ontimeRate')}
+                      <Bar
+                        dataKey="ontimeFinished"
+                        stackId="timeliness"
+                        fill="hsl(var(--success))"
+                        name={t('dashboard.ontimeFinished')}
+                        cursor="pointer"
+                        onClick={(data) => {
+                          const payload = data?.payload;
+                          if (!payload?.display_name) return;
+                          openOntimeDrilldown('ontime', getOntimeAreaExtras(payload.display_name));
+                        }}
+                      />
+                      <Bar
+                        dataKey="lateFinished"
+                        stackId="timeliness"
+                        fill="hsl(var(--warning))"
+                        name={t('dashboard.lateFinished')}
+                        cursor="pointer"
+                        onClick={(data) => {
+                          const payload = data?.payload;
+                          if (!payload?.display_name) return;
+                          openOntimeDrilldown('late', getOntimeAreaExtras(payload.display_name));
+                        }}
                       />
                     </BarChart>
                   </ResponsiveContainer>
@@ -3279,9 +3328,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                       <XAxis 
                         type="number" 
                         allowDecimals={false}
-                        label={{ value: 'Percentage (%)', position: 'insideBottom', offset: -10 }}
-                        tickFormatter={(value) => `${value}%`}
-                        domain={[0, 100]}
+                        label={{ value: t('dashboard.tickets'), position: 'insideBottom', offset: -10 }}
                         tick={{ dy: 5 }}
                       />
                       <YAxis 
@@ -3290,23 +3337,43 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         width={80}
                       />
                       <RechartsTooltip 
-                        formatter={(value, name) => {
-                          if (name === 'ontimeRate') {
-                            return [`${value}%`, 'Ontime Rate'];
-                          } else if (name === 'totalFinished') {
-                            return [`${value} tickets`, 'Total Finished'];
-                          } else if (name === 'ontimeFinished') {
-                            return [`${value} tickets`, 'Ontime Finished'];
-                          }
-                          return [value, name];
+                        content={({ active, payload, label }) => {
+                          if (!active || !payload?.length) return null;
+                          const row = payload[0].payload;
+                          return (
+                            <div className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm">
+                              <p className="mb-1 font-medium">{label}</p>
+                              <p>{t('dashboard.ontimeFinished')}: {row.ontimeFinished} {t('dashboard.tickets')}</p>
+                              <p>{t('dashboard.lateFinished')}: {row.lateFinished} {t('dashboard.tickets')}</p>
+                              <p>{t('dashboard.ontimeRate')}: {row.ontimeRate}%</p>
+                            </div>
+                          );
                         }}
-                        labelFormatter={(label) => `User: ${label}`}
                       />
                       <Legend wrapperStyle={{ paddingTop: '20px' }} />
-                      <Bar 
-                        dataKey="ontimeRate" 
-                        fill="hsl(var(--success))" 
-                        name="Ontime Rate"
+                      <Bar
+                        dataKey="ontimeFinished"
+                        stackId="timeliness"
+                        fill="hsl(var(--success))"
+                        name={t('dashboard.ontimeFinished')}
+                        cursor="pointer"
+                        onClick={(data) => {
+                          const payload = data?.payload;
+                          if (!payload?.id) return;
+                          openOntimeDrilldown('ontime', { finished_by: String(payload.id) });
+                        }}
+                      />
+                      <Bar
+                        dataKey="lateFinished"
+                        stackId="timeliness"
+                        fill="hsl(var(--warning))"
+                        name={t('dashboard.lateFinished')}
+                        cursor="pointer"
+                        onClick={(data) => {
+                          const payload = data?.payload;
+                          if (!payload?.id) return;
+                          openOntimeDrilldown('late', { finished_by: String(payload.id) });
+                        }}
                       >
                         <LabelList content={AvatarLabel({ data: ontimeRateByUserChartData, maxAvatar: 28, clipPrefix: "ontime-rate-user-" })} />
                       </Bar>
