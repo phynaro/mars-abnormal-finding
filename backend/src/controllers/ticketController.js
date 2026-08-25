@@ -613,9 +613,9 @@ const getTickets = async (req, res) => {
       whereClause += " AND t.schedule_finish < GETDATE() AND t.status NOT IN ('closed', 'finished', 'canceled', 'rejected_final')";
     }
 
-    // Overdue filter: status in_progress or planed, and schedule_finish before now
+    // Overdue filter: status in_progress/planed/reopened_in_progress, and schedule_finish before now
     if (overdue === 'true' || overdue === true) {
-      whereClause += " AND t.status IN ('in_progress', 'planed') AND t.schedule_finish IS NOT NULL AND t.schedule_finish < GETDATE()";
+      whereClause += " AND t.status IN ('in_progress', 'planed', 'reopened_in_progress') AND t.schedule_finish IS NOT NULL AND t.schedule_finish < GETDATE()";
     }
 
     if (finished_by) {

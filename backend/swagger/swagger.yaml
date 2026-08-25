@@ -3091,6 +3091,10 @@ paths:
                             type: integer
                             description: Pending tickets in comparison period
                             example: 40
+                          overdueTicketsThisPeriod:
+                            type: integer
+                            description: Overdue pending tickets (in_progress/planed/reopened_in_progress with schedule_finish in the past) in current period
+                            example: 8
                           totalDowntimeAvoidanceThisPeriod:
                             type: number
                             format: decimal

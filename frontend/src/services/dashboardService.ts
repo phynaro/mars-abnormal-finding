@@ -82,6 +82,7 @@ export interface AbnormalFindingKPIResponse {
       waitingTicketsLastPeriod: number;
       pendingTicketsThisPeriod: number;
       pendingTicketsLastPeriod: number;
+      overdueTicketsThisPeriod: number;
       totalDowntimeAvoidanceThisPeriod: number;
       totalDowntimeAvoidanceLastPeriod: number;
       totalCostAvoidanceThisPeriod: number;

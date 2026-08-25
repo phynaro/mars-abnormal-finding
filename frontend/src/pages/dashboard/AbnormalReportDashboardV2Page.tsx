@@ -70,6 +70,10 @@ interface KPITile {
   tooltip?: string;
   /** URLSearchParams string for ticket list route (e.g. "startDate=2025-01-01&endDate=2025-01-31&plant=X&area=X") */
   ticketRoute?: string;
+  /** Overdue subset count shown as amber second line on pending tile */
+  overdueCount?: number;
+  /** URLSearchParams string for overdue ticket list (opens on overdue-line click) */
+  overdueRoute?: string;
 }
 
 interface TopPerformer {
@@ -1374,6 +1378,14 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     pendingParams.set('endDate', dateRange.endDate);
     if (plantFilter && plantFilter !== 'all') pendingParams.set('plant', plantFilter);
     if (areaFilter && areaFilter !== 'all') pendingParams.set('area', areaFilter);
+
+    const overdueParams = new URLSearchParams();
+    overdueParams.set('overdue', 'true');
+    overdueParams.set('startDate', dateRange.startDate);
+    overdueParams.set('endDate', dateRange.endDate);
+    if (plantFilter && plantFilter !== 'all') overdueParams.set('plant', plantFilter);
+    if (areaFilter && areaFilter !== 'all') overdueParams.set('area', areaFilter);
+
     const showComparison = !(timeFilter === 'select-period' && selectedPeriods.length > 1);
     const closeToOpenRatePct = kpis.totalTicketsThisPeriod > 0
       ? (kpis.closedTicketsThisPeriod / kpis.totalTicketsThisPeriod) * 100
@@ -1411,9 +1423,11 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       {
         title: t('dashboard.pendingTickets'),
         value: kpis.pendingTicketsThisPeriod,
+        overdueCount: kpis.overdueTicketsThisPeriod,
         icon: <Clock className="h-4 w-4" />,
         color: 'text-warning',
-        ticketRoute: pendingParams.toString()
+        ticketRoute: pendingParams.toString(),
+        overdueRoute: overdueParams.toString()
       },
       {
         title: t('dashboard.totalDowntimeAvoidance'),
@@ -2038,6 +2052,18 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                         <span className="text-sm text-muted-foreground">({kpi.subValue})</span>
                       )}
                     </div>
+                    {kpi.overdueCount != null && kpi.overdueCount > 0 && kpi.overdueRoute && (
+                      <button
+                        type="button"
+                        className="mt-0.5 text-xs font-medium text-amber-600 dark:text-amber-500 hover:underline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          window.open(`/tickets?${kpi.overdueRoute}`, '_blank');
+                        }}
+                      >
+                        {t('dashboard.overdueCount', { count: kpi.overdueCount })}
+                      </button>
+                    )}
                     {kpi.change !== undefined && (
                       <div className="flex items-center mt-1">
                         {kpi.change > 0 ? (

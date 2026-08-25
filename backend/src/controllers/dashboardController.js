@@ -3809,6 +3809,11 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
       SELECT 
         COUNT(*) as totalTickets,
         SUM(CASE WHEN t.status NOT IN ('closed', 'open', 'rejected_final') THEN 1 ELSE 0 END) as pendingTickets,
+        SUM(CASE
+          WHEN t.status IN ('in_progress', 'planed', 'reopened_in_progress')
+           AND t.schedule_finish IS NOT NULL
+           AND t.schedule_finish < GETDATE()
+          THEN 1 ELSE 0 END) as overdueTickets,
         ISNULL(SUM(t.downtime_avoidance_hours), 0) as totalDowntimeAvoidance,
         ISNULL(SUM(t.cost_avoidance), 0) as totalCostAvoidance
       FROM IgxTickets t
@@ -4035,6 +4040,7 @@ exports.getAbnormalFindingKPIs = async (req, res) => {
           waitingTicketsLastPeriod: compareWaitingTicketsCount || 0,
           pendingTicketsThisPeriod: currentKPIs.pendingTickets || 0,
           pendingTicketsLastPeriod: compareKPIs.pendingTickets || 0,
+          overdueTicketsThisPeriod: currentKPIs.overdueTickets || 0,
           totalDowntimeAvoidanceThisPeriod: currentKPIs.totalDowntimeAvoidance || 0,
           totalDowntimeAvoidanceLastPeriod: compareKPIs.totalDowntimeAvoidance || 0,
           totalCostAvoidanceThisPeriod: currentKPIs.totalCostAvoidance || 0,

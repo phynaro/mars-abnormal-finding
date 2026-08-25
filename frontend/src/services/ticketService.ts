@@ -209,7 +209,7 @@ export interface TicketFilters {
   finishedEndDate?: string;    // End date for finished_at filter (closed tickets)
   puno?: string;        // Comma-separated PU IDs (e.g., "895,917,939")
   delay?: boolean | string;  // Filter for delayed tickets
-  overdue?: boolean | string;  // Filter for overdue (in_progress/planed with schedule_finish < now)
+  overdue?: boolean | string;  // Filter for overdue (in_progress/planed/reopened_in_progress with schedule_finish < now)
   team?: 'operator' | 'reliability';  // Team-based filter
   finished_by?: number | string;
   timeliness?: 'ontime' | 'late';
