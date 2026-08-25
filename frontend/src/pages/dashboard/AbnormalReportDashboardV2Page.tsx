@@ -697,7 +697,8 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
         plant: plantFilter !== 'all' ? plantFilter : undefined,
-        area: areaFilter !== 'all' ? areaFilter : undefined
+        area: areaFilter !== 'all' ? areaFilter : undefined,
+        limit: 10
       };
       
       const response = await dashboardService.getUserActivityData(params);
@@ -1533,6 +1534,18 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }));
   }, [closerActivityData]);
 
+  const getUserLeaderboardUrl = (type: 'reporter' | 'closer') => {
+    const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
+    const params = new URLSearchParams({
+      type,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
+    });
+    if (plantFilter !== 'all') params.set('plant', plantFilter);
+    if (areaFilter !== 'all') params.set('area', areaFilter);
+    return `/dashboard/user-leaderboard?${params.toString()}`;
+  };
+
   // Impact and Value Charts Data (from API)
   const downtimeTrendChartData = useMemo(() => {
     return downtimeTrendData;
@@ -2199,23 +2212,18 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
           {/* Who Active (User) */}
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow" onClick={() => {
-            const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
-            const params = new URLSearchParams({
-              startDate: dateRange.startDate,
-              endDate: dateRange.endDate,
-              plant: plantFilter,
-              area: areaFilter
-            });
-            window.open(`/charts/user-activity?${params.toString()}`, '_blank');
-          }}>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span>{t('dashboard.whoActiveUser')}</span>
-                <div className="text-sm text-muted-foreground hover:text-blue-600 transition-colors">
-                  {t('dashboard.clickToExpand')}
-                </div>
-              </CardTitle>
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle>{t('dashboard.whoActiveUser')}</CardTitle>
+              {!userActivityLoading && userActivityChartData.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(getUserLeaderboardUrl('reporter'), '_blank')}
+                >
+                  {t('common.seeMore')}
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {userActivityLoading ? (
@@ -2282,10 +2290,19 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
             </CardContent>
           </Card>
 
-          {/* Who Active (User) */}
-          <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-            <CardHeader>
+          {/* Who Close the Tickets */}
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle>{t('dashboard.whoCloseTickets')}</CardTitle>
+              {!closerActivityLoading && closerActivityChartData.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => window.open(getUserLeaderboardUrl('closer'), '_blank')}
+                >
+                  {t('common.seeMore')}
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {closerActivityLoading ? (

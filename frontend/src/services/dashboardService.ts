@@ -242,6 +242,7 @@ export interface UserActivityResponse {
       totalUsers: number;
       totalTickets: number;
       averageTicketsPerUser: number;
+      limit: number | null;
       appliedFilters: {
         startDate: string;
         endDate: string;
@@ -269,7 +270,7 @@ export interface UserCloserActivityResponse {
       totalUsers: number;
       totalTickets: number;
       averageTicketsPerUser: number;
-      limit: number;
+      limit: number | null;
       appliedFilters: {
         startDate: string;
         endDate: string;
@@ -746,6 +747,7 @@ class DashboardService {
     endDate: string;
     plant?: string;
     area?: string;
+    limit?: number | 'all';
   }): Promise<UserActivityResponse> {
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
@@ -764,7 +766,7 @@ class DashboardService {
     endDate: string;
     plant?: string;
     area?: string;
-    limit?: number;
+    limit?: number | 'all';
   }): Promise<UserCloserActivityResponse> {
     const queryParams = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {

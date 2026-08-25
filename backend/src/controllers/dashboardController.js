@@ -1746,6 +1746,25 @@ exports.getAreaActivityOpenClosed = async (req, res) => {
 };
 
 /**
+ * Parse leaderboard limit query param.
+ * Missing/invalid → 10. "all" or "0" → null (unlimited, no TOP).
+ */
+function parseLeaderboardLimit(limitParam) {
+  if (limitParam === undefined || limitParam === null || limitParam === '') {
+    return 10;
+  }
+  const raw = String(limitParam).toLowerCase();
+  if (raw === 'all' || raw === '0') {
+    return null;
+  }
+  const parsed = parseInt(raw, 10);
+  if (Number.isNaN(parsed) || parsed < 1) {
+    return 10;
+  }
+  return parsed;
+}
+
+/**
  * Get User Activity Data
  * Returns ticket counts grouped by user for the "Who Active (User)" chart
  * This chart is affected by time range and plant/area filters
@@ -1759,7 +1778,8 @@ exports.getUserActivityData = async (req, res) => {
       startDate,
       endDate,
       plant,
-      area
+      area,
+      limit: limitParam
     } = req.query;
 
     // Validate required parameters
@@ -1770,13 +1790,7 @@ exports.getUserActivityData = async (req, res) => {
       });
     }
 
-    // Convert dates to proper format for SQL queries
-    const formatDateForSQL = (dateStr) => {
-      return dateStr.replace(/-/g, '');
-    };
-
-    const startDateFormatted = formatDateForSQL(startDate);
-    const endDateFormatted = formatDateForSQL(endDate);
+    const limit = parseLeaderboardLimit(limitParam);
 
     // Build WHERE clause for tickets with plant/area filtering via IgxPUExtension
     let whereClause = `WHERE CAST(t.created_at AS DATE) >= '${startDate}' AND CAST(t.created_at AS DATE) <= '${endDate}'`;
@@ -1789,9 +1803,11 @@ exports.getUserActivityData = async (req, res) => {
       whereClause += ` AND pe.area = '${area}'`;
     }
 
+    const topClause = limit !== null ? 'TOP (@limit)' : '';
+
     // Get ticket counts by user for the specified time range and plant/area
     const userActivityQuery = `
-      SELECT TOP 10
+      SELECT ${topClause}
         t.created_by as user_id,
         ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as user_name,
         ue.AvatarUrl as avatar_url,
@@ -1807,7 +1823,11 @@ exports.getUserActivityData = async (req, res) => {
       ORDER BY ticket_count DESC, p.FIRSTNAME ASC, p.LASTNAME ASC
     `;
 
-    const result = await pool.request().query(userActivityQuery);
+    const request = pool.request();
+    if (limit !== null) {
+      request.input('limit', sql.Int, limit);
+    }
+    const result = await request.query(userActivityQuery);
     
     // Transform the data for frontend consumption
     const userActivityData = result.recordset.map((row, index) => {
@@ -1843,6 +1863,7 @@ exports.getUserActivityData = async (req, res) => {
           averageTicketsPerUser: userActivityData.length > 0 
             ? Math.round(userActivityData.reduce((sum, item) => sum + item.tickets, 0) / userActivityData.length)
             : 0,
+          limit,
           appliedFilters: {
             startDate,
             endDate,
@@ -1888,7 +1909,7 @@ exports.getUserCloserActivity = async (req, res) => {
       });
     }
 
-    const limit = Math.min(Math.max(parseInt(limitParam, 10) || 10, 1), 100);
+    const limit = parseLeaderboardLimit(limitParam);
 
     let whereClause = `WHERE t.status = 'closed' AND t.finished_by IS NOT NULL AND CAST(t.finished_at AS DATE) >= '${startDate}' AND CAST(t.finished_at AS DATE) <= '${endDate}'`;
 
@@ -1900,8 +1921,10 @@ exports.getUserCloserActivity = async (req, res) => {
       whereClause += ` AND pe.area = '${area}'`;
     }
 
+    const topClause = limit !== null ? 'TOP (@limit)' : '';
+
     const userCloserActivityQuery = `
-      SELECT TOP (${limit})
+      SELECT ${topClause}
         t.finished_by as user_id,
         ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as user_name,
         ue.AvatarUrl as avatar_url,
@@ -1917,7 +1940,11 @@ exports.getUserCloserActivity = async (req, res) => {
       ORDER BY ticket_count DESC, p.FIRSTNAME ASC, p.LASTNAME ASC
     `;
 
-    const result = await pool.request().query(userCloserActivityQuery);
+    const request = pool.request();
+    if (limit !== null) {
+      request.input('limit', sql.Int, limit);
+    }
+    const result = await request.query(userCloserActivityQuery);
 
     const userCloserActivityData = result.recordset.map((row, index) => {
       const initials = row.user_name
