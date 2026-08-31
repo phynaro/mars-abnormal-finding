@@ -5,12 +5,12 @@
 const sql = require('mssql');
 const { getCedarPool } = require('../../config/getCedarPool');
 const {
-  getPMCalSched,
   getPMCalSchedCoreWhere,
   eqTypeKeyExpr,
 } = require('../../helpers/pmCalibrationScheduleQuery');
 const {
   applyEmsPlantAreaFilters,
+  applyEmsEffectiveDueDateRangeClause,
   paginationMeta,
   WO_FINISHED_SQL,
   WO_OPEN_SQL,
@@ -21,6 +21,8 @@ const {
   dueDateSourceExpr,
   woTargetDateTimeExpr,
   mapDueFields,
+  getEmsScheduleFromJoin,
+  EMS_SCHEDULE_HAS_ROW_SQL,
 } = require('../../helpers/emsQueryHelpers');
 
 const WO_STATUS_HISTORY = 9;
@@ -82,27 +84,18 @@ function applyWoStatusFilter(query, parts) {
 }
 
 function buildEmsScheduleWhere(request, query) {
-  const { applyPmCalSchedNonDateFilters, applyPmCalSchedDateRangeClause } = require('../../helpers/pmCalibrationScheduleQuery');
+  const { applyPmCalSchedNonDateFilters } = require('../../helpers/pmCalibrationScheduleQuery');
   const { plant: _plant, area: _area, ...pmQuery } = query;
   const base = applyPmCalSchedNonDateFilters(request, pmQuery);
   if (base.error) return { error: base.error };
 
   const parts = [...base.parts];
-  const dueFrom = query.dueFrom || query.startDate;
-  const dueTo = query.dueTo || query.endDate;
-
-  if (dueFrom && dueTo) {
-    const range = applyPmCalSchedDateRangeClause(request, {
-      startDate: dueFrom,
-      endDate: dueTo,
-      startParamName: 'EmsDueFrom',
-      endParamName: 'EmsDueTo',
-    });
-    if (range.error) return { error: range.error };
-    parts.push(range.clause);
-  }
+  const range = applyEmsEffectiveDueDateRangeClause(request, query);
+  if (range.error) return { error: range.error };
+  if (range.clause) parts.push(range.clause);
 
   parts.push(`EXISTS (SELECT 1 FROM dbo.IgxEQExtension extc WHERE extc.eqno = eq.EQNO)`);
+  parts.push(EMS_SCHEDULE_HAS_ROW_SQL);
   parts.push(...applyEmsPlantAreaFilters(request, query, { extAlias: 'ext' }));
   applyWoStatusFilter(query, parts);
 
@@ -127,7 +120,7 @@ exports.getScheduleList = async (req, res) => {
       return res.status(400).json({ success: false, message: builtCount.error });
     }
 
-    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getPMCalSched();
+    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getEmsScheduleFromJoin();
     const countWhere = builtCount.whereFragment;
 
     const countSql = `
@@ -176,7 +169,7 @@ exports.getScheduleList = async (req, res) => {
           LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))) AS assigneeName,
           CAST(s.PMNO AS VARCHAR(10)) + '_' + s.DUEDATE AS PMSchNo,
           DATEDIFF(day, GETDATE(), ${effectiveExpr}) AS daysUntilDue,
-          ROW_NUMBER() OVER (ORDER BY ${effectiveExpr}, s.PMNO) AS RowNum
+          ROW_NUMBER() OVER (ORDER BY ${effectiveExpr}, pm.PMNO) AS RowNum
         ${fromJoinPm}
         ${leftJoinEq}
         ${leftJoinWo}
@@ -214,7 +207,7 @@ exports.getScheduleKpi = async (req, res) => {
       return res.status(400).json({ success: false, message: built.error });
     }
 
-    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getPMCalSched();
+    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getEmsScheduleFromJoin();
     const whereFragment = built.whereFragment;
 
     const finishedExpr = woFinishedJoinExpr('wof', 'wo');
@@ -275,7 +268,7 @@ exports.getScheduleCalendarRange = async (req, res) => {
       return res.status(400).json({ success: false, message: built.error });
     }
 
-    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getPMCalSched();
+    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getEmsScheduleFromJoin();
     const typeKeySel = eqTypeKeyExpr('eq');
     const effectiveExpr = effectiveDueDateTimeExpr('s', 'pm', 'openWo');
     const finishedExpr = woFinishedJoinExpr('wof', 'wo');
@@ -308,7 +301,7 @@ exports.getScheduleCalendarRange = async (req, res) => {
       INNER JOIN dbo.IgxEQExtension ext ON ext.eqno = eq.EQNO
       LEFT JOIN dbo.Person p ON p.PERSONNO = pm.ASSIGN
       WHERE ${built.whereFragment}
-      ORDER BY ${effectiveExpr}, s.PMNO
+      ORDER BY ${effectiveExpr}, pm.PMNO
     `;
 
     const result = await request.query(sqlText);
@@ -340,7 +333,7 @@ exports.getScheduleCalendarRange = async (req, res) => {
 exports.getScheduleAssignees = async (req, res) => {
   try {
     const pool = await getCedarPool();
-    const { fromJoinPm, leftJoinEq } = getPMCalSched();
+    const { fromJoinPm, leftJoinEq } = getEmsScheduleFromJoin();
     const sqlText = `
       SELECT DISTINCT
         pm.ASSIGN AS id,
@@ -353,6 +346,7 @@ exports.getScheduleAssignees = async (req, res) => {
       INNER JOIN dbo.IgxEQExtension ext ON ext.eqno = eq.EQNO
       LEFT JOIN dbo.Person per ON per.PERSONNO = pm.ASSIGN
       WHERE ${getPMCalSchedCoreWhere()}
+        AND ${EMS_SCHEDULE_HAS_ROW_SQL}
         AND pm.ASSIGN IS NOT NULL
         AND pm.ASSIGN <> 0
       ORDER BY name

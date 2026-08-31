@@ -219,7 +219,7 @@ async function buildEquipmentDetailData(pool, extRow, historyLimit = 5) {
   const cal = calResult.recordset[0] || null;
   const due = cal ? mapDueFields(cal) : null;
   const status = calculateEquipmentStatus({
-    dueDate: due?.effectiveDueDate || cal?.DUEDATE,
+    dueDate: due?.effectiveDueDate ?? null,
     woStatusNo: cal?.woStatusNo,
     schedWoStatusNo: cal?.schedWOStatusNo,
     woNo: cal?.openWoNo,
@@ -258,7 +258,7 @@ async function buildEquipmentDetailData(pool, extRow, historyLimit = 5) {
         woTargetDate: due?.woTargetDate ?? null,
         effectiveDueDate: due?.effectiveDueDate ?? null,
         dueDateSource: due?.dueDateSource ?? null,
-        dueDate: due?.effectiveDueDate ?? cal.DUEDATE,
+        dueDate: due?.effectiveDueDate ?? null,
         woStatusNo: cal.woStatusNo ?? cal.schedWOStatusNo,
         assignedCalibrator: cal.assigneeName || null,
         assigneeId: cal.assigneeId ?? null,

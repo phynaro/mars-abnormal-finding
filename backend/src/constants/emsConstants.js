@@ -18,6 +18,17 @@ const EMS_EQUIPMENT_STATUS = Object.freeze({
 /** Cedar WO status: completed / history */
 const EMS_WO_STATUS_FINISHED = Object.freeze([7, 9]);
 
+/** Cedar WO statuses excluded when picking an open WO (finished, canceled, history). */
+const EMS_WO_STATUS_NON_OPEN = Object.freeze([7, 8, 9]);
+
+/** @param {string} woAlias */
+function emsWoStatusNonOpenSql(woAlias) {
+  return `${woAlias}.WOSTATUSNO NOT IN (${EMS_WO_STATUS_NON_OPEN.join(', ')})`;
+}
+
+/** EMS schedule attaches leftover open WOs only if created on/after this YYYYMMDD. */
+const EMS_SCHEDULE_OPEN_WO_CREATED_FROM = '20230101';
+
 /** Days-until-due thresholds (spec §5). */
 const EMS_DUE_THIS_WEEK_MAX_DAYS = 7;
 const EMS_DUE_SOON_MAX_DAYS = 7;
@@ -37,6 +48,9 @@ module.exports = {
   EMS_ROLE_VALUES,
   EMS_EQUIPMENT_STATUS,
   EMS_WO_STATUS_FINISHED,
+  EMS_WO_STATUS_NON_OPEN,
+  emsWoStatusNonOpenSql,
+  EMS_SCHEDULE_OPEN_WO_CREATED_FROM,
   EMS_DUE_THIS_WEEK_MAX_DAYS,
   EMS_DUE_SOON_MAX_DAYS,
   EMS_NOTIFICATION_RULES,

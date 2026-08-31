@@ -55,12 +55,6 @@ const WoStatusSection: React.FC<WoStatusSectionProps> = ({
                 <dt className="text-muted-foreground">{t('ems.due.scheduleDue')}</dt>
                 <dd className="font-medium">{formatEmsDate(currentWo.scheduleDueDate)}</dd>
               </div>
-              {currentWo.woTargetDate && (
-                <div className="flex justify-between gap-4">
-                  <dt className="text-muted-foreground">{t('ems.due.woTarget')}</dt>
-                  <dd className="font-medium">{formatEmsDate(currentWo.woTargetDate)}</dd>
-                </div>
-              )}
               <div className="flex justify-between gap-4">
                 <dt className="text-muted-foreground">{t('ems.due.effectiveDue')}</dt>
                 <dd className="font-medium">{displayEffectiveDue(currentWo)}</dd>

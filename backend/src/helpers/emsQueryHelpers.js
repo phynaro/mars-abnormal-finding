@@ -1,6 +1,6 @@
 /**
  * Shared SQL helpers for EMS (IgxEQExtension + Cedar PM/WO).
- * Effective due: open WO target (WO.PMNO) → PMSched.DUEDATE → PM.NEXTDUE_D.
+ * Effective due: PM.NEXTDUE_D only (never WO scheduled finish).
  */
 
 const sql = require('mssql');
@@ -10,9 +10,14 @@ const {
   pmFlagActive,
   ALLOWED_PLANT_PREFIXES,
   PM_CAL_PLANTS,
+  leftJoinEq,
+  leftJoinWoBySched,
+  leftJoinOpenWoByPmno,
 } = require('./pmCalibrationScheduleQuery');
 const {
   EMS_DUE_SOON_MAX_DAYS,
+  EMS_SCHEDULE_OPEN_WO_CREATED_FROM,
+  emsWoStatusNonOpenSql,
 } = require('../constants/emsConstants');
 
 /** Schedule row considered finished (legacy sched status, WONo link, or matching finished WO on PM). */
@@ -105,22 +110,17 @@ function scheduleDueDateExpr(schedAlias = 's', pmAlias = 'pm') {
   return `COALESCE(${schedDue}, ${pmNextDue})`;
 }
 
-/** Effective due datetime: WO target when open WO exists, else schedule due. */
-function effectiveDueDateTimeExpr(schedAlias = 's', pmAlias = 'pm', woAlias = 'openWo') {
-  const schedDue = scheduleDueDateExpr(schedAlias, pmAlias);
-  const woTarget = woTargetDateTimeExpr(woAlias);
-  return `COALESCE(${woTarget}, CAST(${schedDue} AS DATETIME))`;
+/** Effective due datetime: PM.NEXTDUE_D only. */
+function effectiveDueDateTimeExpr(_schedAlias = 's', pmAlias = 'pm', _woAlias = 'openWo') {
+  const pmNextDue = dateExprFromColumn(`${pmAlias}.NEXTDUE_D`);
+  return `CAST(${pmNextDue} AS DATETIME)`;
 }
 
 /** Source label for effective due resolution. */
-function dueDateSourceExpr(schedAlias = 's', pmAlias = 'pm', woAlias = 'openWo') {
-  const schedDue = dateExprFromColumn(`${schedAlias}.DUEDATE`);
+function dueDateSourceExpr(_schedAlias = 's', pmAlias = 'pm', _woAlias = 'openWo') {
   const pmNextDue = dateExprFromColumn(`${pmAlias}.NEXTDUE_D`);
-  const woTarget = woTargetDateTimeExpr(woAlias);
   return `(
     CASE
-      WHEN ${woTarget} IS NOT NULL THEN 'wo_target'
-      WHEN ${schedDue} IS NOT NULL THEN 'schedule'
       WHEN ${pmNextDue} IS NOT NULL THEN 'pm_next_due'
       ELSE NULL
     END
@@ -149,6 +149,41 @@ function emsEquipmentFromJoin() {
   `;
 }
 
+/** OUTER APPLY: latest PMSched slot per PM (furthest future DUEDATE). */
+function latestPmSchedApplySql(schedAlias = 's', pmAlias = 'pm') {
+  return `
+    OUTER APPLY (
+      SELECT TOP 1
+        sched.DUEDATE,
+        sched.WONo,
+        sched.WOStatusNo,
+        sched.PMNO
+      FROM dbo.PMSched sched
+      WHERE sched.PMNO = ${pmAlias}.PMNO
+      ORDER BY ${dateExprFromColumn('sched.DUEDATE')} DESC
+    ) ${schedAlias}
+  `;
+}
+
+/**
+ * EMS schedule grain: one row per CAL PM (latest PMSched) + registry EQ + optional open WO.
+ * Drop-in replacement for getPMCalSched() in EMS schedule/dashboard queries.
+ */
+function getEmsScheduleFromJoin(options = {}) {
+  const createdFrom = options.createdFrom ?? EMS_SCHEDULE_OPEN_WO_CREATED_FROM;
+  return {
+    fromJoinPm: `
+    FROM dbo.PM pm
+    ${latestPmSchedApplySql('s', 'pm')}`,
+    leftJoinEq: leftJoinEq('eq'),
+    leftJoinWo: leftJoinWoBySched('wo'),
+    leftJoinOpenWo: leftJoinOpenWoByPmno('openWo', 'pm', { createdFrom }),
+  };
+}
+
+/** PM must have at least one PMSched row after latest-slot apply. */
+const EMS_SCHEDULE_HAS_ROW_SQL = `s.DUEDATE IS NOT NULL`;
+
 /** OUTER APPLY: latest open WO for a PM (links via PMNO on new Cedar). */
 function openWoApplySql(pmAlias = 'pm', woAlias = 'openWo') {
   return `
@@ -162,7 +197,7 @@ function openWoApplySql(pmAlias = 'pm', woAlias = 'openWo') {
         wo.ASSIGN
       FROM dbo.WO wo
       WHERE wo.PMNO = ${pmAlias}.PMNO
-        AND wo.WOSTATUSNO NOT IN (7, 9)
+        AND ${emsWoStatusNonOpenSql('wo')}
         AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
       ORDER BY wo.WONO DESC
     ) ${woAlias}
@@ -171,7 +206,6 @@ function openWoApplySql(pmAlias = 'pm', woAlias = 'openWo') {
 
 /** Next open calibration obligation per equipment (effective-due model). */
 function openCalApplySql() {
-  const schedDueExpr = scheduleDueDateExpr('s', 'pm');
   const woTargetExpr = woTargetDateTimeExpr('openWo');
   const effectiveExpr = effectiveDueDateTimeExpr('s', 'pm', 'openWo');
   const sourceExpr = dueDateSourceExpr('s', 'pm', 'openWo');
@@ -193,7 +227,7 @@ function openCalApplySql() {
         ${woTargetExpr} AS woTargetDate,
         ${effectiveExpr} AS effectiveDueDate,
         ${effectiveExpr} AS dueDateTime,
-        CAST(${schedDueExpr} AS DATE) AS dueDateParsed,
+        CAST(${dateExprFromColumn('pm.NEXTDUE_D')} AS DATE) AS dueDateParsed,
         ${sourceExpr} AS dueDateSource
       FROM dbo.PM pm
       INNER JOIN dbo.PMSched s ON s.PMNO = pm.PMNO
@@ -255,6 +289,28 @@ function equipmentStatusCaseExpr(dueCol = 'cal.effectiveDueDate') {
       ELSE 'OK'
     END
   )`;
+}
+
+/**
+ * Date window on PM.NEXTDUE_D (EMS effective due).
+ * @returns {{ clause: string, error: string|null }}
+ */
+function applyEmsEffectiveDueDateRangeClause(request, query = {}, options = {}) {
+  const dueFrom = query.dueFrom || query.startDate;
+  const dueTo = query.dueTo || query.endDate;
+  const startParamName = options.startParamName || 'EmsDueFrom';
+  const endParamName = options.endParamName || 'EmsDueTo';
+  if (!dueFrom || !dueTo) {
+    return { clause: '', error: null };
+  }
+
+  request.input(startParamName, sql.Date, dueFrom);
+  request.input(endParamName, sql.Date, dueTo);
+  const nextDue = dateExprFromColumn('pm.NEXTDUE_D');
+  return {
+    clause: `${nextDue} >= @${startParamName} AND ${nextDue} <= @${endParamName}`,
+    error: null,
+  };
 }
 
 /**
@@ -344,6 +400,9 @@ module.exports = {
   plantFromTagExpr,
   eqActiveWhere,
   emsEquipmentFromJoin,
+  latestPmSchedApplySql,
+  getEmsScheduleFromJoin,
+  EMS_SCHEDULE_HAS_ROW_SQL,
   openCalApplySql,
   openWoApplySql,
   openCalNotFinishedWhere,
@@ -358,6 +417,7 @@ module.exports = {
   weekDeadlineExpr,
   kpiBucketCaseExpr,
   equipmentStatusCaseExpr,
+  applyEmsEffectiveDueDateRangeClause,
   applyEmsPlantAreaFilters,
   parseStatusFilter,
   parseKpiBucketFilter,

@@ -4,6 +4,7 @@
  */
 
 const sql = require('mssql');
+const { emsWoStatusNonOpenSql } = require('../constants/emsConstants');
 
 /** Plant code prefix of PMCODE (segment before first '-', e.g. PP, PIP). */
 const ALLOWED_PLANT_PREFIXES = ['PP', 'DJ', 'DP', 'SN', 'CT', 'PS', 'ST', 'PIP'];
@@ -87,18 +88,22 @@ function leftJoinWoBySched(woAlias = 'wo') {
 }
 
 /** Open WO join via PM.PMNO (primary linkage on new Cedar). */
-function leftJoinOpenWoByPmno(woAlias = 'openWo', pmAlias = 'pm') {
+function leftJoinOpenWoByPmno(woAlias = 'openWo', pmAlias = 'pm', options = {}) {
+  const createdFrom = options.createdFrom != null ? String(options.createdFrom).trim() : '';
+  const createdClause = createdFrom
+    ? ` AND ${woAlias}.CREATEDATE >= '${createdFrom.replace(/'/g, '')}'`
+    : '';
   return `LEFT JOIN dbo.WO ${woAlias} ON ${woAlias}.PMNO = ${pmAlias}.PMNO
-    AND ${woAlias}.WOSTATUSNO NOT IN (7, 9)
-    AND (${woAlias}.FLAGDEL IS NULL OR ${woAlias}.FLAGDEL <> 'Y')`;
+    AND ${emsWoStatusNonOpenSql(woAlias)}
+    AND (${woAlias}.FLAGDEL IS NULL OR ${woAlias}.FLAGDEL <> 'Y')${createdClause}`;
 }
 
-function getPMCalSched() {
+function getPMCalSched(options = {}) {
   return {
     fromJoinPm: `FROM dbo.PMSched s INNER JOIN dbo.PM pm ON pm.PMNO = s.PMNO`,
     leftJoinEq: leftJoinEq('eq'),
     leftJoinWo: leftJoinWoBySched('wo'),
-    leftJoinOpenWo: leftJoinOpenWoByPmno('openWo', 'pm'),
+    leftJoinOpenWo: leftJoinOpenWoByPmno('openWo', 'pm', options),
     dueDateExpr: dateExprFromColumn('s.DUEDATE'),
     plantPrefixExpr: plantPrefixExpr(),
   };

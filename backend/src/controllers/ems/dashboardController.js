@@ -47,6 +47,9 @@ const {
   woTargetDateTimeExpr,
 
   mapDueFields,
+  applyEmsEffectiveDueDateRangeClause,
+  getEmsScheduleFromJoin,
+  EMS_SCHEDULE_HAS_ROW_SQL,
 
   dateExprFromColumn,
 
@@ -69,10 +72,6 @@ const {
 const {
 
   getPMCalSchedCoreWhere,
-
-  getPMCalSched,
-
-  applyPmCalSchedDateRangeClause,
 
   pmNotFrozen,
 
@@ -272,7 +271,7 @@ async function fetchSchedulePanel(req, res, windowClause, orderBy) {
 
   const sourceExpr = dueDateSourceExpr('s', 'pm', 'openWo');
 
-  const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getPMCalSched();
+  const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getEmsScheduleFromJoin();
 
 
 
@@ -285,6 +284,8 @@ async function fetchSchedulePanel(req, res, windowClause, orderBy) {
     getPMCalSchedCoreWhere(),
 
     `EXISTS (SELECT 1 FROM dbo.IgxEQExtension extf WHERE extf.eqno = eq.EQNO)`,
+
+    EMS_SCHEDULE_HAS_ROW_SQL,
 
     windowClause,
 
@@ -329,6 +330,8 @@ async function fetchSchedulePanel(req, res, windowClause, orderBy) {
     getPMCalSchedCoreWhere(),
 
     `EXISTS (SELECT 1 FROM dbo.IgxEQExtension extf WHERE extf.eqno = eq.EQNO)`,
+
+    EMS_SCHEDULE_HAS_ROW_SQL,
 
     windowClause,
 
@@ -652,11 +655,13 @@ exports.getPlantMatrix = async (req, res) => {
 
     const request = pool.request();
 
-    const dateRange = applyPmCalSchedDateRangeClause(request, {
+    const dateRange = applyEmsEffectiveDueDateRangeClause(request, {
 
       startDate: range.rangeStart,
 
       endDate: range.rangeEnd,
+
+    }, {
 
       startParamName: 'PlantMatrixStart',
 
@@ -672,7 +677,7 @@ exports.getPlantMatrix = async (req, res) => {
 
 
 
-    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getPMCalSched();
+    const { fromJoinPm, leftJoinEq, leftJoinWo, leftJoinOpenWo } = getEmsScheduleFromJoin();
 
     const plantExpr = plantFromTagExpr('ext.tag_no');
 
@@ -683,6 +688,8 @@ exports.getPlantMatrix = async (req, res) => {
       dateRange.clause,
 
       `EXISTS (SELECT 1 FROM dbo.IgxEQExtension extf WHERE extf.eqno = eq.EQNO)`,
+
+      EMS_SCHEDULE_HAS_ROW_SQL,
 
     ].join(' AND ');
 
