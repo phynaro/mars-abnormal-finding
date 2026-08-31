@@ -1,10 +1,19 @@
 import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
-import { Gauge, LayoutDashboard, Wrench, CalendarDays, ClipboardList, Settings } from 'lucide-react';
+import { LayoutDashboard, Wrench, CalendarDays, ClipboardList, Settings } from 'lucide-react';
 import { PageHeader } from '@/components/common/PageHeader';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useEmsAccess } from '@/contexts/EmsAccessContext';
 import EmsSubNav from '@/components/ems/shared/EmsSubNav';
+import { isMenuChildPathActive } from '@/components/layout/menuConfig';
+
+const PAGE_DESCRIPTION_KEYS: Record<string, string> = {
+  '/ems/dashboard': 'ems.dashboard.pageDescription',
+  '/ems/equipment': 'ems.equipment.pageDescription',
+  '/ems/schedule': 'ems.schedule.pageDescription',
+  '/ems/work-orders': 'ems.workOrders.pageDescription',
+  '/ems/settings/roles': 'ems.settings.description',
+};
 
 const EmsLayout: React.FC = () => {
   const { t } = useLanguage();
@@ -21,6 +30,10 @@ const EmsLayout: React.FC = () => {
       : []),
   ];
 
+  const activeTab = tabs.find((tab) => isMenuChildPathActive(location.pathname, tab.to)) ?? tabs[0];
+  const ActiveIcon = activeTab.icon;
+  const description = t(PAGE_DESCRIPTION_KEYS[activeTab.to] ?? 'ems.layout.description');
+
   const isDetail = /\/ems\/equipment\/[^/]+/.test(location.pathname);
 
   return (
@@ -28,11 +41,11 @@ const EmsLayout: React.FC = () => {
       {!isDetail && (
         <header className="space-y-5">
           <PageHeader
-            title={t('ems.nav.label')}
-            description={t('ems.layout.description')}
+            title={activeTab.label}
+            description={description}
             rightContent={
               <div className="hidden sm:flex h-10 w-10 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                <Gauge className="h-5 w-5" aria-hidden />
+                <ActiveIcon className="h-5 w-5" aria-hidden />
               </div>
             }
           />
