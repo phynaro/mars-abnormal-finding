@@ -95,6 +95,7 @@ function emptyPeriods(): EmsWoPeriodStatusItem[] {
     ontime: 0,
     late: 0,
     notFinish: 0,
+    wo_postpone: 0,
     total: 0,
   }));
 }

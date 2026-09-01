@@ -252,6 +252,7 @@ export interface EmsPlantMatrixItem {
   overdue: number;
   inProgress: number;
   noWo: number;
+  wo_postpone: number;
   completionRate: number;
 }
 
@@ -270,6 +271,7 @@ export interface EmsWoPeriodStatusItem {
   ontime: number;
   late: number;
   notFinish: number;
+  wo_postpone: number;
   total: number;
 }
 

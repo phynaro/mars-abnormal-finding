@@ -103,6 +103,59 @@ function woCompletionStatusExpr(woAlias = 'wo') {
   )`;
 }
 
+/** 1 when the WO scheduled start moved off the original PM due (reschedule/postpone). */
+function woPostponeCaseExpr(woAlias = 'wo') {
+  const schStartExpr = dateExprFromColumn(`${woAlias}.SCH_START_D`);
+  const pmDueExpr = dateExprFromColumn(`${woAlias}.PMDUE_D`);
+  return `(CASE WHEN ${schStartExpr} IS NOT NULL AND ${pmDueExpr} IS NOT NULL AND ${schStartExpr} <> ${pmDueExpr} THEN 1 ELSE 0 END)`;
+}
+
+function woPostponeOnJoinedWoCaseExpr() {
+  return `(CASE
+    WHEN ${woPostponeCaseExpr('wof')} = 1 THEN 1
+    WHEN ${woPostponeCaseExpr('wo')} = 1 THEN 1
+    WHEN ${woPostponeCaseExpr('openWo')} = 1 THEN 1
+    ELSE 0
+  END)`;
+}
+
+function emptyPlantMatrixItem(plant, plantLabel) {
+  return {
+    plant,
+    plantLabel,
+    total: 0,
+    done: 0,
+    overdue: 0,
+    inProgress: 0,
+    noWo: 0,
+    wo_postpone: 0,
+    completionRate: 0,
+  };
+}
+
+function emptyWoPeriodStatusEntry(period) {
+  return { period, ontime: 0, late: 0, notFinish: 0, wo_postpone: 0, total: 0 };
+}
+
+function applyWoPeriodStatusCount(entry, status, cnt, postponeCnt = 0) {
+  const n = Number(cnt) || 0;
+  switch (status) {
+    case 'ontime':
+      entry.ontime += n;
+      break;
+    case 'late':
+      entry.late += n;
+      break;
+    case 'not_finish':
+      entry.notFinish += n;
+      break;
+    default:
+      break;
+  }
+  entry.total += n;
+  entry.wo_postpone += Number(postponeCnt) || 0;
+}
+
 /** PMSched due with PM.NEXTDUE_D fallback. */
 function scheduleDueDateExpr(schedAlias = 's', pmAlias = 'pm') {
   const schedDue = dateExprFromColumn(`${schedAlias}.DUEDATE`);
@@ -561,6 +614,11 @@ module.exports = {
   woSchFinishDateExpr,
   woActFinishDateExpr,
   woCompletionStatusExpr,
+  woPostponeCaseExpr,
+  woPostponeOnJoinedWoCaseExpr,
+  emptyPlantMatrixItem,
+  emptyWoPeriodStatusEntry,
+  applyWoPeriodStatusCount,
   scheduleDueDateExpr,
   effectiveDueDateTimeExpr,
   dueDateSourceExpr,

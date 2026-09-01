@@ -59,6 +59,16 @@ const {
 
   woCompletionStatusExpr,
 
+  woPostponeCaseExpr,
+
+  woPostponeOnJoinedWoCaseExpr,
+
+  emptyPlantMatrixItem,
+
+  emptyWoPeriodStatusEntry,
+
+  applyWoPeriodStatusCount,
+
   eqActiveWhere,
 
 } = require('../../helpers/emsQueryHelpers');
@@ -742,7 +752,9 @@ exports.getPlantMatrix = async (req, res) => {
 
         ISNULL(SUM(CASE WHEN NOT (${finishedExpr}) AND ${effectiveExpr} >= GETDATE() AND ${WO_OPEN_SQL} THEN 1 ELSE 0 END), 0) AS inProgress,
 
-        ISNULL(SUM(CASE WHEN NOT (${finishedExpr}) AND ${effectiveExpr} >= GETDATE() AND NOT ${WO_OPEN_SQL} THEN 1 ELSE 0 END), 0) AS noWo
+        ISNULL(SUM(CASE WHEN NOT (${finishedExpr}) AND ${effectiveExpr} >= GETDATE() AND NOT ${WO_OPEN_SQL} THEN 1 ELSE 0 END), 0) AS noWo,
+
+        ISNULL(SUM(${woPostponeOnJoinedWoCaseExpr()}), 0) AS wo_postpone
 
       ${fromJoinPm}
 
@@ -796,6 +808,8 @@ exports.getPlantMatrix = async (req, res) => {
 
         noWo: row.noWo ?? 0,
 
+        wo_postpone: Number(row.wo_postpone) || 0,
+
         completionRate: total > 0 ? Math.round((done / total) * 100) : 0,
 
       });
@@ -808,25 +822,7 @@ exports.getPlantMatrix = async (req, res) => {
 
       if (byPlant.has(p.code)) return byPlant.get(p.code);
 
-      return {
-
-        plant: p.code,
-
-        plantLabel: p.label,
-
-        total: 0,
-
-        done: 0,
-
-        overdue: 0,
-
-        inProgress: 0,
-
-        noWo: 0,
-
-        completionRate: 0,
-
-      };
+      return emptyPlantMatrixItem(p.code, p.label);
 
     });
 
@@ -887,26 +883,9 @@ exports.getPlantMatrix = async (req, res) => {
 function emptyWoPeriodSlots() {
   const byPeriod = new Map();
   for (let p = 1; p <= 13; p += 1) {
-    byPeriod.set(p, { period: p, ontime: 0, late: 0, notFinish: 0, total: 0 });
+    byPeriod.set(p, emptyWoPeriodStatusEntry(p));
   }
   return byPeriod;
-}
-
-function applyWoPeriodStatusCount(entry, status, cnt) {
-  switch (status) {
-    case 'ontime':
-      entry.ontime += cnt;
-      break;
-    case 'late':
-      entry.late += cnt;
-      break;
-    case 'not_finish':
-      entry.notFinish += cnt;
-      break;
-    default:
-      break;
-  }
-  entry.total += cnt;
 }
 
 exports.getWoPeriodStatus = async (req, res) => {
@@ -946,6 +925,7 @@ exports.getWoPeriodStatus = async (req, res) => {
     const periodExpr = `(DATEDIFF(day, @WoPeriodRangeStart, ${schFinishExpr}) / 28) + 1`;
 
     const statusExpr = woCompletionStatusExpr('wo');
+    const postponeExpr = woPostponeCaseExpr('wo');
 
 
 
@@ -985,7 +965,9 @@ exports.getWoPeriodStatus = async (req, res) => {
 
         ${statusExpr} AS status,
 
-        COUNT(*) AS cnt
+        COUNT(*) AS cnt,
+
+        SUM(${postponeExpr}) AS wo_postpone
 
       FROM dbo.WO wo
 
@@ -1022,13 +1004,14 @@ exports.getWoPeriodStatus = async (req, res) => {
       if (!allowedPlants.has(plant)) continue;
 
       const cnt = row.cnt ?? 0;
+      const postponeCnt = row.wo_postpone ?? 0;
       const aggEntry = byPeriod.get(period);
-      if (aggEntry) applyWoPeriodStatusCount(aggEntry, row.status, cnt);
+      if (aggEntry) applyWoPeriodStatusCount(aggEntry, row.status, cnt, postponeCnt);
 
       const plantPeriods = byPlantMap.get(plant);
       if (!plantPeriods) continue;
       const plantEntry = plantPeriods.get(period);
-      if (plantEntry) applyWoPeriodStatusCount(plantEntry, row.status, cnt);
+      if (plantEntry) applyWoPeriodStatusCount(plantEntry, row.status, cnt, postponeCnt);
     }
 
     const periods = Array.from(byPeriod.values());

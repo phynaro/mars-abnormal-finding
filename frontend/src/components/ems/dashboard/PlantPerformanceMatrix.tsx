@@ -27,6 +27,7 @@ function emptyPlants(): EmsPlantMatrixItem[] {
     overdue: 0,
     inProgress: 0,
     noWo: 0,
+    wo_postpone: 0,
     completionRate: 0,
   }));
 }
