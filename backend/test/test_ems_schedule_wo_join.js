@@ -36,3 +36,8 @@ test('equipment open-WO apply excludes canceled status 8', () => {
   const sql = openWoApplySql('openWo', 'pm');
   assert.match(sql, /WOSTATUSNO NOT IN \(7, 8, 9\)/);
 });
+
+test('work-order analytics exclude canceled status 8', () => {
+  const { emsWoStatusNotCanceledSql } = require('../src/constants/emsConstants');
+  assert.strictEqual(emsWoStatusNotCanceledSql('wo'), 'wo.WOSTATUSNO <> 8');
+});

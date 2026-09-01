@@ -65,6 +65,7 @@ const {
 const {
 
   EMS_DUE_SOON_MAX_DAYS,
+  emsWoStatusNotCanceledSql,
 
 } = require('../../constants/emsConstants');
 
@@ -958,6 +959,8 @@ exports.getWoPeriodStatus = async (req, res) => {
       pmFlagActive('pm'),
 
       `(wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')`,
+
+      emsWoStatusNotCanceledSql('wo'),
 
       `${schFinishExpr} IS NOT NULL`,
 

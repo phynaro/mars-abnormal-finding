@@ -14,6 +14,7 @@ const {
   woCompletionStatusExpr,
 } = require('../../helpers/emsQueryHelpers');
 const { PM_CAL_PLANTS } = require('../../helpers/pmCalibrationScheduleQuery');
+const { emsWoStatusNotCanceledSql } = require('../../constants/emsConstants');
 
 const ALLOWED_STATUS = new Set(['ontime', 'late', 'not_finish']);
 const ALLOWED_PLANTS = new Set(PM_CAL_PLANTS.map((p) => p.code));
@@ -39,6 +40,7 @@ function buildWoFilters(request, query) {
     `(pm.FREEZE IS NULL OR LTRIM(RTRIM(pm.FREEZE)) <> 'T')`,
     `(pm.FLAGDEL IS NULL OR LTRIM(RTRIM(pm.FLAGDEL)) <> 'T')`,
     `(wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')`,
+    emsWoStatusNotCanceledSql('wo'),
     `EXISTS (SELECT 1 FROM dbo.IgxEQExtension extf WHERE extf.eqno = eq.EQNO)`,
   ];
 
