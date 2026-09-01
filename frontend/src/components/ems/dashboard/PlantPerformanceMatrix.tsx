@@ -45,64 +45,42 @@ const PlantPerformanceMatrix: React.FC<Props> = ({ timeTravel }) => {
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
+    setKpiLoading(true);
     setError(null);
 
-    emsService
-      .getPlantMatrix({
+    Promise.all([
+      emsService.getPlantMatrix({
         mode: timeTravel.mode,
         year: timeTravel.year,
         month: timeTravel.month,
         period: timeTravel.period,
         startDate: dateRange.startDate,
         endDate: dateRange.endDate,
-      })
-      .then((data) => {
+      }),
+      emsService.getDashboardKpiByPlant(),
+    ])
+      .then(([matrix, kpiPlants]) => {
         if (cancelled) return;
-        setPlants(data.plants);
+        setPlants(matrix.plants);
+        setKpiByPlant(kpiPlants);
       })
       .catch((e) => {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : t('common.error'));
         setPlants(emptyPlants());
+        setKpiByPlant({});
       })
       .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          setKpiLoading(false);
+        }
       });
 
     return () => {
       cancelled = true;
     };
   }, [dateRange.endDate, dateRange.startDate, t, timeTravel.mode, timeTravel.month, timeTravel.period, timeTravel.year]);
-
-  useEffect(() => {
-    let cancelled = false;
-    setKpiLoading(true);
-
-    const plantCodes = PM_CALIBRATION_PLANT_OPTIONS.map((p) => p.code);
-    Promise.all(
-      plantCodes.map((code) =>
-        emsService.getDashboardKpi({ plant: code }).then((data) => ({ code, data }))
-      )
-    )
-      .then((results) => {
-        if (cancelled) return;
-        const next: Record<string, EmsKpiData> = {};
-        for (const { code, data } of results) {
-          next[code] = data;
-        }
-        setKpiByPlant(next);
-      })
-      .catch(() => {
-        if (!cancelled) setKpiByPlant({});
-      })
-      .finally(() => {
-        if (!cancelled) setKpiLoading(false);
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   return (
     <section className="space-y-4">

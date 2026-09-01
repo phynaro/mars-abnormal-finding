@@ -389,6 +389,130 @@ function paginationMeta(page, limit, total) {
   };
 }
 
+/**
+ * Set-based CAL status prep: #EmsEq → #EmsFinWo → #EmsOpenWo → #EmsCal.
+ * Avoids correlated WO scans (262k rows, no PMNO index).
+ */
+function emsEquipmentCalPrepSql(identityWhere = '1=1') {
+  const effectiveExpr = effectiveDueDateTimeExpr('s', 'pm', 'openWo');
+  const woTargetExpr = woTargetDateTimeExpr('openWo');
+  const sourceExpr = dueDateSourceExpr('s', 'pm', 'openWo');
+  const schedDueParsed = dateExprFromColumn('sched.DUEDATE');
+  const finDateParsed = dateExprFromColumn('wof.SCH_FINISH_D');
+  return `
+    SELECT
+      ext.tag_no AS tagNo,
+      ext.eqno,
+      ISNULL(ext.description, eq.EQNAME) AS description,
+      ${plantFromTagExpr('ext.tag_no')} AS plant,
+      ext.location AS area,
+      ext.manufacturer,
+      ext.model,
+      ext.equipment_type,
+      ext.cal_interval,
+      ext.ccp_code
+    INTO #EmsEq
+    ${emsEquipmentFromJoin()}
+    WHERE ${identityWhere};
+
+    SELECT wof.PMNO, ${finDateParsed} AS finishDate
+    INTO #EmsFinWo
+    FROM dbo.WO wof
+    INNER JOIN dbo.PM pm ON pm.PMNO = wof.PMNO
+    INNER JOIN #EmsEq e ON e.eqno = pm.EQNO
+    WHERE pm.PMCODE LIKE '%-CAL%'
+      AND ${pmNotFrozen('pm')}
+      AND ${pmFlagActive('pm')}
+      AND wof.WOSTATUSNO IN (7, 9)
+      AND (wof.FLAGDEL IS NULL OR wof.FLAGDEL <> 'Y');
+
+    SELECT wo.PMNO, wo.WONO, wo.WOCODE, wo.WOSTATUSNO, wo.SCH_FINISH_D, wo.SCH_FINISH_T
+    INTO #EmsOpenWo
+    FROM (
+      SELECT
+        wo.PMNO, wo.WONO, wo.WOCODE, wo.WOSTATUSNO, wo.SCH_FINISH_D, wo.SCH_FINISH_T,
+        ROW_NUMBER() OVER (PARTITION BY wo.PMNO ORDER BY wo.WONO DESC) AS woRn
+      FROM dbo.WO wo
+      INNER JOIN (
+        SELECT DISTINCT pm.PMNO
+        FROM dbo.PM pm
+        INNER JOIN #EmsEq e ON e.eqno = pm.EQNO
+        WHERE pm.PMCODE LIKE '%-CAL%'
+          AND ${pmNotFrozen('pm')}
+          AND ${pmFlagActive('pm')}
+      ) calpm ON calpm.PMNO = wo.PMNO
+      WHERE wo.WOSTATUSNO NOT IN (7, 8, 9)
+        AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
+    ) wo
+    WHERE wo.woRn = 1;
+
+    SELECT ranked.*
+    INTO #EmsCal
+    FROM (
+      SELECT
+        pm.EQNO AS eqno,
+        pm.PMNO,
+        pm.ASSIGN AS assigneeId,
+        s.DUEDATE,
+        s.WONo,
+        s.WOStatusNo AS schedWOStatusNo,
+        ${dateExprFromColumn('s.DUEDATE')} AS scheduleDueDateParsed,
+        ${woTargetExpr} AS woTargetDate,
+        ${effectiveExpr} AS effectiveDueDate,
+        ${sourceExpr} AS dueDateSource,
+        openWo.WONO AS openWoNo,
+        openWo.WOSTATUSNO AS woStatusNo,
+        ROW_NUMBER() OVER (PARTITION BY pm.EQNO ORDER BY ${effectiveExpr} ASC) AS rn
+      FROM #EmsEq e
+      INNER JOIN dbo.PM pm ON pm.EQNO = e.eqno
+        AND pm.PMCODE LIKE '%-CAL%'
+        AND ${pmNotFrozen('pm')}
+        AND ${pmFlagActive('pm')}
+      CROSS APPLY (
+        SELECT TOP 1
+          sched.DUEDATE,
+          sched.WONo,
+          sched.WOStatusNo,
+          sched.PMNO
+        FROM dbo.PMSched sched
+        WHERE sched.PMNO = pm.PMNO
+          AND sched.WOStatusNo <> 9
+          AND NOT EXISTS (
+            SELECT 1 FROM #EmsFinWo f
+            WHERE f.PMNO = sched.PMNO AND f.finishDate = ${schedDueParsed}
+          )
+        ORDER BY sched.DUEDATE ASC
+      ) s
+      LEFT JOIN #EmsOpenWo openWo ON openWo.PMNO = pm.PMNO
+    ) ranked
+    WHERE ranked.rn = 1;
+  `;
+}
+
+function emptyEmsKpiCounts() {
+  return {
+    totalEquipment: 0,
+    overdue: 0,
+    dueThisWeek: 0,
+    dueSoon: 0,
+    ok: 0,
+    noWo: 0,
+  };
+}
+
+function accumulateEmsKpiCounts(counts, bucket, cnt) {
+  const n = Number(cnt) || 0;
+  counts.totalEquipment += n;
+  switch (bucket) {
+    case 'overdue': counts.overdue += n; break;
+    case 'due_this_week': counts.dueThisWeek += n; break;
+    case 'due_soon': counts.dueSoon += n; break;
+    case 'ok': counts.ok += n; break;
+    case 'no_wo': counts.noWo += n; break;
+    default: break;
+  }
+}
+
 /** Map explicit due fields for API responses (with backward-compat aliases). */
 function mapDueFields(row) {
   const scheduleDueDate = row.scheduleDueDate ?? row.scheduleDueDateRaw ?? row.DUEDATE ?? null;
@@ -441,4 +565,7 @@ module.exports = {
   KPI_BUCKET_VALUES,
   paginationMeta,
   mapDueFields,
+  emsEquipmentCalPrepSql,
+  emptyEmsKpiCounts,
+  accumulateEmsKpiCounts,
 };

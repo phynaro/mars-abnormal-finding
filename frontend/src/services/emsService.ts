@@ -354,6 +354,13 @@ const emsService = {
     return res.data;
   },
 
+  async getDashboardKpiByPlant(params?: { area?: string }): Promise<Record<string, EmsKpiData>> {
+    const res = await emsFetch<{ success: boolean; data: { plants: Record<string, EmsKpiData> } }>(
+      `/dashboard/kpi-by-plant${toQuery(params || {})}`
+    );
+    return res.data.plants || {};
+  },
+
   async getOverdue(params?: { plant?: string; area?: string; page?: number; limit?: number }) {
     return emsFetch<{ success: boolean; data: { items: EmsDashboardItem[]; pagination: EmsPagination } }>(
       `/dashboard/overdue${toQuery(params || {})}`

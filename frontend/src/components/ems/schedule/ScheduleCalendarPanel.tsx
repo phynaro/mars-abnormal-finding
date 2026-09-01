@@ -56,9 +56,9 @@ const ScheduleCalendarPanel: React.FC<Props> = ({
   );
 
   useEffect(() => {
-    if (anchorDate) {
-      setCalendarDate(startOfMonth(anchorDate));
-    }
+    if (!anchorDate) return;
+    const nextTime = startOfMonth(anchorDate).getTime();
+    setCalendarDate((prev) => (prev.getTime() === nextTime ? prev : new Date(nextTime)));
   }, [anchorDate]);
 
   useEffect(() => {
@@ -69,11 +69,8 @@ const ScheduleCalendarPanel: React.FC<Props> = ({
 
   const handleNavigate = useCallback(
     (date: Date) => {
-      if (controlledMonth && anchorDate) {
-        setCalendarDate(startOfMonth(anchorDate));
-        return;
-      }
-      setCalendarDate(date);
+      const next = controlledMonth && anchorDate ? startOfMonth(anchorDate) : date;
+      setCalendarDate((prev) => (prev.getTime() === next.getTime() ? prev : next));
     },
     [anchorDate, controlledMonth]
   );
@@ -85,6 +82,7 @@ const ScheduleCalendarPanel: React.FC<Props> = ({
   const [items, setItems] = useState<PmScheduleListItem[]>([]);
   const [userEvents, setUserEvents] = useState<CalibrationUserEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [rangeInfo, setRangeInfo] = useState({ rangeStart: '', rangeEnd: '', count: 0 });
   const [categories, setCategories] = useState<CalibrationUserEventCategoryOption[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -109,8 +107,9 @@ const ScheduleCalendarPanel: React.FC<Props> = ({
       });
   }, []);
 
+  const calendarDateKey = calendarDate.getTime();
   const fetchCalendar = useCallback(async () => {
-    const visibleRange = getCalendarVisibleRange(calendarView, calendarDate);
+    const visibleRange = getCalendarVisibleRange(calendarView, new Date(calendarDateKey));
     setLoading(true);
     try {
       const [pmRes, eventRes] = await Promise.all([
@@ -141,8 +140,9 @@ const ScheduleCalendarPanel: React.FC<Props> = ({
       setRangeInfo({ rangeStart: '', rangeEnd: '', count: 0 });
     } finally {
       setLoading(false);
+      setHasLoaded(true);
     }
-  }, [calendarDate, calendarView, filters.area, filters.plant, filters.woStatus]);
+  }, [calendarDateKey, calendarView, filters.area, filters.plant, filters.woStatus]);
 
   useEffect(() => {
     fetchCalendar();
@@ -166,7 +166,7 @@ const ScheduleCalendarPanel: React.FC<Props> = ({
       <CalibrationBigCalendar
         items={items}
         userEvents={userEvents}
-        loading={loading}
+        loading={loading && !hasLoaded}
         view={controlledMonth ? 'month' : calendarView}
         date={calendarDate}
         onViewChange={controlledMonth ? () => undefined : setCalendarView}

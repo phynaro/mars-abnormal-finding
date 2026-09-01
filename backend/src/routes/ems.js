@@ -32,6 +32,7 @@ router.use(attachEmsRoles);
 router.use(requireEmsAccess);
 
 router.get('/dashboard/kpi', dashboardController.getKpi);
+router.get('/dashboard/kpi-by-plant', dashboardController.getKpiByPlant);
 router.get('/dashboard/plant-matrix', dashboardController.getPlantMatrix);
 router.get('/dashboard/wo-period-status', dashboardController.getWoPeriodStatus);
 router.get('/dashboard/overdue', dashboardController.getOverdue);

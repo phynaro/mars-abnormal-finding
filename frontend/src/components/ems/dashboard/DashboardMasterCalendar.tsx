@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 
 import { useLanguage } from '@/contexts/LanguageContext';
 import ScheduleCalendarPanel from '@/components/ems/schedule/ScheduleCalendarPanel';
@@ -15,7 +15,11 @@ interface Props {
 
 const DashboardMasterCalendar: React.FC<Props> = ({ timeTravel }) => {
   const { t } = useLanguage();
-  const anchorDate = getTimeTravelAnchorDate(timeTravel);
+  const anchorTime = useMemo(
+    () => getTimeTravelAnchorDate(timeTravel).getTime(),
+    [timeTravel.mode, timeTravel.month, timeTravel.period, timeTravel.year]
+  );
+  const anchorDate = useMemo(() => new Date(anchorTime), [anchorTime]);
   const rangeLabel = formatTimeTravelSelectionLabel(timeTravel, t);
 
   return (

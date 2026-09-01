@@ -16,8 +16,6 @@ const {
 
   emsEquipmentFromJoin,
 
-  openCalApplySql,
-
   applyEmsPlantAreaFilters,
 
   paginationMeta,
@@ -50,6 +48,9 @@ const {
   applyEmsEffectiveDueDateRangeClause,
   getEmsScheduleFromJoin,
   EMS_SCHEDULE_HAS_ROW_SQL,
+  emsEquipmentCalPrepSql,
+  emptyEmsKpiCounts,
+  accumulateEmsKpiCounts,
 
   dateExprFromColumn,
 
@@ -145,6 +146,8 @@ exports.getKpi = async (req, res) => {
 
   try {
 
+    const startedAt = Date.now();
+
     const pool = await getCedarPool();
 
     const request = pool.request();
@@ -153,87 +156,39 @@ exports.getKpi = async (req, res) => {
 
     const bucketExpr = kpiBucketCaseExpr('cal.effectiveDueDate');
 
+    const result = await request.query(`
 
-
-    const sqlText = `
+      ${emsEquipmentCalPrepSql(registryWhere)}
 
       SELECT ${bucketExpr} AS bucket, COUNT(*) AS cnt
 
-      ${emsEquipmentFromJoin()}
+      FROM #EmsEq e
 
-      ${openCalApplySql()}
-
-      WHERE ${registryWhere}
+      LEFT JOIN #EmsCal cal ON cal.eqno = e.eqno
 
       GROUP BY ${bucketExpr}
 
-    `;
+    `);
 
+    const counts = emptyEmsKpiCounts();
 
+    const rows = Array.isArray(result.recordsets) && result.recordsets.length
+      ? result.recordsets[result.recordsets.length - 1]
+      : result.recordset;
 
-    const result = await request.query(sqlText);
+    for (const row of rows || []) {
 
-    const counts = {
-
-      totalEquipment: 0,
-
-      overdue: 0,
-
-      dueThisWeek: 0,
-
-      dueSoon: 0,
-
-      ok: 0,
-
-      noWo: 0,
-
-    };
-
-
-
-    for (const row of result.recordset || []) {
-
-      counts.totalEquipment += row.cnt;
-
-      switch (row.bucket) {
-
-        case 'overdue': counts.overdue += row.cnt; break;
-
-        case 'due_this_week': counts.dueThisWeek += row.cnt; break;
-
-        case 'due_soon': counts.dueSoon += row.cnt; break;
-
-        case 'ok': counts.ok += row.cnt; break;
-
-        case 'no_wo': counts.noWo += row.cnt; break;
-
-        default: break;
-
-      }
+      accumulateEmsKpiCounts(counts, row.bucket, row.cnt);
 
     }
 
-
+    console.log(`EMS getKpi ${Date.now() - startedAt}ms total=${counts.totalEquipment}`);
 
     res.json({
 
       success: true,
 
-      data: {
-
-        totalEquipment: counts.totalEquipment,
-
-        overdue: counts.overdue,
-
-        dueThisWeek: counts.dueThisWeek,
-
-        dueSoon: counts.dueSoon,
-
-        ok: counts.ok,
-
-        noWo: counts.noWo,
-
-      },
+      data: counts,
 
       message: 'EMS dashboard KPI',
 
@@ -244,6 +199,81 @@ exports.getKpi = async (req, res) => {
     console.error('EMS getKpi error:', error);
 
     res.status(500).json({ success: false, message: 'Failed to fetch EMS dashboard KPI', error: error.message });
+
+  }
+
+};
+
+/**
+ * GET /api/ems/dashboard/kpi-by-plant
+ */
+exports.getKpiByPlant = async (req, res) => {
+
+  try {
+
+    const startedAt = Date.now();
+
+    const pool = await getCedarPool();
+
+    const request = pool.request();
+
+    const registryWhere = buildRegistryWhere(request, req.query);
+
+    const bucketExpr = kpiBucketCaseExpr('cal.effectiveDueDate');
+
+    const result = await request.query(`
+
+      ${emsEquipmentCalPrepSql(registryWhere)}
+
+      SELECT e.plant, ${bucketExpr} AS bucket, COUNT(*) AS cnt
+
+      FROM #EmsEq e
+
+      LEFT JOIN #EmsCal cal ON cal.eqno = e.eqno
+
+      GROUP BY e.plant, ${bucketExpr}
+
+    `);
+
+    const rows = Array.isArray(result.recordsets) && result.recordsets.length
+      ? result.recordsets[result.recordsets.length - 1]
+      : result.recordset;
+
+    const plants = {};
+
+    for (const p of PM_CAL_PLANTS) {
+
+      plants[p.code] = emptyEmsKpiCounts();
+
+    }
+
+    for (const row of rows || []) {
+
+      const plant = String(row.plant || '').toUpperCase();
+
+      if (!plants[plant]) plants[plant] = emptyEmsKpiCounts();
+
+      accumulateEmsKpiCounts(plants[plant], row.bucket, row.cnt);
+
+    }
+
+    console.log(`EMS getKpiByPlant ${Date.now() - startedAt}ms plants=${Object.keys(plants).length}`);
+
+    res.json({
+
+      success: true,
+
+      data: { plants },
+
+      message: 'EMS dashboard KPI by plant',
+
+    });
+
+  } catch (error) {
+
+    console.error('EMS getKpiByPlant error:', error);
+
+    res.status(500).json({ success: false, message: 'Failed to fetch EMS dashboard KPI by plant', error: error.message });
 
   }
 
