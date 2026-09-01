@@ -33,6 +33,7 @@ const {
   PM_CAL_PLANTS,
 
   weekDeadlineExpr,
+  daysFromTodayExpr,
 
   kpiBucketCaseExpr,
 
@@ -506,7 +507,7 @@ exports.getOverdue = async (req, res) => {
 
 /**
 
- * GET /api/ems/dashboard/due-this-week — due before coming Saturday
+ * GET /api/ems/dashboard/due-this-week — today until Saturday midnight
 
  */
 
@@ -542,7 +543,7 @@ exports.getDueThisWeek = async (req, res) => {
 
 /**
 
- * GET /api/ems/dashboard/due-soon — 7 days after coming Saturday
+ * GET /api/ems/dashboard/due-soon — next 7 days from today
 
  */
 
@@ -558,9 +559,7 @@ exports.getDueSoon = async (req, res) => {
 
       res,
 
-      `${effectiveExpr} >= ${weekDeadlineExpr()}
-
-       AND ${effectiveExpr} < DATEADD(day, ${EMS_DUE_SOON_MAX_DAYS}, ${weekDeadlineExpr()})`,
+      `${effectiveExpr} >= GETDATE() AND ${effectiveExpr} < ${daysFromTodayExpr(EMS_DUE_SOON_MAX_DAYS)}`,
 
       `${effectiveExpr} ASC`
 

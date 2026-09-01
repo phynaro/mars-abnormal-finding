@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Pencil } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/common/PageHeader';
@@ -13,6 +13,7 @@ import EquipmentChangeHistorySection from '@/components/ems/equipment/EquipmentC
 import EquipmentEditModal from '@/components/ems/equipment/EquipmentEditModal';
 import { EQUIPMENT_THUMB_PX } from '@/components/ems/equipment/equipmentImageConstants';
 import { EmsPageStack } from '@/components/ems/shared/emsLayoutPrimitives';
+import { emsBackLocation } from '@/components/ems/shared/emsListReturn';
 
 const CHANGE_HISTORY_PREVIEW = 5;
 const CHANGE_HISTORY_EXPANDED = 50;
@@ -20,6 +21,7 @@ const CHANGE_HISTORY_EXPANDED = 50;
 const EquipmentDetailPage: React.FC = () => {
   const { tagNo } = useParams<{ tagNo: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
   const [data, setData] = useState<EmsEquipmentDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -106,7 +108,14 @@ const EquipmentDetailPage: React.FC = () => {
       <PageHeader
         title={tagNo || t('ems.nav.equipment')}
         showBackButton
-        onBack={() => navigate('/ems/equipment')}
+        onBack={() => {
+          const backTo = emsBackLocation(location.state);
+          if (backTo) {
+            navigate(backTo);
+            return;
+          }
+          navigate(-1);
+        }}
         rightContent={
           canEdit && data ? (
             <Button

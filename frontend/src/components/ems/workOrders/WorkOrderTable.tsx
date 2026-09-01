@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Table,
   TableBody,
@@ -12,6 +12,7 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsWorkOrderItem } from '@/services/emsService';
 import { formatEmsDate } from '@/components/ems/equipment/formatEmsValues';
 import { WorkOrderStatusBadge } from './workOrderStatus';
+import { emsListReturnState } from '@/components/ems/shared/emsListReturn';
 
 interface WorkOrderTableProps {
   items: EmsWorkOrderItem[];
@@ -19,6 +20,7 @@ interface WorkOrderTableProps {
 
 const WorkOrderTable: React.FC<WorkOrderTableProps> = ({ items }) => {
   const { t } = useLanguage();
+  const location = useLocation();
 
   return (
     <div className="hidden md:block overflow-x-auto">
@@ -42,6 +44,7 @@ const WorkOrderTable: React.FC<WorkOrderTableProps> = ({ items }) => {
               <TableCell>
                 <Link
                   to={`/ems/equipment/${encodeURIComponent(row.tagNo)}`}
+                  state={emsListReturnState(location)}
                   className="font-medium text-primary hover:underline"
                 >
                   {row.tagNo}

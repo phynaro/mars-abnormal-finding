@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { startOfMonth } from 'date-fns';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 import CalibrationBigCalendar from '@/components/dashboard/calibration/CalibrationBigCalendar';
 import CalibrationUserEventModal from '@/components/dashboard/calibration/CalibrationUserEventModal';
@@ -16,6 +16,7 @@ import personnelService, { type Department } from '@/services/personnelService';
 import { getCalendarVisibleRange, toIsoDate } from '@/utils/emsScheduleCalendar';
 
 import type { ScheduleFilters } from './ScheduleFilterBar';
+import { emsListReturnState } from '@/components/ems/shared/emsListReturn';
 
 const emsUserEventApi = {
   createCalibrationUserEvent: (payload: Parameters<typeof emsService.createUserEvent>[0]) =>
@@ -49,6 +50,7 @@ const ScheduleCalendarPanel: React.FC<Props> = ({
   const filters = filtersProp ?? EMPTY_SCHEDULE_FILTERS;
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [calendarView, setCalendarView] = useState<PmCalendarView>('month');
   const [calendarDate, setCalendarDate] = useState(() =>
@@ -151,7 +153,9 @@ const ScheduleCalendarPanel: React.FC<Props> = ({
   const handleSelectPm = (item: PmScheduleListItem) => {
     const tagNo = item.EQCODE || item.PMCODE;
     if (tagNo) {
-      navigate(`/ems/equipment/${encodeURIComponent(tagNo)}`);
+      navigate(`/ems/equipment/${encodeURIComponent(tagNo)}`, {
+        state: emsListReturnState(location),
+      });
     }
   };
 

@@ -17,8 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Search, ChevronDown, Filter, X } from 'lucide-react';
+import { Search, ChevronDown, Filter } from 'lucide-react';
 import type { EmsKpiBucket } from '@/services/emsService';
 import { useLanguage } from '@/contexts/LanguageContext';
 import emsService, { type EmsFilterOptions } from '@/services/emsService';
@@ -52,6 +51,12 @@ interface EquipmentFilterBarProps {
 }
 
 const ALL = '__all__';
+
+const DUE_WINDOW_OPTIONS: { value: EmsKpiBucket; labelKey: string }[] = [
+  { value: 'overdue', labelKey: 'ems.status.overdue' },
+  { value: 'due_this_week', labelKey: 'ems.dashboard.dueThisWeek' },
+  { value: 'due_soon', labelKey: 'ems.status.dueSoon' },
+];
 
 const EquipmentFilterBar: React.FC<EquipmentFilterBarProps> = ({
   filters,
@@ -95,42 +100,15 @@ const EquipmentFilterBar: React.FC<EquipmentFilterBarProps> = ({
     onChange({ ...filters, status: Array.from(set), kpiBucket: '' });
   };
 
-  const kpiBucketLabel = useMemo(() => {
-    if (!filters.kpiBucket) return null;
-    switch (filters.kpiBucket) {
-      case 'overdue':
-        return t('ems.status.overdue');
-      case 'due_this_week':
-        return t('ems.dashboard.dueThisWeek');
-      case 'due_soon':
-        return t('ems.status.dueSoon');
-      default:
-        return filters.kpiBucket;
-    }
-  }, [filters.kpiBucket, t]);
-
   return (
     <EmsFilterCard className={cn('sticky top-0 z-10', className)}>
       <div className="space-y-4">
         <div className="flex flex-wrap items-center gap-2 text-sm font-medium text-muted-foreground">
           <Filter className="h-4 w-4" />
           {t('ems.equipment.filters')}
-          {kpiBucketLabel && (
-            <Badge variant="secondary" className="gap-1 font-normal">
-              {t('ems.equipment.filter.kpiBucket')}: {kpiBucketLabel}
-              <button
-                type="button"
-                className="rounded-sm hover:bg-muted p-0.5"
-                onClick={() => onChange({ ...filters, kpiBucket: '' })}
-                aria-label={t('ems.equipment.filter.clearKpiBucket')}
-              >
-                <X className="h-3 w-3" />
-              </button>
-            </Badge>
-          )}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">{t('ems.equipment.plant')}</Label>
             <Select
@@ -200,6 +178,32 @@ const EquipmentFilterBar: React.FC<EquipmentFilterBarProps> = ({
           </div>
 
           <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">{t('ems.equipment.filter.dueWindow')}</Label>
+            <Select
+              value={filters.kpiBucket || ALL}
+              onValueChange={(v) =>
+                onChange({
+                  ...filters,
+                  kpiBucket: v === ALL ? '' : (v as EmsKpiBucket),
+                  status: [],
+                })
+              }
+            >
+              <SelectTrigger>
+                <SelectValue placeholder={t('ems.equipment.filter.allDueWindows')} />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={ALL}>{t('ems.equipment.filter.allDueWindows')}</SelectItem>
+                {DUE_WINDOW_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {t(option.labelKey)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">{t('ems.equipment.status')}</Label>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -224,7 +228,7 @@ const EquipmentFilterBar: React.FC<EquipmentFilterBarProps> = ({
             </DropdownMenu>
           </div>
 
-          <div className="space-y-1.5 sm:col-span-2 lg:col-span-1">
+          <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">{t('common.search')}</Label>
             <div className="relative">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />

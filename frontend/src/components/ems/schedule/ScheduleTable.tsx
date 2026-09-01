@@ -1,5 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import {
   Table,
   TableBody,
@@ -13,6 +13,7 @@ import type { EmsScheduleItem } from '@/services/emsService';
 import { displayEffectiveDue } from '@/components/ems/equipment/formatEmsValues';
 import { EmsWoStatusBadge, formatScheduleDueDays } from './scheduleStatus';
 import { cn } from '@/lib/utils';
+import { emsListReturnState } from '@/components/ems/shared/emsListReturn';
 
 interface ScheduleTableProps {
   items: EmsScheduleItem[];
@@ -20,6 +21,7 @@ interface ScheduleTableProps {
 
 const ScheduleTable: React.FC<ScheduleTableProps> = ({ items }) => {
   const { t } = useLanguage();
+  const location = useLocation();
 
   return (
     <div className="hidden md:block overflow-x-auto">
@@ -44,6 +46,7 @@ const ScheduleTable: React.FC<ScheduleTableProps> = ({ items }) => {
                 <TableCell>
                   <Link
                     to={`/ems/equipment/${encodeURIComponent(row.tagNo)}`}
+                    state={emsListReturnState(location)}
                     className="font-medium text-primary hover:underline"
                   >
                     {row.tagNo}

@@ -1,9 +1,10 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsEquipmentListItem } from '@/services/emsService';
 import { EmsStatusBadge, emsStatusLabel } from './equipmentStatus';
 import { displayEffectiveDue } from './formatEmsValues';
+import { emsListReturnState } from '@/components/ems/shared/emsListReturn';
 import { cn } from '@/lib/utils';
 
 interface EquipmentCardListProps {
@@ -13,6 +14,7 @@ interface EquipmentCardListProps {
 
 const EquipmentCardList: React.FC<EquipmentCardListProps> = ({ items, className }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
 
   return (
@@ -22,7 +24,11 @@ const EquipmentCardList: React.FC<EquipmentCardListProps> = ({ items, className 
           key={item.tagNo}
           type="button"
           className="w-full rounded-lg border bg-muted/30 p-4 text-left transition-colors hover:bg-muted/60"
-          onClick={() => navigate(`/ems/equipment/${encodeURIComponent(item.tagNo)}`)}
+          onClick={() =>
+            navigate(`/ems/equipment/${encodeURIComponent(item.tagNo)}`, {
+              state: emsListReturnState(location),
+            })
+          }
         >
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0 flex-1">

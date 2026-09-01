@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import {
   Table,
@@ -14,6 +14,7 @@ import type { EmsEquipmentListItem, EmsEquipmentListSortOrder } from '@/services
 import { cn } from '@/lib/utils';
 import { EmsStatusBadge, emsStatusLabel } from './equipmentStatus';
 import { displayEffectiveDue, formatManufacturerModel } from './formatEmsValues';
+import { emsListReturnState } from '@/components/ems/shared/emsListReturn';
 
 interface EquipmentTableProps {
   items: EmsEquipmentListItem[];
@@ -23,6 +24,7 @@ interface EquipmentTableProps {
 
 const EquipmentTable: React.FC<EquipmentTableProps> = ({ items, sortOrder, onCcpCodeSortToggle }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { t } = useLanguage();
 
   const SortIcon = sortOrder === 'ASC' ? ArrowUp : ArrowDown;
@@ -63,7 +65,11 @@ const EquipmentTable: React.FC<EquipmentTableProps> = ({ items, sortOrder, onCcp
             <TableRow
               key={item.tagNo}
               className="cursor-pointer hover:bg-muted/50"
-              onClick={() => navigate(`/ems/equipment/${encodeURIComponent(item.tagNo)}`)}
+              onClick={() =>
+                navigate(`/ems/equipment/${encodeURIComponent(item.tagNo)}`, {
+                  state: emsListReturnState(location),
+                })
+              }
             >
               <TableCell className="font-medium whitespace-nowrap">{item.tagNo}</TableCell>
               <TableCell className="max-w-[280px] truncate" title={item.description}>

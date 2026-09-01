@@ -133,6 +133,11 @@ function weekDeadlineExpr(nowExpr = 'GETDATE()') {
   return `DATEADD(day, 7 - (DATEDIFF(day, '1899-12-31', ${todayDate}) % 7), ${todayDate})`;
 }
 
+/** Midnight of today + N days (rolling from today). */
+function daysFromTodayExpr(days, nowExpr = 'GETDATE()') {
+  return `DATEADD(day, ${days}, CAST(${nowExpr} AS DATE))`;
+}
+
 function plantFromTagExpr(tagCol = 'ext.tag_no') {
   return `UPPER(LTRIM(RTRIM(LEFT(${tagCol}, NULLIF(CHARINDEX(N'-', ${tagCol} + N'-'), 0) - 1))))`;
 }
@@ -279,6 +284,7 @@ function openCalNotFinishedWhere() {
 function kpiBucketCaseExpr(dueCol = 'cal.effectiveDueDate') {
   const d = dueCol;
   const weekDeadline = weekDeadlineExpr();
+  const dueSoonDeadline = daysFromTodayExpr(EMS_DUE_SOON_MAX_DAYS);
   return `(
     CASE
       WHEN cal.DUEDATE IS NULL AND cal.scheduleDueDateParsed IS NULL THEN 'no_wo'
@@ -286,7 +292,7 @@ function kpiBucketCaseExpr(dueCol = 'cal.effectiveDueDate') {
       WHEN ${d} IS NULL THEN 'no_wo'
       WHEN ${d} < GETDATE() THEN 'overdue'
       WHEN ${d} >= GETDATE() AND ${d} < ${weekDeadline} THEN 'due_this_week'
-      WHEN ${d} >= ${weekDeadline} AND ${d} < DATEADD(day, ${EMS_DUE_SOON_MAX_DAYS}, ${weekDeadline}) THEN 'due_soon'
+      WHEN ${d} >= GETDATE() AND ${d} < ${dueSoonDeadline} THEN 'due_soon'
       ELSE 'ok'
     END
   )`;
@@ -295,14 +301,14 @@ function kpiBucketCaseExpr(dueCol = 'cal.effectiveDueDate') {
 /** Badge status for equipment list (NO WO | OVERDUE | DUE SOON | OK). */
 function equipmentStatusCaseExpr(dueCol = 'cal.effectiveDueDate') {
   const d = dueCol;
-  const weekDeadline = weekDeadlineExpr();
+  const dueSoonDeadline = daysFromTodayExpr(EMS_DUE_SOON_MAX_DAYS);
   return `(
     CASE
       WHEN cal.DUEDATE IS NULL AND cal.scheduleDueDateParsed IS NULL THEN 'NO WO'
       WHEN cal.schedWOStatusNo = 9 OR cal.woStatusNo IN (7, 9) THEN 'OK'
       WHEN ${d} IS NULL THEN 'NO WO'
       WHEN ${d} < GETDATE() THEN 'OVERDUE'
-      WHEN ${d} < DATEADD(day, ${EMS_DUE_SOON_MAX_DAYS}, ${weekDeadline}) THEN 'DUE SOON'
+      WHEN ${d} < ${dueSoonDeadline} THEN 'DUE SOON'
       ELSE 'OK'
     END
   )`;
@@ -500,12 +506,16 @@ function emptyEmsKpiCounts() {
   };
 }
 
+/** Add exclusive CASE counts. dueSoon is 7 days from today, so it includes due_this_week. */
 function accumulateEmsKpiCounts(counts, bucket, cnt) {
   const n = Number(cnt) || 0;
   counts.totalEquipment += n;
   switch (bucket) {
     case 'overdue': counts.overdue += n; break;
-    case 'due_this_week': counts.dueThisWeek += n; break;
+    case 'due_this_week':
+      counts.dueThisWeek += n;
+      counts.dueSoon += n;
+      break;
     case 'due_soon': counts.dueSoon += n; break;
     case 'ok': counts.ok += n; break;
     case 'no_wo': counts.noWo += n; break;
@@ -556,6 +566,7 @@ module.exports = {
   dueDateSourceExpr,
   timeToMinutesExpr,
   weekDeadlineExpr,
+  daysFromTodayExpr,
   kpiBucketCaseExpr,
   equipmentStatusCaseExpr,
   applyEmsEffectiveDueDateRangeClause,

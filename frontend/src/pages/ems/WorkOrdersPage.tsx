@@ -48,6 +48,23 @@ function paramsFromFilters(filters: WorkOrderFilters, page: number): URLSearchPa
   return next;
 }
 
+function sameWorkOrderQuery(
+  a: WorkOrderFilters,
+  b: WorkOrderFilters,
+  pageA: number,
+  pageB: number
+): boolean {
+  return (
+    a.plant === b.plant &&
+    a.area === b.area &&
+    a.status === b.status &&
+    a.schFrom === b.schFrom &&
+    a.schTo === b.schTo &&
+    a.q === b.q &&
+    pageA === pageB
+  );
+}
+
 const EMPTY_KPI: EmsWorkOrderKpi = {
   total: 0,
   ontime: 0,
@@ -108,6 +125,17 @@ const WorkOrdersPage: React.FC = () => {
     },
     [filters, setSearchParams]
   );
+
+  useEffect(() => {
+    const nextFilters = {
+      ...EMPTY_WORK_ORDER_FILTERS,
+      ...filtersFromParams(searchParams),
+    };
+    const nextPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    if (sameWorkOrderQuery(filters, nextFilters, page, nextPage)) return;
+    setFilters(nextFilters);
+    setPage(nextPage);
+  }, [searchParams, filters, page]);
 
   useEffect(() => {
     let cancelled = false;

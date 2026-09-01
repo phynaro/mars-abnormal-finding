@@ -310,7 +310,9 @@ exports.listEquipment = async (req, res) => {
     const identityWhere = identityParts.length ? identityParts.join(' AND ') : '1=1';
 
     const decoratedFilters = [];
-    if (kpiBucket) {
+    if (kpiBucket === 'due_soon') {
+      decoratedFilters.push(`${bucketExpr} IN ('due_this_week', 'due_soon')`);
+    } else if (kpiBucket) {
       dataReq.input('KpiBucket', sql.NVarChar(20), kpiBucket);
       decoratedFilters.push(`${bucketExpr} = @KpiBucket`);
     } else if (statusFilters.length > 0) {

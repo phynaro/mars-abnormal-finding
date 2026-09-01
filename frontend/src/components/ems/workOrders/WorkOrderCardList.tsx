@@ -1,9 +1,10 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsWorkOrderItem } from '@/services/emsService';
 import { formatEmsDate } from '@/components/ems/equipment/formatEmsValues';
 import { WorkOrderStatusBadge } from './workOrderStatus';
+import { emsListReturnState } from '@/components/ems/shared/emsListReturn';
 
 interface WorkOrderCardListProps {
   items: EmsWorkOrderItem[];
@@ -11,6 +12,7 @@ interface WorkOrderCardListProps {
 
 const WorkOrderCardList: React.FC<WorkOrderCardListProps> = ({ items }) => {
   const { t } = useLanguage();
+  const location = useLocation();
 
   return (
     <div className="md:hidden space-y-3 px-4 py-4">
@@ -18,6 +20,7 @@ const WorkOrderCardList: React.FC<WorkOrderCardListProps> = ({ items }) => {
         <Link
           key={`${row.woNo ?? 'na'}-${row.tagNo}`}
           to={`/ems/equipment/${encodeURIComponent(row.tagNo)}`}
+          state={emsListReturnState(location)}
           className="block rounded-lg border bg-muted/30 p-4 transition-colors hover:bg-muted/60"
         >
           <div className="flex items-start justify-between gap-2">

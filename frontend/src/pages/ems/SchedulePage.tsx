@@ -58,6 +58,22 @@ function paramsFromFilters(filters: ScheduleFilters, page: number, view: Schedul
   return next;
 }
 
+function sameScheduleQuery(
+  a: ScheduleFilters,
+  b: ScheduleFilters,
+  pageA: number,
+  pageB: number
+): boolean {
+  return (
+    a.plant === b.plant &&
+    a.area === b.area &&
+    a.woStatus === b.woStatus &&
+    a.dueFrom === b.dueFrom &&
+    a.dueTo === b.dueTo &&
+    pageA === pageB
+  );
+}
+
 const SchedulePage: React.FC = () => {
   const { t } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -107,6 +123,14 @@ const SchedulePage: React.FC = () => {
     },
     [filters, page, setSearchParams]
   );
+
+  useEffect(() => {
+    const nextFilters = filtersFromParams(searchParams);
+    const nextPage = Math.max(1, parseInt(searchParams.get('page') || '1', 10) || 1);
+    if (sameScheduleQuery(filters, nextFilters, page, nextPage)) return;
+    setFilters(nextFilters);
+    setPage(nextPage);
+  }, [searchParams, filters, page]);
 
   useEffect(() => {
     if (view !== 'list') return undefined;

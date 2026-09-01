@@ -37,7 +37,7 @@ function emsWoStatusNotCanceledSql(woAlias) {
 /** EMS schedule attaches leftover open WOs only if created on/after this YYYYMMDD. */
 const EMS_SCHEDULE_OPEN_WO_CREATED_FROM = '20230101';
 
-/** Days-until-due thresholds (spec §5). */
+/** Days-until-due: this week ends Saturday midnight; due soon is 7 days from today (includes this week). */
 const EMS_DUE_THIS_WEEK_MAX_DAYS = 7;
 const EMS_DUE_SOON_MAX_DAYS = 7;
 

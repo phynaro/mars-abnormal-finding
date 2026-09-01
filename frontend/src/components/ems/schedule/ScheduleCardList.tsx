@@ -1,10 +1,11 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
 import type { EmsScheduleItem } from '@/services/emsService';
 import { displayEffectiveDue } from '@/components/ems/equipment/formatEmsValues';
 import { cn } from '@/lib/utils';
 import { EmsWoStatusBadge, formatScheduleDueDays } from './scheduleStatus';
+import { emsListReturnState } from '@/components/ems/shared/emsListReturn';
 
 interface ScheduleCardListProps {
   items: EmsScheduleItem[];
@@ -12,6 +13,7 @@ interface ScheduleCardListProps {
 
 const ScheduleCardList: React.FC<ScheduleCardListProps> = ({ items }) => {
   const { t } = useLanguage();
+  const location = useLocation();
 
   return (
     <div className="md:hidden space-y-3 px-4 py-4">
@@ -21,6 +23,7 @@ const ScheduleCardList: React.FC<ScheduleCardListProps> = ({ items }) => {
           <Link
             key={row.pmSchNo || `${row.tagNo}-${row.dueDate}`}
             to={`/ems/equipment/${encodeURIComponent(row.tagNo)}`}
+            state={emsListReturnState(location)}
             className="block rounded-lg border bg-muted/30 p-4 transition-colors hover:bg-muted/60"
           >
             <div className="flex items-start justify-between gap-2">

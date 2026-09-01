@@ -13,6 +13,10 @@ const {
   calculateEquipmentStatus,
   plantFromTagNo,
 } = require('../src/services/ems/statusCalculationService');
+const {
+  emptyEmsKpiCounts,
+  accumulateEmsKpiCounts,
+} = require('../src/helpers/emsQueryHelpers');
 
 const REF = new Date('2026-06-09T12:00:00');
 
@@ -59,20 +63,26 @@ test('OVERDUE when past due and open', () => {
   assert.strictEqual(getKpiBucket(input, REF), 'overdue');
 });
 
-test('DUE SOON within 7 days', () => {
+test('due_this_week is today through Saturday midnight', () => {
   const input = { dueDate: '20260612', woNo: 100, woStatusNo: 1 };
   assert.strictEqual(calculateEquipmentStatus(input, REF), 'DUE SOON');
   assert.strictEqual(getKpiBucket(input, REF), 'due_this_week');
 });
 
-test('DUE SOON within next 7 days after this week', () => {
-  const input = { dueDate: '20260620', woNo: 100, woStatusNo: 1 };
+test('due_soon exclusive leftover is after Saturday and within 7 days from today', () => {
+  const input = { dueDate: '20260615', woNo: 100, woStatusNo: 1 };
   assert.strictEqual(calculateEquipmentStatus(input, REF), 'DUE SOON');
   assert.strictEqual(getKpiBucket(input, REF), 'due_soon');
 });
 
-test('OK when due beyond due-soon window', () => {
-  const input = { dueDate: '20260701', woNo: 100, woStatusNo: 1 };
+test('OK when due beyond 7 days from today', () => {
+  const input = { dueDate: '20260616', woNo: 100, woStatusNo: 1 };
+  assert.strictEqual(calculateEquipmentStatus(input, REF), 'OK');
+  assert.strictEqual(getKpiBucket(input, REF), 'ok');
+});
+
+test('OK when due well beyond the next 7 days', () => {
+  const input = { dueDate: '20260620', woNo: 100, woStatusNo: 1 };
   assert.strictEqual(calculateEquipmentStatus(input, REF), 'OK');
   assert.strictEqual(getKpiBucket(input, REF), 'ok');
 });
@@ -85,6 +95,15 @@ test('OK when WO closed', () => {
 test('plantFromTagNo', () => {
   assert.strictEqual(plantFromTagNo('DP-FOO-BAR'), 'DP');
   assert.strictEqual(plantFromTagNo('PIP-X'), 'PIP');
+});
+
+test('KPI dueSoon is 7 days from today and includes due_this_week', () => {
+  const counts = emptyEmsKpiCounts();
+  accumulateEmsKpiCounts(counts, 'due_this_week', 4);
+  accumulateEmsKpiCounts(counts, 'due_soon', 2);
+  assert.strictEqual(counts.dueThisWeek, 4);
+  assert.strictEqual(counts.dueSoon, 6);
+  assert.strictEqual(counts.totalEquipment, 6);
 });
 
 if (process.exitCode !== 1) {

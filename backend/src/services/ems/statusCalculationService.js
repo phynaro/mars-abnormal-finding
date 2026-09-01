@@ -15,9 +15,15 @@ function startOfDay(date) {
   return d;
 }
 
+function addDaysStartOfDay(date, days) {
+  const d = startOfDay(date);
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+/** Upcoming Sunday 00:00 local (end of coming Saturday). */
 function comingSundayMidnight(referenceDate = new Date()) {
-  const ref = new Date(referenceDate);
-  const today = startOfDay(ref);
+  const today = startOfDay(referenceDate);
   const day = today.getDay(); // 0=Sun ... 6=Sat
   const daysToNextSunday = day === 0 ? 7 : 7 - day;
   today.setDate(today.getDate() + daysToNextSunday);
@@ -124,8 +130,7 @@ function getKpiBucket(input, referenceDate = new Date()) {
   if (due < ref) return 'overdue';
 
   const weekDeadline = comingSundayMidnight(ref);
-  const dueSoonDeadline = new Date(weekDeadline);
-  dueSoonDeadline.setDate(dueSoonDeadline.getDate() + EMS_DUE_SOON_MAX_DAYS);
+  const dueSoonDeadline = addDaysStartOfDay(ref, EMS_DUE_SOON_MAX_DAYS);
 
   if (due < weekDeadline) return 'due_this_week';
   if (due < dueSoonDeadline) return 'due_soon';
