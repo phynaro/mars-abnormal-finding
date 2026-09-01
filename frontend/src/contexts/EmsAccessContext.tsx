@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useAuth } from '@/contexts/useAuth';
 import emsService from '@/services/emsService';
 import type { EmsRole } from '@/utils/permissionChecker';
@@ -15,14 +15,23 @@ interface EmsAccessState {
 const EmsAccessContext = createContext<EmsAccessState | undefined>(undefined);
 
 export const EmsAccessProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { isAuthenticated, user } = useAuth();
-  const [loading, setLoading] = useState(false);
+  const { isAuthenticated, user, isLoading: authLoading } = useAuth();
+  const userId = user?.id ?? null;
+  const userRef = useRef(user);
+  userRef.current = user;
+  const [loading, setLoading] = useState(true);
   const [emsRoles, setEmsRoles] = useState<EmsRole[]>([]);
   const [canAccess, setCanAccess] = useState(false);
   const [canAdmin, setCanAdmin] = useState(false);
 
   const refresh = useCallback(async () => {
-    if (!isAuthenticated || !user) {
+    if (authLoading) {
+      setLoading(true);
+      return;
+    }
+
+    const currentUser = userRef.current;
+    if (!isAuthenticated || userId == null || !currentUser) {
       setEmsRoles([]);
       setCanAccess(false);
       setCanAdmin(false);
@@ -37,15 +46,21 @@ export const EmsAccessProvider: React.FC<{ children: ReactNode }> = ({ children 
       setCanAccess(data.canAccess);
       setCanAdmin(data.canAdmin);
     } catch {
-      const fallbackAccess = checkEmsAccess({ levelReport: user.permissionLevel, emsRoles: [] });
-      const fallbackAdmin = checkEmsAdmin({ levelReport: user.permissionLevel, emsRoles: [] });
+      const fallbackAccess = checkEmsAccess({
+        levelReport: currentUser.permissionLevel,
+        emsRoles: [],
+      });
+      const fallbackAdmin = checkEmsAdmin({
+        levelReport: currentUser.permissionLevel,
+        emsRoles: [],
+      });
       setEmsRoles([]);
       setCanAccess(fallbackAccess.allowed);
       setCanAdmin(fallbackAdmin.allowed);
     } finally {
       setLoading(false);
     }
-  }, [isAuthenticated, user]);
+  }, [authLoading, isAuthenticated, userId]);
 
   useEffect(() => {
     refresh();

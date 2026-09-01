@@ -9,7 +9,6 @@ const { getCedarPool } = require('../../config/getCedarPool');
 const { compressEquipmentImage } = require('../../utils/imageCompression');
 const {
   emsEquipmentFromJoin,
-  openCalApplySql,
   applyEmsPlantAreaFilters,
   parseStatusFilter,
   parseKpiBucketFilter,
@@ -26,6 +25,8 @@ const {
   effectiveDueDateTimeExpr,
   dueDateSourceExpr,
   woTargetDateTimeExpr,
+  pmNotFrozen,
+  pmFlagActive,
 } = require('../../helpers/emsQueryHelpers');
 const { calculateEquipmentStatus, plantFromTagNo } = require('../../services/ems/statusCalculationService');
 const {
@@ -34,35 +35,39 @@ const {
   fetchEquipmentChangeHistory,
 } = require('../../services/ems/equipmentChangeLogService');
 
-const EQUIPMENT_LIST_SORT_COLUMNS = {
-  tagNo: 'ext.tag_no',
-  description: 'ISNULL(ext.description, eq.EQNAME)',
-  area: 'ext.location',
-  equipmentType: 'ext.equipment_type',
-  nextDue: 'cal.effectiveDueDate',
+const DECORATED_SORT_COLUMNS = {
+  tagNo: 'tagNo',
+  description: 'description',
+  area: 'area',
+  equipmentType: 'equipment_type',
+  nextDue: 'effectiveDueDate',
 };
 
 /** CCP-prefixed codes first, then other values, then blank/null — alphabetical within each tier. */
-function ccpCodeOrderExpr(sortOrder) {
-  const tierExpr = `CASE
-    WHEN ext.ccp_code IS NULL OR LTRIM(RTRIM(ext.ccp_code)) = '' THEN 2
-    WHEN UPPER(LTRIM(RTRIM(ext.ccp_code))) LIKE 'CCP%' THEN 0
-    ELSE 1
-  END`;
-  return `${tierExpr} ASC, ext.ccp_code ${sortOrder}, ext.tag_no ASC`;
-}
-
-function parseEquipmentListSort(query) {
+function decoratedSortOrderBy(query) {
   const sortBy = String(query.sortBy || 'ccpCode').trim();
   const sortOrder = String(query.sortOrder || 'ASC').trim().toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
-  if (sortBy === 'ccpCode') {
-    return ccpCodeOrderExpr(sortOrder);
+  if (sortBy === 'ccpCode' || !DECORATED_SORT_COLUMNS[sortBy]) {
+    return `CASE
+      WHEN ccp_code IS NULL OR LTRIM(RTRIM(ccp_code)) = '' THEN 2
+      WHEN UPPER(LTRIM(RTRIM(ccp_code))) LIKE 'CCP%' THEN 0
+      ELSE 1
+    END ASC, ccp_code ${sortOrder}, tagNo ASC`;
   }
-  const column = EQUIPMENT_LIST_SORT_COLUMNS[sortBy];
-  if (!column) {
-    return ccpCodeOrderExpr(sortOrder);
+  return `${DECORATED_SORT_COLUMNS[sortBy]} ${sortOrder}, tagNo ASC`;
+}
+
+function applyEquipmentListIdentityFilters(request, query, search, equipmentType) {
+  const whereParts = [...applyEmsPlantAreaFilters(request, query)];
+  if (search) {
+    request.input('Search', sql.NVarChar(200), `%${search}%`);
+    whereParts.push(`(ext.tag_no LIKE @Search OR ext.description LIKE @Search)`);
   }
-  return `${column} ${sortOrder}, ext.tag_no ASC`;
+  if (equipmentType) {
+    request.input('EqType', sql.NVarChar(100), equipmentType);
+    whereParts.push(`ext.equipment_type = @EqType`);
+  }
+  return whereParts;
 }
 
 function mapEquipmentRow(row) {
@@ -287,105 +292,164 @@ async function buildEquipmentDetailData(pool, extRow, historyLimit = 5) {
  */
 exports.listEquipment = async (req, res) => {
   try {
+    const startedAt = Date.now();
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 50));
-    const startRow = (page - 1) * limit + 1;
-    const endRow = (page - 1) * limit + limit;
+    const offset = (page - 1) * limit;
     const search = (req.query.search || '').trim();
     const equipmentType = (req.query.equipmentType || '').trim();
     const kpiBucket = parseKpiBucketFilter(req.query);
     const statusFilters = kpiBucket ? [] : parseStatusFilter(req.query);
+    const orderBy = decoratedSortOrderBy(req.query);
 
     const pool = await getCedarPool();
     const statusExpr = equipmentStatusCaseExpr('cal.effectiveDueDate');
     const bucketExpr = kpiBucketCaseExpr('cal.effectiveDueDate');
-
-    const countReq = pool.request();
-    const whereParts = [...applyEmsPlantAreaFilters(countReq, req.query)];
-    if (search) {
-      countReq.input('Search', sql.NVarChar(200), `%${search}%`);
-      whereParts.push(`(ext.tag_no LIKE @Search OR ext.description LIKE @Search)`);
-    }
-    if (equipmentType) {
-      countReq.input('EqType', sql.NVarChar(100), equipmentType);
-      whereParts.push(`ext.equipment_type = @EqType`);
-    }
-    if (kpiBucket) {
-      countReq.input('KpiBucket', sql.NVarChar(20), kpiBucket);
-      whereParts.push(`${bucketExpr} = @KpiBucket`);
-    } else if (statusFilters.length > 0) {
-      statusFilters.forEach((s, i) => countReq.input(`St${i}`, sql.NVarChar(20), s));
-      whereParts.push(`${statusExpr} IN (${statusFilters.map((_, i) => `@St${i}`).join(', ')})`);
-    }
-    const whereClause = whereParts.length ? whereParts.join(' AND ') : '1=1';
-
-    const countSql = `
-      SELECT COUNT(*) AS total
-      ${emsEquipmentFromJoin()}
-      ${openCalApplySql()}
-      LEFT JOIN dbo.Person p ON p.PERSONNO = cal.assigneeId
-      WHERE ${whereClause}
-    `;
-    const countResult = await countReq.query(countSql);
-    const total = countResult.recordset[0]?.total || 0;
+    const effectiveExpr = effectiveDueDateTimeExpr('s', 'pm', 'openWo');
+    const woTargetExpr = woTargetDateTimeExpr('openWo');
+    const sourceExpr = dueDateSourceExpr('s', 'pm', 'openWo');
+    const schedDueParsed = dateExprFromColumn('sched.DUEDATE');
+    const finDateParsed = dateExprFromColumn('wof.SCH_FINISH_D');
 
     const dataReq = pool.request();
-    const dataWhereParts = [...applyEmsPlantAreaFilters(dataReq, req.query)];
-    if (search) {
-      dataReq.input('Search', sql.NVarChar(200), `%${search}%`);
-      dataWhereParts.push(`(ext.tag_no LIKE @Search OR ext.description LIKE @Search)`);
-    }
-    if (equipmentType) {
-      dataReq.input('EqType', sql.NVarChar(100), equipmentType);
-      dataWhereParts.push(`ext.equipment_type = @EqType`);
-    }
+    const identityParts = applyEquipmentListIdentityFilters(dataReq, req.query, search, equipmentType);
+    const identityWhere = identityParts.length ? identityParts.join(' AND ') : '1=1';
+
+    const decoratedFilters = [];
     if (kpiBucket) {
       dataReq.input('KpiBucket', sql.NVarChar(20), kpiBucket);
-      dataWhereParts.push(`${bucketExpr} = @KpiBucket`);
+      decoratedFilters.push(`${bucketExpr} = @KpiBucket`);
     } else if (statusFilters.length > 0) {
       statusFilters.forEach((s, i) => dataReq.input(`St${i}`, sql.NVarChar(20), s));
-      dataWhereParts.push(`${statusExpr} IN (${statusFilters.map((_, i) => `@St${i}`).join(', ')})`);
+      decoratedFilters.push(`${statusExpr} IN (${statusFilters.map((_, i) => `@St${i}`).join(', ')})`);
     }
-    const dataWhere = dataWhereParts.length ? dataWhereParts.join(' AND ') : '1=1';
+    const decoratedWhere = decoratedFilters.length ? decoratedFilters.join(' AND ') : '1=1';
 
-    dataReq.input('StartRow', sql.Int, startRow);
-    dataReq.input('EndRow', sql.Int, endRow);
-
-    const orderBy = parseEquipmentListSort(req.query);
+    dataReq.input('Offset', sql.Int, offset);
+    dataReq.input('Limit', sql.Int, limit);
 
     const dataSql = `
-      SELECT tagNo, eqno, description, plant, area, manufacturer, model, equipment_type,
-             cal_interval, ccp_code, status, scheduleDueDateRaw, woTargetDate,
-             effectiveDueDate, dueDateSource, assigneeName
+      SELECT
+        ext.tag_no AS tagNo,
+        ext.eqno,
+        ISNULL(ext.description, eq.EQNAME) AS description,
+        ${plantFromTagExpr('ext.tag_no')} AS plant,
+        ext.location AS area,
+        ext.manufacturer,
+        ext.model,
+        ext.equipment_type,
+        ext.cal_interval,
+        ext.ccp_code
+      INTO #EmsEq
+      ${emsEquipmentFromJoin()}
+      WHERE ${identityWhere};
+
+      SELECT wof.PMNO, ${finDateParsed} AS finishDate
+      INTO #EmsFinWo
+      FROM dbo.WO wof
+      INNER JOIN dbo.PM pm ON pm.PMNO = wof.PMNO
+      INNER JOIN #EmsEq e ON e.eqno = pm.EQNO
+      WHERE pm.PMCODE LIKE '%-CAL%'
+        AND ${pmNotFrozen('pm')}
+        AND ${pmFlagActive('pm')}
+        AND wof.WOSTATUSNO IN (7, 9)
+        AND (wof.FLAGDEL IS NULL OR wof.FLAGDEL <> 'Y');
+
+      SELECT wo.PMNO, wo.WONO, wo.WOCODE, wo.WOSTATUSNO, wo.SCH_FINISH_D, wo.SCH_FINISH_T
+      INTO #EmsOpenWo
       FROM (
         SELECT
-          ext.tag_no AS tagNo,
-          ext.eqno,
-          ISNULL(ext.description, eq.EQNAME) AS description,
-          ${plantFromTagExpr('ext.tag_no')} AS plant,
-          ext.location AS area,
-          ext.manufacturer,
-          ext.model,
-          ext.equipment_type,
-          ext.cal_interval,
-          ext.ccp_code,
-          ${statusExpr} AS status,
-          cal.DUEDATE AS scheduleDueDateRaw,
-          cal.woTargetDate,
-          cal.effectiveDueDate,
-          cal.dueDateSource,
-          LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))) AS assigneeName,
-          ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS RowNum
-        ${emsEquipmentFromJoin()}
-        ${openCalApplySql()}
-        LEFT JOIN dbo.Person p ON p.PERSONNO = cal.assigneeId
-        WHERE ${dataWhere}
-      ) AS Ordered
-      WHERE RowNum >= @StartRow AND RowNum <= @EndRow
+          wo.PMNO, wo.WONO, wo.WOCODE, wo.WOSTATUSNO, wo.SCH_FINISH_D, wo.SCH_FINISH_T,
+          ROW_NUMBER() OVER (PARTITION BY wo.PMNO ORDER BY wo.WONO DESC) AS woRn
+        FROM dbo.WO wo
+        INNER JOIN (
+          SELECT DISTINCT pm.PMNO
+          FROM dbo.PM pm
+          INNER JOIN #EmsEq e ON e.eqno = pm.EQNO
+          WHERE pm.PMCODE LIKE '%-CAL%'
+            AND ${pmNotFrozen('pm')}
+            AND ${pmFlagActive('pm')}
+        ) calpm ON calpm.PMNO = wo.PMNO
+        WHERE wo.WOSTATUSNO NOT IN (7, 8, 9)
+          AND (wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')
+      ) wo
+      WHERE wo.woRn = 1;
+
+      SELECT ranked.*
+      INTO #EmsCal
+      FROM (
+        SELECT
+          pm.EQNO AS eqno,
+          pm.PMNO,
+          pm.ASSIGN AS assigneeId,
+          s.DUEDATE,
+          s.WONo,
+          s.WOStatusNo AS schedWOStatusNo,
+          ${dateExprFromColumn('s.DUEDATE')} AS scheduleDueDateParsed,
+          ${woTargetExpr} AS woTargetDate,
+          ${effectiveExpr} AS effectiveDueDate,
+          ${sourceExpr} AS dueDateSource,
+          openWo.WONO AS openWoNo,
+          openWo.WOSTATUSNO AS woStatusNo,
+          ROW_NUMBER() OVER (PARTITION BY pm.EQNO ORDER BY ${effectiveExpr} ASC) AS rn
+        FROM #EmsEq e
+        INNER JOIN dbo.PM pm ON pm.EQNO = e.eqno
+          AND pm.PMCODE LIKE '%-CAL%'
+          AND ${pmNotFrozen('pm')}
+          AND ${pmFlagActive('pm')}
+        CROSS APPLY (
+          SELECT TOP 1
+            sched.DUEDATE,
+            sched.WONo,
+            sched.WOStatusNo,
+            sched.PMNO
+          FROM dbo.PMSched sched
+          WHERE sched.PMNO = pm.PMNO
+            AND sched.WOStatusNo <> 9
+            AND NOT EXISTS (
+              SELECT 1 FROM #EmsFinWo f
+              WHERE f.PMNO = sched.PMNO AND f.finishDate = ${schedDueParsed}
+            )
+          ORDER BY sched.DUEDATE ASC
+        ) s
+        LEFT JOIN #EmsOpenWo openWo ON openWo.PMNO = pm.PMNO
+      ) ranked
+      WHERE ranked.rn = 1;
+
+      SELECT
+        e.tagNo, e.eqno, e.description, e.plant, e.area, e.manufacturer, e.model,
+        e.equipment_type, e.cal_interval, e.ccp_code,
+        ${statusExpr} AS status,
+        cal.DUEDATE AS scheduleDueDateRaw,
+        cal.woTargetDate,
+        cal.effectiveDueDate,
+        cal.dueDateSource,
+        LTRIM(RTRIM(ISNULL(per.FIRSTNAME,'') + ' ' + ISNULL(per.LASTNAME,''))) AS assigneeName
+      INTO #EmsDecorated
+      FROM #EmsEq e
+      LEFT JOIN #EmsCal cal ON cal.eqno = e.eqno
+      LEFT JOIN dbo.Person per ON per.PERSONNO = cal.assigneeId
+      WHERE ${decoratedWhere};
+
+      SELECT COUNT(*) AS total FROM #EmsDecorated;
+
+      SELECT
+        tagNo, eqno, description, plant, area, manufacturer, model, equipment_type,
+        cal_interval, ccp_code, status, scheduleDueDateRaw, woTargetDate,
+        effectiveDueDate, dueDateSource, assigneeName
+      FROM #EmsDecorated
+      ORDER BY ${orderBy}
+      OFFSET @Offset ROWS FETCH NEXT @Limit ROWS ONLY;
     `;
 
     const dataResult = await dataReq.query(dataSql);
-    const items = (dataResult.recordset || []).map(mapEquipmentRow);
+    const recordsets = Array.isArray(dataResult.recordsets) ? dataResult.recordsets : [dataResult.recordset];
+    const countRows = recordsets[recordsets.length - 2] || [];
+    const pageRows = recordsets[recordsets.length - 1] || [];
+    const total = countRows[0]?.total || 0;
+    const items = (pageRows || []).map(mapEquipmentRow);
+
+    console.log(`EMS listEquipment ${Date.now() - startedAt}ms total=${total} page=${page}`);
 
     res.json({
       success: true,

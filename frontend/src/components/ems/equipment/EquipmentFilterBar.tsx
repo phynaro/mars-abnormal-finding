@@ -74,6 +74,7 @@ const EquipmentFilterBar: React.FC<EquipmentFilterBarProps> = ({
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
+      if (searchInput === filtersRef.current.search) return;
       onChange({ ...filtersRef.current, search: searchInput });
     }, 300);
     return () => window.clearTimeout(timer);

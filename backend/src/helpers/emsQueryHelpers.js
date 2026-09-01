@@ -205,10 +205,11 @@ function openWoApplySql(pmAlias = 'pm', woAlias = 'openWo') {
 }
 
 /** Next open calibration obligation per equipment (effective-due model). */
-function openCalApplySql() {
+function openCalApplySql(eqNoExpr = 'eq.EQNO') {
   const woTargetExpr = woTargetDateTimeExpr('openWo');
   const effectiveExpr = effectiveDueDateTimeExpr('s', 'pm', 'openWo');
   const sourceExpr = dueDateSourceExpr('s', 'pm', 'openWo');
+  const schedDueParsed = dateExprFromColumn('sched.DUEDATE');
   return `
     OUTER APPLY (
       SELECT TOP 1
@@ -230,13 +231,29 @@ function openCalApplySql() {
         CAST(${dateExprFromColumn('pm.NEXTDUE_D')} AS DATE) AS dueDateParsed,
         ${sourceExpr} AS dueDateSource
       FROM dbo.PM pm
-      INNER JOIN dbo.PMSched s ON s.PMNO = pm.PMNO
+      CROSS APPLY (
+        SELECT TOP 1
+          sched.DUEDATE,
+          sched.WONo,
+          sched.WOStatusNo,
+          sched.PMNO
+        FROM dbo.PMSched sched
+        WHERE sched.PMNO = pm.PMNO
+          AND sched.WOStatusNo <> 9
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.WO wof
+            WHERE wof.PMNO = pm.PMNO
+              AND wof.WOSTATUSNO IN (7, 9)
+              AND (wof.FLAGDEL IS NULL OR wof.FLAGDEL <> 'Y')
+              AND ${dateExprFromColumn('wof.SCH_FINISH_D')} = ${schedDueParsed}
+          )
+        ORDER BY sched.DUEDATE ASC
+      ) s
       ${openWoApplySql('pm', 'openWo')}
-      WHERE pm.EQNO = eq.EQNO
+      WHERE pm.EQNO = ${eqNoExpr}
         AND pm.PMCODE LIKE '%-CAL%'
         AND ${pmNotFrozen('pm')}
         AND ${pmFlagActive('pm')}
-        AND ${openCalNotFinishedWhere()}
       ORDER BY ${effectiveExpr} ASC
     ) cal
   `;

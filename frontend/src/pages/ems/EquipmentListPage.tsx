@@ -160,74 +160,44 @@ const EquipmentListPage: React.FC = () => {
 
 
   useEffect(() => {
-
+    const parsed = JSON.parse(queryKey) as EquipmentFilters & {
+      page: number;
+      sortOrder: EmsEquipmentListSortOrder;
+    };
     let cancelled = false;
-
     setLoading(true);
-
     setError(null);
 
-
-
     emsService
-
       .listEquipment({
-
-        page,
-
+        page: parsed.page,
         limit: PAGE_SIZE,
-
-        plant: filters.plant || undefined,
-
-        area: filters.area || undefined,
-
-        equipmentType: filters.equipmentType || undefined,
-
-        search: filters.search || undefined,
-
-        status: filters.kpiBucket ? undefined : filters.status.length ? filters.status : undefined,
-
-        kpiBucket: filters.kpiBucket || undefined,
-
+        plant: parsed.plant || undefined,
+        area: parsed.area || undefined,
+        equipmentType: parsed.equipmentType || undefined,
+        search: parsed.search || undefined,
+        status: parsed.kpiBucket ? undefined : parsed.status.length ? parsed.status : undefined,
+        kpiBucket: parsed.kpiBucket || undefined,
         sortBy: 'ccpCode',
-
-        sortOrder,
-
+        sortOrder: parsed.sortOrder,
       })
-
       .then((res) => {
-
         if (cancelled) return;
-
         setItems(res.data.items);
-
         setPagination(res.data.pagination);
-
       })
-
       .catch((e) => {
-
         if (cancelled) return;
-
         setError(e instanceof Error ? e.message : t('common.error'));
-
       })
-
       .finally(() => {
-
         if (!cancelled) setLoading(false);
-
       });
 
-
-
     return () => {
-
       cancelled = true;
-
     };
-
-  }, [queryKey, page, filters, sortOrder, t]);
+  }, [queryKey, t]);
 
 
 
