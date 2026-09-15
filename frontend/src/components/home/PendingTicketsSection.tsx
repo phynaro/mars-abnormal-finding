@@ -166,6 +166,7 @@ const getRelationshipConfig = (
         //{ key: "severity_level", label: "Severity" },
         { key: "critical", label: "Critical" },
         { key: "pu_name", label: "PU Name" },
+        { key: "reporter_name", label: t("homepage.requester") },
         { key: "reviewed_by", label: "Reviewed By" },
         { key: "reviewed_at", label: "Reviewed At" },
       ],
@@ -615,10 +616,15 @@ const renderStatusBasedCardContent = (ticket: APIPendingTicket, t: (key: string)
   const formatDate = (s: string) => formatUITime(s);
   const nodes: React.ReactNode[] = [];
 
+  const createdByLabel =
+    ticket.status === "reviewed" || ticket.status === "review_escalated"
+      ? t("homepage.requester")
+      : t("ticket.createdBy");
+
   nodes.push(
     <div key="created_by" className="flex items-center gap-2">
       <User className="w-4 h-4 flex-shrink-0" />
-      <span className="truncate">{t("ticket.createdBy")}: {ticket.reporter_name || `${t("ticket.userId")} ${ticket.created_by}`}</span>
+      <span className="truncate">{createdByLabel}: {ticket.reporter_name || `${t("ticket.userId")} ${ticket.created_by}`}</span>
     </div>,
     <div key="created_at" className="flex items-center gap-2">
       <Clock className="w-4 h-4 flex-shrink-0" />

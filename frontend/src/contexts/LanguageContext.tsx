@@ -587,6 +587,7 @@ const translations: Record<Language, Record<string, string>> = {
     'homepage.scheduledStart': 'Scheduled start',
     'homepage.scheduledFinish': 'Scheduled finish',
     'homepage.createdBy': 'Created by',
+    'homepage.requester': 'Requester',
     'homepage.created': 'Created',
     'homepage.assignedTo': 'Assigned to',
     
@@ -1798,6 +1799,7 @@ const translations: Record<Language, Record<string, string>> = {
     'homepage.scheduledStart': 'กำหนดเวลาเริ่ม',
     'homepage.scheduledFinish': 'กำหนดเวลาเสร็จ',
     'homepage.createdBy': 'สร้างโดย',
+    'homepage.requester': 'ผู้ร้องขอ',
     'homepage.created': 'สร้างเมื่อ',
     'homepage.assignedTo': 'มอบหมายให้',
     
