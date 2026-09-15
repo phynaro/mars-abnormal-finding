@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { CheckCircle2, Clock3, ListTodo, Wrench } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -48,21 +48,35 @@ function paramsFromFilters(filters: WorkOrderFilters, page: number): URLSearchPa
   return next;
 }
 
-function sameWorkOrderQuery(
-  a: WorkOrderFilters,
-  b: WorkOrderFilters,
-  pageA: number,
-  pageB: number
-): boolean {
+function sameWorkOrderFilters(a: WorkOrderFilters, b: WorkOrderFilters): boolean {
   return (
     a.plant === b.plant &&
     a.area === b.area &&
     a.status === b.status &&
     a.schFrom === b.schFrom &&
     a.schTo === b.schTo &&
-    a.q === b.q &&
-    pageA === pageB
+    a.q === b.q
   );
+}
+
+function sameWorkOrderQuery(
+  a: WorkOrderFilters,
+  b: WorkOrderFilters,
+  pageA: number,
+  pageB: number
+): boolean {
+  return sameWorkOrderFilters(a, b) && pageA === pageB;
+}
+
+function toWorkOrderApiParams(filters: WorkOrderFilters) {
+  return {
+    plant: filters.plant || undefined,
+    area: filters.area || undefined,
+    status: filters.status || undefined,
+    schFrom: filters.schFrom || undefined,
+    schTo: filters.schTo || undefined,
+    q: filters.q || undefined,
+  };
 }
 
 const EMPTY_KPI: EmsWorkOrderKpi = {
@@ -96,21 +110,30 @@ const WorkOrdersPage: React.FC = () => {
   const [kpi, setKpi] = useState<EmsWorkOrderKpi>(EMPTY_KPI);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const filtersRef = useRef(filters);
+  filtersRef.current = filters;
 
-  const apiParams = useMemo(
-    () => ({
-      plant: filters.plant || undefined,
-      area: filters.area || undefined,
-      status: filters.status || undefined,
-      schFrom: filters.schFrom || undefined,
-      schTo: filters.schTo || undefined,
-      q: filters.q || undefined,
-    }),
+  const filterKey = useMemo(
+    () =>
+      JSON.stringify({
+        plant: filters.plant,
+        area: filters.area,
+        status: filters.status,
+        schFrom: filters.schFrom,
+        schTo: filters.schTo,
+        q: filters.q,
+      }),
     [filters]
+  );
+
+  const queryKey = useMemo(
+    () => JSON.stringify({ page, ...(JSON.parse(filterKey) as WorkOrderFilters) }),
+    [page, filterKey]
   );
 
   const applyFilters = useCallback(
     (next: WorkOrderFilters) => {
+      if (sameWorkOrderFilters(filtersRef.current, next)) return;
       setFilters(next);
       setPage(1);
       setSearchParams(paramsFromFilters(next, 1), { replace: true });
@@ -138,26 +161,23 @@ const WorkOrdersPage: React.FC = () => {
   }, [searchParams, filters, page]);
 
   useEffect(() => {
+    const parsed = JSON.parse(queryKey) as WorkOrderFilters & { page: number };
     let cancelled = false;
     setLoading(true);
     setError(null);
 
-    Promise.all([
-      emsService.getWorkOrderList({ page, limit: PAGE_SIZE, ...apiParams }),
-      emsService.getWorkOrderKpi(apiParams),
-    ])
-      .then(([listRes, kpiRes]) => {
+    emsService
+      .getWorkOrderList({ page: parsed.page, limit: PAGE_SIZE, ...toWorkOrderApiParams(parsed) })
+      .then((listRes) => {
         if (cancelled) return;
         setItems(listRes.data.items ?? []);
         setPagination(listRes.data.pagination);
-        setKpi(kpiRes);
       })
       .catch((e) => {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : t('common.error'));
         setItems([]);
         setPagination(null);
-        setKpi(EMPTY_KPI);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -166,7 +186,25 @@ const WorkOrdersPage: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [apiParams, page, t]);
+  }, [queryKey, t]);
+
+  useEffect(() => {
+    const parsed = JSON.parse(filterKey) as WorkOrderFilters;
+    let cancelled = false;
+
+    emsService
+      .getWorkOrderKpi(toWorkOrderApiParams(parsed))
+      .then((kpiRes) => {
+        if (!cancelled) setKpi(kpiRes);
+      })
+      .catch(() => {
+        if (!cancelled) setKpi(EMPTY_KPI);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [filterKey]);
 
   return (
     <EmsPageStack>

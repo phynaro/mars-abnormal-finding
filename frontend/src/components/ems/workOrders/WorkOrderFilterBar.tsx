@@ -47,7 +47,9 @@ const WorkOrderFilterBar: React.FC<WorkOrderFilterBarProps> = ({ filters, onChan
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
-      onChange({ ...filtersRef.current, q: searchInput.trim() });
+      const nextQ = searchInput.trim();
+      if (nextQ === filtersRef.current.q) return;
+      onChange({ ...filtersRef.current, q: nextQ });
     }, 300);
     return () => window.clearTimeout(timer);
   }, [searchInput, onChange]);
