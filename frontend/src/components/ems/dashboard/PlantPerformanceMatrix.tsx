@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useLanguage } from '@/contexts/LanguageContext';
 import emsService, { type EmsKpiData, type EmsPlantMatrixItem } from '@/services/emsService';
 import { PM_CALIBRATION_PLANT_OPTIONS } from '@/utils/pmCalibrationPlantMap';
@@ -11,7 +10,6 @@ import {
   type DashboardTimeTravelValue,
 } from '@/utils/emsDashboardTimeTravel';
 
-import PlantPerformanceCard from './PlantPerformanceCard';
 import PlantPerformanceTable from './PlantPerformanceTable';
 
 interface Props {
@@ -34,7 +32,6 @@ function emptyPlants(): EmsPlantMatrixItem[] {
 
 const PlantPerformanceMatrix: React.FC<Props> = ({ timeTravel }) => {
   const { t } = useLanguage();
-  const [viewMode, setViewMode] = useState<'card' | 'table'>('card');
   const [plants, setPlants] = useState<EmsPlantMatrixItem[]>(emptyPlants);
   const [kpiByPlant, setKpiByPlant] = useState<Record<string, EmsKpiData>>({});
   const [loading, setLoading] = useState(true);
@@ -86,56 +83,30 @@ const PlantPerformanceMatrix: React.FC<Props> = ({ timeTravel }) => {
   return (
     <section className="space-y-4">
       <div>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <h2 className="text-base font-semibold">{t('ems.dashboard.v2.zoneB')}</h2>
-            <p className="text-sm text-muted-foreground mt-0.5">
-              {t('ems.dashboard.v2.plantMatrixForRange', { label: rangeLabel })}
-            </p>
-          </div>
-          <Tabs
-            value={viewMode}
-            onValueChange={(value) => setViewMode(value === 'table' ? 'table' : 'card')}
-            className="shrink-0"
-          >
-            <TabsList className="h-9">
-              <TabsTrigger value="card" className="text-xs sm:text-sm">
-                {t('ems.dashboard.v2.matrixViewCard')}
-              </TabsTrigger>
-              <TabsTrigger value="table" className="text-xs sm:text-sm">
-                {t('ems.dashboard.v2.matrixViewTable')}
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
+        <h2 className="text-base font-semibold">{t('ems.dashboard.v2.zoneB')}</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {t('ems.dashboard.v2.plantMatrixForRange', { label: rangeLabel })}
+        </p>
       </div>
 
       {error && <p className="text-sm text-destructive">{error}</p>}
 
       {loading ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-[220px] w-full rounded-xl" />
-          ))}
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-[88px] w-full rounded-xl" />
+            ))}
+          </div>
+          <Skeleton className="h-[420px] w-full rounded-xl" />
         </div>
       ) : (
-        <>
-          {viewMode === 'card' ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {plants.map((plant) => (
-                <PlantPerformanceCard
-                  key={plant.plant}
-                  plant={plant}
-                  kpi={kpiByPlant[plant.plant] ?? null}
-                  kpiLoading={kpiLoading}
-                  rangeLabel={rangeLabel}
-                />
-              ))}
-            </div>
-          ) : (
-            <PlantPerformanceTable plants={plants} kpiByPlant={kpiByPlant} kpiLoading={kpiLoading} />
-          )}
-        </>
+        <PlantPerformanceTable
+          plants={plants}
+          kpiByPlant={kpiByPlant}
+          kpiLoading={kpiLoading}
+          rangeLabel={rangeLabel}
+        />
       )}
     </section>
   );
