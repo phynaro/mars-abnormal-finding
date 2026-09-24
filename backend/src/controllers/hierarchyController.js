@@ -72,6 +72,9 @@ const searchPUCODE = async (req, res) => {
                 WHERE (PUCODE LIKE @search OR PUNAME LIKE @search)
                 AND FLAGDEL = 'F'
                 AND PUCODE LIKE '%-%-%'  -- At least 3-section PUCODEs (minimum Plant-Area-Number)
+                AND PUNO <> 1414
+                AND ISNULL(PUPARENT, 0) <> 1414
+                AND ISNULL(PUPARENT, 0) NOT IN (SELECT child.PUNO FROM PU child WHERE child.PUPARENT = 1414)
                 ORDER BY PUCODE
             `);
 
