@@ -34,10 +34,51 @@ export interface EmsMeResponse {
 export interface EmsKpiData {
   totalEquipment: number;
   overdue: number;
+  overdueNoWo?: number;
   dueThisWeek: number;
+  dueThisWeekNoWo?: number;
   dueSoon: number;
+  dueSoonNoWo?: number;
   ok: number;
   noWo: number;
+}
+
+export interface EmsWoHistoryTotals {
+  total: number;
+  ontime: number;
+  late: number;
+  notFinish: number;
+  openPastDue: number;
+  postponed: number;
+}
+
+export interface EmsWoHistoryPlantRow extends EmsWoHistoryTotals {
+  plant: string;
+  plantLabel: string;
+}
+
+export interface EmsWoHistoryAssigneeRow extends EmsWoHistoryTotals {
+  assigneeId: number;
+  assigneeName: string;
+}
+
+export interface EmsWoHistoryTimeRow extends EmsWoHistoryTotals {
+  period?: number;
+  day?: string;
+}
+
+export interface EmsWoHistoryData {
+  mode: 'month' | 'period' | 'year';
+  grain: 'period' | 'day';
+  year: number;
+  month?: number;
+  period?: number;
+  rangeStart: string;
+  rangeEnd: string;
+  totals: EmsWoHistoryTotals;
+  byPlant: EmsWoHistoryPlantRow[];
+  byAssignee: EmsWoHistoryAssigneeRow[];
+  byTime: EmsWoHistoryTimeRow[];
 }
 
 export type EmsDueDateSource = 'wo_target' | 'schedule' | 'pm_next_due' | null;
@@ -402,6 +443,21 @@ const emsService = {
   }): Promise<EmsWoPeriodStatusData> {
     const res = await emsFetch<{ success: boolean; data: EmsWoPeriodStatusData }>(
       `/dashboard/wo-period-status${toQuery(params)}`
+    );
+    return res.data;
+  },
+
+  async getWoHistory(params: {
+    mode: 'month' | 'period' | 'year';
+    year: number;
+    month?: number;
+    period?: number;
+    startDate: string;
+    endDate: string;
+    plant?: string;
+  }): Promise<EmsWoHistoryData> {
+    const res = await emsFetch<{ success: boolean; data: EmsWoHistoryData }>(
+      `/dashboard/wo-history${toQuery(params)}`
     );
     return res.data;
   },

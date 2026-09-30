@@ -18,6 +18,7 @@ const {
   EMS_DUE_SOON_MAX_DAYS,
   EMS_SCHEDULE_OPEN_WO_CREATED_FROM,
   emsWoStatusNonOpenSql,
+  emsWoStatusNotCanceledSql,
 } = require('../constants/emsConstants');
 
 /** Schedule row considered finished (legacy sched status, WONo link, or matching finished WO on PM). */
@@ -90,15 +91,16 @@ function woActFinishDateExpr(woAlias = 'wo') {
   return dateExprFromColumn(`${woAlias}.ACT_FINISH_D`);
 }
 
-/** WO completion status used by EMS calibration WO analytics and drill-down. */
+/** WO completion status vs frozen PM due (EMS history KPIs and drill-down). */
 function woCompletionStatusExpr(woAlias = 'wo') {
-  const schFinishExpr = woSchFinishDateExpr(woAlias);
+  const pmDueExpr = dateExprFromColumn(`${woAlias}.PMDUE_D`);
   const actFinishExpr = woActFinishDateExpr(woAlias);
   return `(
     CASE
       WHEN ${actFinishExpr} IS NULL THEN 'not_finish'
-      WHEN ${actFinishExpr} <= ${schFinishExpr} THEN 'ontime'
-      ELSE 'late'
+      WHEN ${pmDueExpr} IS NOT NULL AND ${actFinishExpr} <= ${pmDueExpr} THEN 'ontime'
+      WHEN ${pmDueExpr} IS NOT NULL AND ${actFinishExpr} > ${pmDueExpr} THEN 'late'
+      ELSE 'not_finish'
     END
   )`;
 }
@@ -333,21 +335,39 @@ function openCalNotFinishedWhere() {
   )`;
 }
 
-/** SQL CASE matching statusCalculationService buckets (no_wo | overdue | due_this_week | due_soon | ok). */
+/**
+ * Live KPI buckets from next due only (exclusive).
+ * overdue | due_this_week | due_soon | ok — null due counts as ok.
+ */
 function kpiBucketCaseExpr(dueCol = 'cal.effectiveDueDate') {
   const d = dueCol;
   const weekDeadline = weekDeadlineExpr();
   const dueSoonDeadline = daysFromTodayExpr(EMS_DUE_SOON_MAX_DAYS);
   return `(
     CASE
-      WHEN cal.DUEDATE IS NULL AND cal.scheduleDueDateParsed IS NULL THEN 'no_wo'
-      WHEN cal.schedWOStatusNo = 9 OR cal.woStatusNo IN (7, 9) THEN 'ok'
-      WHEN ${d} IS NULL THEN 'no_wo'
+      WHEN ${d} IS NULL THEN 'ok'
       WHEN ${d} < GETDATE() THEN 'overdue'
       WHEN ${d} >= GETDATE() AND ${d} < ${weekDeadline} THEN 'due_this_week'
       WHEN ${d} >= GETDATE() AND ${d} < ${dueSoonDeadline} THEN 'due_soon'
       ELSE 'ok'
     END
+  )`;
+}
+
+/**
+ * 1 when a non-cancelled WO exists for this PM whose PMDUE_D matches the current next due.
+ * @param {string} [calAlias]
+ */
+function liveHasCurrentDueWoExpr(calAlias = 'cal') {
+  const pmDue = dateExprFromColumn('woCur.PMDUE_D');
+  return `(
+    CASE WHEN ${calAlias}.PMNO IS NOT NULL AND EXISTS (
+      SELECT 1 FROM dbo.WO woCur
+      WHERE woCur.PMNO = ${calAlias}.PMNO
+        AND ${pmDue} = CAST(${calAlias}.effectiveDueDate AS DATE)
+        AND ${emsWoStatusNotCanceledSql('woCur')}
+        AND (woCur.FLAGDEL IS NULL OR woCur.FLAGDEL <> 'Y')
+    ) THEN 1 ELSE 0 END
   )`;
 }
 
@@ -552,27 +572,81 @@ function emptyEmsKpiCounts() {
   return {
     totalEquipment: 0,
     overdue: 0,
+    overdueNoWo: 0,
     dueThisWeek: 0,
+    dueThisWeekNoWo: 0,
     dueSoon: 0,
+    dueSoonNoWo: 0,
     ok: 0,
     noWo: 0,
   };
 }
 
-/** Add exclusive CASE counts. dueSoon is 7 days from today, so it includes due_this_week. */
-function accumulateEmsKpiCounts(counts, bucket, cnt) {
+/**
+ * Accumulate exclusive live buckets.
+ * @param {ReturnType<typeof emptyEmsKpiCounts>} counts
+ * @param {string} bucket
+ * @param {number} cnt
+ * @param {boolean|number} [hasWo=true]
+ */
+function accumulateEmsKpiCounts(counts, bucket, cnt, hasWo = true) {
   const n = Number(cnt) || 0;
   counts.totalEquipment += n;
+  const missingWo = !(hasWo === true || hasWo === 1 || hasWo === '1');
   switch (bucket) {
-    case 'overdue': counts.overdue += n; break;
+    case 'overdue':
+      counts.overdue += n;
+      if (missingWo) counts.overdueNoWo += n;
+      break;
     case 'due_this_week':
       counts.dueThisWeek += n;
-      counts.dueSoon += n;
+      if (missingWo) counts.dueThisWeekNoWo += n;
       break;
-    case 'due_soon': counts.dueSoon += n; break;
-    case 'ok': counts.ok += n; break;
-    case 'no_wo': counts.noWo += n; break;
-    default: break;
+    case 'due_soon':
+      counts.dueSoon += n;
+      if (missingWo) counts.dueSoonNoWo += n;
+      break;
+    case 'ok':
+      counts.ok += n;
+      break;
+    case 'no_wo':
+      counts.ok += n;
+      break;
+    default:
+      counts.ok += n;
+      break;
+  }
+  counts.noWo = counts.overdueNoWo + counts.dueThisWeekNoWo + counts.dueSoonNoWo;
+}
+
+function emptyWoHistoryTotals() {
+  return {
+    total: 0,
+    ontime: 0,
+    late: 0,
+    notFinish: 0,
+    openPastDue: 0,
+    postponed: 0,
+  };
+}
+
+function accumulateWoHistoryTotals(totals, status, cnt, postponeCnt = 0, openPastDueCnt = 0) {
+  const n = Number(cnt) || 0;
+  totals.total += n;
+  totals.postponed += Number(postponeCnt) || 0;
+  totals.openPastDue += Number(openPastDueCnt) || 0;
+  switch (status) {
+    case 'ontime':
+      totals.ontime += n;
+      break;
+    case 'late':
+      totals.late += n;
+      break;
+    case 'not_finish':
+      totals.notFinish += n;
+      break;
+    default:
+      break;
   }
 }
 
@@ -626,6 +700,7 @@ module.exports = {
   weekDeadlineExpr,
   daysFromTodayExpr,
   kpiBucketCaseExpr,
+  liveHasCurrentDueWoExpr,
   equipmentStatusCaseExpr,
   applyEmsEffectiveDueDateRangeClause,
   applyEmsPlantAreaFilters,
@@ -637,4 +712,6 @@ module.exports = {
   emsEquipmentCalPrepSql,
   emptyEmsKpiCounts,
   accumulateEmsKpiCounts,
+  emptyWoHistoryTotals,
+  accumulateWoHistoryTotals,
 };

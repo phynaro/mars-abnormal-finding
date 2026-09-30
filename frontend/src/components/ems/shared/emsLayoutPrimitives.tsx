@@ -32,24 +32,31 @@ export function EmsFilterCard({
 export function EmsContentCard({
   title,
   description,
+  action,
   children,
   className,
   contentClassName,
 }: {
   title?: string;
   description?: string;
+  action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
   contentClassName?: string;
 }) {
   return (
     <Card className={cn('overflow-hidden shadow-sm', className)}>
-      {(title || description) && (
+      {(title || description || action) && (
         <div className="border-b px-4 py-3 sm:px-6">
-          {title && <h3 className="text-sm font-semibold leading-none">{title}</h3>}
-          {description && (
-            <p className="text-xs text-muted-foreground mt-1.5">{description}</p>
-          )}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              {title && <h3 className="text-sm font-semibold leading-none">{title}</h3>}
+              {description && (
+                <p className="text-xs text-muted-foreground mt-1.5">{description}</p>
+              )}
+            </div>
+            {action ? <div className="shrink-0">{action}</div> : null}
+          </div>
         </div>
       )}
       <CardContent className={cn('p-0', contentClassName)}>{children}</CardContent>

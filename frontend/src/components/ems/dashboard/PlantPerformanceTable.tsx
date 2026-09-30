@@ -9,7 +9,6 @@ import {
   Clock,
   Factory,
   Package,
-  PauseCircle,
   Search,
 } from 'lucide-react';
 
@@ -27,35 +26,31 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { EmsKpiGrid, EmsKpiStat } from '@/components/ems/shared/EmsKpiStat';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
-import type { EmsKpiData, EmsPlantMatrixItem } from '@/services/emsService';
+import type { EmsKpiData } from '@/services/emsService';
+import { PM_CALIBRATION_PLANT_OPTIONS } from '@/utils/pmCalibrationPlantMap';
 
 interface Props {
-  plants: EmsPlantMatrixItem[];
   kpiByPlant: Record<string, EmsKpiData>;
   kpiLoading?: boolean;
-  rangeLabel?: string;
 }
 
-type SortKey =
-  | 'plant'
-  | 'completion'
-  | 'totalEquipment'
-  | 'overdue'
-  | 'dueThisWeek'
-  | 'dueSoon'
-  | 'postponed';
-
+type SortKey = 'plant' | 'totalEquipment' | 'overdue' | 'dueThisWeek' | 'dueSoon';
 type SortDir = 'asc' | 'desc';
 
 const ALL_PLANTS = '__all__';
 
-const RING_SIZE = 40;
-const RING_STROKE = 4;
-const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
-const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
-
 function emptyKpi(): EmsKpiData {
-  return { totalEquipment: 0, overdue: 0, dueThisWeek: 0, dueSoon: 0, ok: 0, noWo: 0 };
+  return {
+    totalEquipment: 0,
+    overdue: 0,
+    overdueNoWo: 0,
+    dueThisWeek: 0,
+    dueThisWeekNoWo: 0,
+    dueSoon: 0,
+    dueSoonNoWo: 0,
+    ok: 0,
+    noWo: 0,
+  };
 }
 
 function plantHref(plant: string, kpiBucket?: string): string {
@@ -65,48 +60,9 @@ function plantHref(plant: string, kpiBucket?: string): string {
   return `/ems/equipment?${params.toString()}`;
 }
 
-function CompletionRing({ rate, total }: { rate: number; total: number }) {
-  const offset = RING_CIRCUMFERENCE - (rate / 100) * RING_CIRCUMFERENCE;
-  const center = RING_SIZE / 2;
-  const hasWork = total > 0;
-
-  return (
-    <div className="relative shrink-0" style={{ width: RING_SIZE, height: RING_SIZE }}>
-      <svg width={RING_SIZE} height={RING_SIZE} className="-rotate-90" aria-hidden>
-        <circle
-          cx={center}
-          cy={center}
-          r={RING_RADIUS}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={RING_STROKE}
-          className="text-muted/40"
-        />
-        <circle
-          cx={center}
-          cy={center}
-          r={RING_RADIUS}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={RING_STROKE}
-          strokeDasharray={RING_CIRCUMFERENCE}
-          strokeDashoffset={hasWork ? offset : RING_CIRCUMFERENCE}
-          strokeLinecap="round"
-          className={cn(
-            hasWork && rate >= 80 && 'text-green-500',
-            hasWork && rate >= 50 && rate < 80 && 'text-amber-500',
-            hasWork && rate < 50 && 'text-red-500',
-            !hasWork && 'text-muted-foreground/30'
-          )}
-        />
-      </svg>
-      <div className="absolute inset-0 flex items-center justify-center">
-        <span className="text-[10px] font-semibold tabular-nums leading-none">
-          {hasWork ? `${rate}%` : '—'}
-        </span>
-      </div>
-    </div>
-  );
+function noWoHint(count: number | undefined, t: (key: string, vars?: Record<string, string | number>) => string) {
+  const n = count ?? 0;
+  return t('ems.dashboard.v2.noWoHint', { count: n });
 }
 
 function StatusBreakdownBar({
@@ -123,19 +79,14 @@ function StatusBreakdownBar({
   }
 
   const data = kpi ?? emptyKpi();
+  const overdue = data.overdue;
+  const nearNoWo = (data.dueThisWeekNoWo ?? 0) + (data.dueSoonNoWo ?? 0);
+  const onTrack = Math.max(0, data.totalEquipment - overdue - nearNoWo);
   const segments = [
-    { key: 'overdue', count: data.overdue, color: 'bg-red-500', label: t('ems.dashboard.v2.statusOverdue') },
-    {
-      key: 'dueThisWeek',
-      count: data.dueThisWeek,
-      color: 'bg-orange-500',
-      label: t('ems.dashboard.dueThisWeek'),
-    },
-    { key: 'dueSoon', count: data.dueSoon, color: 'bg-blue-500', label: t('ems.status.dueSoon') },
-    { key: 'ok', count: data.ok, color: 'bg-green-500', label: t('ems.dashboard.v2.statusOnTrack') },
+    { key: 'overdue', count: overdue, color: 'bg-red-500', label: t('ems.dashboard.v2.statusOverdue') },
+    { key: 'nearNoWo', count: nearNoWo, color: 'bg-amber-500', label: t('ems.dashboard.v2.statusDueNoWo') },
+    { key: 'onTrack', count: onTrack, color: 'bg-green-500', label: t('ems.dashboard.v2.statusOnTrack') },
   ];
-  const classified = segments.reduce((sum, s) => sum + s.count, 0);
-  const remainder = Math.max(0, data.totalEquipment - classified);
   const total = data.totalEquipment;
 
   if (total <= 0) {
@@ -145,26 +96,16 @@ function StatusBreakdownBar({
   return (
     <div
       className="flex h-4 w-full overflow-hidden rounded-full bg-muted/30 gap-px"
-      title={[
-        ...segments.map((s) => `${s.label}: ${s.count}`),
-        remainder > 0 ? `${t('ems.dashboard.v2.statusNoWo')}: ${remainder}` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')}
+      title={segments.map((s) => `${s.label}: ${s.count}`).join(' · ')}
     >
-      {segments.map((seg) => {
-        const pct = (seg.count / total) * 100;
-        if (pct <= 0) return null;
-        return (
+      {segments.map((s) =>
+        s.count > 0 ? (
           <div
-            key={seg.key}
-            className={cn('h-full transition-all', seg.color)}
-            style={{ width: `${pct}%` }}
+            key={s.key}
+            className={cn('h-full', s.color)}
+            style={{ width: `${(s.count / total) * 100}%` }}
           />
-        );
-      })}
-      {remainder > 0 && (
-        <div className="h-full bg-muted-foreground/25" style={{ width: `${(remainder / total) * 100}%` }} />
+        ) : null
       )}
     </div>
   );
@@ -173,37 +114,26 @@ function StatusBreakdownBar({
 function KpiNumberLink({
   value,
   href,
+  loading,
   className,
   tooltip,
-  loading,
 }: {
-  value: number | undefined;
+  value?: number;
   href: string;
-  className?: string;
-  tooltip: string;
   loading?: boolean;
+  className?: string;
+  tooltip?: string;
 }) {
-  if (loading && typeof value !== 'number') {
-    return <span className="text-muted-foreground tabular-nums">...</span>;
+  if (loading && value == null) {
+    return <Skeleton className="ml-auto h-5 w-8" />;
   }
-
-  const n = typeof value === 'number' ? value : 0;
-
-  if (n === 0) {
-    return <span className={cn('tabular-nums text-muted-foreground', className)}>0</span>;
-  }
-
   return (
     <Link
       to={href}
       title={tooltip}
-      className={cn(
-        'inline-flex min-w-[2rem] justify-end rounded-sm px-1 py-0.5 font-semibold tabular-nums',
-        'hover:underline hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-        className
-      )}
+      className={cn('tabular-nums font-semibold hover:underline', className)}
     >
-      {n}
+      {value ?? 0}
     </Link>
   );
 }
@@ -225,15 +155,14 @@ function SortableHead({
 }) {
   const active = activeKey === sortKey;
   const Icon = !active ? ArrowUpDown : dir === 'asc' ? ArrowUp : ArrowDown;
-
   return (
-    <TableHead className={cn(align === 'right' ? 'text-right' : 'text-left')}>
+    <TableHead className={cn(align === 'right' && 'text-right')}>
       <button
         type="button"
         onClick={() => onSort(sortKey)}
         className={cn(
-          'inline-flex items-center gap-1 font-medium hover:text-foreground',
-          align === 'right' && 'ml-auto',
+          'inline-flex items-center gap-1 hover:text-foreground',
+          align === 'right' && 'w-full justify-end',
           active ? 'text-foreground' : 'text-muted-foreground'
         )}
       >
@@ -244,12 +173,21 @@ function SortableHead({
   );
 }
 
-const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading, rangeLabel }) => {
+const PlantPerformanceTable: React.FC<Props> = ({ kpiByPlant, kpiLoading }) => {
   const { t } = useLanguage();
   const [search, setSearch] = useState('');
   const [plantFilter, setPlantFilter] = useState(ALL_PLANTS);
   const [sortKey, setSortKey] = useState<SortKey>('overdue');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  const plants = useMemo(
+    () =>
+      PM_CALIBRATION_PLANT_OPTIONS.map((p) => ({
+        plant: p.code,
+        plantLabel: p.label,
+      })),
+    []
+  );
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -265,10 +203,7 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
     return plants.filter((p) => {
       if (plantFilter !== ALL_PLANTS && p.plant !== plantFilter) return false;
       if (!q) return true;
-      return (
-        p.plant.toLowerCase().includes(q) ||
-        p.plantLabel.toLowerCase().includes(q)
-      );
+      return p.plant.toLowerCase().includes(q) || p.plantLabel.toLowerCase().includes(q);
     });
   }, [plantFilter, plants, search]);
 
@@ -279,18 +214,11 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
     rows.sort((a, b) => {
       const kpiA = kpiByPlant[a.plant];
       const kpiB = kpiByPlant[b.plant];
-
       let cmp = 0;
       switch (sortKey) {
         case 'plant':
           cmp = a.plantLabel.localeCompare(b.plantLabel);
           break;
-        case 'completion': {
-          const aVal = a.total > 0 ? a.completionRate : -1;
-          const bVal = b.total > 0 ? b.completionRate : -1;
-          cmp = aVal - bVal;
-          break;
-        }
         case 'totalEquipment':
           cmp = (kpiA?.totalEquipment ?? 0) - (kpiB?.totalEquipment ?? 0);
           break;
@@ -302,9 +230,6 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
           break;
         case 'dueSoon':
           cmp = (kpiA?.dueSoon ?? 0) - (kpiB?.dueSoon ?? 0);
-          break;
-        case 'postponed':
-          cmp = a.wo_postpone - b.wo_postpone;
           break;
         default:
           cmp = 0;
@@ -319,29 +244,38 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
   const portfolio = useMemo(() => {
     return filteredPlants.reduce(
       (acc, plant) => {
-        const kpi = kpiByPlant[plant.plant];
-        acc.totalEquipment += kpi?.totalEquipment ?? 0;
-        acc.overdue += kpi?.overdue ?? 0;
-        acc.dueThisWeek += kpi?.dueThisWeek ?? 0;
-        acc.dueSoon += kpi?.dueSoon ?? 0;
-        acc.postponed += plant.wo_postpone ?? 0;
+        const kpi = kpiByPlant[plant.plant] ?? emptyKpi();
+        acc.totalEquipment += kpi.totalEquipment ?? 0;
+        acc.overdue += kpi.overdue ?? 0;
+        acc.overdueNoWo += kpi.overdueNoWo ?? 0;
+        acc.dueThisWeek += kpi.dueThisWeek ?? 0;
+        acc.dueThisWeekNoWo += kpi.dueThisWeekNoWo ?? 0;
+        acc.dueSoon += kpi.dueSoon ?? 0;
+        acc.dueSoonNoWo += kpi.dueSoonNoWo ?? 0;
         return acc;
       },
-      { totalEquipment: 0, overdue: 0, dueThisWeek: 0, dueSoon: 0, postponed: 0 }
+      {
+        totalEquipment: 0,
+        overdue: 0,
+        overdueNoWo: 0,
+        dueThisWeek: 0,
+        dueThisWeekNoWo: 0,
+        dueSoon: 0,
+        dueSoonNoWo: 0,
+      }
     );
   }, [filteredPlants, kpiByPlant]);
 
   const legendItems = [
     { color: 'bg-red-500', label: t('ems.dashboard.v2.statusOverdue') },
-    { color: 'bg-orange-500', label: t('ems.dashboard.dueThisWeek') },
-    { color: 'bg-blue-500', label: t('ems.status.dueSoon') },
+    { color: 'bg-amber-500', label: t('ems.dashboard.v2.statusDueNoWo') },
     { color: 'bg-green-500', label: t('ems.dashboard.v2.statusOnTrack') },
   ];
 
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-3 xl:flex-row xl:items-stretch">
-        <EmsKpiGrid columns="5" className="flex-1 gap-3">
+        <EmsKpiGrid columns="4" className="flex-1 gap-3">
           <EmsKpiStat
             label={t('ems.dashboard.total')}
             value={portfolio.totalEquipment}
@@ -353,6 +287,7 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
           <EmsKpiStat
             label={t('ems.dashboard.overdueTitle')}
             value={portfolio.overdue}
+            hint={noWoHint(portfolio.overdueNoWo, t)}
             icon={AlertTriangle}
             valueClassName="text-destructive"
             iconClassName="bg-red-100 text-red-600 dark:bg-red-950 dark:text-red-400"
@@ -362,6 +297,7 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
           <EmsKpiStat
             label={t('ems.dashboard.dueThisWeek')}
             value={portfolio.dueThisWeek}
+            hint={noWoHint(portfolio.dueThisWeekNoWo, t)}
             icon={Clock}
             valueClassName="text-orange-600"
             iconClassName="bg-orange-100 text-orange-700 dark:bg-orange-950 dark:text-orange-400"
@@ -371,18 +307,11 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
           <EmsKpiStat
             label={t('ems.status.dueSoon')}
             value={portfolio.dueSoon}
+            hint={noWoHint(portfolio.dueSoonNoWo, t)}
             icon={CalendarClock}
             valueClassName="text-blue-600"
             iconClassName="bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400"
             loading={kpiLoading}
-            compact
-          />
-          <EmsKpiStat
-            label={t('ems.dashboard.v2.postponed')}
-            value={portfolio.postponed}
-            icon={PauseCircle}
-            valueClassName="text-violet-600"
-            iconClassName="bg-violet-100 text-violet-700 dark:bg-violet-950 dark:text-violet-400"
             compact
           />
         </EmsKpiGrid>
@@ -439,7 +368,7 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
 
         <CardContent className="p-0">
           <div className="overflow-x-auto">
-            <Table className="min-w-[920px]">
+            <Table className="min-w-[760px]">
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <SortableHead
@@ -449,13 +378,6 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
                     dir={sortDir}
                     onSort={handleSort}
                     align="left"
-                  />
-                  <SortableHead
-                    label={t('ems.dashboard.v2.table.completion')}
-                    sortKey="completion"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onSort={handleSort}
                   />
                   <SortableHead
                     label={t('ems.dashboard.total')}
@@ -485,13 +407,6 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
                     dir={sortDir}
                     onSort={handleSort}
                   />
-                  <SortableHead
-                    label={t('ems.dashboard.v2.postponed')}
-                    sortKey="postponed"
-                    activeKey={sortKey}
-                    dir={sortDir}
-                    onSort={handleSort}
-                  />
                   <TableHead className="min-w-[140px]">
                     {t('ems.dashboard.v2.table.statusBreakdown')}
                   </TableHead>
@@ -500,15 +415,13 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
               <TableBody>
                 {sortedPlants.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                       {t('ems.dashboard.v2.noPlantsMatch')}
                     </TableCell>
                   </TableRow>
                 ) : (
                   sortedPlants.map((plant) => {
                     const kpi = kpiByPlant[plant.plant];
-                    const hasWork = plant.total > 0;
-
                     return (
                       <TableRow key={plant.plant} className="h-[64px]">
                         <TableCell>
@@ -519,33 +432,11 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
                             <div className="min-w-0">
                               <p className="font-semibold truncate">{plant.plantLabel}</p>
                               <p className="text-xs text-muted-foreground truncate">
-                                {hasWork
-                                  ? t('ems.dashboard.v2.tasksCompletedShort', {
-                                      done: plant.done,
-                                      total: plant.total,
-                                    })
-                                  : t('ems.dashboard.v2.noScheduledTasks')}
+                                {t('ems.dashboard.v2.equipmentCountShort', {
+                                  count: kpi?.totalEquipment ?? 0,
+                                })}
                               </p>
                             </div>
-                          </div>
-                        </TableCell>
-
-                        <TableCell className="text-right">
-                          <div className="inline-flex items-center justify-end gap-2">
-                            <CompletionRing rate={plant.completionRate} total={plant.total} />
-                            <span
-                              className={cn(
-                                'text-xs tabular-nums',
-                                hasWork ? 'font-medium' : 'text-muted-foreground'
-                              )}
-                              aria-label={
-                                hasWork
-                                  ? t('ems.dashboard.v2.completionAria', { rate: plant.completionRate })
-                                  : t('ems.dashboard.v2.completionNa')
-                              }
-                            >
-                              {hasWork ? `${plant.completionRate}%` : t('ems.dashboard.v2.completionNa')}
-                            </span>
                           </div>
                         </TableCell>
 
@@ -562,55 +453,54 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
                         </TableCell>
 
                         <TableCell className="text-right">
-                          <KpiNumberLink
-                            value={kpi?.overdue}
-                            href={plantHref(plant.plant, 'overdue')}
-                            loading={kpiLoading}
-                            className={(kpi?.overdue ?? 0) > 0 ? 'text-destructive' : undefined}
-                            tooltip={t('ems.dashboard.v2.viewOverdue', {
-                              count: kpi?.overdue ?? 0,
-                            })}
-                          />
+                          <div className="flex flex-col items-end gap-0.5">
+                            <KpiNumberLink
+                              value={kpi?.overdue}
+                              href={plantHref(plant.plant, 'overdue')}
+                              loading={kpiLoading}
+                              className={(kpi?.overdue ?? 0) > 0 ? 'text-destructive' : undefined}
+                              tooltip={t('ems.dashboard.v2.viewOverdue', {
+                                count: kpi?.overdue ?? 0,
+                              })}
+                            />
+                            <span className="text-[10px] text-muted-foreground">
+                              {noWoHint(kpi?.overdueNoWo, t)}
+                            </span>
+                          </div>
                         </TableCell>
 
                         <TableCell className="text-right">
-                          <KpiNumberLink
-                            value={kpi?.dueThisWeek}
-                            href={plantHref(plant.plant, 'due_this_week')}
-                            loading={kpiLoading}
-                            className={(kpi?.dueThisWeek ?? 0) > 0 ? 'text-orange-600' : undefined}
-                            tooltip={t('ems.dashboard.v2.viewDueThisWeek', {
-                              count: kpi?.dueThisWeek ?? 0,
-                            })}
-                          />
+                          <div className="flex flex-col items-end gap-0.5">
+                            <KpiNumberLink
+                              value={kpi?.dueThisWeek}
+                              href={plantHref(plant.plant, 'due_this_week')}
+                              loading={kpiLoading}
+                              className={(kpi?.dueThisWeek ?? 0) > 0 ? 'text-orange-600' : undefined}
+                              tooltip={t('ems.dashboard.v2.viewDueThisWeek', {
+                                count: kpi?.dueThisWeek ?? 0,
+                              })}
+                            />
+                            <span className="text-[10px] text-muted-foreground">
+                              {noWoHint(kpi?.dueThisWeekNoWo, t)}
+                            </span>
+                          </div>
                         </TableCell>
 
                         <TableCell className="text-right">
-                          <KpiNumberLink
-                            value={kpi?.dueSoon}
-                            href={plantHref(plant.plant, 'due_soon')}
-                            loading={kpiLoading}
-                            className={(kpi?.dueSoon ?? 0) > 0 ? 'text-blue-600' : undefined}
-                            tooltip={t('ems.dashboard.v2.viewDueSoon', {
-                              count: kpi?.dueSoon ?? 0,
-                            })}
-                          />
-                        </TableCell>
-
-                        <TableCell className="text-right">
-                          <span
-                            className={cn(
-                              'tabular-nums font-semibold',
-                              plant.wo_postpone > 0 ? 'text-violet-600' : 'text-muted-foreground'
-                            )}
-                            title={
-                              rangeLabel
-                                ? t('ems.dashboard.v2.postponedInRange', { label: rangeLabel })
-                                : undefined
-                            }
-                          >
-                            {plant.wo_postpone}
-                          </span>
+                          <div className="flex flex-col items-end gap-0.5">
+                            <KpiNumberLink
+                              value={kpi?.dueSoon}
+                              href={plantHref(plant.plant, 'due_soon')}
+                              loading={kpiLoading}
+                              className={(kpi?.dueSoon ?? 0) > 0 ? 'text-blue-600' : undefined}
+                              tooltip={t('ems.dashboard.v2.viewDueSoon', {
+                                count: kpi?.dueSoon ?? 0,
+                              })}
+                            />
+                            <span className="text-[10px] text-muted-foreground">
+                              {noWoHint(kpi?.dueSoonNoWo, t)}
+                            </span>
+                          </div>
                         </TableCell>
 
                         <TableCell className="min-w-[140px]">
@@ -625,9 +515,7 @@ const PlantPerformanceTable: React.FC<Props> = ({ plants, kpiByPlant, kpiLoading
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t px-4 py-3 text-xs text-muted-foreground">
-            <span>
-              {t('ems.dashboard.v2.showingPlants', { count: sortedPlants.length })}
-            </span>
+            <span>{t('ems.dashboard.v2.showingPlants', { count: sortedPlants.length })}</span>
           </div>
         </CardContent>
       </Card>

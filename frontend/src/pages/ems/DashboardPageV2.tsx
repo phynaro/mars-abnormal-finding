@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 
 import DashboardTimeTravelBar from '@/components/ems/dashboard/DashboardTimeTravelBar';
-import DashboardWoPeriodChart from '@/components/ems/dashboard/DashboardWoPeriodChart';
+import HistoryDashboardSection from '@/components/ems/dashboard/HistoryDashboardSection';
 import {
   createDashboardTimeTravelValue,
   type DashboardTimeTravelValue,
@@ -25,15 +25,15 @@ const DashboardPageV2: React.FC = () => {
 
   return (
     <EmsPageStack>
+      <PlantPerformanceMatrix />
+
       <DashboardTimeTravelBar
         value={timeTravel}
         onChange={handleTimeChange}
         onReturnToPresent={handleReturnToPresent}
       />
 
-      {timeTravel.mode === 'year' && <DashboardWoPeriodChart timeTravel={timeTravel} />}
-
-      <PlantPerformanceMatrix timeTravel={timeTravel} />
+      <HistoryDashboardSection timeTravel={timeTravel} />
 
       <DashboardMasterCalendar timeTravel={timeTravel} />
     </EmsPageStack>

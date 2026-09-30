@@ -12,6 +12,7 @@ export interface EmsKpiStatProps {
   valueClassName?: string;
   loading?: boolean;
   compact?: boolean;
+  hint?: string | null;
 }
 
 export function EmsKpiStat({
@@ -22,6 +23,7 @@ export function EmsKpiStat({
   valueClassName,
   loading,
   compact,
+  hint,
 }: EmsKpiStatProps) {
   if (compact) {
     return (
@@ -39,9 +41,12 @@ export function EmsKpiStat({
           {loading ? (
             <Skeleton className="mt-2 h-9 w-16" />
           ) : (
-            <p className={cn('mt-1 text-3xl font-bold tabular-nums leading-none tracking-tight', valueClassName)}>
-              {value ?? '—'}
-            </p>
+            <>
+              <p className={cn('mt-1 text-3xl font-bold tabular-nums leading-none tracking-tight', valueClassName)}>
+                {value ?? '—'}
+              </p>
+              {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+            </>
           )}
         </div>
       </div>
@@ -57,9 +62,12 @@ export function EmsKpiStat({
             {loading ? (
               <Skeleton className={cn('mt-1', compact ? 'h-7 w-12' : 'h-9 w-16 mt-2')} />
             ) : (
-              <p className={cn('font-bold tabular-nums mt-0.5', compact ? 'text-xl' : 'text-3xl mt-1', valueClassName)}>
-                {value ?? '—'}
-              </p>
+              <>
+                <p className={cn('font-bold tabular-nums mt-0.5', compact ? 'text-xl' : 'text-3xl mt-1', valueClassName)}>
+                  {value ?? '—'}
+                </p>
+                {hint ? <p className="mt-1 text-xs text-muted-foreground">{hint}</p> : null}
+              </>
             )}
           </div>
           <div
@@ -79,7 +87,7 @@ export function EmsKpiStat({
 
 interface EmsKpiGridProps {
   children: React.ReactNode;
-  columns?: '2' | '3' | '5';
+  columns?: '2' | '3' | '4' | '5';
   className?: string;
 }
 
@@ -92,7 +100,9 @@ export function EmsKpiGrid({ children, columns = '5', className }: EmsKpiGridPro
           ? 'grid-cols-2'
           : columns === '3'
             ? 'grid-cols-1 sm:grid-cols-3'
-            : 'grid-cols-2 lg:grid-cols-5',
+            : columns === '4'
+              ? 'grid-cols-2 lg:grid-cols-4'
+              : 'grid-cols-2 lg:grid-cols-5',
         className
       )}
     >

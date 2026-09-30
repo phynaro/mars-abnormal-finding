@@ -138,10 +138,8 @@ const PlantPerformanceMatrixLegacy: React.FC<Props> = ({ timeTravel }) => {
             </div>
           ) : (
             <PlantPerformanceTable
-              plants={plants}
               kpiByPlant={kpiByPlant}
               kpiLoading={kpiLoading}
-              rangeLabel={rangeLabel}
             />
           )}
         </>

@@ -104,6 +104,15 @@ const DashboardKpiCards: React.FC<Props> = ({ data, loading, plant, compact }) =
             <EmsKpiStat
               label={tile.label}
               value={data ? data[tile.key] : '—'}
+              hint={
+                data && tile.key === 'overdue'
+                  ? t('ems.dashboard.v2.noWoHint', { count: data.overdueNoWo ?? 0 })
+                  : data && tile.key === 'dueThisWeek'
+                    ? t('ems.dashboard.v2.noWoHint', { count: data.dueThisWeekNoWo ?? 0 })
+                    : data && tile.key === 'dueSoon'
+                      ? t('ems.dashboard.v2.noWoHint', { count: data.dueSoonNoWo ?? 0 })
+                      : null
+              }
               icon={Icon}
               iconClassName={tile.iconClassName}
               valueClassName={tile.valueClassName}

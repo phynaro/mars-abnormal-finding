@@ -97,13 +97,25 @@ test('plantFromTagNo', () => {
   assert.strictEqual(plantFromTagNo('PIP-X'), 'PIP');
 });
 
-test('KPI dueSoon is 7 days from today and includes due_this_week', () => {
+test('KPI dueSoon is exclusive of due_this_week', () => {
   const counts = emptyEmsKpiCounts();
-  accumulateEmsKpiCounts(counts, 'due_this_week', 4);
-  accumulateEmsKpiCounts(counts, 'due_soon', 2);
+  accumulateEmsKpiCounts(counts, 'due_this_week', 4, true);
+  accumulateEmsKpiCounts(counts, 'due_soon', 2, false);
   assert.strictEqual(counts.dueThisWeek, 4);
-  assert.strictEqual(counts.dueSoon, 6);
+  assert.strictEqual(counts.dueThisWeekNoWo, 0);
+  assert.strictEqual(counts.dueSoon, 2);
+  assert.strictEqual(counts.dueSoonNoWo, 2);
   assert.strictEqual(counts.totalEquipment, 6);
+  assert.strictEqual(counts.noWo, 2);
+});
+
+test('KPI overdue no-WO split', () => {
+  const counts = emptyEmsKpiCounts();
+  accumulateEmsKpiCounts(counts, 'overdue', 3, false);
+  accumulateEmsKpiCounts(counts, 'overdue', 2, true);
+  assert.strictEqual(counts.overdue, 5);
+  assert.strictEqual(counts.overdueNoWo, 3);
+  assert.strictEqual(counts.noWo, 3);
 });
 
 if (process.exitCode !== 1) {

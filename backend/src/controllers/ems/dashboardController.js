@@ -52,6 +52,9 @@ const {
   emsEquipmentCalPrepSql,
   emptyEmsKpiCounts,
   accumulateEmsKpiCounts,
+  liveHasCurrentDueWoExpr,
+  emptyWoHistoryTotals,
+  accumulateWoHistoryTotals,
 
   dateExprFromColumn,
 
@@ -167,18 +170,19 @@ exports.getKpi = async (req, res) => {
     const registryWhere = buildRegistryWhere(request, req.query);
 
     const bucketExpr = kpiBucketCaseExpr('cal.effectiveDueDate');
+    const hasWoExpr = liveHasCurrentDueWoExpr('cal');
 
     const result = await request.query(`
 
       ${emsEquipmentCalPrepSql(registryWhere)}
 
-      SELECT ${bucketExpr} AS bucket, COUNT(*) AS cnt
-
-      FROM #EmsEq e
-
-      LEFT JOIN #EmsCal cal ON cal.eqno = e.eqno
-
-      GROUP BY ${bucketExpr}
+      SELECT bucket, hasWo, COUNT(*) AS cnt
+      FROM (
+        SELECT ${bucketExpr} AS bucket, ${hasWoExpr} AS hasWo
+        FROM #EmsEq e
+        LEFT JOIN #EmsCal cal ON cal.eqno = e.eqno
+      ) ranked
+      GROUP BY bucket, hasWo
 
     `);
 
@@ -190,7 +194,7 @@ exports.getKpi = async (req, res) => {
 
     for (const row of rows || []) {
 
-      accumulateEmsKpiCounts(counts, row.bucket, row.cnt);
+      accumulateEmsKpiCounts(counts, row.bucket, row.cnt, row.hasWo);
 
     }
 
@@ -232,18 +236,19 @@ exports.getKpiByPlant = async (req, res) => {
     const registryWhere = buildRegistryWhere(request, req.query);
 
     const bucketExpr = kpiBucketCaseExpr('cal.effectiveDueDate');
+    const hasWoExpr = liveHasCurrentDueWoExpr('cal');
 
     const result = await request.query(`
 
       ${emsEquipmentCalPrepSql(registryWhere)}
 
-      SELECT e.plant, ${bucketExpr} AS bucket, COUNT(*) AS cnt
-
-      FROM #EmsEq e
-
-      LEFT JOIN #EmsCal cal ON cal.eqno = e.eqno
-
-      GROUP BY e.plant, ${bucketExpr}
+      SELECT plant, bucket, hasWo, COUNT(*) AS cnt
+      FROM (
+        SELECT e.plant, ${bucketExpr} AS bucket, ${hasWoExpr} AS hasWo
+        FROM #EmsEq e
+        LEFT JOIN #EmsCal cal ON cal.eqno = e.eqno
+      ) ranked
+      GROUP BY plant, bucket, hasWo
 
     `);
 
@@ -265,7 +270,7 @@ exports.getKpiByPlant = async (req, res) => {
 
       if (!plants[plant]) plants[plant] = emptyEmsKpiCounts();
 
-      accumulateEmsKpiCounts(plants[plant], row.bucket, row.cnt);
+      accumulateEmsKpiCounts(plants[plant], row.bucket, row.cnt, row.hasWo);
 
     }
 
@@ -918,11 +923,11 @@ exports.getWoPeriodStatus = async (req, res) => {
 
 
 
-    const schFinishExpr = woSchFinishDateExpr('wo');
+    const pmDueExpr = dateExprFromColumn('wo.PMDUE_D');
 
     const plantExpr = plantFromTagExpr('ext.tag_no');
 
-    const periodExpr = `(DATEDIFF(day, @WoPeriodRangeStart, ${schFinishExpr}) / 28) + 1`;
+    const periodExpr = `(DATEDIFF(day, @WoPeriodRangeStart, ${pmDueExpr}) / 28) + 1`;
 
     const statusExpr = woCompletionStatusExpr('wo');
     const postponeExpr = woPostponeCaseExpr('wo');
@@ -941,11 +946,11 @@ exports.getWoPeriodStatus = async (req, res) => {
 
       emsWoStatusNotCanceledSql('wo'),
 
-      `${schFinishExpr} IS NOT NULL`,
+      `${pmDueExpr} IS NOT NULL`,
 
-      `${schFinishExpr} >= @WoPeriodRangeStart`,
+      `${pmDueExpr} >= @WoPeriodRangeStart`,
 
-      `${schFinishExpr} <= @WoPeriodRangeEnd`,
+      `${pmDueExpr} <= @WoPeriodRangeEnd`,
 
       `${periodExpr} BETWEEN 1 AND 13`,
 
@@ -1060,3 +1065,180 @@ exports.getWoPeriodStatus = async (req, res) => {
 
 };
 
+
+/**
+ * GET /api/ems/dashboard/wo-history
+ * Calibration WO history for a selected range, anchored on WO.PMDUE_D.
+ */
+exports.getWoHistory = async (req, res) => {
+  try {
+    const range = resolvePlantMatrixRange(req.query);
+    if (!range) {
+      return res.status(400).json({
+        success: false,
+        message: 'Provide startDate/endDate or year and month (month 1–12)',
+      });
+    }
+
+    const mode = String(req.query.mode || range.mode || 'month').toLowerCase();
+    const grain = mode === 'year' ? 'period' : 'day';
+
+    const pool = await getCedarPool();
+    const request = pool.request();
+    request.input('WoHistRangeStart', sql.Date, range.rangeStart);
+    request.input('WoHistRangeEnd', sql.Date, range.rangeEnd);
+
+    const plantFilters = applyEmsPlantAreaFilters(request, req.query, { extAlias: 'ext' });
+    const pmDueExpr = dateExprFromColumn('wo.PMDUE_D');
+    const plantExpr = plantFromTagExpr('ext.tag_no');
+    const statusExpr = woCompletionStatusExpr('wo');
+    const postponeExpr = woPostponeCaseExpr('wo');
+    const openPastDueExpr = `(CASE
+      WHEN ${dateExprFromColumn('wo.ACT_FINISH_D')} IS NULL
+        AND ${pmDueExpr} < CAST(GETDATE() AS DATE)
+      THEN 1 ELSE 0 END)`;
+    const periodExpr = `(DATEDIFF(day, @WoHistRangeStart, ${pmDueExpr}) / 28) + 1`;
+    const dayKeyExpr = `CONVERT(varchar(10), ${pmDueExpr}, 23)`;
+    const bucketExpr = grain === 'period' ? periodExpr : dayKeyExpr;
+    const assigneeIdExpr = `ISNULL(wo.ASSIGN, 0)`;
+    const assigneeNameExpr = `CASE
+      WHEN wo.ASSIGN IS NULL OR wo.ASSIGN = 0 THEN N'Unassigned'
+      ELSE LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'')))
+    END`;
+
+    const whereFragment = [
+      `pm.PMCODE LIKE '%-CAL%'`,
+      pmNotFrozen('pm'),
+      pmFlagActive('pm'),
+      `(wo.FLAGDEL IS NULL OR wo.FLAGDEL <> 'Y')`,
+      emsWoStatusNotCanceledSql('wo'),
+      `${pmDueExpr} IS NOT NULL`,
+      `${pmDueExpr} >= @WoHistRangeStart`,
+      `${pmDueExpr} <= @WoHistRangeEnd`,
+      `EXISTS (SELECT 1 FROM dbo.IgxEQExtension extf WHERE extf.eqno = eq.EQNO)`,
+      ...plantFilters,
+    ].join(' AND ');
+
+    const sqlText = `
+      SELECT
+        ${plantExpr} AS plant,
+        ${assigneeIdExpr} AS assigneeId,
+        ${assigneeNameExpr} AS assigneeName,
+        ${bucketExpr} AS bucket,
+        ${statusExpr} AS status,
+        COUNT(*) AS cnt,
+        SUM(${postponeExpr}) AS wo_postpone,
+        SUM(${openPastDueExpr}) AS open_past_due
+      FROM dbo.WO wo
+      INNER JOIN dbo.PM pm ON pm.PMNO = wo.PMNO
+      INNER JOIN dbo.EQ eq ON eq.EQNO = pm.EQNO AND ${eqActiveWhere('eq')}
+      INNER JOIN dbo.IgxEQExtension ext ON ext.eqno = eq.EQNO
+      LEFT JOIN dbo.Person p ON p.PERSONNO = wo.ASSIGN
+      WHERE ${whereFragment}
+      GROUP BY ${plantExpr}, ${assigneeIdExpr}, ${assigneeNameExpr}, ${bucketExpr}, ${statusExpr}
+    `;
+
+    const result = await request.query(sqlText);
+    const rows = result.recordset || [];
+
+    const totals = emptyWoHistoryTotals();
+    const byPlantMap = new Map();
+    for (const p of PM_CAL_PLANTS) {
+      byPlantMap.set(p.code, emptyWoHistoryTotals());
+    }
+    const byAssigneeMap = new Map();
+    const byTimeMap = new Map();
+
+    const allowedPlants = new Set(PM_CAL_PLANTS.map((p) => p.code));
+
+    for (const row of rows) {
+      const plant = String(row.plant || '').toUpperCase();
+      if (!allowedPlants.has(plant)) continue;
+
+      const status = row.status;
+      const cnt = row.cnt ?? 0;
+      const postponeCnt = row.wo_postpone ?? 0;
+      const openPastDueCnt = row.open_past_due ?? 0;
+
+      accumulateWoHistoryTotals(totals, status, cnt, postponeCnt, openPastDueCnt);
+
+      if (!byPlantMap.has(plant)) byPlantMap.set(plant, emptyWoHistoryTotals());
+      accumulateWoHistoryTotals(byPlantMap.get(plant), status, cnt, postponeCnt, openPastDueCnt);
+
+      const assigneeId = Number(row.assigneeId) || 0;
+      const assigneeKey = String(assigneeId);
+      if (!byAssigneeMap.has(assigneeKey)) {
+        byAssigneeMap.set(assigneeKey, {
+          assigneeId,
+          assigneeName: row.assigneeName || 'Unassigned',
+          ...emptyWoHistoryTotals(),
+        });
+      }
+      const assigneeEntry = byAssigneeMap.get(assigneeKey);
+      accumulateWoHistoryTotals(assigneeEntry, status, cnt, postponeCnt, openPastDueCnt);
+
+      let bucketKey = row.bucket;
+      if (grain === 'period') {
+        const period = Number(row.bucket);
+        if (period < 1 || period > 13) continue;
+        bucketKey = period;
+      } else {
+        bucketKey = String(row.bucket || '');
+        if (!bucketKey) continue;
+      }
+
+      if (!byTimeMap.has(bucketKey)) {
+        byTimeMap.set(bucketKey, {
+          ...(grain === 'period' ? { period: bucketKey } : { day: bucketKey }),
+          ...emptyWoHistoryTotals(),
+        });
+      }
+      accumulateWoHistoryTotals(byTimeMap.get(bucketKey), status, cnt, postponeCnt, openPastDueCnt);
+    }
+
+    const byPlant = PM_CAL_PLANTS.map((p) => ({
+      plant: p.code,
+      plantLabel: p.label,
+      ...byPlantMap.get(p.code),
+    }));
+
+    const byAssignee = Array.from(byAssigneeMap.values()).sort(
+      (a, b) => b.total - a.total || String(a.assigneeName).localeCompare(String(b.assigneeName))
+    );
+
+    let byTime;
+    if (grain === 'period') {
+      byTime = Array.from({ length: 13 }, (_, i) => {
+        const period = i + 1;
+        return byTimeMap.get(period) || { period, ...emptyWoHistoryTotals() };
+      });
+    } else {
+      byTime = Array.from(byTimeMap.values()).sort((a, b) => String(a.day).localeCompare(String(b.day)));
+    }
+
+    res.json({
+      success: true,
+      data: {
+        mode: range.mode,
+        grain,
+        year: range.year,
+        month: range.month,
+        period: range.period,
+        rangeStart: range.rangeStart,
+        rangeEnd: range.rangeEnd,
+        totals,
+        byPlant,
+        byAssignee,
+        byTime,
+      },
+      message: 'EMS dashboard WO history',
+    });
+  } catch (error) {
+    console.error('EMS getWoHistory error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch EMS WO history',
+      error: error.message,
+    });
+  }
+};
