@@ -199,6 +199,7 @@ export interface TicketFilters {
   ticketClass?: number | string | null; // Ticket Class ID (supports comma-separated values)
   workGroup?: number | string | null; // Work Group ID (supports comma-separated values + "default")
   assigned_to?: number | string;
+  assigned_dept?: number | string; // Assignee department DEPTNO (supports comma-separated values)
   created_by?: number | string;
   search?: string;
   plant?: string;  // Plant code from PUExtension
@@ -388,6 +389,8 @@ export interface TicketFilterUser {
   id: number;
   name: string;
   email?: string;
+  deptNo?: number;
+  deptName?: string;
 }
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';

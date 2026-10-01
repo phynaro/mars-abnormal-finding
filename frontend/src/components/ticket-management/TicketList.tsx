@@ -308,6 +308,7 @@ export const TicketList: React.FC = () => {
       area: searchParams.get('area') || undefined,
       created_by: (searchParams.get('created_by') || undefined) as TicketFilters["created_by"],
       assigned_to: (searchParams.get('assigned_to') || undefined) as TicketFilters["assigned_to"],
+      assigned_dept: (searchParams.get('assigned_dept') || undefined) as TicketFilters["assigned_dept"],
       finished_by: (searchParams.get('finished_by') || undefined) as TicketFilters["finished_by"],
       timeliness: (searchParams.get('timeliness') === 'ontime' || searchParams.get('timeliness') === 'late'
         ? searchParams.get('timeliness')
@@ -553,6 +554,40 @@ export const TicketList: React.FC = () => {
   const selectedCreatedByUsers = parseUserFilter(filters.created_by);
   const selectedAssignedToUsers = parseUserFilter(filters.assigned_to);
   const selectedFinishedByUsers = parseUserFilter(filters.finished_by);
+  const selectedAssignedDepartments = parseUserFilter(filters.assigned_dept);
+
+  const assignedDepartments = (() => {
+    const deptMap = new Map<number, string>();
+    assignedToUsers.forEach((user) => {
+      if (user.deptNo != null && user.deptName) {
+        deptMap.set(user.deptNo, user.deptName);
+      }
+    });
+    return Array.from(deptMap.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  })();
+
+  const getDepartmentFilterLabel = (deptId: string): string => {
+    const selectedDept = assignedDepartments.find((dept) => String(dept.id) === deptId);
+    return selectedDept?.name || `Dept ${deptId}`;
+  };
+
+  const getDepartmentFilterSummary = (selectedDeptIds: string[]): string => {
+    if (selectedDeptIds.length === 0) {
+      return t("ticket.allDepartments");
+    }
+
+    if (selectedDeptIds.length <= 2) {
+      return selectedDeptIds.map(getDepartmentFilterLabel).join(", ");
+    }
+
+    if (language === "th") {
+      return `${selectedDeptIds.length} ${t("ticket.departmentsSelected")}`;
+    }
+
+    return `${selectedDeptIds.length} ${t("ticket.departmentsSelected")}`;
+  };
 
   const getUserFilterSummary = (selectedUserIds: string[], type: "created_by" | "assigned_to" | "finished_by"): string => {
     if (selectedUserIds.length === 0) {
@@ -911,6 +946,7 @@ export const TicketList: React.FC = () => {
       area: undefined,
       created_by: undefined,
       assigned_to: undefined,
+      assigned_dept: undefined,
       finished_by: undefined,
       timeliness: undefined,
       machine: undefined,
@@ -929,7 +965,7 @@ export const TicketList: React.FC = () => {
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.finished_by || filters.timeliness || filters.machine || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
+    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.assigned_dept || filters.finished_by || filters.timeliness || filters.machine || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
   };
 
   // const getTicketClassLabel = (ticketClassId?: number | string | null) => {
@@ -1747,6 +1783,23 @@ export const TicketList: React.FC = () => {
                     }
                   />
                   <SearchableMultiSelectUserFilter
+                    id="assigned_dept"
+                    label={t('ticket.assignedDepartment')}
+                    options={assignedDepartments}
+                    selectedValues={selectedAssignedDepartments}
+                    triggerLabel={getDepartmentFilterSummary(selectedAssignedDepartments)}
+                    searchPlaceholder={t('ticket.searchDepartments')}
+                    loadingText={t('ticket.searching')}
+                    emptyText={t('ticket.noDepartmentsFound')}
+                    loading={ticketUsersLoading}
+                    onChange={(nextValues) =>
+                      handleFilterChange(
+                        "assigned_dept",
+                        serializeUserFilter(nextValues) as TicketFilters["assigned_dept"]
+                      )
+                    }
+                  />
+                  <SearchableMultiSelectUserFilter
                     id="finished_by"
                     label={t('ticket.finishedBy')}
                     options={finishedByUsers}
@@ -2547,6 +2600,15 @@ export const TicketList: React.FC = () => {
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("assigned_to")}
+              />
+            </Badge>
+          )}
+          {filters.assigned_dept && (
+            <Badge variant="secondary" className="gap-1">
+              {t('ticket.assignedDepartment')}: {parseUserFilter(filters.assigned_dept).map(getDepartmentFilterLabel).join(", ")}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("assigned_dept")}
               />
             </Badge>
           )}

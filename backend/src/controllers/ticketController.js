@@ -530,6 +530,7 @@ const getTickets = async (req, res) => {
       ticketClass,
       workGroup,
       assigned_to,
+      assigned_dept,
       created_by,
       search,
       plant,
@@ -784,6 +785,24 @@ const getTickets = async (req, res) => {
       } else {
         whereClause += " AND t.assigned_to = @assigned_to";
         params.push({ name: "assigned_to", value: assigned_to, type: sql.Int });
+      }
+    }
+
+    if (assigned_dept) {
+      const assignedDeptList = String(assigned_dept)
+        .split(',')
+        .map((value) => parseInt(value.trim(), 10))
+        .filter((value) => !isNaN(value));
+      if (assignedDeptList.length > 0) {
+        const assignedDeptPlaceholders = assignedDeptList.map((_, index) => `@assignedDept${index}`).join(',');
+        whereClause += ` AND EXISTS (
+          SELECT 1 FROM Person p_assigned_dept
+          WHERE p_assigned_dept.PERSONNO = t.assigned_to
+            AND p_assigned_dept.DEPTNO IN (${assignedDeptPlaceholders})
+        )`;
+        assignedDeptList.forEach((assignedDeptValue, index) => {
+          params.push({ name: `assignedDept${index}`, value: assignedDeptValue, type: sql.Int });
+        });
       }
     }
 
@@ -4774,9 +4793,12 @@ const getTicketFilterUsers = async (req, res) => {
       SELECT DISTINCT
         p.PERSONNO AS id,
         NULLIF(LTRIM(RTRIM(ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,''))), '') AS name,
-        p.EMAIL AS email
+        p.EMAIL AS email,
+        p.DEPTNO AS deptNo,
+        d.DEPTNAME AS deptName
       FROM IgxTickets t
       INNER JOIN Person p ON p.PERSONNO = t.${filterColumn}
+      LEFT JOIN Dept d ON d.DEPTNO = p.DEPTNO AND d.FLAGDEL != 'Y'
       WHERE t.${filterColumn} IS NOT NULL
         AND p.FLAGDEL != 'Y'
       ORDER BY name
@@ -4788,6 +4810,8 @@ const getTicketFilterUsers = async (req, res) => {
         id: person.id,
         name: person.name || `User ${person.id}`,
         email: person.email,
+        deptNo: person.deptNo != null && person.deptName ? person.deptNo : undefined,
+        deptName: person.deptNo != null && person.deptName ? person.deptName : undefined,
       })),
     });
   } catch (error) {
