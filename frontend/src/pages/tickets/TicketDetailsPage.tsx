@@ -884,7 +884,7 @@ const TicketDetailsPage: React.FC = () => {
     }
   };
 
-  // Load equipment for accept action (similar to TicketCreatePage)
+  // Load equipment for accept action (similar to TicketCreatePageV2)
   const loadEquipmentForAccept = async (puno: number) => {
     try {
       setEquipmentLoading(true);
