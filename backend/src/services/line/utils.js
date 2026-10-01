@@ -29,6 +29,9 @@ function getStatusColor(status) {
 
 function getPriorityColor(priority) {
   const priorityColors = {
+    1: '#DC3545',
+    2: '#FF6B35',
+    3: '#FFA500',
     low: '#28A745',
     normal: '#FFA500',
     high: '#FF6B35',
@@ -36,7 +39,7 @@ function getPriorityColor(priority) {
     critical: '#8B0000',
   };
 
-  return priorityColors[priority] || '#FFA500';
+  return priorityColors[priority] || priorityColors[Number(priority)] || '#FFA500';
 }
 
 function getNotificationTitle(messageType) {
@@ -107,6 +110,9 @@ function getPriorityText(priority) {
   }
 
   const priorityTexts = {
+    1: 'Priority 1',
+    2: 'Priority 2',
+    3: 'Priority 3',
     low: 'ต่ำ',
     normal: 'ปกติ',
     high: 'สูง',
@@ -114,7 +120,7 @@ function getPriorityText(priority) {
     critical: 'วิกฤต',
   };
 
-  return priorityTexts[priority] || priority || 'ไม่ระบุ';
+  return priorityTexts[priority] || priorityTexts[Number(priority)] || priority || 'ไม่ระบุ';
 }
 
 function isImageAccessible(url) {

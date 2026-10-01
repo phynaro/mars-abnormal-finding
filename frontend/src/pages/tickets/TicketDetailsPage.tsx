@@ -61,6 +61,8 @@ import authService from "@/services/authService";
 import { formatUITime, timestampToDatetimeLocal } from "@/utils/timezone";
 import {
   getTicketStatusClassModern,
+  getTicketPriorityClass,
+  getTicketPriorityText,
   getCriticalLevelText,
   getCriticalLevelClassModern,
   getCriticalLevelIconClass,
@@ -1770,17 +1772,17 @@ const TicketDetailsPage: React.FC = () => {
                     <span>{ticket.status?.replace("_", " ").replace(/\b\w/g, l => l.toUpperCase())}</span>
                   </div>
                 </div>
-                {/* <div>
+                <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     {t('ticket.priority')}
                   </p>
                   <Badge
-                    className={`mt-1 ${getTicketPriorityClass(ticket.priority)}`}
+                    className={`mt-1 whitespace-normal text-left ${getTicketPriorityClass(ticket.priority)}`}
                   >
-                    {ticket.priority?.toUpperCase() || "N/A"}
+                    {getTicketPriorityText(ticket.priority, t)}
                   </Badge>
                 </div>
-                <div>
+                {/* <div>
                   <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
                     {t('ticket.severity')}
                   </p>

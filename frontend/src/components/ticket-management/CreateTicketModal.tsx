@@ -31,7 +31,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
     pucode: '',
     puno: undefined,
     severity_level: 'medium',
-    priority: 'normal',
+    priority: 3,
     cost_avoidance: undefined,
     downtime_avoidance_hours: undefined,
     failure_mode_id: 0
@@ -81,7 +81,7 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
         pucode: '',
         puno: undefined,
         severity_level: 'medium',
-        priority: 'normal',
+        priority: 3,
         cost_avoidance: undefined,
         downtime_avoidance_hours: undefined,
         failure_mode_id: 0
@@ -188,17 +188,16 @@ export const CreateTicketModal: React.FC<CreateTicketModalProps> = ({
             <div className="space-y-2">
               <Label htmlFor="priority">{t('ticket.priority')}</Label>
               <Select
-                value={formData.priority}
-                onValueChange={(value) => handleInputChange('priority', value)}
+                value={formData.priority?.toString()}
+                onValueChange={(value) => handleInputChange('priority', parseInt(value, 10) as 1 | 2 | 3)}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="low">{t('ticket.low')}</SelectItem>
-                  <SelectItem value="normal">{t('ticket.normal')}</SelectItem>
-                  <SelectItem value="high">{t('ticket.high')}</SelectItem>
-                  <SelectItem value="urgent">{t('ticket.urgent')}</SelectItem>
+                  <SelectItem value="1">{t('ticket.priority1')}</SelectItem>
+                  <SelectItem value="2">{t('ticket.priority2')}</SelectItem>
+                  <SelectItem value="3">{t('ticket.priority3')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

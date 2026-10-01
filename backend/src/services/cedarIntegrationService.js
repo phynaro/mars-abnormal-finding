@@ -883,11 +883,17 @@ class CedarIntegrationService {
    * Map priority level to Cedar priority number
    */
   mapPriorityToCedar(priorityLevel) {
+    const numeric = Number(priorityLevel);
+    if ([1, 2, 3].includes(numeric)) {
+      return numeric;
+    }
+
     const priorityMapping = {
       low: 4,
       normal: 3,
       high: 2,
       urgent: 1,
+      medium: 3,
     };
 
     return priorityMapping[priorityLevel] || 3; // Default to normal

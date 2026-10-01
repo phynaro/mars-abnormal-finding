@@ -5240,10 +5240,10 @@ components:
           description: Current ticket status
           example: "open"
         priority:
-          type: string
-          enum: [urgent, high, medium, low]
-          description: Ticket priority level
-          example: "high"
+          type: integer
+          enum: [1, 2, 3]
+          description: Ticket priority (1=Safety/Quality/immediate production impact, 2=Breakdown risk within 48h, 3=Normal)
+          example: 3
         severity_level:
           type: string
           enum: [critical, high, medium, low]

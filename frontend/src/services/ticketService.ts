@@ -33,7 +33,7 @@ export interface Ticket {
   failure_mode_name?: string;
   severity_level: 'low' | 'medium' | 'high' | 'critical';
   status: 'open' | 'accepted' | 'planed' | 'in_progress' | 'rejected_pending_l3_review' | 'rejected_final' | 'finished' | 'reviewed' | 'review_escalated' | 'escalated' | 'closed' | 'reopened_in_progress';
-  priority: 'low' | 'normal' | 'high' | 'urgent';
+  priority: 1 | 2 | 3;
   created_by: number;
   assigned_to?: number;
   created_at: string;
@@ -157,7 +157,7 @@ export interface CreateTicketRequest {
   downtime_avoidance_hours?: number;
   failure_mode_id?: number;
   severity_level?: 'low' | 'medium' | 'high' | 'critical';
-  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  priority?: 1 | 2 | 3;
   suggested_assignee_id?: number;
   schedule_finish?: string;
   plant?: string;
@@ -168,7 +168,7 @@ export interface UpdateTicketRequest {
   description?: string;
   severity_level?: 'low' | 'medium' | 'high' | 'critical';
   status?: 'open' | 'assigned' | 'in_progress' | 'resolved' | 'closed';
-  priority?: 'low' | 'normal' | 'high' | 'urgent';
+  priority?: 1 | 2 | 3;
   estimated_downtime_hours?: number;
   actual_downtime_hours?: number;
   assigned_to?: number;
@@ -226,7 +226,7 @@ export interface PendingTicket {
   title: string;
   description: string;
   status: 'open' | 'in_progress' | 'pending_approval' | 'pending_assignment' | 'accepted' | 'planed' | 'rejected_pending_l3_review' | 'rejected_final' | 'finished' | 'reviewed' | 'review_escalated' | 'escalated' | 'closed' | 'reopened_in_progress';
-  priority: 'urgent' | 'high' | 'medium' | 'low' | 'normal';
+  priority: 1 | 2 | 3;
   severity_level: 'critical' | 'high' | 'medium' | 'low';
   created_at: string;
   updated_at: string;

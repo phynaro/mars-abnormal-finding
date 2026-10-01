@@ -17,7 +17,7 @@ import authService from '@/services/authService';
 import { compressTicketImage, formatFileSize, compressImage } from '@/utils/imageCompression';
 import HierarchicalMachineSelectorV2, { type SelectedMachine } from '@/components/tickets/HierarchicalMachineSelectorV2';
 
-/** Normalize search API response (uppercase keys) to SelectedMachine (lowercase). */
+const PRIORITY_OPTIONS = [1, 2, 3] as const;
 function mapSearchResultToSelectedMachine(item: Record<string, unknown>): SelectedMachine {
   const pucode = (item.PUCODE ?? item.pucode ?? '') as string;
   const parts = pucode.split('-');
@@ -48,7 +48,7 @@ const TicketCreatePageV2: React.FC = () => {
     ticketClass: undefined,
     work_group_id: undefined,
     severity_level: 'medium',
-    priority: 'normal',
+    priority: undefined,
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -330,6 +330,7 @@ const TicketCreatePageV2: React.FC = () => {
     if (!formData.description.trim()) newErrors.description = t('ticket.descriptionRequired');
     if (!selectedMachine) newErrors.machine = t('ticket.selectMachine');
     if (!formData.work_group_id) newErrors.work_group_id = t('workGroup.required');
+    if (![1, 2, 3].includes(formData.priority as number)) newErrors.priority = t('ticket.priorityRequired');
     if (selectedFiles.length === 0) newErrors.files = t('ticket.atLeastOneAttachment');
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -904,6 +905,35 @@ const TicketCreatePageV2: React.FC = () => {
                 </Select>
               </div>
 
+              {/* Priority */}
+              <div className="space-y-2">
+                <Label htmlFor="priority">{t('ticket.priority')} *</Label>
+                <Select
+                  value={formData.priority?.toString() || ''}
+                  onValueChange={(v) => {
+                    handleInputChange('priority', parseInt(v, 10) as 1 | 2 | 3);
+                    if (errors.priority) setErrors((prev) => ({ ...prev, priority: '' }));
+                  }}
+                  disabled={submitting}
+                >
+                  <SelectTrigger id="priority" className={errors.priority ? 'border-red-500' : ''}>
+                    <SelectValue placeholder={t('ticket.selectPriority')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITY_OPTIONS.map((priorityValue) => (
+                      <SelectItem
+                        key={priorityValue}
+                        value={priorityValue.toString()}
+                        className="whitespace-normal py-2"
+                      >
+                        {t(`ticket.priority${priorityValue}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {errors.priority && <p className="text-sm text-red-500">{errors.priority}</p>}
+              </div>
+
               {/* Attach images (before) */}
               <div className="space-y-2">
                 <Label htmlFor="images" className="text-base font-semibold">{t('ticket.attachImages')} *</Label>
@@ -1009,34 +1039,6 @@ const TicketCreatePageV2: React.FC = () => {
                   <p className="text-sm text-red-500">{errors.files}</p>
                 )}
               </div>
-
-              {/* Severity & Priority */}
-              {/* <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="severity_level">{t('ticket.severity')}</Label>
-                  <Select value={formData.severity_level} onValueChange={(v) => handleInputChange('severity_level', v as any)}>
-                    <SelectTrigger><SelectValue placeholder={t('ticket.selectSeverity')} /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">{t('ticket.low')}</SelectItem>
-                      <SelectItem value="medium">{t('ticket.medium')}</SelectItem>
-                      <SelectItem value="high">{t('ticket.high')}</SelectItem>
-                      <SelectItem value="critical">{t('ticket.critical')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="priority">{t('ticket.priority')}</Label>
-                  <Select value={formData.priority} onValueChange={(v) => handleInputChange('priority', v as any)}>
-                    <SelectTrigger><SelectValue placeholder={t('ticket.selectPriority')} /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="low">{t('ticket.low')}</SelectItem>
-                      <SelectItem value="normal">{t('ticket.normal')}</SelectItem>
-                      <SelectItem value="high">{t('ticket.high')}</SelectItem>
-                      <SelectItem value="urgent">{t('ticket.urgent')}</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div> */}
             </div>
           </form>
         </CardContent>

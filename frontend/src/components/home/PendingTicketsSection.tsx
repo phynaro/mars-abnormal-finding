@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { PendingTicket as APIPendingTicket } from "@/services/ticketService";
 import {
   getTicketPriorityClass,
+  getTicketPriorityText,
   getTicketSeverityClass,
   getTicketStatusClassModern,
   getCriticalLevelClassModern,
@@ -461,7 +462,7 @@ const renderCellContent = (ticket: APIPendingTicket, fieldKey: string, t: (key: 
     case "priority":
       return (
         <Badge className={getTicketPriorityClass(ticket.priority)}>
-          {ticket.priority?.toUpperCase()}
+          {getTicketPriorityText(ticket.priority, t)}
         </Badge>
       );
     case "severity_level":

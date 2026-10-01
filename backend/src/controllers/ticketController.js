@@ -42,6 +42,17 @@ const getWorkGroupLabel = (ticketData = {}) => {
   return "Default";
 };
 
+const formatTicketPriority = (priority) => {
+  const numeric = Number(priority);
+  if ([1, 2, 3].includes(numeric)) {
+    return `Priority ${numeric}`;
+  }
+  if (typeof priority === "string" && priority.trim() !== "") {
+    return priority.toUpperCase();
+  }
+  return "Priority 3";
+};
+
 const createTicket = async (req, res) => {
     const fsPromises = fs.promises;
 
@@ -79,7 +90,7 @@ const createTicket = async (req, res) => {
         const ticketClassInput = parseOptionalInt(rawBody.ticketClass);
         const workGroupIdInput = parseOptionalInt(rawBody.work_group_id);
         const severityLevel = typeof rawBody.severity_level === 'string' ? rawBody.severity_level : rawBody.severity_level?.toString?.();
-        const priorityLevel = typeof rawBody.priority === 'string' ? rawBody.priority : rawBody.priority?.toString?.();
+        const priorityInput = parseOptionalInt(rawBody.priority);
         const imageType = typeof rawBody.image_type === 'string' && rawBody.image_type.trim()
             ? rawBody.image_type.trim()
             : 'before';
@@ -91,6 +102,13 @@ const createTicket = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: 'Title, description, and PU ID are required'
+            });
+        }
+
+        if (![1, 2, 3].includes(priorityInput)) {
+            return res.status(400).json({
+                success: false,
+                message: 'Priority is required and must be 1, 2, or 3'
             });
         }
 
@@ -183,7 +201,7 @@ const createTicket = async (req, res) => {
             { name: 'ticketClass', type: sql.Int, value: validatedTicketClass },
             { name: 'work_group_id', type: sql.Int, value: workGroupIdInput },
             { name: 'severity_level', type: sql.VarChar(20), value: severityLevel || 'medium' },
-            { name: 'priority', type: sql.VarChar(20), value: priorityLevel || 'normal' },
+            { name: 'priority', type: sql.TinyInt, value: priorityInput },
             { name: 'created_by', type: sql.Int, value: created_by }
         ]);
 
@@ -397,7 +415,7 @@ const createTicket = async (req, res) => {
                     equipment_code: ticketData.equipment_code,
                     PUNAME: ticketData.pudescription, // For email template compatibility
                     severity_level: severityLevel || 'medium',
-                    priority: priorityLevel || 'normal',
+                    priority: priorityInput,
                     created_by,
                     assigned_to: null,
                     created_at: new Date().toISOString()
@@ -3973,7 +3991,7 @@ const escalateTicket = async (req, res) => {
         extraKVs: [
           { label: "Work Group", value: getWorkGroupLabel(ticketData) },
           { label: "Severity", value: (ticketData.severity_level || "medium").toUpperCase() },
-          { label: "Priority", value: (ticketData.priority || "normal").toUpperCase() },
+          { label: "Priority", value: formatTicketPriority(ticketData.priority) },
           { label: "Escalated to", value: escalated_to },
           { label: "Status", value: "ESCALATED" },
           { label: "Escalated by", value: escalatorName },
@@ -4728,7 +4746,7 @@ const reassignTicket = async (req, res) => {
         extraKVs: [
           { label: "Work Group", value: getWorkGroupLabel(ticketData) },
           { label: "Severity", value: (ticketData.severity_level || "medium").toUpperCase() },
-          { label: "Priority", value: (ticketData.priority || "normal").toUpperCase() },
+          { label: "Priority", value: formatTicketPriority(ticketData.priority) },
           { label: "New Assignee", value: validAssignee.PERSON_NAME },
           { label: "Schedule Start", value: new Date(schedule_start).toLocaleDateString("th-TH") },
           { label: "Schedule Finish", value: new Date(schedule_finish).toLocaleDateString("th-TH") },

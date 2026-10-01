@@ -49,6 +49,9 @@ const STATUS_CLASSES: Record<string, string> = {
 };
 
 const PRIORITY_CLASSES: Record<string, string> = {
+  '1': "border-red-200 bg-red-50 text-red-700",
+  '2': "border-orange-200 bg-orange-50 text-orange-700",
+  '3': "border-blue-200 bg-blue-50 text-blue-700",
   urgent: "border-red-200 bg-red-50 text-red-700",
   high: "border-orange-200 bg-orange-50 text-orange-700",
   normal: "border-blue-200 bg-blue-50 text-blue-700",
@@ -129,12 +132,26 @@ export const getTicketStatusClass = (status?: string) => {
   );
 };
 
-export const getTicketPriorityClass = (priority?: string) => {
-  if (!priority) return "border-slate-200 bg-slate-50 text-slate-700";
+export const getTicketPriorityClass = (priority?: string | number) => {
+  if (priority === undefined || priority === null || priority === '') {
+    return "border-slate-200 bg-slate-50 text-slate-700";
+  }
   return (
-    PRIORITY_CLASSES[priority.toLowerCase()] ??
+    PRIORITY_CLASSES[String(priority).toLowerCase()] ??
     "border-slate-200 bg-slate-50 text-slate-700"
   );
+};
+
+export const getTicketPriorityText = (
+  priority: string | number | null | undefined,
+  t: (key: string) => string
+): string => {
+  const numeric = Number(priority);
+  if (numeric === 1) return t('ticket.priority1');
+  if (numeric === 2) return t('ticket.priority2');
+  if (numeric === 3) return t('ticket.priority3');
+  if (priority === undefined || priority === null || priority === '') return 'N/A';
+  return String(priority);
 };
 
 export const getTicketSeverityClass = (severity?: string) => {

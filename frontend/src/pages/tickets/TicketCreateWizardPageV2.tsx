@@ -17,6 +17,8 @@ import authService from '@/services/authService';
 import { compressTicketImage, formatFileSize, compressImage } from '@/utils/imageCompression';
 import HierarchicalMachineSelectorV2, { type SelectedMachine } from '@/components/tickets/HierarchicalMachineSelectorV2';
 
+const PRIORITY_OPTIONS = [1, 2, 3] as const;
+
 /** Normalize search API response (uppercase keys) to SelectedMachine (lowercase). */
 function mapSearchResultToSelectedMachine(item: Record<string, unknown>): SelectedMachine {
   const pucode = (item.PUCODE ?? item.pucode ?? '') as string;
@@ -32,13 +34,14 @@ function mapSearchResultToSelectedMachine(item: Record<string, unknown>): Select
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api';
 
-type StepKey = 'machine' | 'images' | 'title' | 'description' | 'severity_priority' | 'review';
+type StepKey = 'machine' | 'priority' | 'images' | 'title' | 'description' | 'severity_priority' | 'review';
 
-const stepsOrder: StepKey[] = ['machine', 'images', 'title', 'description', 'severity_priority', 'review'];
+const stepsOrder: StepKey[] = ['machine', 'priority', 'images', 'title', 'description', 'severity_priority', 'review'];
 
 // Step illustrations mapping
 const stepIllustrations: Record<StepKey, string> = {
   machine: '/illustrations/machine.png',
+  priority: '/illustrations/severity.png',
   images: '/illustrations/images.png',
   title: '/illustrations/title.png',
   description: '/illustrations/description.png',
@@ -80,7 +83,7 @@ const TicketCreateWizardPageV2: React.FC = () => {
   const [plant, setPlant] = useState<string | undefined>(undefined);
   const [pucriticalno, setPucriticalno] = useState<number | undefined>(undefined);
   const severity = 'medium' as const;
-  const priority = 'normal' as const;
+  const [priority, setPriority] = useState<1 | 2 | 3 | undefined>(undefined);
 
   // Equipment selection state
   const [equipmentList, setEquipmentList] = useState<Equipment[]>([]);
@@ -393,6 +396,7 @@ const TicketCreateWizardPageV2: React.FC = () => {
     const step = stepsOrder[currentIndex];
     switch (step) {
       case 'machine': return !!selectedMachine;
+      case 'priority': return !!priority;
       case 'images': return beforeFiles.length > 0; // Force at least 1 image
       case 'title': return title.trim().length > 0;
       case 'description': return description.trim().length > 0;
@@ -421,6 +425,14 @@ const TicketCreateWizardPageV2: React.FC = () => {
 
   const submit = async () => {
     if (submittingRef.current) return; // guard against double taps
+    if (![1, 2, 3].includes(priority as number)) {
+      toast({
+        title: t('common.error'),
+        description: t('ticket.priorityRequired'),
+        variant: 'destructive',
+      });
+      return;
+    }
     submittingRef.current = true;
     setSubmitting(true);
     try {
@@ -902,6 +914,36 @@ const TicketCreateWizardPageV2: React.FC = () => {
           </>
         )}
 
+        {step === 'priority' && (
+          <>
+            <StepIllustration step="priority" />
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-semibold">{t('ticket.priority')} *</Label>
+                <Select
+                  value={priority?.toString() || ''}
+                  onValueChange={(v) => setPriority(parseInt(v, 10) as 1 | 2 | 3)}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder={t('ticket.selectPriority')} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PRIORITY_OPTIONS.map((priorityValue) => (
+                      <SelectItem
+                        key={priorityValue}
+                        value={priorityValue.toString()}
+                        className="whitespace-normal py-2"
+                      >
+                        {t(`ticket.priority${priorityValue}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </>
+        )}
+
         {step === 'images' && (
           <>
             <StepIllustration step="images" />
@@ -1074,21 +1116,6 @@ const TicketCreateWizardPageV2: React.FC = () => {
                     <SelectItem value="critical">{t('ticket.critical')}</SelectItem>
                   </SelectContent>
                 </Select>
-              </div>
-              
-              <div>
-                <Label className="text-base font-semibold">{t('ticket.priority')}</Label>
-                <Select value={priority} onValueChange={(v) => setPriority(v as any)}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">{t('ticket.low')}</SelectItem>
-                    <SelectItem value="normal">{t('ticket.normal')}</SelectItem>
-                    <SelectItem value="high">{t('ticket.high')}</SelectItem>
-                    <SelectItem value="urgent">{t('ticket.urgent')}</SelectItem>
-                  </SelectContent>
-                </Select>
               </div> */}
             </div>
           </>
@@ -1113,6 +1140,16 @@ const TicketCreateWizardPageV2: React.FC = () => {
                     <span className="font-medium">{selectedEquipment ? `${selectedEquipment.EQCODE} - ${selectedEquipment.EQNAME}` : 'No specific equipment'}</span>
                   </div>
                 )}
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500 shrink-0">{t('ticket.priority')}:</span>
+                  <span className="font-medium text-right">
+                    {priority ? t(`ticket.priority${priority}`) : '-'}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">{t('ticket.wizardUploadImages')}:</span> 
+                  <span className="font-medium">{beforeFiles.length} photo(s)</span>
+                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.description')}:</span> 
                   <span className="font-medium">{description}</span>
@@ -1148,15 +1185,7 @@ const TicketCreateWizardPageV2: React.FC = () => {
                 {/* <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.severity')}:</span> 
                   <span className="font-medium capitalize">{severity}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t('ticket.priority')}:</span> 
-                  <span className="font-medium capitalize">{priority}</span>
                 </div> */}
-                <div className="flex justify-between">
-                  <span className="text-gray-500">{t('ticket.wizardUploadImages')}:</span> 
-                  <span className="font-medium">{beforeFiles.length} photo(s)</span>
-                </div>
               </div>
               
               {/* Image preview */}
