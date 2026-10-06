@@ -119,6 +119,13 @@ const createTicket = async (req, res) => {
             });
         }
 
+        if (!ticketClassInput) {
+            return res.status(400).json({
+                success: false,
+                message: 'Ticket class (7 Abnormality) is required'
+            });
+        }
+
         const pool = await sql.connect(dbConfig);
         const ticket_number = await generateTicketNumber(pool);
 
@@ -144,24 +151,21 @@ const createTicket = async (req, res) => {
             validatedEquipmentId = equipmentIdInput;
         }
 
-        // Validate ticketClass if provided
-        let validatedTicketClass = null;
-        if (ticketClassInput) {
-            const ticketClassCheck = await runQuery(pool, `
-                SELECT id FROM IgxTicketClass WHERE id = @ticketClass
-            `, [
-                { name: 'ticketClass', type: sql.Int, value: ticketClassInput }
-            ]);
+        // Validate required ticketClass
+        const ticketClassCheck = await runQuery(pool, `
+            SELECT id FROM IgxTicketClass WHERE id = @ticketClass
+        `, [
+            { name: 'ticketClass', type: sql.Int, value: ticketClassInput }
+        ]);
 
-            if (mapRecordset(ticketClassCheck).length === 0) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid ticket class'
-                });
-            }
-
-            validatedTicketClass = ticketClassInput;
+        if (mapRecordset(ticketClassCheck).length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid ticket class'
+            });
         }
+
+        const validatedTicketClass = ticketClassInput;
 
         const workGroupCheck = await runQuery(pool, `
             SELECT id FROM IgxWorkGroup WHERE id = @work_group_id AND is_active = 1

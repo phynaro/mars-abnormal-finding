@@ -16,6 +16,7 @@ import { Upload, X, Search, Building2 } from 'lucide-react';
 import authService from '@/services/authService';
 import { compressTicketImage, formatFileSize, compressImage } from '@/utils/imageCompression';
 import HierarchicalMachineSelectorV2, { type SelectedMachine } from '@/components/tickets/HierarchicalMachineSelectorV2';
+import { cn } from '@/lib/utils';
 
 const PRIORITY_OPTIONS = [1, 2, 3] as const;
 function mapSearchResultToSelectedMachine(item: Record<string, unknown>): SelectedMachine {
@@ -330,6 +331,7 @@ const TicketCreatePageV2: React.FC = () => {
     if (!formData.description.trim()) newErrors.description = t('ticket.descriptionRequired');
     if (!selectedMachine) newErrors.machine = t('ticket.selectMachine');
     if (!formData.work_group_id) newErrors.work_group_id = t('workGroup.required');
+    if (!formData.ticketClass) newErrors.ticketClass = t('ticket.ticketClassRequired');
     if (![1, 2, 3].includes(formData.priority as number)) newErrors.priority = t('ticket.priorityRequired');
     if (selectedFiles.length === 0) newErrors.files = t('ticket.atLeastOneAttachment');
     setErrors(newErrors);
@@ -885,17 +887,19 @@ const TicketCreatePageV2: React.FC = () => {
 
               {/* Ticket Class */}
               <div className="space-y-2">
-                <Label htmlFor="ticketClass">{t('ticket.ticketClass')}</Label>
+                <Label htmlFor="ticketClass">{t('ticket.ticketClass')} *</Label>
                 <Select
-                  value={formData.ticketClass?.toString() || 'none'}
-                  onValueChange={(v) => handleInputChange('ticketClass', v === 'none' ? null : parseInt(v))}
+                  value={formData.ticketClass?.toString() || ''}
+                  onValueChange={(v) => {
+                    handleInputChange('ticketClass', parseInt(v, 10));
+                    if (errors.ticketClass) setErrors((prev) => ({ ...prev, ticketClass: '' }));
+                  }}
                   disabled={ticketClassesLoading}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder={ticketClassesLoading ? "Loading ticket classes..." : "Select ticket class..."} />
+                  <SelectTrigger className={errors.ticketClass ? 'border-red-500' : ''}>
+                    <SelectValue placeholder={ticketClassesLoading ? t('common.loading') : t('ticket.selectTicketClass')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
                     {ticketClasses.map((ticketClass) => (
                       <SelectItem key={ticketClass.id} value={ticketClass.id.toString()}>
                         {language === 'en' ? ticketClass.name_en : ticketClass.name_th}
@@ -903,6 +907,7 @@ const TicketCreatePageV2: React.FC = () => {
                     ))}
                   </SelectContent>
                 </Select>
+                {errors.ticketClass && <p className="text-sm text-red-500">{errors.ticketClass}</p>}
               </div>
 
               {/* Priority */}
@@ -916,15 +921,21 @@ const TicketCreatePageV2: React.FC = () => {
                   }}
                   disabled={submitting}
                 >
-                  <SelectTrigger id="priority" className={errors.priority ? 'border-red-500' : ''}>
+                  <SelectTrigger
+                    id="priority"
+                    className={cn(
+                      'h-auto min-h-10 items-start py-2 [&>span]:line-clamp-none [&>span]:whitespace-normal [&>span]:text-left',
+                      errors.priority ? 'border-red-500' : ''
+                    )}
+                  >
                     <SelectValue placeholder={t('ticket.selectPriority')} />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent position="popper" className="max-w-[var(--radix-select-trigger-width)]">
                     {PRIORITY_OPTIONS.map((priorityValue) => (
                       <SelectItem
                         key={priorityValue}
                         value={priorityValue.toString()}
-                        className="whitespace-normal py-2"
+                        className="h-auto items-start whitespace-normal py-2.5"
                       >
                         {t(`ticket.priority${priorityValue}`)}
                       </SelectItem>

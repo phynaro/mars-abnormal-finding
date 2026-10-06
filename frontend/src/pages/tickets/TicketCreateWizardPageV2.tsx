@@ -34,14 +34,13 @@ function mapSearchResultToSelectedMachine(item: Record<string, unknown>): Select
 
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api';
 
-type StepKey = 'machine' | 'priority' | 'images' | 'title' | 'description' | 'severity_priority' | 'review';
+type StepKey = 'machine' | 'images' | 'title' | 'description' | 'severity_priority' | 'review';
 
-const stepsOrder: StepKey[] = ['machine', 'priority', 'images', 'title', 'description', 'severity_priority', 'review'];
+const stepsOrder: StepKey[] = ['machine', 'images', 'title', 'description', 'severity_priority', 'review'];
 
 // Step illustrations mapping
 const stepIllustrations: Record<StepKey, string> = {
   machine: '/illustrations/machine.png',
-  priority: '/illustrations/severity.png',
   images: '/illustrations/images.png',
   title: '/illustrations/title.png',
   description: '/illustrations/description.png',
@@ -396,11 +395,10 @@ const TicketCreateWizardPageV2: React.FC = () => {
     const step = stepsOrder[currentIndex];
     switch (step) {
       case 'machine': return !!selectedMachine;
-      case 'priority': return !!priority;
       case 'images': return beforeFiles.length > 0; // Force at least 1 image
       case 'title': return title.trim().length > 0;
       case 'description': return description.trim().length > 0;
-      case 'severity_priority': return !!workGroupId;
+      case 'severity_priority': return !!workGroupId && !!priority && !!ticketClass;
       default: return true;
     }
   };
@@ -429,6 +427,14 @@ const TicketCreateWizardPageV2: React.FC = () => {
       toast({
         title: t('common.error'),
         description: t('ticket.priorityRequired'),
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (!ticketClass) {
+      toast({
+        title: t('common.error'),
+        description: t('ticket.ticketClassRequired'),
         variant: 'destructive',
       });
       return;
@@ -914,36 +920,6 @@ const TicketCreateWizardPageV2: React.FC = () => {
           </>
         )}
 
-        {step === 'priority' && (
-          <>
-            <StepIllustration step="priority" />
-            <div className="space-y-4">
-              <div>
-                <Label className="text-base font-semibold">{t('ticket.priority')} *</Label>
-                <Select
-                  value={priority?.toString() || ''}
-                  onValueChange={(v) => setPriority(parseInt(v, 10) as 1 | 2 | 3)}
-                >
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder={t('ticket.selectPriority')} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PRIORITY_OPTIONS.map((priorityValue) => (
-                      <SelectItem
-                        key={priorityValue}
-                        value={priorityValue.toString()}
-                        className="whitespace-normal py-2"
-                      >
-                        {t(`ticket.priority${priorityValue}`)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </>
-        )}
-
         {step === 'images' && (
           <>
             <StepIllustration step="images" />
@@ -1036,6 +1012,29 @@ const TicketCreateWizardPageV2: React.FC = () => {
             <StepIllustration step="severity_priority" />
             <div className="space-y-4">
               <div>
+                <Label className="text-base font-semibold">{t('ticket.priority')} *</Label>
+                <Select
+                  value={priority?.toString() || ''}
+                  onValueChange={(v) => setPriority(parseInt(v, 10) as 1 | 2 | 3)}
+                >
+                  <SelectTrigger className="mt-2 h-auto min-h-10 items-start py-2 [&>span]:line-clamp-none [&>span]:whitespace-normal [&>span]:text-left">
+                    <SelectValue placeholder={t('ticket.selectPriority')} />
+                  </SelectTrigger>
+                  <SelectContent position="popper" className="max-w-[var(--radix-select-trigger-width)]">
+                    {PRIORITY_OPTIONS.map((priorityValue) => (
+                      <SelectItem
+                        key={priorityValue}
+                        value={priorityValue.toString()}
+                        className="h-auto items-start whitespace-normal py-2.5"
+                      >
+                        {t(`ticket.priority${priorityValue}`)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
                 <Label className="text-base font-semibold">{t('ticket.criticalLevel')}</Label>
                 <Select
                   value={pucriticalno?.toString() || ''}
@@ -1083,17 +1082,16 @@ const TicketCreateWizardPageV2: React.FC = () => {
               </div>
 
               <div>
-                <Label className="text-base font-semibold">{t('ticket.ticketClass')}</Label>
+                <Label className="text-base font-semibold">{t('ticket.ticketClass')} *</Label>
                 <Select
-                  value={ticketClass?.toString() || 'none'}
-                  onValueChange={(v) => setTicketClass(v === 'none' ? undefined : parseInt(v))}
+                  value={ticketClass?.toString() || ''}
+                  onValueChange={(v) => setTicketClass(parseInt(v, 10))}
                   disabled={ticketClassesLoading}
                 >
                   <SelectTrigger className="mt-2">
-                    <SelectValue placeholder={ticketClassesLoading ? "Loading ticket classes..." : "Select ticket class..."} />
+                    <SelectValue placeholder={ticketClassesLoading ? t('common.loading') : t('ticket.selectTicketClass')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">None</SelectItem>
                     {ticketClasses.map((tc) => (
                       <SelectItem key={tc.id} value={tc.id.toString()}>
                         {language === 'en' ? tc.name_en : tc.name_th}
@@ -1140,12 +1138,6 @@ const TicketCreateWizardPageV2: React.FC = () => {
                     <span className="font-medium">{selectedEquipment ? `${selectedEquipment.EQCODE} - ${selectedEquipment.EQNAME}` : 'No specific equipment'}</span>
                   </div>
                 )}
-                <div className="flex justify-between gap-4">
-                  <span className="text-gray-500 shrink-0">{t('ticket.priority')}:</span>
-                  <span className="font-medium text-right">
-                    {priority ? t(`ticket.priority${priority}`) : '-'}
-                  </span>
-                </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.wizardUploadImages')}:</span> 
                   <span className="font-medium">{beforeFiles.length} photo(s)</span>
@@ -1157,6 +1149,12 @@ const TicketCreateWizardPageV2: React.FC = () => {
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.title')}:</span> 
                   <span className="font-medium">{title}</span>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-gray-500 shrink-0">{t('ticket.priority')}:</span>
+                  <span className="font-medium text-right">
+                    {priority ? t(`ticket.priority${priority}`) : '-'}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-500">{t('ticket.criticalLevel')}:</span> 
@@ -1179,7 +1177,7 @@ const TicketCreateWizardPageV2: React.FC = () => {
                     {ticketClass ? (language === 'en' 
                       ? ticketClasses.find(tc => tc.id === ticketClass)?.name_en || '-' 
                       : ticketClasses.find(tc => tc.id === ticketClass)?.name_th || '-') 
-                      : 'None'}
+                      : '-'}
                   </span>
                 </div>
                 {/* <div className="flex justify-between">
