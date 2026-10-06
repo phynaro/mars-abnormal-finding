@@ -322,6 +322,9 @@ export const TicketList: React.FC = () => {
       delay: searchParams.get('delay') === 'true' ? true : undefined,
       overdue: searchParams.get('overdue') === 'true' ? true : undefined,
       team: (searchParams.get('team') as 'operator' | 'reliability') || undefined,
+      dueStartDate: searchParams.get('dueStartDate') || undefined,
+      dueEndDate: searchParams.get('dueEndDate') || undefined,
+      assignedBucket: searchParams.get('assignedBucket') || undefined,
     };
 
     const tf = searchParams.get("timeFilter");
@@ -956,6 +959,9 @@ export const TicketList: React.FC = () => {
       delay: undefined,
       overdue: undefined,
       team: undefined,
+      dueStartDate: undefined,
+      dueEndDate: undefined,
+      assignedBucket: undefined,
     };
     setTimeFilter("all");
     setSelectedYear(clearedYear);
@@ -965,7 +971,7 @@ export const TicketList: React.FC = () => {
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.assigned_dept || filters.finished_by || filters.timeliness || filters.machine || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team);
+    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.assigned_dept || filters.finished_by || filters.timeliness || filters.machine || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team || filters.dueStartDate || filters.dueEndDate || filters.assignedBucket);
   };
 
   // const getTicketClassLabel = (ticketClassId?: number | string | null) => {
@@ -2652,6 +2658,33 @@ export const TicketList: React.FC = () => {
             <Badge variant="secondary" className="gap-1">
               {t('ticket.completion')}: {filters.timeliness === 'ontime' ? t('ticket.ontime') : t('ticket.late')}
               <X className="h-3 w-3 cursor-pointer hover:text-destructive" onClick={() => clearFilter("timeliness")} />
+            </Badge>
+          )}
+          {filters.dueStartDate && filters.dueEndDate && (
+            <Badge variant="secondary" className="gap-1">
+              Due: {new Date(filters.dueStartDate).toLocaleDateString()} - {new Date(filters.dueEndDate).toLocaleDateString()}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => {
+                  const updatedFilters = {
+                    ...filters,
+                    dueStartDate: undefined,
+                    dueEndDate: undefined,
+                    page: 1
+                  };
+                  setFilters(updatedFilters);
+                  syncFiltersToURL(updatedFilters);
+                }}
+              />
+            </Badge>
+          )}
+          {filters.assignedBucket && (
+            <Badge variant="secondary" className="gap-1">
+              {filters.assignedBucket}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("assignedBucket")}
+              />
             </Badge>
           )}
           {filters.finished_by && (

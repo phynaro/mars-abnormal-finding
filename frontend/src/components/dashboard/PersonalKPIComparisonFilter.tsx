@@ -29,6 +29,7 @@ export interface PersonalKPIComparisonFilterProps {
 }
 
 const KPI_OPTIONS = [
+  { value: 'ticketCountAssigned', label: 'dashboard.personalKPIComparison.ticketCountAssigned' },
   { value: 'ticketCountCreated', label: 'dashboard.personalKPIComparison.ticketCountCreated' },
   { value: 'ticketCountClosed', label: 'dashboard.personalKPIComparison.ticketCountClosed' },
   { value: 'downtimeSavedCreated', label: 'dashboard.personalKPIComparison.downtimeSavedCreated' },

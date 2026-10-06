@@ -4217,19 +4217,7 @@ const getPersonalKPIComparison = async (req, res) => {
 
     // Generate avatar colors and initials for each user
     const users = result.recordset.map((user, index) => {
-      const name = user.personName || 'Unknown User';
-      const nameParts = name.split(' ');
-      const initials = nameParts.length >= 2 
-        ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
-        : nameParts[0] ? nameParts[0][0].toUpperCase() : 'U';
-      
-      // Generate consistent color based on user index
-      const colors = [
-        '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
-        '#06B6D4', '#F97316', '#84CC16', '#EC4899', '#6366F1',
-        '#14B8A6', '#F43F5E', '#8B5A2B', '#059669', '#DC2626'
-      ];
-      const bgColor = colors[index % colors.length];
+      const { initials, bgColor } = buildAvatarMeta(user.personName, index);
 
       return {
         personno: user.personno,
@@ -4270,6 +4258,165 @@ const getPersonalKPIComparison = async (req, res) => {
 
   } catch (error) {
     console.error('Error in getPersonalKPIComparison:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+const AVATAR_COLORS = [
+  '#3B82F6', '#EF4444', '#10B981', '#F59E0B', '#8B5CF6',
+  '#06B6D4', '#F97316', '#84CC16', '#EC4899', '#6366F1',
+  '#14B8A6', '#F43F5E', '#8B5A2B', '#059669', '#DC2626'
+];
+
+/**
+ * Build initials and a stable avatar color for a person name
+ */
+const buildAvatarMeta = (personName, index) => {
+  const name = personName || 'Unknown User';
+  const nameParts = name.trim().split(/\s+/).filter(Boolean);
+  const initials = nameParts.length >= 2
+    ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`.toUpperCase()
+    : nameParts[0] ? nameParts[0][0].toUpperCase() : 'U';
+  const bgColor = AVATAR_COLORS[index % AVATAR_COLORS.length];
+  return { initials, bgColor };
+};
+
+/**
+ * Get Personal KPI Assigned Breakdown
+ * Returns stacked-bar category counts per assignee × plant, plus unassigned totals by plant.
+ * Assigned tickets: due date (schedule_finish) in range.
+ * Unassigned tickets: assigned_to IS NULL OR schedule_finish IS NULL, created_at in range.
+ */
+const getPersonalKPIAssignedBreakdown = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    const pool = await sql.connect(dbConfig);
+
+    const CLOSED_STATUSES = `('finished', 'reviewed', 'review_escalated', 'closed')`;
+    const ACTIVE_STATUSES = `('open', 'accepted', 'planed', 'in_progress', 'escalated', 'reopened_in_progress')`;
+    const REJECTED_STATUSES = `('rejected_pending_l3_review', 'rejected_final')`;
+
+    const assignedQuery = `
+      SELECT
+        p.PERSONNO as personno,
+        ISNULL(p.FIRSTNAME,'') + ' ' + ISNULL(p.LASTNAME,'') as personName,
+        p.DEPTNO as deptNo,
+        d.DEPTCODE as deptCode,
+        d.DEPTNAME as deptName,
+        ISNULL(ue.AvatarUrl, '') as avatarUrl,
+        ISNULL(pe.plant, 'Unknown') as plant,
+        COUNT(CASE
+          WHEN t.status IN ${CLOSED_STATUSES}
+            AND t.actual_finish_at IS NOT NULL
+            AND t.actual_finish_at <= t.schedule_finish
+          THEN 1 END) as closedOnTime,
+        COUNT(CASE
+          WHEN t.status IN ${CLOSED_STATUSES}
+            AND (t.actual_finish_at IS NULL OR t.actual_finish_at > t.schedule_finish)
+          THEN 1 END) as closedDelay,
+        COUNT(CASE
+          WHEN t.status IN ${ACTIVE_STATUSES}
+            AND t.schedule_finish >= GETDATE()
+          THEN 1 END) as openNotDue,
+        COUNT(CASE
+          WHEN t.status IN ${ACTIVE_STATUSES}
+            AND t.schedule_finish < GETDATE()
+          THEN 1 END) as openOverdue
+      FROM IgxTickets t
+      INNER JOIN Person p ON t.assigned_to = p.PERSONNO AND p.FLAGDEL != 'Y'
+      LEFT JOIN IgxUserExtension ue ON p.PERSONNO = ue.PersonNo
+      LEFT JOIN Dept d ON p.DEPTNO = d.DEPTNO
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+      WHERE t.assigned_to IS NOT NULL
+        AND t.schedule_finish IS NOT NULL
+        AND t.schedule_finish >= @startDate
+        AND t.schedule_finish <= @endDate
+        AND t.status NOT IN ${REJECTED_STATUSES}
+      GROUP BY
+        p.PERSONNO, p.FIRSTNAME, p.LASTNAME, p.DEPTNO,
+        d.DEPTCODE, d.DEPTNAME, ue.AvatarUrl, pe.plant
+      HAVING
+        COUNT(CASE
+          WHEN t.status IN ${CLOSED_STATUSES}
+            OR t.status IN ${ACTIVE_STATUSES}
+          THEN 1 END) > 0
+      ORDER BY personName, plant
+    `;
+
+    const unassignedQuery = `
+      SELECT
+        ISNULL(pe.plant, 'Unknown') as plant,
+        COUNT(*) as count
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+      WHERE (t.assigned_to IS NULL OR t.schedule_finish IS NULL)
+        AND t.created_at >= @startDate
+        AND t.created_at <= @endDate
+        AND t.status NOT IN ${REJECTED_STATUSES}
+      GROUP BY pe.plant
+      ORDER BY plant
+    `;
+
+    const assignedResult = await pool.request()
+      .input('startDate', sql.DateTime, startDate)
+      .input('endDate', sql.DateTime, endDate)
+      .query(assignedQuery);
+
+    const unassignedResult = await pool.request()
+      .input('startDate', sql.DateTime, startDate)
+      .input('endDate', sql.DateTime, endDate)
+      .query(unassignedQuery);
+
+    // Stable color index per person across plants
+    const personColorIndex = new Map();
+    let colorCounter = 0;
+
+    const rows = assignedResult.recordset.map((row) => {
+      if (!personColorIndex.has(row.personno)) {
+        personColorIndex.set(row.personno, colorCounter++);
+      }
+      const { initials, bgColor } = buildAvatarMeta(row.personName, personColorIndex.get(row.personno));
+      return {
+        personno: row.personno,
+        personName: row.personName,
+        deptNo: row.deptNo || null,
+        deptCode: row.deptCode || null,
+        deptName: row.deptName || null,
+        avatarUrl: row.avatarUrl || '',
+        initials,
+        bgColor,
+        plant: row.plant || 'Unknown',
+        closedOnTime: row.closedOnTime || 0,
+        closedDelay: row.closedDelay || 0,
+        openNotDue: row.openNotDue || 0,
+        openOverdue: row.openOverdue || 0
+      };
+    });
+
+    const unassigned = unassignedResult.recordset.map((row) => ({
+      plant: row.plant || 'Unknown',
+      count: row.count || 0
+    }));
+
+    res.json({
+      success: true,
+      data: { rows, unassigned },
+      message: 'Personal KPI assigned breakdown retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error in getPersonalKPIAssignedBreakdown:', error);
     res.status(500).json({
       success: false,
       message: 'Internal server error',
@@ -4759,6 +4906,7 @@ exports.getCaseCountByPU = async (req, res) => {
 };
 
 exports.getPersonalKPIComparison = getPersonalKPIComparison;
+exports.getPersonalKPIAssignedBreakdown = getPersonalKPIAssignedBreakdown;
 exports.getDepartmentUserKPITicketsCreated = getDepartmentUserKPITicketsCreated;
 exports.getDepartmentUserKPITicketsAssigned = getDepartmentUserKPITicketsAssigned;
 exports.getDepartmentUserKPIClosureRate = getDepartmentUserKPIClosureRate;

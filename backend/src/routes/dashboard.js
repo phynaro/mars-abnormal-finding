@@ -98,6 +98,9 @@ router.get('/downtime-impact-reporter-leaderboard', requireFormPermission('TKT',
 // Get Personal KPI Comparison Data (requires TKT form view permission)
 router.get('/personal-kpi-comparison', requireFormPermission('TKT', 'view'), dashboardController.getPersonalKPIComparison);
 
+// Get Personal KPI Assigned Breakdown (stacked chart categories by assignee × plant)
+router.get('/personal-kpi-comparison/assigned-breakdown', requireFormPermission('TKT', 'view'), dashboardController.getPersonalKPIAssignedBreakdown);
+
 // Get Department User KPI - Tickets Created (requires TKT form view permission)
 router.get('/department-user-kpi/tickets-created', requireFormPermission('TKT', 'view'), dashboardController.getDepartmentUserKPITicketsCreated);
 

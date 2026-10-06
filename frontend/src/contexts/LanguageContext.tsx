@@ -1162,6 +1162,7 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.personalKPIComparison.errorFetchingData': 'Failed to fetch KPI comparison data',
     
     // KPI Names
+    'dashboard.personalKPIComparison.ticketCountAssigned': 'Ticket Count (Assigned)',
     'dashboard.personalKPIComparison.ticketCountCreated': 'Ticket Count (Created)',
     'dashboard.personalKPIComparison.ticketCountClosed': 'Ticket Count (Closed)',
     'dashboard.personalKPIComparison.downtimeSavedCreated': 'Downtime Saved (Created)',
@@ -1170,6 +1171,16 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.personalKPIComparison.costSavedAssigned': 'Cost Saved (Assigned)',
     'dashboard.personalKPIComparison.ontimePercentage': 'Ontime Percentage',
     'dashboard.personalKPIComparison.avgResolutionHours': 'Average Resolution (Hours)',
+    'dashboard.personalKPIComparison.all': 'ALL',
+    'dashboard.personalKPIComparison.byPlant': 'By Plant',
+    'dashboard.personalKPIComparison.closedOnTime': 'Close on time',
+    'dashboard.personalKPIComparison.closedDelay': 'Close delay',
+    'dashboard.personalKPIComparison.openNotDue': 'In progress (not due)',
+    'dashboard.personalKPIComparison.openOverdue': 'In progress (overdue)',
+    'dashboard.personalKPIComparison.unassigned': 'Unassigned',
+    'dashboard.personalKPIComparison.unknownPlant': 'Unknown',
+    'dashboard.personalKPIComparison.total': 'Total',
+    'dashboard.personalKPIComparison.clickToViewTickets': 'Click a bar segment to open the ticket list',
     
     // Filter Mode and Navigation
     'dashboard.personalKPIComparison.filterMode': 'Filter Mode',
@@ -2421,6 +2432,7 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.personalKPIComparison.errorFetchingData': 'ไม่สามารถดึงข้อมูลการเปรียบเทียบ KPI ได้',
     
     // KPI Names
+    'dashboard.personalKPIComparison.ticketCountAssigned': 'จำนวนรายงาน (มอบหมาย)',
     'dashboard.personalKPIComparison.ticketCountCreated': 'จำนวนรายงาน (สร้าง)',
     'dashboard.personalKPIComparison.ticketCountClosed': 'จำนวนรายงาน (ปิด)',
     'dashboard.personalKPIComparison.downtimeSavedCreated': 'เวลาหยุดทำงานที่หลีกเลี่ยงได้ (สร้าง)',
@@ -2429,6 +2441,16 @@ const translations: Record<Language, Record<string, string>> = {
     'dashboard.personalKPIComparison.costSavedAssigned': 'ต้นทุนที่หลีกเลี่ยงได้ (รับผิดชอบ)',
     'dashboard.personalKPIComparison.ontimePercentage': 'เปอร์เซ็นต์การส่งตรงเวลา',
     'dashboard.personalKPIComparison.avgResolutionHours': 'เวลาเฉลี่ยในการแก้ไข (ชั่วโมง)',
+    'dashboard.personalKPIComparison.all': 'ทั้งหมด',
+    'dashboard.personalKPIComparison.byPlant': 'ตามโรงงาน',
+    'dashboard.personalKPIComparison.closedOnTime': 'ปิดตรงเวลา',
+    'dashboard.personalKPIComparison.closedDelay': 'ปิดล่าช้า',
+    'dashboard.personalKPIComparison.openNotDue': 'กำลังดำเนินการ (ยังไม่ครบกำหนด)',
+    'dashboard.personalKPIComparison.openOverdue': 'กำลังดำเนินการ (เกินกำหนด)',
+    'dashboard.personalKPIComparison.unassigned': 'ยังไม่มอบหมาย',
+    'dashboard.personalKPIComparison.unknownPlant': 'ไม่ทราบโรงงาน',
+    'dashboard.personalKPIComparison.total': 'รวม',
+    'dashboard.personalKPIComparison.clickToViewTickets': 'คลิกที่แท่งเพื่อเปิดรายการรายงาน',
     
     // Filter Mode and Navigation
     'dashboard.personalKPIComparison.filterMode': 'โหมดตัวกรอง',

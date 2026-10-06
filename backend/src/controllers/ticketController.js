@@ -568,6 +568,9 @@ const getTickets = async (req, res) => {
       finished_by,
       timeliness,
       machine,
+      dueStartDate,
+      dueEndDate,
+      assignedBucket,
     } = req.query;
 
     const offset = (page - 1) * limit;
@@ -581,6 +584,43 @@ const getTickets = async (req, res) => {
       whereClause += " AND CAST(t.created_at AS DATE) >= @startDate AND CAST(t.created_at AS DATE) <= @endDate";
       params.push({ name: "startDate", value: startDate, type: sql.Date });
       params.push({ name: "endDate", value: endDate, type: sql.Date });
+    }
+
+    // Due date range filter (schedule_finish) — used by Personal KPI assigned chart deep-links
+    if (dueStartDate && dueEndDate) {
+      whereClause += " AND t.schedule_finish IS NOT NULL AND CAST(t.schedule_finish AS DATE) >= @dueStartDate AND CAST(t.schedule_finish AS DATE) <= @dueEndDate";
+      params.push({ name: "dueStartDate", value: dueStartDate, type: sql.Date });
+      params.push({ name: "dueEndDate", value: dueEndDate, type: sql.Date });
+    }
+
+    // Assigned-bucket filter matching Personal KPI stacked chart categories
+    if (assignedBucket === 'unassigned') {
+      whereClause += " AND (t.assigned_to IS NULL OR t.schedule_finish IS NULL) AND t.status NOT IN ('rejected_pending_l3_review', 'rejected_final')";
+    } else if (assignedBucket === 'closedOnTime') {
+      whereClause += ` AND t.assigned_to IS NOT NULL
+        AND t.schedule_finish IS NOT NULL
+        AND t.status IN ('finished', 'reviewed', 'review_escalated', 'closed')
+        AND t.actual_finish_at IS NOT NULL
+        AND t.actual_finish_at <= t.schedule_finish`;
+    } else if (assignedBucket === 'closedDelay') {
+      whereClause += ` AND t.assigned_to IS NOT NULL
+        AND t.schedule_finish IS NOT NULL
+        AND t.status IN ('finished', 'reviewed', 'review_escalated', 'closed')
+        AND (t.actual_finish_at IS NULL OR t.actual_finish_at > t.schedule_finish)`;
+    } else if (assignedBucket === 'openNotDue') {
+      whereClause += ` AND t.assigned_to IS NOT NULL
+        AND t.schedule_finish IS NOT NULL
+        AND t.status IN ('open', 'accepted', 'planed', 'in_progress', 'escalated', 'reopened_in_progress')
+        AND t.schedule_finish >= GETDATE()`;
+    } else if (assignedBucket === 'openOverdue') {
+      whereClause += ` AND t.assigned_to IS NOT NULL
+        AND t.schedule_finish IS NOT NULL
+        AND t.status IN ('open', 'accepted', 'planed', 'in_progress', 'escalated', 'reopened_in_progress')
+        AND t.schedule_finish < GETDATE()`;
+    } else if (assignedBucket === 'assigned') {
+      whereClause += ` AND t.assigned_to IS NOT NULL
+        AND t.schedule_finish IS NOT NULL
+        AND t.status IN ('open', 'accepted', 'planed', 'in_progress', 'escalated', 'reopened_in_progress', 'finished', 'reviewed', 'review_escalated', 'closed')`;
     }
 
     // Finished date range filter (finished_at) - for closed tickets with finished_at in period
@@ -858,14 +898,28 @@ const getTickets = async (req, res) => {
     }
 
     if (plant) {
-      if (plant.includes(',')) {
+      if (plant === 'Unknown') {
+        whereClause += " AND (pe.plant IS NULL OR LTRIM(RTRIM(pe.plant)) = '' OR pe.plant = 'Unknown')";
+      } else if (plant.includes(',')) {
         const plantList = plant.split(',').map(p => p.trim()).filter(Boolean);
         if (plantList.length > 0) {
           const plantPlaceholders = plantList.map((_, index) => `@plant${index}`).join(',');
-          whereClause += ` AND pe.plant IN (${plantPlaceholders})`;
-          plantList.forEach((plantValue, index) => {
-            params.push({ name: `plant${index}`, value: plantValue, type: sql.VarChar(50) });
-          });
+          const hasUnknown = plantList.includes('Unknown');
+          const knownPlants = plantList.filter((p) => p !== 'Unknown');
+          if (hasUnknown && knownPlants.length > 0) {
+            const knownPlaceholders = knownPlants.map((_, index) => `@plant${index}`).join(',');
+            whereClause += ` AND (pe.plant IN (${knownPlaceholders}) OR pe.plant IS NULL OR LTRIM(RTRIM(pe.plant)) = '' OR pe.plant = 'Unknown')`;
+            knownPlants.forEach((plantValue, index) => {
+              params.push({ name: `plant${index}`, value: plantValue, type: sql.VarChar(50) });
+            });
+          } else if (hasUnknown) {
+            whereClause += " AND (pe.plant IS NULL OR LTRIM(RTRIM(pe.plant)) = '' OR pe.plant = 'Unknown')";
+          } else {
+            whereClause += ` AND pe.plant IN (${plantPlaceholders})`;
+            plantList.forEach((plantValue, index) => {
+              params.push({ name: `plant${index}`, value: plantValue, type: sql.VarChar(50) });
+            });
+          }
         }
       } else {
         whereClause += " AND pe.plant = @plant";

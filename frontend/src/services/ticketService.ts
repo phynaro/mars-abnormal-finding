@@ -215,6 +215,11 @@ export interface TicketFilters {
   finished_by?: number | string;
   timeliness?: 'ontime' | 'late';
   machine?: string;
+  /** Due date range (schedule_finish) — Personal KPI assigned chart deep-link */
+  dueStartDate?: string;
+  dueEndDate?: string;
+  /** Stacked-chart category: closedOnTime | closedDelay | openNotDue | openOverdue | unassigned | assigned */
+  assignedBucket?: string;
 }
 
 // Legacy hierarchy interfaces (deprecated - use PUExtension data instead)

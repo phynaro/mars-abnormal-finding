@@ -1,5 +1,5 @@
 import { getAuthHeaders } from '../utils/authHeaders';
-import type { PersonalKPIComparisonResponse } from '../types/personalKPIComparison';
+import type { PersonalKPIComparisonResponse, PersonalKPIAssignedBreakdownResponse } from '../types/personalKPIComparison';
 import type { DepartmentUserKPIResponse } from '../types/departmentUserKPI';
 
 export type GroupBy = 'daily' | 'weekly' | 'period';
@@ -1068,6 +1068,19 @@ class DashboardService {
     const url = `${this.baseURL}/personal-kpi-comparison?${queryParams.toString()}`;
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch personal KPI comparison data');
+    return res.json();
+  }
+
+  async getPersonalKPIAssignedBreakdown(params: {
+    startDate: string;
+    endDate: string;
+  }): Promise<PersonalKPIAssignedBreakdownResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
+    const url = `${this.baseURL}/personal-kpi-comparison/assigned-breakdown?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch personal KPI assigned breakdown');
     return res.json();
   }
 
