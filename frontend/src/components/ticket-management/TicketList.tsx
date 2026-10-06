@@ -302,6 +302,7 @@ export const TicketList: React.FC = () => {
       status: searchParams.get('status') || "",
       pucriticalno: (searchParams.get('pucriticalno') || undefined) as TicketFilters["pucriticalno"],
       ticketClass: (searchParams.get('ticketClass') || undefined) as TicketFilters["ticketClass"],
+      priority: searchParams.get('priority') || undefined,
       workGroup: (searchParams.get('workGroup') || undefined) as TicketFilters["workGroup"],
       search: searchParams.get('search') || "",
       plant: searchParams.get('plant') || undefined,
@@ -943,6 +944,7 @@ export const TicketList: React.FC = () => {
       status: "",
       pucriticalno: undefined,
       ticketClass: undefined,
+      priority: undefined,
       workGroup: undefined,
       search: "",
       plant: undefined,
@@ -971,7 +973,7 @@ export const TicketList: React.FC = () => {
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.assigned_dept || filters.finished_by || filters.timeliness || filters.machine || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team || filters.dueStartDate || filters.dueEndDate || filters.assignedBucket);
+    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.priority || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.assigned_dept || filters.finished_by || filters.timeliness || filters.machine || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team || filters.dueStartDate || filters.dueEndDate || filters.assignedBucket);
   };
 
   // const getTicketClassLabel = (ticketClassId?: number | string | null) => {
@@ -2552,6 +2554,15 @@ export const TicketList: React.FC = () => {
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("ticketClass")}
+              />
+            </Badge>
+          )}
+          {filters.priority && (
+            <Badge variant="secondary" className="gap-1">
+              {t('ticket.priority')}: {String(filters.priority).split(',').map((value) => `P${value.trim()}`).join(", ")}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("priority")}
               />
             </Badge>
           )}

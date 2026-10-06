@@ -197,6 +197,7 @@ export interface TicketFilters {
   status?: string;
   pucriticalno?: number | string;  // Critical Level (supports comma-separated values)
   ticketClass?: number | string | null; // Ticket Class ID (supports comma-separated values)
+  priority?: number | string; // Priority 1-3 (supports comma-separated values)
   workGroup?: number | string | null; // Work Group ID (supports comma-separated values + "default")
   assigned_to?: number | string;
   assigned_dept?: number | string; // Assignee department DEPTNO (supports comma-separated values)

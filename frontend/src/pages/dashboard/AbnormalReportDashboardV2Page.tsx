@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from '@/components/ui/badge';
 import {
   ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, Legend,
-  ComposedChart, AreaChart, Area, Line, LabelList, Cell
+  ComposedChart, AreaChart, Area, Line, LabelList, Cell, PieChart, Pie, type PieLabelRenderProps
 } from 'recharts';
 import CalendarHeatmap from 'react-calendar-heatmap';
 import 'react-calendar-heatmap/dist/styles.css';
@@ -25,7 +25,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import dashboardService, { type AbnormalFindingKPIResponse, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityOpenClosedResponse, type UserActivityResponse, type UserCloserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse } from '@/services/dashboardService';
+import dashboardService, { type AbnormalFindingKPIResponse, type TicketsCountPerPeriodResponse, type TicketsClosedPerPeriodResponse, type AreaActivityOpenClosedResponse, type UserActivityResponse, type UserCloserActivityResponse, type CalendarHeatmapResponse, type DowntimeAvoidanceTrendResponse, type CostAvoidanceResponse, type DowntimeImpactLeaderboardResponse, type CostImpactLeaderboardResponse, type DowntimeImpactReporterLeaderboardResponse, type CostImpactReporterLeaderboardResponse, type DowntimeByFailureModeResponse, type CostByFailureModeResponse, type TicketResolveDurationByAreaResponse, type TicketResolveDurationByUserResponse, type OntimeRateByAreaResponse, type OntimeRateByUserResponse, type TicketCategoryBreakdownResponse, type SpeedTrendPerPeriodDataPoint } from '@/services/dashboardService';
 import { KPITileSkeleton } from '@/components/ui/kpi-tile-skeleton';
 import { TopPerformersSkeleton } from '@/components/ui/top-performers-skeleton';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -33,6 +33,7 @@ import hierarchyService from '@/services/hierarchyService';
 import { getAvatarUrl } from '@/utils/url';
 import { formatLocalDate, calculatePeriodForDate, getDateRangeForFilter, getCompanyYearDateRange } from '@/utils/periodCalculations';
 import { openOntimeTicketList } from '@/utils/ontimeChartDrilldown';
+import { cn } from '@/lib/utils';
 
 // Utility function for dynamic currency formatting
 const formatCurrencyDynamic = (amount: number): { display: string; tooltip: string } => {
@@ -54,6 +55,12 @@ const formatCurrencyDynamic = (amount: number): { display: string; tooltip: stri
       tooltip
     };
   }
+};
+
+const formatMinutesAsDuration = (value: number): string => {
+  const hours = Math.floor(value / 60);
+  const minutes = Math.round(value % 60);
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 };
 
 // Types
@@ -219,6 +226,151 @@ const CostTooltip = ({ active, payload }: ChartTooltipProps) => {
   return null;
 };
 
+interface DonutSlice {
+  name: string;
+  value: number;
+  fill: string;
+  /** Ticket list query param for this slice; omitted when the category has no value to filter on */
+  filter?: { key: 'ticketClass' | 'priority' | 'pucriticalno'; value: string };
+}
+
+const DONUT_PALETTE = [
+  'hsl(var(--primary))',
+  'hsl(var(--accent))',
+  'hsl(var(--warning))',
+  'hsl(var(--info))',
+  'hsl(var(--success))',
+  'hsl(var(--destructive))',
+  'hsl(var(--primary) / 0.6)',
+  'hsl(var(--accent) / 0.6)'
+];
+
+const NOT_SPECIFIED_COLOR = 'hsl(var(--muted-foreground) / 0.5)';
+
+const PRIORITY_COLORS: Record<number, string> = {
+  1: 'hsl(var(--destructive))',
+  2: 'hsl(var(--warning))',
+  3: 'hsl(var(--primary))'
+};
+
+// Keyed by PUCritical.PUCRITICALNO
+const CRITICAL_COLORS: Record<number, string> = {
+  1: 'hsl(var(--accent))',
+  4: 'hsl(var(--muted-foreground))',
+  5: 'hsl(var(--destructive))',
+  6: 'hsl(var(--warning))',
+  7: 'hsl(var(--success))'
+};
+
+const mergeDonutSlices = (slices: DonutSlice[]): DonutSlice[] => {
+  const merged = new Map<string, DonutSlice>();
+  slices.forEach((slice) => {
+    const existing = merged.get(slice.name);
+    if (existing) {
+      existing.value += slice.value;
+    } else {
+      merged.set(slice.name, { ...slice });
+    }
+  });
+  return Array.from(merged.values()).filter((slice) => slice.value > 0);
+};
+
+const CategoryDonutCard: React.FC<{
+  title: string;
+  data: DonutSlice[];
+  loading: boolean;
+  totalLabel: string;
+  onSliceClick?: (slice: DonutSlice) => void;
+}> = ({ title, data, loading, totalLabel, onSliceClick }) => {
+  const total = data.reduce((sum, slice) => sum + slice.value, 0);
+
+  const handleSliceClick = (slice: DonutSlice | undefined) => {
+    if (slice?.filter && onSliceClick) onSliceClick(slice);
+  };
+
+  const renderSliceLabel = ({ cx, cy, midAngle, outerRadius, value, percent = 0 }: PieLabelRenderProps) => {
+    const RADIAN = Math.PI / 180;
+    const cos = Math.cos(-Number(midAngle) * RADIAN);
+    const sin = Math.sin(-Number(midAngle) * RADIAN);
+    const radius = Number(outerRadius) + 22;
+    const x = Number(cx) + radius * cos;
+    const y = Number(cy) + radius * sin;
+    const anchor = cos >= 0 ? 'start' : 'end';
+
+    return (
+      <text x={x} y={y} textAnchor={anchor} dominantBaseline="central" className="text-[11px]">
+        <tspan x={x} dy="-0.5em" className="font-semibold" fill="hsl(var(--foreground))">{Number(value).toLocaleString()}</tspan>
+        <tspan x={x} dy="1.1em" fill="hsl(var(--muted-foreground))">{(percent * 100).toFixed(1)}%</tspan>
+      </text>
+    );
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="flex items-center justify-center h-[340px]">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+          </div>
+        ) : data.length === 0 ? (
+          <div className="flex flex-col items-center justify-center h-[340px] text-muted-foreground">
+            <AlertTriangle className="h-8 w-8 mb-2" />
+            <p className="text-sm font-medium">No Data Available</p>
+          </div>
+        ) : (
+          <div className="relative">
+            <ResponsiveContainer width="100%" height={340}>
+              <PieChart>
+                <Pie
+                  data={data}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="40%"
+                  innerRadius="34%"
+                  outerRadius="52%"
+                  paddingAngle={1}
+                  label={renderSliceLabel}
+                  labelLine={{ stroke: 'hsl(var(--muted-foreground))', strokeWidth: 1 }}
+                  isAnimationActive={false}
+                >
+                  {data.map((slice) => (
+                    <Cell
+                      key={slice.name}
+                      fill={slice.fill}
+                      className={cn(slice.filter && onSliceClick && 'cursor-pointer outline-none')}
+                      onClick={() => handleSliceClick(slice)}
+                    />
+                  ))}
+                </Pie>
+                <RechartsTooltip
+                  formatter={(value: number, name: string) => [
+                    `${value.toLocaleString()} (${total > 0 ? ((value / total) * 100).toFixed(1) : 0}%)`,
+                    name
+                  ]}
+                />
+                <Legend
+                  verticalAlign="bottom"
+                  iconType="circle"
+                  wrapperStyle={{ fontSize: 12, cursor: onSliceClick ? 'pointer' : undefined }}
+                  onClick={(entry) => handleSliceClick(data.find((slice) => slice.name === entry.value))}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-x-0 top-[40%] -translate-y-1/2 flex flex-col items-center">
+              <span className="text-2xl font-bold">{total.toLocaleString()}</span>
+              <span className="text-xs text-muted-foreground">{totalLabel}</span>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
+
 // Individual avatar component that manages its own image loading state
 const SVGAvatar: React.FC<{
   x: number;
@@ -354,7 +506,7 @@ const AvatarLabel = ({ data, maxAvatar = 28, clipPrefix = '' }: { data: AvatarUs
 
 
 const AbnormalReportDashboardV2Page: React.FC = () => {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const getCurrentPeriod = (year: number = new Date().getFullYear()) =>
     calculatePeriodForDate(new Date(), year).period;
@@ -427,6 +579,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   const [caseCountByPUData, setCaseCountByPUData] = useState<Array<{ puno: number; puName: string; caseCount: number }>>([]);
   const [caseCountByPULoading, setCaseCountByPULoading] = useState<boolean>(false);
 
+  const [categoryBreakdownData, setCategoryBreakdownData] = useState<TicketCategoryBreakdownResponse['data'] | null>(null);
+  const [categoryBreakdownLoading, setCategoryBreakdownLoading] = useState<boolean>(false);
+
   const [downtimeByFailureModeData, setDowntimeByFailureModeData] = useState<DowntimeByFailureModeResponse['data']['downtimeByFailureModeData']>([]);
   const [downtimeByFailureModeLoading, setDowntimeByFailureModeLoading] = useState<boolean>(false);
 
@@ -448,6 +603,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   // Tickets Closed Per Period Data
   const [ticketsClosedData, setTicketsClosedData] = useState<TicketsClosedPerPeriodResponse['data']['ticketsClosedData']>([]);
   const [ticketsClosedLoading, setTicketsClosedLoading] = useState<boolean>(false);
+
+  const [speedTrendData, setSpeedTrendData] = useState<SpeedTrendPerPeriodDataPoint[]>([]);
+  const [speedTrendLoading, setSpeedTrendLoading] = useState<boolean>(false);
 
   // Minimum loading time to prevent UI blinking (in milliseconds)
   const MIN_LOADING_TIME = 800;
@@ -1019,6 +1177,30 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   }, [selectedYear, plantFilter, areaFilter]);
 
+  // Fetch average resolve duration and ontime rate per period for the selected year
+  const fetchSpeedTrendData = useCallback(async () => {
+    try {
+      setSpeedTrendLoading(true);
+
+      const params = {
+        year: selectedYear,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
+      };
+
+      const response = await dashboardService.getSpeedTrendPerPeriod(params);
+
+      if (response.success) {
+        setSpeedTrendData(response.data.speedTrendData);
+      }
+    } catch (error) {
+      console.error('Error fetching speed trend per period data:', error);
+      setSpeedTrendData([]);
+    } finally {
+      setSpeedTrendLoading(false);
+    }
+  }, [selectedYear, plantFilter, areaFilter]);
+
   // Fetch Cost Impact by Failure Mode Data
   const fetchCostByFailureModeData = useCallback(async () => {
     try {
@@ -1159,6 +1341,33 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
+  // Fetch Ticket Category Breakdown (ticket class / priority / critical level)
+  const fetchCategoryBreakdownData = useCallback(async () => {
+    try {
+      setCategoryBreakdownLoading(true);
+
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
+
+      const params = {
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined
+      };
+
+      const response = await dashboardService.getTicketCategoryBreakdown(params);
+
+      if (response.success) {
+        setCategoryBreakdownData(response.data);
+      }
+    } catch (error) {
+      console.error('Error fetching ticket category breakdown data:', error);
+      setCategoryBreakdownData(null);
+    } finally {
+      setCategoryBreakdownLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
+
   // Update selectedYear when timeFilter changes (only for applied filters)
   useEffect(() => {
     const currentYear = new Date().getFullYear();
@@ -1271,6 +1480,11 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     fetchCaseCountByPUData();
   }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchCaseCountByPUData]);
 
+  // Fetch ticket category breakdown when time filter, period, or filters change
+  useEffect(() => {
+    fetchCategoryBreakdownData();
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchCategoryBreakdownData]);
+
   // Fetch resolve duration by area data when time filter or period changes (only when "All Area" is selected)
   useEffect(() => {
     if (areaFilter === 'all') {
@@ -1311,6 +1525,11 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   useEffect(() => {
     fetchTicketsClosedData();
   }, [selectedYear, plantFilter, areaFilter, fetchTicketsClosedData]);
+
+  // Fetch speed trend per period when year or filters change
+  useEffect(() => {
+    fetchSpeedTrendData();
+  }, [selectedYear, plantFilter, areaFilter, fetchSpeedTrendData]);
 
   // Fetch participation data when year or area changes
   useEffect(() => {
@@ -1591,6 +1810,49 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
       avatar: item.avatar ? getAvatarUrl(item.avatar) : undefined
     }));
   }, [costImpactReporterData]);
+
+  const ticketClassDonutData = useMemo<DonutSlice[]>(() => {
+    const items = categoryBreakdownData?.ticketClass ?? [];
+    return mergeDonutSlices(items.map((item, index) => ({
+      name: (language === 'th' ? item.nameTh || item.nameEn : item.nameEn || item.nameTh) || t('dashboard.notSpecified'),
+      value: item.count,
+      fill: item.id === null ? NOT_SPECIFIED_COLOR : DONUT_PALETTE[index % DONUT_PALETTE.length],
+      filter: item.id !== null ? { key: 'ticketClass' as const, value: String(item.id) } : undefined
+    })));
+  }, [categoryBreakdownData, language, t]);
+
+  const priorityDonutData = useMemo<DonutSlice[]>(() => {
+    const items = categoryBreakdownData?.priority ?? [];
+    return mergeDonutSlices(items.map((item) => ({
+      name: item.id ? `${t('ticket.priority')} ${item.id}` : t('dashboard.notSpecified'),
+      value: item.count,
+      fill: (item.id && PRIORITY_COLORS[item.id]) || NOT_SPECIFIED_COLOR,
+      filter: item.id ? { key: 'priority' as const, value: String(item.id) } : undefined
+    })));
+  }, [categoryBreakdownData, t]);
+
+  const criticalDonutData = useMemo<DonutSlice[]>(() => {
+    const items = categoryBreakdownData?.critical ?? [];
+    return mergeDonutSlices(items.map((item) => ({
+      name: item.name || t('dashboard.notSpecified'),
+      value: item.count,
+      fill: (item.id && CRITICAL_COLORS[item.id]) || NOT_SPECIFIED_COLOR,
+      filter: item.id ? { key: 'pucriticalno' as const, value: String(item.id) } : undefined
+    })));
+  }, [categoryBreakdownData, t]);
+
+  const openCategoryTicketList = useCallback((slice: DonutSlice) => {
+    if (!slice.filter) return;
+    const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
+    const params = new URLSearchParams({
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate
+    });
+    if (plantFilter !== 'all') params.set('plant', plantFilter);
+    if (areaFilter !== 'all') params.set('area', areaFilter);
+    params.set(slice.filter.key, slice.filter.value);
+    window.open(`/tickets?${params.toString()}`, '_blank');
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
   const downtimeByFailureModeChartData = useMemo(() => {
     return downtimeByFailureModeData;
@@ -2995,6 +3257,30 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
           </Card>
         </div>
 
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <CategoryDonutCard
+            title={t('ticket.ticketClass')}
+            data={ticketClassDonutData}
+            loading={categoryBreakdownLoading}
+            totalLabel={t('dashboard.totalCases')}
+            onSliceClick={openCategoryTicketList}
+          />
+          <CategoryDonutCard
+            title={t('dashboard.casesByPriority')}
+            data={priorityDonutData}
+            loading={categoryBreakdownLoading}
+            totalLabel={t('dashboard.totalCases')}
+            onSliceClick={openCategoryTicketList}
+          />
+          <CategoryDonutCard
+            title={t('dashboard.casesByCriticalLevel')}
+            data={criticalDonutData}
+            loading={categoryBreakdownLoading}
+            totalLabel={t('dashboard.totalCases')}
+            onSliceClick={openCategoryTicketList}
+          />
+        </div>
+
         {/* Case Count by PU - Top 10 with See more */}
         {(() => {
           const CASE_COUNT_BY_PU_TOP = 10;
@@ -3426,6 +3712,108 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
               </CardContent>
             </Card>
           )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* Average Resolve Duration/Case per Period */}
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('dashboard.avgResolveDurationPerPeriod')} ({selectedYear})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {speedTrendLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : !speedTrendData.some((row) => row.avgResolveMinutes !== null) ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={speedTrendData} margin={{ top: 24, right: 20, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="period" />
+                    <YAxis tickFormatter={(value) => `${Math.round(Number(value) / 60)}h`} />
+                    <RechartsTooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const row = payload[0].payload as SpeedTrendPerPeriodDataPoint;
+                        return (
+                          <div className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm">
+                            <p className="mb-1 font-medium">{label}</p>
+                            <p>
+                              {t('dashboard.averageResolveTime')}:{' '}
+                              {row.avgResolveMinutes !== null ? formatMinutesAsDuration(row.avgResolveMinutes) : '-'}
+                            </p>
+                            <p>{t('dashboard.resolvedCases')}: {row.resolvedCount}</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="avgResolveMinutes" fill="hsl(var(--primary))" name={t('dashboard.averageResolveTime')} radius={[4, 4, 0, 0]}>
+                      <LabelList
+                        dataKey="avgResolveMinutes"
+                        position="top"
+                        className="fill-muted-foreground text-[10px]"
+                        formatter={(value: unknown) => (value === null || value === undefined ? '' : `${(Number(value) / 60).toFixed(1)}h`)}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Ontime Rate per Period */}
+          <Card>
+            <CardHeader>
+              <CardTitle>{t('dashboard.ontimeRatePerPeriod')} ({selectedYear})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {speedTrendLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                </div>
+              ) : !speedTrendData.some((row) => row.ontimeRate !== null) ? (
+                <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                  <AlertTriangle className="h-8 w-8 mb-2" />
+                  <p className="text-sm font-medium">No Data Available</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={speedTrendData} margin={{ top: 24, right: 20, left: 10, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="period" />
+                    <YAxis domain={[0, 100]} tickFormatter={(value) => `${value}%`} />
+                    <RechartsTooltip
+                      content={({ active, payload, label }) => {
+                        if (!active || !payload?.length) return null;
+                        const row = payload[0].payload as SpeedTrendPerPeriodDataPoint;
+                        return (
+                          <div className="rounded-md border bg-background px-3 py-2 text-sm shadow-sm">
+                            <p className="mb-1 font-medium">{label}</p>
+                            <p>{t('dashboard.ontimeRate')}: {row.ontimeRate !== null ? `${row.ontimeRate}%` : '-'}</p>
+                            <p>{t('dashboard.ontimeFinished')}: {row.ontimeFinished} {t('dashboard.tickets')}</p>
+                            <p>{t('dashboard.lateFinished')}: {row.lateFinished} {t('dashboard.tickets')}</p>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Bar dataKey="ontimeRate" fill="hsl(var(--success))" name={t('dashboard.ontimeRate')} radius={[4, 4, 0, 0]}>
+                      <LabelList
+                        dataKey="ontimeRate"
+                        position="top"
+                        className="fill-muted-foreground text-[10px]"
+                        formatter={(value: unknown) => (value === null || value === undefined ? '' : `${Math.round(Number(value))}%`)}
+                      />
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>

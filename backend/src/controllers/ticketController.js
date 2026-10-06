@@ -550,6 +550,7 @@ const getTickets = async (req, res) => {
       status,
       pucriticalno,
       ticketClass,
+      priority,
       workGroup,
       assigned_to,
       assigned_dept,
@@ -794,6 +795,20 @@ const getTickets = async (req, res) => {
           name: "ticketClass",
           value: parseInt(ticketClass),
           type: sql.Int,
+        });
+      }
+    }
+
+    if (priority) {
+      const priorityList = String(priority)
+        .split(',')
+        .map((value) => parseInt(value.trim()))
+        .filter((value) => !isNaN(value));
+      if (priorityList.length > 0) {
+        const priorityPlaceholders = priorityList.map((_, index) => `@priority${index}`).join(',');
+        whereClause += ` AND t.priority IN (${priorityPlaceholders})`;
+        priorityList.forEach((priorityValue, index) => {
+          params.push({ name: `priority${index}`, value: priorityValue, type: sql.Int });
         });
       }
     }

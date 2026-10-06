@@ -83,6 +83,9 @@ router.get('/ticket-resolve-duration-by-user', requireFormPermission('TKT', 'vie
 // Get Ticket Resolve Duration by Area Data (requires TKT form view permission)
 router.get('/ticket-resolve-duration-by-area', requireFormPermission('TKT', 'view'), dashboardController.getTicketResolveDurationByArea);
 
+// Get average resolve duration and ontime rate per period for a company year (requires TKT form view permission)
+router.get('/speed-trend-per-period', requireFormPermission('TKT', 'view'), dashboardController.getSpeedTrendPerPeriod);
+
 // Get Cost Impact by Failure Mode Data (requires TKT form view permission)
 router.get('/cost-impact-by-failure-mode', requireFormPermission('TKT', 'view'), dashboardController.getCostImpactByFailureMode);
 
@@ -110,6 +113,9 @@ router.get('/department-user-kpi/closure-rate', requireFormPermission('TKT', 'vi
 
 // Get Case Count by PU (requires TKT form view permission)
 router.get('/case-count-by-pu', requireFormPermission('TKT', 'view'), dashboardController.getCaseCountByPU);
+
+// Get Ticket Category Breakdown by ticket class / priority / critical level (requires TKT form view permission)
+router.get('/ticket-category-breakdown', requireFormPermission('TKT', 'view'), dashboardController.getTicketCategoryBreakdown);
 
 // Calibration dashboard (WOTypeNo = 5) - requires WO form view permission
 router.get('/calibration/person-period-summary', requireFormPermission('WO', 'view'), calibrationController.getPersonPeriodSummary);

@@ -598,6 +598,40 @@ export interface CaseCountByPUDataPoint {
   caseCount: number;
 }
 
+export interface SpeedTrendPerPeriodDataPoint {
+  period: string;
+  avgResolveMinutes: number | null;
+  resolvedCount: number;
+  ontimeRate: number | null;
+  ontimeFinished: number;
+  lateFinished: number;
+  ontimeTotal: number;
+}
+
+export interface SpeedTrendPerPeriodResponse {
+  success: boolean;
+  data: {
+    speedTrendData: SpeedTrendPerPeriodDataPoint[];
+    appliedFilters: {
+      year: number;
+      plant: string | null;
+      area: string | null;
+    };
+  };
+  message: string;
+}
+
+export interface TicketCategoryBreakdownResponse {
+  success: boolean;
+  data: {
+    ticketClass: Array<{ id: number | null; nameEn: string | null; nameTh: string | null; count: number }>;
+    priority: Array<{ id: number | null; count: number }>;
+    critical: Array<{ id: number | null; name: string | null; count: number }>;
+    totalTickets: number;
+  };
+  message: string;
+}
+
 export interface CaseCountByPUResponse {
   success: boolean;
   data: {
@@ -705,6 +739,23 @@ class DashboardService {
     const url = `${this.baseURL}/tickets-closed-per-period?${queryParams.toString()}`;
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch tickets closed per period');
+    return res.json();
+  }
+
+  async getSpeedTrendPerPeriod(params: {
+    year?: number;
+    plant?: string;
+    area?: string;
+  } = {}): Promise<SpeedTrendPerPeriodResponse> {
+    const queryParams = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && String(v) !== '') {
+        queryParams.set(k, String(v));
+      }
+    });
+    const url = `${this.baseURL}/speed-trend-per-period?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch speed trend per period');
     return res.json();
   }
 
@@ -1054,6 +1105,27 @@ class DashboardService {
     const url = `${this.baseURL}/case-count-by-pu?${queryParams.toString()}`;
     const res = await fetch(url, { headers: this.headers() });
     if (!res.ok) throw new Error('Failed to fetch case count by PU data');
+    return res.json();
+  }
+
+  async getTicketCategoryBreakdown(params: {
+    startDate: string;
+    endDate: string;
+    plant?: string;
+    area?: string;
+  }): Promise<TicketCategoryBreakdownResponse> {
+    const queryParams = new URLSearchParams();
+    queryParams.set('startDate', params.startDate);
+    queryParams.set('endDate', params.endDate);
+    if (params.plant !== undefined) {
+      queryParams.set('plant', params.plant);
+    }
+    if (params.area !== undefined) {
+      queryParams.set('area', params.area);
+    }
+    const url = `${this.baseURL}/ticket-category-breakdown?${queryParams.toString()}`;
+    const res = await fetch(url, { headers: this.headers() });
+    if (!res.ok) throw new Error('Failed to fetch ticket category breakdown data');
     return res.json();
   }
 

@@ -4905,6 +4905,191 @@ exports.getCaseCountByPU = async (req, res) => {
   }
 };
 
+/**
+ * Get Ticket Category Breakdown
+ * Returns ticket counts grouped by ticket class, priority, and PU critical level
+ */
+exports.getTicketCategoryBreakdown = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+
+    const { startDate, endDate, plant, area } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'startDate and endDate are required'
+      });
+    }
+
+    let whereClause = 'WHERE CAST(t.created_at AS DATE) >= @startDate AND CAST(t.created_at AS DATE) <= @endDate';
+    if (plant && plant !== 'all') whereClause += ' AND pe.plant = @plant';
+    if (area && area !== 'all') whereClause += ' AND pe.area = @area';
+
+    const buildRequest = () => {
+      const request = pool.request()
+        .input('startDate', sql.Date, startDate)
+        .input('endDate', sql.Date, endDate);
+      if (plant && plant !== 'all') request.input('plant', sql.NVarChar, plant);
+      if (area && area !== 'all') request.input('area', sql.NVarChar, area);
+      return request;
+    };
+
+    const [ticketClassResult, priorityResult, criticalResult] = await Promise.all([
+      buildRequest().query(`
+        SELECT
+          t.ticketClass AS id,
+          MAX(tc.name_en) AS nameEn,
+          MAX(tc.name_th) AS nameTh,
+          COUNT(DISTINCT t.id) AS count
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        LEFT JOIN IgxTicketClass tc ON t.ticketClass = tc.id
+        ${whereClause}
+        GROUP BY t.ticketClass
+        ORDER BY count DESC
+      `),
+      buildRequest().query(`
+        SELECT
+          t.priority AS id,
+          COUNT(DISTINCT t.id) AS count
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        ${whereClause}
+        GROUP BY t.priority
+        ORDER BY t.priority
+      `),
+      buildRequest().query(`
+        SELECT
+          t.pucriticalno AS id,
+          MAX(pc.PUCRITICALNAME) AS name,
+          COUNT(DISTINCT t.id) AS count
+        FROM IgxTickets t
+        LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+        LEFT JOIN PUCritical pc ON t.pucriticalno = pc.PUCRITICALNO
+        ${whereClause}
+        GROUP BY t.pucriticalno
+        ORDER BY t.pucriticalno
+      `)
+    ]);
+
+    const ticketClass = ticketClassResult.recordset.map(row => ({
+      id: row.id,
+      nameEn: row.nameEn ? row.nameEn.trim() : null,
+      nameTh: row.nameTh ? row.nameTh.trim() : null,
+      count: row.count
+    }));
+
+    const priority = priorityResult.recordset.map(row => ({
+      id: row.id,
+      count: row.count
+    }));
+
+    const critical = criticalResult.recordset.map(row => ({
+      id: row.id,
+      name: row.name ? row.name.trim() : null,
+      count: row.count
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        ticketClass,
+        priority,
+        critical,
+        totalTickets: ticketClass.reduce((sum, item) => sum + item.count, 0)
+      },
+      message: 'Ticket category breakdown retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error in getTicketCategoryBreakdown:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get Speed KPI Trend Per Period
+ * Returns average resolve duration and ontime rate for every company period (P1-P13) of a year.
+ * Tickets are bucketed by the period of their finished_at date, matching Total Tickets Closed Per Period.
+ */
+exports.getSpeedTrendPerPeriod = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+
+    const { plant, area } = req.query;
+    const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+
+    const request = pool.request().input('year', sql.Int, year);
+    let filterClause = '';
+    if (plant && plant !== 'all') {
+      filterClause += ' AND pe.plant = @plant';
+      request.input('plant', sql.NVarChar, plant);
+    }
+    if (area && area !== 'all') {
+      filterClause += ' AND pe.area = @area';
+      request.input('area', sql.NVarChar, area);
+    }
+
+    const result = await request.query(`
+      SELECT
+        dd.PeriodNo AS periodNo,
+        COUNT(CASE WHEN t.status = 'closed' AND t.finished_at IS NOT NULL THEN 1 END) AS resolved_count,
+        AVG(CASE WHEN t.status = 'closed' AND t.finished_at IS NOT NULL
+                 THEN CAST(DATEDIFF(MINUTE, t.actual_start_at, t.actual_finish_at) AS FLOAT) END) AS avg_resolve_minutes,
+        COUNT(CASE WHEN ${ontimePopulationSql()} THEN 1 END) AS ontime_total,
+        COUNT(CASE WHEN ${ontimePopulationSql()} AND t.actual_finish_at <= t.schedule_finish THEN 1 END) AS ontime_finished
+      FROM IgxTickets t
+      LEFT JOIN IgxPUExtension pe ON t.puno = pe.puno
+      JOIN dbo.IgxDateDim AS dd ON dd.DateKey = CAST(t.finished_at AS DATE)
+      WHERE dd.CompanyYear = @year
+        AND t.finished_at IS NOT NULL
+        ${filterClause}
+      GROUP BY dd.PeriodNo
+    `);
+
+    const rowsByPeriod = new Map(result.recordset.map(row => [row.periodNo, row]));
+
+    const speedTrendData = Array.from({ length: 13 }, (_, i) => {
+      const row = rowsByPeriod.get(i + 1);
+      const ontimeTotal = row ? row.ontime_total : 0;
+      const ontimeFinished = row ? row.ontime_finished : 0;
+      return {
+        period: `P${i + 1}`,
+        avgResolveMinutes: row && row.avg_resolve_minutes !== null ? Math.round(row.avg_resolve_minutes * 100) / 100 : null,
+        resolvedCount: row ? row.resolved_count : 0,
+        ontimeRate: ontimeTotal > 0 ? Math.round((ontimeFinished * 10000) / ontimeTotal) / 100 : null,
+        ontimeFinished,
+        lateFinished: ontimeTotal - ontimeFinished,
+        ontimeTotal
+      };
+    });
+
+    res.json({
+      success: true,
+      data: {
+        speedTrendData,
+        appliedFilters: {
+          year,
+          plant: plant && plant !== 'all' ? plant : null,
+          area: area && area !== 'all' ? area : null
+        }
+      },
+      message: 'Speed trend per period retrieved successfully'
+    });
+  } catch (error) {
+    console.error('Error in getSpeedTrendPerPeriod:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message
+    });
+  }
+};
+
 exports.getPersonalKPIComparison = getPersonalKPIComparison;
 exports.getPersonalKPIAssignedBreakdown = getPersonalKPIAssignedBreakdown;
 exports.getDepartmentUserKPITicketsCreated = getDepartmentUserKPITicketsCreated;
