@@ -145,16 +145,16 @@ const UserKPICard: React.FC<UserKPICardProps> = ({
 
 
   return (
-    <Card className="h-[310px]">
-      <CardHeader className="pb-2">
+    <Card>
+      <CardHeader className="p-4 pb-2">
         <CardTitle className="flex items-center space-x-2 text-sm">
           <BarChart3 className="h-4 w-4" />
           <span className="truncate">{user.personName}</span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3">
+      <CardContent className="p-4 pt-0">
         {/* Chart */}
-        <div className="h-[180px]">
+        <div className="h-[200px]">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />

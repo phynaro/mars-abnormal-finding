@@ -1,5 +1,5 @@
 import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Users, Calendar, Building, BarChart3 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import type { DepartmentUserKPISummary, DepartmentUserKPIUserData } from "@/types/departmentUserKPI";
@@ -21,13 +21,11 @@ const DepartmentUserKPISummaryCards: React.FC<DepartmentUserKPISummaryCardsProps
 
   if (loading) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[...Array(4)].map((_, i) => (
           <Card key={i}>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm animate-pulse bg-gray-200 h-4 rounded"></CardTitle>
-            </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 space-y-2">
+              <div className="animate-pulse bg-gray-200 h-4 rounded"></div>
               <div className="animate-pulse bg-gray-200 h-8 rounded"></div>
             </CardContent>
           </Card>
@@ -54,79 +52,59 @@ const DepartmentUserKPISummaryCards: React.FC<DepartmentUserKPISummaryCardsProps
       }, 0) / userData.length
     : 0;
 
+  const tiles = [
+    {
+      key: 'department',
+      title: t("dashboard.departmentUserKPI.department"),
+      value: summary.deptName,
+      description: `${t("dashboard.departmentUserKPI.deptCode")}: ${summary.deptNo}`,
+      icon: <Building className="h-4 w-4 text-muted-foreground" />,
+    },
+    {
+      key: 'users',
+      title: t("dashboard.departmentUserKPI.users"),
+      value: summary.totalUsers,
+      description: t("dashboard.departmentUserKPI.activeUsers"),
+      icon: <Users className="h-4 w-4 text-muted-foreground" />,
+    },
+    {
+      key: 'year',
+      title: t("dashboard.departmentUserKPI.year"),
+      value: summary.year,
+      description: t("dashboard.departmentUserKPI.companyYear"),
+      icon: <Calendar className="h-4 w-4 text-muted-foreground" />,
+    },
+    {
+      key: 'total',
+      title: isClosure
+        ? t("dashboard.departmentUserKPI.closureRate")
+        : kpiType === 'created'
+          ? t("dashboard.departmentUserKPI.totalCreated")
+          : t("dashboard.departmentUserKPI.totalAssigned"),
+      value: isClosure ? `${avgClosureRatePct.toFixed(1)}%` : totalTickets,
+      description: isClosure
+        ? t("dashboard.departmentUserKPI.avgClosureRate")
+        : `${t("dashboard.departmentUserKPI.avgPerUser")}: ${avgTicketsPerUser.toFixed(1)}`,
+      icon: <BarChart3 className="h-4 w-4 text-muted-foreground" />,
+    },
+  ];
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-      {/* Department */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center space-x-2">
-            <Building className="h-4 w-4" />
-            <span>{t("dashboard.departmentUserKPI.department")}</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{summary.deptName}</div>
-          <p className="text-xs text-muted-foreground">
-            {t("dashboard.departmentUserKPI.deptCode")}: {summary.deptNo}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Users Count */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center space-x-2">
-            <Users className="h-4 w-4" />
-            <span>{t("dashboard.departmentUserKPI.users")}</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{summary.totalUsers}</div>
-          <p className="text-xs text-muted-foreground">
-            {t("dashboard.departmentUserKPI.activeUsers")}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Year */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center space-x-2">
-            <Calendar className="h-4 w-4" />
-            <span>{t("dashboard.departmentUserKPI.year")}</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{summary.year}</div>
-          <p className="text-xs text-muted-foreground">
-            {t("dashboard.departmentUserKPI.companyYear")}
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Total / Avg Closure Rate */}
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-sm flex items-center space-x-2">
-            <BarChart3 className="h-4 w-4" />
-            <span>
-              {isClosure
-                ? t("dashboard.departmentUserKPI.closureRate")
-                : kpiType === 'created'
-                  ? t("dashboard.departmentUserKPI.totalCreated")
-                  : t("dashboard.departmentUserKPI.totalAssigned")}
-            </span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">
-            {isClosure ? `${avgClosureRatePct.toFixed(1)}%` : totalTickets}
-          </div>
-          <p className="text-xs text-muted-foreground">
-            {isClosure ? t("dashboard.departmentUserKPI.avgClosureRate") : `${t("dashboard.departmentUserKPI.avgPerUser")}: ${avgTicketsPerUser.toFixed(1)}`}
-          </p>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {tiles.map((tile) => (
+        <Card key={tile.key}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-muted-foreground">{tile.title}</p>
+                <p className="text-2xl font-bold truncate">{tile.value}</p>
+                <p className="text-xs text-muted-foreground truncate">{tile.description}</p>
+              </div>
+              {tile.icon}
+            </div>
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 };

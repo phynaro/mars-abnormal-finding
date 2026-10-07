@@ -51,6 +51,7 @@ export interface AssignedBreakdownRow {
   initials: string;
   bgColor: string;
   plant: string;
+  plantName?: string | null;
   closedOnTime: number;
   closedDelay: number;
   openNotDue: number;
@@ -59,6 +60,7 @@ export interface AssignedBreakdownRow {
 
 export interface UnassignedByPlant {
   plant: string;
+  plantName?: string | null;
   count: number;
 }
 

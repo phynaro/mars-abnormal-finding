@@ -191,7 +191,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
   if (loading) {
     return (
       <Card>
-        <CardHeader>
+        <CardHeader className="p-4">
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <BarChart3 className="h-5 w-5" />
@@ -208,7 +208,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
             </Button>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0">
           <div className="flex items-center justify-center h-[400px]">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
           </div>
@@ -220,7 +220,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
   if (error) {
     return (
       <Card>
-        <CardHeader>
+        <CardHeader className="p-4">
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <BarChart3 className="h-5 w-5" />
@@ -237,7 +237,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
             </Button>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0">
           <div className="flex items-center justify-center h-[400px] text-destructive">
             <div className="text-center">
               <p className="font-medium">{t('dashboard.personalKPIComparison.errorLoadingChart')}</p>
@@ -252,7 +252,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
   if (sortedData.length === 0 || hasNoData) {
     return (
       <Card>
-        <CardHeader>
+        <CardHeader className="p-4">
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center space-x-2">
               <BarChart3 className="h-5 w-5" />
@@ -269,7 +269,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
             </Button>
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 pt-0">
           <div className="flex items-center justify-center h-[400px] text-muted-foreground">
             <div className="text-center">
               <BarChart3 className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -284,7 +284,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="p-4">
         <CardTitle className="flex items-center justify-between">
           <div className="flex items-center space-x-2">
             <BarChart3 className="h-5 w-5" />
@@ -301,7 +301,7 @@ const PersonalKPIComparisonChart: React.FC<PersonalKPIComparisonChartProps> = ({
           </Button>
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0">
         <ResponsiveContainer width="100%" height={400}>
           <BarChart
             data={sortedData}

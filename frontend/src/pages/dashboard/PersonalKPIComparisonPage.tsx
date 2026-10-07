@@ -329,11 +329,11 @@ const PersonalKPIComparisonPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto space-y-6 p-6">
+    <div className="space-y-4 p-4">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">
+          <h1 className="text-2xl font-bold tracking-tight">
             {t('dashboard.personalKPIComparison.title')}
           </h1>
           <p className="text-muted-foreground">
@@ -365,7 +365,7 @@ const PersonalKPIComparisonPage: React.FC = () => {
 
       {/* Main Layout: Filter Panel (Left) + Content (Right) */}
       <div
-        className={`grid gap-6 transition-all duration-300 ${
+        className={`grid gap-4 transition-all duration-300 ${
           isFilterPanelOpen ? 'grid-cols-1 lg:grid-cols-4' : 'grid-cols-1'
         }`}
       >
@@ -393,69 +393,49 @@ const PersonalKPIComparisonPage: React.FC = () => {
         )}
 
         {/* Right Side Content */}
-        <div className={`space-y-6 ${isFilterPanelOpen ? 'lg:col-span-3' : 'col-span-1'}`}>
+        <div className={`space-y-4 ${isFilterPanelOpen ? 'lg:col-span-3' : 'col-span-1'}`}>
           {/* Summary Cards (other KPIs only — assigned chart owns its tiles) */}
           {!isAssignedKPI && (
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {t('dashboard.personalKPIComparison.totalUsers')}
-                  </CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{summaryStats.totalUsers}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {t('dashboard.personalKPIComparison.outOf', { total: allUsers.length })}
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {t('dashboard.personalKPIComparison.average')}
-                  </CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{formatValue(summaryStats.avgValue)}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {t('dashboard.personalKPIComparison.averageDescription')}
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {t('dashboard.personalKPIComparison.highest')}
-                  </CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{formatValue(summaryStats.maxValue)}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {t('dashboard.personalKPIComparison.highestDescription')}
-                  </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {t('dashboard.personalKPIComparison.lowest')}
-                  </CardTitle>
-                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{formatValue(summaryStats.minValue)}</div>
-                  <p className="text-xs text-muted-foreground">
-                    {t('dashboard.personalKPIComparison.lowestDescription')}
-                  </p>
-                </CardContent>
-              </Card>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+              {[
+                {
+                  title: t('dashboard.personalKPIComparison.totalUsers'),
+                  value: String(summaryStats.totalUsers),
+                  description: t('dashboard.personalKPIComparison.outOf', { total: allUsers.length }),
+                  icon: <Users className="h-4 w-4 text-muted-foreground" />
+                },
+                {
+                  title: t('dashboard.personalKPIComparison.average'),
+                  value: formatValue(summaryStats.avgValue),
+                  description: t('dashboard.personalKPIComparison.averageDescription'),
+                  icon: <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                },
+                {
+                  title: t('dashboard.personalKPIComparison.highest'),
+                  value: formatValue(summaryStats.maxValue),
+                  description: t('dashboard.personalKPIComparison.highestDescription'),
+                  icon: <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                },
+                {
+                  title: t('dashboard.personalKPIComparison.lowest'),
+                  value: formatValue(summaryStats.minValue),
+                  description: t('dashboard.personalKPIComparison.lowestDescription'),
+                  icon: <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                }
+              ].map((tile) => (
+                <Card key={tile.title}>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-muted-foreground">{tile.title}</p>
+                        <p className="text-2xl font-bold">{tile.value}</p>
+                        <p className="text-xs text-muted-foreground">{tile.description}</p>
+                      </div>
+                      {tile.icon}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           )}
 
@@ -482,12 +462,12 @@ const PersonalKPIComparisonPage: React.FC = () => {
 
           {/* Date Range Info */}
           <Card>
-            <CardHeader>
+            <CardHeader className="p-4 pb-2">
               <CardTitle className="text-sm font-medium">
                 {t('dashboard.personalKPIComparison.dateRange')}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="p-4 pt-0">
               <div className="text-sm text-muted-foreground">
                 {filterMode === 'year'
                   ? t('dashboard.personalKPIComparison.yearRangeDescription', {

@@ -131,11 +131,11 @@ const DepartmentUserKPIDashboardPage: React.FC = () => {
   };
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className="p-4 space-y-4">
       {/* Page Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">{t('dashboard.departmentUserKPI.title')}</h1>
+          <h1 className="text-2xl font-bold tracking-tight">{t('dashboard.departmentUserKPI.title')}</h1>
           <p className="text-muted-foreground">{t('dashboard.departmentUserKPI.description')}</p>
         </div>
         <div className="flex items-center space-x-2">
@@ -163,7 +163,7 @@ const DepartmentUserKPIDashboardPage: React.FC = () => {
       )}
 
       {/* Main Layout: Filter Panel (Left) + Content (Right) */}
-      <div className={`grid gap-6 transition-all duration-300 ${isFilterPanelOpen ? 'grid-cols-1 lg:grid-cols-4' : 'grid-cols-1'}`}>
+      <div className={`grid gap-4 transition-all duration-300 ${isFilterPanelOpen ? 'grid-cols-1 lg:grid-cols-4' : 'grid-cols-1'}`}>
         {/* Filter Panel - Left Side */}
         {isFilterPanelOpen && (
           <div className="lg:col-span-1">
@@ -185,7 +185,7 @@ const DepartmentUserKPIDashboardPage: React.FC = () => {
         )}
 
         {/* Right Side Content */}
-        <div className={`space-y-6 ${isFilterPanelOpen ? 'lg:col-span-3' : 'col-span-1'}`}>
+        <div className={`space-y-4 ${isFilterPanelOpen ? 'lg:col-span-3' : 'col-span-1'}`}>
           {/* Summary Cards */}
           <DepartmentUserKPISummaryCards
             summary={summary}
@@ -208,13 +208,13 @@ const DepartmentUserKPIDashboardPage: React.FC = () => {
               </CardContent>
             </Card>
           ) : loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
               {[...Array(6)].map((_, i) => (
-                <Card key={i} className="h-[350px]">
-                  <CardHeader className="pb-2">
+                <Card key={i} className="h-[260px]">
+                  <CardHeader className="p-4 pb-2">
                     <div className="animate-pulse bg-gray-200 h-4 rounded"></div>
                   </CardHeader>
-                  <CardContent className="space-y-3">
+                  <CardContent className="p-4 pt-0 space-y-3">
                     <div className="h-[180px] animate-pulse bg-gray-200 rounded"></div>
                     <div className="space-y-2">
                       <div className="animate-pulse bg-gray-200 h-3 rounded"></div>
@@ -245,7 +245,7 @@ const DepartmentUserKPIDashboardPage: React.FC = () => {
                 </div>
               </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
                 {userData.map(user => (
                   <UserKPICard
                     key={user.personno}

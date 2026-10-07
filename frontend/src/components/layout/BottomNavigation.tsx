@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { cn } from '@/lib/utils';
 import { useAuth } from '../../contexts/useAuth';
 import { useLanguage } from '../../contexts/LanguageContext';
@@ -7,10 +8,14 @@ import {
   Home, 
   LayoutDashboard, 
   Ticket,
-  Plus
+  Plus,
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { DialogOverlay, DialogPortal } from '@/components/ui/dialog';
 import { getAvatarUrl } from '../../utils/url';
+import { menuItems, isMenuChildPathActive } from './menuConfig';
 
 interface BottomNavItem {
   id: string;
@@ -87,11 +92,82 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
     return location.pathname.startsWith(path);
   };
 
+  const [dashboardMenuOpen, setDashboardMenuOpen] = useState(false);
+
+  const dashboardChildren = (menuItems.find((item) => item.id === 'dashboard')?.children ?? []).filter(
+    (child) => user?.permissionLevel === undefined || user.permissionLevel >= child.permissionLevel
+  );
+
   const handleNavigation = (path: string) => {
+    if (path === '/dashboard' && dashboardChildren.length > 0) {
+      setDashboardMenuOpen(true);
+      return;
+    }
+    navigate(path);
+  };
+
+  const handleDashboardChildSelect = (path: string) => {
+    setDashboardMenuOpen(false);
     navigate(path);
   };
 
   return (
+    <>
+    <DialogPrimitive.Root open={dashboardMenuOpen} onOpenChange={setDashboardMenuOpen}>
+      <DialogPortal>
+        <DialogOverlay className="bg-black/50 lg:hidden" />
+        <DialogPrimitive.Content
+          onOpenAutoFocus={(e) => e.preventDefault()}
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-[9850] lg:hidden",
+            "max-h-[75vh] overflow-y-auto rounded-t-2xl border-t bg-background shadow-lg",
+            "pb-[calc(env(safe-area-inset-bottom)+1rem)]",
+            "data-[state=open]:animate-in data-[state=closed]:animate-out",
+            "data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom duration-200"
+          )}
+        >
+          <div className="mx-auto mt-2 h-1.5 w-10 rounded-full bg-muted" />
+          <div className="flex items-center justify-between px-4 pt-3 pb-2">
+            <DialogPrimitive.Title className="text-base font-semibold">
+              {t('nav.dashboard')}
+            </DialogPrimitive.Title>
+            <DialogPrimitive.Close
+              className="rounded-sm p-1 text-muted-foreground hover:text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </DialogPrimitive.Close>
+          </div>
+          <DialogPrimitive.Description className="sr-only">
+            Select a dashboard
+          </DialogPrimitive.Description>
+          <ul className="px-2">
+            {dashboardChildren.map((child) => {
+              const childActive = isMenuChildPathActive(location.pathname, child.path);
+              return (
+                <li key={child.id}>
+                  <button
+                    onClick={() => handleDashboardChildSelect(child.path)}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg px-3 py-3 text-left text-sm",
+                      "transition-colors focus:outline-none",
+                      childActive
+                        ? "bg-primary text-primary-foreground"
+                        : "text-foreground hover:bg-hover hover:text-hover-foreground"
+                    )}
+                    aria-current={childActive ? 'page' : undefined}
+                  >
+                    {child.icon}
+                    <span className="flex-1 truncate">{child.label}</span>
+                    <ChevronRight className="h-4 w-4 opacity-60" />
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </DialogPrimitive.Content>
+      </DialogPortal>
+    </DialogPrimitive.Root>
     <nav 
       className={cn(
         "fixed bottom-0 left-0 right-0 z-50",
@@ -223,6 +299,7 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
         })}
       </div>
     </nav>
+    </>
   );
 };
 

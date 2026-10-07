@@ -4379,6 +4379,17 @@ const getPersonalKPIAssignedBreakdown = async (req, res) => {
       .input('endDate', sql.DateTime, endDate)
       .query(unassignedQuery);
 
+    const plantNameResult = await pool.request().query(`
+      SELECT plant, MAX(pudescription) as plantName
+      FROM IgxPUExtension
+      WHERE plant IS NOT NULL
+        AND area IS NULL AND line IS NULL AND machine IS NULL
+        AND pudescription IS NOT NULL
+        AND LTRIM(RTRIM(pudescription)) NOT IN ('', '#')
+      GROUP BY plant
+    `);
+    const plantNames = new Map(plantNameResult.recordset.map((r) => [r.plant, r.plantName]));
+
     // Stable color index per person across plants
     const personColorIndex = new Map();
     let colorCounter = 0;
@@ -4398,6 +4409,7 @@ const getPersonalKPIAssignedBreakdown = async (req, res) => {
         initials,
         bgColor,
         plant: row.plant || 'Unknown',
+        plantName: plantNames.get(row.plant) || null,
         closedOnTime: row.closedOnTime || 0,
         closedDelay: row.closedDelay || 0,
         openNotDue: row.openNotDue || 0,
@@ -4407,6 +4419,7 @@ const getPersonalKPIAssignedBreakdown = async (req, res) => {
 
     const unassigned = unassignedResult.recordset.map((row) => ({
       plant: row.plant || 'Unknown',
+      plantName: plantNames.get(row.plant) || null,
       count: row.count || 0
     }));
 

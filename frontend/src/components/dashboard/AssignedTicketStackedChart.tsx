@@ -6,8 +6,7 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
-  Legend
+  Tooltip
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -73,6 +72,8 @@ const STATE_BUCKETS: Array<Exclude<AssignedBucket, 'assigned'>> = [
 ];
 
 const ROW_HEIGHT = 44;
+const MAX_BAR_SIZE = 28;
+const X_AXIS_HEIGHT = 30;
 const CHART_MARGIN = { top: 8, right: 24, left: 8, bottom: 8 };
 const Y_AXIS_WIDTH = 220;
 
@@ -383,7 +384,7 @@ interface StateTilesProps {
 }
 
 const StateTiles: React.FC<StateTilesProps> = ({ totals, labels, plant, onTileClick }) => (
-  <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+  <div className="grid grid-cols-2 gap-4 lg:grid-cols-5">
     {STATE_BUCKETS.map((key) => {
       const Icon = STATE_ICONS[key];
       return (
@@ -391,7 +392,7 @@ const StateTiles: React.FC<StateTilesProps> = ({ totals, labels, plant, onTileCl
           key={`${plant ?? 'all'}-${key}`}
           role="button"
           tabIndex={0}
-          className="cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="cursor-pointer transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => onTileClick(key, plant)}
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
@@ -400,22 +401,38 @@ const StateTiles: React.FC<StateTilesProps> = ({ totals, labels, plant, onTileCl
             }
           }}
         >
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium leading-snug">
-              {labels[key]}
-            </CardTitle>
-            <Icon
-              className="h-5 w-5 shrink-0"
-              style={{ color: COLORS[key] }}
-              aria-hidden
-            />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{totals[key]}</div>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-sm font-medium leading-snug text-muted-foreground">
+                  {labels[key]}
+                </p>
+                <p className="text-2xl font-bold">{totals[key]}</p>
+              </div>
+              <Icon
+                className="h-5 w-5 shrink-0"
+                style={{ color: COLORS[key] }}
+                aria-hidden
+              />
+            </div>
           </CardContent>
         </Card>
       );
     })}
+  </div>
+);
+
+const StateLegend: React.FC<{ labels: Record<string, string> }> = ({ labels }) => (
+  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs">
+    {STATE_BUCKETS.map((bucket) => (
+      <span key={bucket} className="flex items-center gap-1.5">
+        <span
+          className="inline-block h-2.5 w-2.5 rounded-sm"
+          style={{ backgroundColor: COLORS[bucket] }}
+        />
+        {labels[bucket]}
+      </span>
+    ))}
   </div>
 );
 
@@ -437,7 +454,8 @@ const SingleStackedChart: React.FC<SingleChartProps> = ({
   onRowClick
 }) => {
   const dataByKey = useMemo(() => new Map(bars.map((b) => [b.key, b])), [bars]);
-  const height = Math.max(180, bars.length * ROW_HEIGHT + 48);
+  const height =
+    bars.length * ROW_HEIGHT + X_AXIS_HEIGHT + CHART_MARGIN.top + CHART_MARGIN.bottom;
 
   const chartData = bars.map((b) => ({
     ...b,
@@ -462,11 +480,13 @@ const SingleStackedChart: React.FC<SingleChartProps> = ({
           layout="vertical"
           margin={CHART_MARGIN}
           barCategoryGap={8}
+          maxBarSize={MAX_BAR_SIZE}
           style={{ cursor: 'pointer' }}
         >
           <CartesianGrid strokeDasharray="3 3" horizontal={false} />
           <XAxis
             type="number"
+            height={X_AXIS_HEIGHT}
             allowDecimals={false}
             domain={xMax != null && xMax > 0 ? [0, xMax] : [0, 'auto']}
           />
@@ -484,9 +504,6 @@ const SingleStackedChart: React.FC<SingleChartProps> = ({
                 labels={labels}
               />
             }
-          />
-          <Legend
-            formatter={(value: string) => labels[value] || value}
           />
           {STATE_BUCKETS.map((bucket) => (
             <Bar
@@ -634,8 +651,19 @@ const AssignedTicketStackedChart: React.FC<AssignedTicketStackedChartProps> = ({
     }
   };
 
-  const plantDisplayName = (plant: string) =>
-    plant === 'Unknown' ? unknownPlantLabel : plant;
+  const plantNames = useMemo(() => {
+    const names = new Map<string, string>();
+    for (const item of [...rows, ...unassigned]) {
+      if (item.plantName && !names.has(item.plant)) names.set(item.plant, item.plantName);
+    }
+    return names;
+  }, [rows, unassigned]);
+
+  const plantDisplayName = (plant: string) => {
+    if (plant === 'Unknown') return unknownPlantLabel;
+    const name = plantNames.get(plant);
+    return name ? `${name} (${plant})` : plant;
+  };
 
   const kpiTitle = t('dashboard.personalKPIComparison.ticketCountAssigned');
 
@@ -682,7 +710,7 @@ const AssignedTicketStackedChart: React.FC<AssignedTicketStackedChartProps> = ({
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="p-4">
         <CardTitle className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center space-x-2">
             <BarChart3 className="h-5 w-5" />
@@ -710,18 +738,19 @@ const AssignedTicketStackedChart: React.FC<AssignedTicketStackedChartProps> = ({
           </div>
         </CardTitle>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-4 pt-0">
         {!hasData ? (
           <div className="flex h-[200px] items-center justify-center text-sm text-muted-foreground">
             {t('dashboard.personalKPIComparison.noDataDescription')}
           </div>
         ) : viewMode === 'all' ? (
-          <div className="space-y-6">
+          <div className="space-y-4">
             <StateTiles
               totals={allTotals}
               labels={labels}
               onTileClick={openBucketTickets}
             />
+            <StateLegend labels={labels} />
             <SingleStackedChart
               bars={allBars}
               labels={labels}
@@ -730,9 +759,10 @@ const AssignedTicketStackedChart: React.FC<AssignedTicketStackedChartProps> = ({
             />
           </div>
         ) : (
-          <div className="space-y-10">
+          <div className="space-y-6">
+            <StateLegend labels={labels} />
             {plantGroups.map((group) => (
-              <div key={group.plant} className="space-y-4">
+              <div key={group.plant} className="space-y-3">
                 <h3 className="text-base font-semibold text-foreground">
                   {plantDisplayName(group.plant)}
                 </h3>
