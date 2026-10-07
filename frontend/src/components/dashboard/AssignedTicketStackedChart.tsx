@@ -11,7 +11,15 @@ import {
 } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { BarChart3 } from 'lucide-react';
+import {
+  BarChart3,
+  CheckCircle2,
+  Clock,
+  Loader,
+  AlertTriangle,
+  UserX,
+  type LucideIcon
+} from 'lucide-react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { cn } from '@/lib/utils';
 import type {
@@ -35,6 +43,9 @@ export interface AssignedTicketStackedChartProps {
   error: string | null;
   startDate: string;
   endDate: string;
+  /** Selected assignee personnos; when a subset, tile deep-links include assigned_to */
+  selectedUserIds?: number[];
+  totalUserCount?: number;
 }
 
 const COLORS = {
@@ -45,7 +56,15 @@ const COLORS = {
   unassigned: '#9CA3AF'
 } as const;
 
-const BUCKET_KEYS: AssignedBucket[] = [
+const STATE_ICONS: Record<Exclude<AssignedBucket, 'assigned'>, LucideIcon> = {
+  closedOnTime: CheckCircle2,
+  closedDelay: Clock,
+  openNotDue: Loader,
+  openOverdue: AlertTriangle,
+  unassigned: UserX
+};
+
+const STATE_BUCKETS: Array<Exclude<AssignedBucket, 'assigned'>> = [
   'closedOnTime',
   'closedDelay',
   'openNotDue',
@@ -56,6 +75,24 @@ const BUCKET_KEYS: AssignedBucket[] = [
 const ROW_HEIGHT = 44;
 const CHART_MARGIN = { top: 8, right: 24, left: 8, bottom: 8 };
 const Y_AXIS_WIDTH = 220;
+
+type StateTotals = {
+  closedOnTime: number;
+  closedDelay: number;
+  openNotDue: number;
+  openOverdue: number;
+  unassigned: number;
+};
+
+function emptyTotals(): StateTotals {
+  return {
+    closedOnTime: 0,
+    closedDelay: 0,
+    openNotDue: 0,
+    openOverdue: 0,
+    unassigned: 0
+  };
+}
 
 function rowTotal(row: Pick<AssignedChartBarRow, 'closedOnTime' | 'closedDelay' | 'openNotDue' | 'openOverdue' | 'unassigned'>): number {
   return row.closedOnTime + row.closedDelay + row.openNotDue + row.openOverdue + row.unassigned;
@@ -159,9 +196,8 @@ function aggregateAll(
 function groupByPlant(
   rows: AssignedBreakdownRow[],
   unassigned: UnassignedByPlant[],
-  unassignedLabel: string,
-  unknownPlantLabel: string
-): { plant: string; bars: AssignedChartBarRow[] }[] {
+  unassignedLabel: string
+): { plant: string; bars: AssignedChartBarRow[]; totals: StateTotals }[] {
   const plantSet = new Set<string>();
   rows.forEach((r) => plantSet.add(r.plant || 'Unknown'));
   unassigned.forEach((u) => plantSet.add(u.plant || 'Unknown'));
@@ -193,9 +229,19 @@ function groupByPlant(
     const unassignedBar = buildUnassignedBar(unassignedCount, `-${plant}`, plant);
     unassignedBar.personName = unassignedLabel;
 
+    const totals = emptyTotals();
+    for (const row of plantRows) {
+      totals.closedOnTime += row.closedOnTime;
+      totals.closedDelay += row.closedDelay;
+      totals.openNotDue += row.openNotDue;
+      totals.openOverdue += row.openOverdue;
+    }
+    totals.unassigned = unassignedCount;
+
     return {
       plant,
-      bars: [...userBars, unassignedBar]
+      bars: [...userBars, unassignedBar],
+      totals
     };
   }).filter((group) => group.bars.some((b) => b.total > 0));
 }
@@ -329,11 +375,54 @@ const StackTooltip: React.FC<StackTooltipProps> = ({
   );
 };
 
+interface StateTilesProps {
+  totals: StateTotals;
+  labels: Record<string, string>;
+  plant?: string;
+  onTileClick: (bucket: Exclude<AssignedBucket, 'assigned'>, plant?: string) => void;
+}
+
+const StateTiles: React.FC<StateTilesProps> = ({ totals, labels, plant, onTileClick }) => (
+  <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+    {STATE_BUCKETS.map((key) => {
+      const Icon = STATE_ICONS[key];
+      return (
+        <Card
+          key={`${plant ?? 'all'}-${key}`}
+          role="button"
+          tabIndex={0}
+          className="cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onClick={() => onTileClick(key, plant)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onTileClick(key, plant);
+            }
+          }}
+        >
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium leading-snug">
+              {labels[key]}
+            </CardTitle>
+            <Icon
+              className="h-5 w-5 shrink-0"
+              style={{ color: COLORS[key] }}
+              aria-hidden
+            />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{totals[key]}</div>
+          </CardContent>
+        </Card>
+      );
+    })}
+  </div>
+);
+
 interface SingleChartProps {
   bars: AssignedChartBarRow[];
   labels: Record<string, string>;
   title?: string;
-  /** Shared X-axis max so plant charts use the same scale */
   xMax?: number;
   onSegmentClick: (row: AssignedChartBarRow, bucket: AssignedBucket) => void;
   onRowClick: (row: AssignedChartBarRow) => void;
@@ -399,7 +488,7 @@ const SingleStackedChart: React.FC<SingleChartProps> = ({
           <Legend
             formatter={(value: string) => labels[value] || value}
           />
-          {BUCKET_KEYS.map((bucket) => (
+          {STATE_BUCKETS.map((bucket) => (
             <Bar
               key={bucket}
               dataKey={bucket}
@@ -427,7 +516,9 @@ const AssignedTicketStackedChart: React.FC<AssignedTicketStackedChartProps> = ({
   loading,
   error,
   startDate,
-  endDate
+  endDate,
+  selectedUserIds = [],
+  totalUserCount = 0
 }) => {
   const { t } = useLanguage();
   const [viewMode, setViewMode] = useState<'all' | 'byPlant'>('all');
@@ -453,12 +544,23 @@ const AssignedTicketStackedChart: React.FC<AssignedTicketStackedChartProps> = ({
     [rows, unassigned, unassignedLabel]
   );
 
+  const allTotals = useMemo(() => {
+    const totals = emptyTotals();
+    for (const row of rows) {
+      totals.closedOnTime += row.closedOnTime;
+      totals.closedDelay += row.closedDelay;
+      totals.openNotDue += row.openNotDue;
+      totals.openOverdue += row.openOverdue;
+    }
+    totals.unassigned = unassigned.reduce((sum, item) => sum + item.count, 0);
+    return totals;
+  }, [rows, unassigned]);
+
   const plantGroups = useMemo(
-    () => groupByPlant(rows, unassigned, unassignedLabel, unknownPlantLabel),
-    [rows, unassigned, unassignedLabel, unknownPlantLabel]
+    () => groupByPlant(rows, unassigned, unassignedLabel),
+    [rows, unassigned, unassignedLabel]
   );
 
-  // Shared X max across all plant charts so bar lengths are comparable
   const plantXMax = useMemo(() => {
     let max = 0;
     for (const group of plantGroups) {
@@ -468,6 +570,35 @@ const AssignedTicketStackedChart: React.FC<AssignedTicketStackedChartProps> = ({
     }
     return max;
   }, [plantGroups]);
+
+  const openBucketTickets = (
+    bucket: Exclude<AssignedBucket, 'assigned'>,
+    plant?: string
+  ) => {
+    const params = new URLSearchParams();
+    params.set('assignedBucket', bucket);
+
+    if (bucket === 'unassigned') {
+      params.set('startDate', startDate);
+      params.set('endDate', endDate);
+    } else {
+      params.set('dueStartDate', startDate);
+      params.set('dueEndDate', endDate);
+      if (
+        selectedUserIds.length > 0 &&
+        totalUserCount > 0 &&
+        selectedUserIds.length < totalUserCount
+      ) {
+        params.set('assigned_to', selectedUserIds.join(','));
+      }
+    }
+
+    if (plant) {
+      params.set('plant', plant === unknownPlantLabel ? 'Unknown' : plant);
+    }
+
+    window.open(`/tickets?${params.toString()}`, '_blank', 'noopener,noreferrer');
+  };
 
   const navigateToTickets = (row: AssignedChartBarRow, bucket: AssignedBucket) => {
     const params = new URLSearchParams();
@@ -502,6 +633,9 @@ const AssignedTicketStackedChart: React.FC<AssignedTicketStackedChartProps> = ({
       navigateToTickets(row, 'assigned');
     }
   };
+
+  const plantDisplayName = (plant: string) =>
+    plant === 'Unknown' ? unknownPlantLabel : plant;
 
   const kpiTitle = t('dashboard.personalKPIComparison.ticketCountAssigned');
 
@@ -582,28 +716,40 @@ const AssignedTicketStackedChart: React.FC<AssignedTicketStackedChartProps> = ({
             {t('dashboard.personalKPIComparison.noDataDescription')}
           </div>
         ) : viewMode === 'all' ? (
-          <SingleStackedChart
-            bars={allBars}
-            labels={labels}
-            onSegmentClick={handleSegmentClick}
-            onRowClick={handleRowClick}
-          />
+          <div className="space-y-6">
+            <StateTiles
+              totals={allTotals}
+              labels={labels}
+              onTileClick={openBucketTickets}
+            />
+            <SingleStackedChart
+              bars={allBars}
+              labels={labels}
+              onSegmentClick={handleSegmentClick}
+              onRowClick={handleRowClick}
+            />
+          </div>
         ) : (
-          <div className="space-y-8">
+          <div className="space-y-10">
             {plantGroups.map((group) => (
-              <SingleStackedChart
-                key={group.plant}
-                bars={group.bars}
-                labels={labels}
-                xMax={plantXMax}
-                title={
-                  group.plant === 'Unknown'
-                    ? unknownPlantLabel
-                    : group.plant
-                }
-                onSegmentClick={handleSegmentClick}
-                onRowClick={handleRowClick}
-              />
+              <div key={group.plant} className="space-y-4">
+                <h3 className="text-base font-semibold text-foreground">
+                  {plantDisplayName(group.plant)}
+                </h3>
+                <StateTiles
+                  totals={group.totals}
+                  labels={labels}
+                  plant={group.plant}
+                  onTileClick={openBucketTickets}
+                />
+                <SingleStackedChart
+                  bars={group.bars}
+                  labels={labels}
+                  xMax={plantXMax}
+                  onSegmentClick={handleSegmentClick}
+                  onRowClick={handleRowClick}
+                />
+              </div>
             ))}
           </div>
         )}

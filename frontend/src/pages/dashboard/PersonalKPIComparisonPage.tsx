@@ -266,48 +266,6 @@ const PersonalKPIComparisonPage: React.FC = () => {
 
   const isAssignedKPI = selectedKPI === 'ticketCountAssigned';
 
-  // Totals per assigned-state category (for KPI tiles above the chart)
-  const assignedStateTotals = useMemo(() => {
-    const totals = {
-      closedOnTime: 0,
-      closedDelay: 0,
-      openNotDue: 0,
-      openOverdue: 0,
-      unassigned: unassignedByPlant.reduce((sum, item) => sum + item.count, 0)
-    };
-    for (const row of filteredAssignedRows) {
-      totals.closedOnTime += row.closedOnTime;
-      totals.closedDelay += row.closedDelay;
-      totals.openNotDue += row.openNotDue;
-      totals.openOverdue += row.openOverdue;
-    }
-    return totals;
-  }, [filteredAssignedRows, unassignedByPlant]);
-
-  const openAssignedStateTickets = (
-    bucket: 'closedOnTime' | 'closedDelay' | 'openNotDue' | 'openOverdue' | 'unassigned'
-  ) => {
-    const params = new URLSearchParams();
-    params.set('assignedBucket', bucket);
-
-    if (bucket === 'unassigned') {
-      params.set('startDate', dateRange.startDate);
-      params.set('endDate', dateRange.endDate);
-    } else {
-      params.set('dueStartDate', dateRange.startDate);
-      params.set('dueEndDate', dateRange.endDate);
-      // Match tile totals: only the currently selected users (omit when all selected)
-      if (
-        selectedUsers.length > 0 &&
-        selectedUsers.length < allUsers.length
-      ) {
-        params.set('assigned_to', selectedUsers.join(','));
-      }
-    }
-
-    window.open(`/tickets?${params.toString()}`, '_blank', 'noopener,noreferrer');
-  };
-
   // Calculate summary statistics
   const summaryStats = useMemo(() => {
     if (isAssignedKPI) {
@@ -436,73 +394,8 @@ const PersonalKPIComparisonPage: React.FC = () => {
 
         {/* Right Side Content */}
         <div className={`space-y-6 ${isFilterPanelOpen ? 'lg:col-span-3' : 'col-span-1'}`}>
-          {/* Summary Cards / Assigned state tiles */}
-          {isAssignedKPI ? (
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
-              {(
-                [
-                  {
-                    key: 'closedOnTime',
-                    label: t('dashboard.personalKPIComparison.closedOnTime'),
-                    value: assignedStateTotals.closedOnTime,
-                    color: '#166534'
-                  },
-                  {
-                    key: 'closedDelay',
-                    label: t('dashboard.personalKPIComparison.closedDelay'),
-                    value: assignedStateTotals.closedDelay,
-                    color: '#84CC16'
-                  },
-                  {
-                    key: 'openNotDue',
-                    label: t('dashboard.personalKPIComparison.openNotDue'),
-                    value: assignedStateTotals.openNotDue,
-                    color: '#FACC15'
-                  },
-                  {
-                    key: 'openOverdue',
-                    label: t('dashboard.personalKPIComparison.openOverdue'),
-                    value: assignedStateTotals.openOverdue,
-                    color: '#DC2626'
-                  },
-                  {
-                    key: 'unassigned',
-                    label: t('dashboard.personalKPIComparison.unassigned'),
-                    value: assignedStateTotals.unassigned,
-                    color: '#9CA3AF'
-                  }
-                ] as const
-              ).map((tile) => (
-                <Card
-                  key={tile.key}
-                  role="button"
-                  tabIndex={0}
-                  className="cursor-pointer transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  onClick={() => openAssignedStateTickets(tile.key)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.preventDefault();
-                      openAssignedStateTickets(tile.key);
-                    }
-                  }}
-                >
-                  <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium leading-snug">
-                      {tile.label}
-                    </CardTitle>
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-sm"
-                      style={{ backgroundColor: tile.color }}
-                      aria-hidden
-                    />
-                  </CardHeader>
-                  <CardContent>
-                    <div className="text-2xl font-bold">{tile.value}</div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
+          {/* Summary Cards (other KPIs only — assigned chart owns its tiles) */}
+          {!isAssignedKPI && (
             <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
               <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -575,6 +468,8 @@ const PersonalKPIComparisonPage: React.FC = () => {
               error={error}
               startDate={dateRange.startDate}
               endDate={dateRange.endDate}
+              selectedUserIds={selectedUsers}
+              totalUserCount={allUsers.length}
             />
           ) : (
             <PersonalKPIComparisonChart
