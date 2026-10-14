@@ -360,6 +360,7 @@ const getDistinctPlantsFromPUExtension = async (req, res) => {
             WHERE pe.plant IS NOT NULL 
             AND pe.plant != ''
             AND pe.digit_count = 1
+            AND pe.pucode = pe.plant
             AND pe.plant IN ('DP', 'DJ', 'SN', 'ST', 'PS', 'PP')
             GROUP BY pe.plant
             ORDER BY pe.plant
