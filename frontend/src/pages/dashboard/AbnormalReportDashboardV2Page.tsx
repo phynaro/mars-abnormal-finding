@@ -505,6 +505,64 @@ const AvatarLabel = ({ data, maxAvatar = 28, clipPrefix = '' }: { data: AvatarUs
 };
 
 
+const DASHBOARD_FILTERS_STORAGE_KEY = 'abnormalDashboardV2Filters';
+const TIME_FILTER_VALUES = ['this-year', 'last-year', 'this-period', 'select-period'];
+const DEFAULT_TIME_FILTER = 'this-period';
+
+interface DashboardFilters {
+  timeFilter: string;
+  plantFilter: string;
+  areaFilter: string;
+  selectedYear: number;
+  selectedPeriods: number[];
+}
+
+const getDefaultDashboardFilters = (): DashboardFilters => {
+  const year = new Date().getFullYear();
+  return {
+    timeFilter: DEFAULT_TIME_FILTER,
+    plantFilter: 'all',
+    areaFilter: 'all',
+    selectedYear: year,
+    selectedPeriods: [calculatePeriodForDate(new Date(), year).period],
+  };
+};
+
+// Relative time filters (this/last year, this period) are re-derived from today so a stale saved year/period never leaks in.
+const loadDashboardFilters = (): DashboardFilters => {
+  const defaults = getDefaultDashboardFilters();
+  try {
+    const raw = localStorage.getItem(DASHBOARD_FILTERS_STORAGE_KEY);
+    if (!raw) return defaults;
+    const saved = JSON.parse(raw) as Partial<DashboardFilters>;
+
+    const timeFilter = typeof saved.timeFilter === 'string' && TIME_FILTER_VALUES.includes(saved.timeFilter)
+      ? saved.timeFilter
+      : defaults.timeFilter;
+    const plantFilter = typeof saved.plantFilter === 'string' && saved.plantFilter ? saved.plantFilter : 'all';
+    const areaFilter = plantFilter !== 'all' && typeof saved.areaFilter === 'string' && saved.areaFilter ? saved.areaFilter : 'all';
+
+    let selectedYear = defaults.selectedYear;
+    let selectedPeriods = defaults.selectedPeriods;
+    if (timeFilter === 'last-year') {
+      selectedYear = defaults.selectedYear - 1;
+    } else if (timeFilter === 'select-period') {
+      const year = Number(saved.selectedYear);
+      const periods = Array.isArray(saved.selectedPeriods)
+        ? saved.selectedPeriods.map(Number).filter((p) => Number.isInteger(p) && p >= 1 && p <= 13)
+        : [];
+      if (Number.isInteger(year) && year >= 2022 && year <= defaults.selectedYear && periods.length > 0) {
+        selectedYear = year;
+        selectedPeriods = [...periods].sort((a, b) => a - b);
+      }
+    }
+
+    return { timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriods };
+  } catch {
+    return defaults;
+  }
+};
+
 const AbnormalReportDashboardV2Page: React.FC = () => {
   const { t, language } = useLanguage();
 
@@ -527,20 +585,32 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     return [getCurrentPeriod(year)];
   };
   
-  // Global Filters - Applied (currently active)
-  const [timeFilter, setTimeFilter] = useState<string>('this-period');
-  const [plantFilter, setPlantFilter] = useState<string>('all');
-  const [areaFilter, setAreaFilter] = useState<string>('all');
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedPeriods, setSelectedPeriods] = useState<number[]>(() => [getCurrentPeriod()]);
+  // Global Filters - Applied (currently active), restored from localStorage
+  const [initialFilters] = useState<DashboardFilters>(loadDashboardFilters);
+  const [timeFilter, setTimeFilter] = useState<string>(initialFilters.timeFilter);
+  const [plantFilter, setPlantFilter] = useState<string>(initialFilters.plantFilter);
+  const [areaFilter, setAreaFilter] = useState<string>(initialFilters.areaFilter);
+  const [selectedYear, setSelectedYear] = useState<number>(initialFilters.selectedYear);
+  const [selectedPeriods, setSelectedPeriods] = useState<number[]>(initialFilters.selectedPeriods);
   const [isFilterModalOpen, setIsFilterModalOpen] = useState<boolean>(false);
 
   // Pending Filters - Changes not yet applied
-  const [pendingTimeFilter, setPendingTimeFilter] = useState<string>('this-period');
-  const [pendingPlantFilter, setPendingPlantFilter] = useState<string>('all');
-  const [pendingAreaFilter, setPendingAreaFilter] = useState<string>('all');
-  const [pendingSelectedYear, setPendingSelectedYear] = useState<number>(new Date().getFullYear());
-  const [pendingSelectedPeriods, setPendingSelectedPeriods] = useState<number[]>(() => [getCurrentPeriod()]);
+  const [pendingTimeFilter, setPendingTimeFilter] = useState<string>(initialFilters.timeFilter);
+  const [pendingPlantFilter, setPendingPlantFilter] = useState<string>(initialFilters.plantFilter);
+  const [pendingAreaFilter, setPendingAreaFilter] = useState<string>(initialFilters.areaFilter);
+  const [pendingSelectedYear, setPendingSelectedYear] = useState<number>(initialFilters.selectedYear);
+  const [pendingSelectedPeriods, setPendingSelectedPeriods] = useState<number[]>(initialFilters.selectedPeriods);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(
+        DASHBOARD_FILTERS_STORAGE_KEY,
+        JSON.stringify({ timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriods }),
+      );
+    } catch {
+      // Storage unavailable (private mode / quota) — filters just won't persist
+    }
+  }, [timeFilter, plantFilter, areaFilter, selectedYear, selectedPeriods]);
 
   // API State
   const [kpiData, setKpiData] = useState<AbnormalFindingKPIResponse['data'] | null>(null);
@@ -649,7 +719,7 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   // Helper functions for active filters
   const hasActiveFilters = () => {
-    return plantFilter !== 'all' || areaFilter !== 'all';
+    return plantFilter !== 'all' || areaFilter !== 'all' || timeFilter !== DEFAULT_TIME_FILTER;
   };
 
   const clearFilter = (filterType: 'plant' | 'area') => {
@@ -665,10 +735,17 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   };
 
   const clearAllFilters = () => {
-    setPlantFilter('all');
-    setAreaFilter('all');
-    setPendingPlantFilter('all');
-    setPendingAreaFilter('all');
+    const defaults = getDefaultDashboardFilters();
+    setTimeFilter(defaults.timeFilter);
+    setPlantFilter(defaults.plantFilter);
+    setAreaFilter(defaults.areaFilter);
+    setSelectedYear(defaults.selectedYear);
+    setSelectedPeriods(defaults.selectedPeriods);
+    setPendingTimeFilter(defaults.timeFilter);
+    setPendingPlantFilter(defaults.plantFilter);
+    setPendingAreaFilter(defaults.areaFilter);
+    setPendingSelectedYear(defaults.selectedYear);
+    setPendingSelectedPeriods(defaults.selectedPeriods);
   };
 
   // Apply pending filters
