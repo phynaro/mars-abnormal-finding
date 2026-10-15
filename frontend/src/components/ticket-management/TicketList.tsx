@@ -326,6 +326,8 @@ export const TicketList: React.FC = () => {
       dueStartDate: searchParams.get('dueStartDate') || undefined,
       dueEndDate: searchParams.get('dueEndDate') || undefined,
       assignedBucket: searchParams.get('assignedBucket') || undefined,
+      part_code: searchParams.get('part_code') || undefined,
+      symptom_code: searchParams.get('symptom_code') || undefined,
     };
 
     const tf = searchParams.get("timeFilter");
@@ -964,6 +966,8 @@ export const TicketList: React.FC = () => {
       dueStartDate: undefined,
       dueEndDate: undefined,
       assignedBucket: undefined,
+      part_code: undefined,
+      symptom_code: undefined,
     };
     setTimeFilter("all");
     setSelectedYear(clearedYear);
@@ -973,7 +977,7 @@ export const TicketList: React.FC = () => {
   };
 
   const hasActiveFilters = () => {
-    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.priority || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.assigned_dept || filters.finished_by || filters.timeliness || filters.machine || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team || filters.dueStartDate || filters.dueEndDate || filters.assignedBucket);
+    return !!(filters.status || filters.pucriticalno || filters.ticketClass || filters.priority || filters.workGroup || filters.search || filters.plant || filters.area || filters.created_by || filters.assigned_to || filters.assigned_dept || filters.finished_by || filters.timeliness || filters.machine || filters.startDate || filters.endDate || filters.puno || filters.delay || filters.overdue || filters.team || filters.dueStartDate || filters.dueEndDate || filters.assignedBucket || filters.part_code || filters.symptom_code);
   };
 
   // const getTicketClassLabel = (ticketClassId?: number | string | null) => {
@@ -2644,6 +2648,24 @@ export const TicketList: React.FC = () => {
               <X
                 className="h-3 w-3 cursor-pointer hover:text-destructive"
                 onClick={() => clearFilter("puno")}
+              />
+            </Badge>
+          )}
+          {filters.part_code && (
+            <Badge variant="secondary" className="gap-1">
+              Part: {filters.part_code}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("part_code")}
+              />
+            </Badge>
+          )}
+          {filters.symptom_code && (
+            <Badge variant="secondary" className="gap-1">
+              Symptom: {filters.symptom_code}
+              <X
+                className="h-3 w-3 cursor-pointer hover:text-destructive"
+                onClick={() => clearFilter("symptom_code")}
               />
             </Badge>
           )}

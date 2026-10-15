@@ -221,6 +221,9 @@ export interface TicketFilters {
   dueEndDate?: string;
   /** Stacked-chart category: closedOnTime | closedDelay | openNotDue | openOverdue | unassigned | assigned */
   assignedBucket?: string;
+  /** Repeat-problem drill-down (IgxTicketProblem) */
+  part_code?: string;
+  symptom_code?: string;
 }
 
 // Legacy hierarchy interfaces (deprecated - use PUExtension data instead)

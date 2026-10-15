@@ -3,6 +3,7 @@ const dbConfig = require("../config/dbConfig");
 const notificationQueue = require("../queues/notificationQueue");
 const cedarIntegrationService = require("../services/cedarIntegrationService");
 const { getCriticalLevelText } = require("../utils/criticalMapping");
+const problemTicketService = require("../services/problemTicketService");
 const fs = require("fs");
 const path = require("path");
 
@@ -502,6 +503,12 @@ const createTicket = async (req, res) => {
             console.log(`ℹ️  No images in initial request - notifications will be sent after image upload (two-step process)`);
         }
 
+        try {
+            await problemTicketService.classifyTicketById(pool, ticketId);
+        } catch (classifyErr) {
+            console.error('Failed to classify ticket problem after create:', classifyErr.message);
+        }
+
         res.status(201).json({
             success: true,
             message: 'Ticket created successfully',
@@ -572,6 +579,8 @@ const getTickets = async (req, res) => {
       dueStartDate,
       dueEndDate,
       assignedBucket,
+      part_code,
+      symptom_code,
     } = req.query;
 
     const offset = (page - 1) * limit;
@@ -670,6 +679,26 @@ const getTickets = async (req, res) => {
           params.push({ name: "puno", value: punoValue, type: sql.Int });
         }
       }
+    }
+
+    // Repeat-problem drill-down: part/symptom from IgxTicketProblem
+    if (part_code || symptom_code) {
+      const partCode = part_code ? String(part_code).trim() : '';
+      const symptomCode = symptom_code ? String(symptom_code).trim() : '';
+      let problemExists = `
+        AND EXISTS (
+          SELECT 1 FROM dbo.IgxTicketProblem tp
+          WHERE tp.ticket_id = t.id`;
+      if (partCode) {
+        problemExists += ` AND tp.part_code = @part_code`;
+        params.push({ name: 'part_code', value: partCode, type: sql.NVarChar(50) });
+      }
+      if (symptomCode) {
+        problemExists += ` AND tp.symptom_code = @symptom_code`;
+        params.push({ name: 'symptom_code', value: symptomCode, type: sql.NVarChar(50) });
+      }
+      problemExists += `)`;
+      whereClause += problemExists;
     }
 
     // Delay filter
@@ -1648,6 +1677,14 @@ const updateTicketDetail = async (req, res) => {
           updated_at = GETDATE()
       WHERE id = @id
     `);
+
+    if (title !== undefined || failure_mode_id !== undefined) {
+      try {
+        await problemTicketService.classifyTicketById(pool, id);
+      } catch (classifyErr) {
+        console.error("Failed to classify ticket problem after ticket update:", classifyErr.message);
+      }
+    }
 
     return res.json({
       success: true,
@@ -3595,6 +3632,12 @@ const finishTicket = async (req, res) => {
 
     
     await request.query(finalQuery);
+
+    try {
+      await problemTicketService.classifyTicketById(pool, id);
+    } catch (classifyErr) {
+      console.error("Failed to classify ticket problem after finish:", classifyErr.message);
+    }
 
     await insertStatusHistory(pool, {
       ticketId: id,

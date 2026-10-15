@@ -117,6 +117,9 @@ router.get('/case-count-by-pu', requireFormPermission('TKT', 'view'), dashboardC
 // Get Ticket Category Breakdown by ticket class / priority / critical level (requires TKT form view permission)
 router.get('/ticket-category-breakdown', requireFormPermission('TKT', 'view'), dashboardController.getTicketCategoryBreakdown);
 
+// Repeat problems by machine + part + symptom (requires TKT form view permission)
+router.get('/repeat-problems', requireFormPermission('TKT', 'view'), dashboardController.getRepeatProblems);
+
 // Calibration dashboard (WOTypeNo = 5) - requires WO form view permission
 router.get('/calibration/person-period-summary', requireFormPermission('WO', 'view'), calibrationController.getPersonPeriodSummary);
 router.get('/calibration/incoming', requireFormPermission('WO', 'view'), calibrationController.getIncoming);

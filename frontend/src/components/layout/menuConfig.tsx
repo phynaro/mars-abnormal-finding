@@ -15,6 +15,8 @@ import {
   Wrench,
   CalendarDays,
   ClipboardList,
+  BookMarked,
+  Repeat,
 } from 'lucide-react';
 
 export interface MenuItem {
@@ -56,6 +58,7 @@ export const menuItems: MenuItem[] = [
     children: [
      // { id: 'dashboard-abnormal', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal', permissionLevel: 1 },
       { id: 'dashboard-abnormal', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal', permissionLevel: 1 },
+      { id: 'dashboard-repeat-problems', label: 'Repeat Problems', icon: <Repeat className="h-4 w-4" />, path: '/dashboard/repeat-problems', permissionLevel: 1 },
       // { id: 'dashboard-backlog', label: 'Backlog', icon: <FileText className="h-4 w-4" />, path: '/dashboard/backlog', permissionLevel: 1 },
       // { id: 'dashboard-maintenance-kpi', label: 'Maintenance KPI', icon: <BarChart3 className="h-4 w-4" />, path: '/dashboard/maintenance-kpi', permissionLevel: 1 },
       // { id: 'dashboard-preventive-maintenance', label: 'Preventive Maintenance', icon: <Clock className="h-4 w-4" />, path: '/dashboard/preventive-maintenance', permissionLevel: 1 },
@@ -178,6 +181,7 @@ export const menuItems: MenuItem[] = [
       { id: 'settings-personal-targets', label: 'Personal Target Setting', icon: <Target className="h-4 w-4" />, path: '/settings/personal-targets', permissionLevel: 3 },
       { id: 'settings-notification-schedules', label: 'Notification Schedules', icon: <Bell className="h-4 w-4" />, path: '/settings/notification-schedules', permissionLevel: 1 },
       { id: 'settings-work-groups', label: 'Work Groups', icon: <Users className="h-4 w-4" />, path: '/settings/work-groups', permissionLevel: 1 },
+      { id: 'settings-problem-dictionary', label: 'Problem Dictionary', icon: <BookMarked className="h-4 w-4" />, path: '/settings/problem-dictionary', permissionLevel: 3 },
       { id: 'settings-notification-testing', label: 'Notification Testing', icon: <Bell className="h-4 w-4" />, path: '/settings/notification-testing', permissionLevel: 3 },
       { id: 'settings-user-management', label: 'User Management', icon: <Users className="h-4 w-4" />, path: '/settings/user-management', permissionLevel: 3 },
     ]

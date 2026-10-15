@@ -23,6 +23,7 @@ import DashboardBacklogPage from './pages/dashboard/DashboardBacklogPage';
 import DashboardBacklogDetailPage from './pages/dashboard/DashboardBacklogDetailPage';
 import AbnormalReportDashboardV2Page from './pages/dashboard/AbnormalReportDashboardV2Page';
 import CaseCountByPUFullPage from './pages/dashboard/CaseCountByPUFullPage';
+import RepeatProblemDashboardPage from './pages/dashboard/RepeatProblemDashboardPage';
 import UserLeaderboardFullPage from './pages/dashboard/UserLeaderboardFullPage';
 import PersonalKPIComparisonPage from './pages/dashboard/PersonalKPIComparisonPage';
 import DepartmentUserKPIDashboardPage from './pages/dashboard/DepartmentUserKPIDashboardPage';
@@ -60,6 +61,7 @@ import HierarchyViewPage from './pages/settings/HierarchyViewPage';
 import TicketApprovalManagementPage from './pages/settings/TicketApprovalManagementPage';
 import NotificationScheduleManagementPage from './pages/settings/NotificationScheduleManagementPage';
 import WorkGroupManagementPage from './pages/settings/WorkGroupManagementPage';
+import ProblemDictionaryPage from './pages/settings/ProblemDictionaryPage';
 import NotificationTestingPage from './pages/settings/NotificationTestingPage';
 import PersonalTargetSettingPage from './pages/settings/PersonalTargetSettingPage';
 import WorkflowTypesPage from './pages/works/WorkflowTypesPage';
@@ -230,6 +232,7 @@ const AppContent: React.FC = () => {
           <Route path="home" element={<HomePage />} />
           <Route path="dashboard" element={<Navigate to="/dashboard/abnormal" replace />} />
           <Route path="dashboard/abnormal" element={<AbnormalReportDashboardV2Page />} />
+          <Route path="dashboard/repeat-problems" element={<RepeatProblemDashboardPage />} />
           <Route path="dashboard/case-count-by-pu" element={<CaseCountByPUFullPage />} />
           <Route path="dashboard/user-leaderboard" element={<UserLeaderboardFullPage />} />
           <Route path="dashboard/personal-kpi-comparison" element={<PersonalKPIComparisonPage />} />
@@ -329,6 +332,11 @@ const AppContent: React.FC = () => {
           <Route path="settings/work-groups" element={
             <PermissionRoute requiredPermission="settings_access">
               <WorkGroupManagementPage />
+            </PermissionRoute>
+          } />
+          <Route path="settings/problem-dictionary" element={
+            <PermissionRoute requiredPermission="admin">
+              <ProblemDictionaryPage />
             </PermissionRoute>
           } />
           <Route path="settings/notification-testing" element={

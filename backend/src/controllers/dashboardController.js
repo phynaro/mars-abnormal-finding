@@ -5103,6 +5103,155 @@ exports.getSpeedTrendPerPeriod = async (req, res) => {
   }
 };
 
+/**
+ * Repeat problems: same machine (puno) + part + symptom within a calendar year.
+ * Returns top 10 with monthly counts and headline bucket stats for the filtered year/plant.
+ */
+exports.getRepeatProblems = async (req, res) => {
+  try {
+    const pool = await sql.connect(dbConfig);
+    const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+    const plant = req.query.plant && req.query.plant !== 'all' ? String(req.query.plant) : null;
+
+    const request = pool.request().input('year', sql.Int, year);
+    let plantClause = '';
+    if (plant) {
+      plantClause = ' AND pe.plant = @plant';
+      request.input('plant', sql.NVarChar(50), plant);
+    }
+
+    const pairResult = await request.query(`
+      SELECT
+        t.puno,
+        MAX(pu.PUCODE) AS pucode,
+        MAX(pu.PUNAME) AS puname,
+        MAX(pe.plant) AS plant,
+        tp.part_code,
+        tp.symptom_code,
+        COUNT(*) AS ticket_count,
+        MIN(t.created_at) AS first_seen,
+        MAX(t.created_at) AS last_seen,
+        SUM(CASE WHEN MONTH(t.created_at) = 1 THEN 1 ELSE 0 END) AS m01,
+        SUM(CASE WHEN MONTH(t.created_at) = 2 THEN 1 ELSE 0 END) AS m02,
+        SUM(CASE WHEN MONTH(t.created_at) = 3 THEN 1 ELSE 0 END) AS m03,
+        SUM(CASE WHEN MONTH(t.created_at) = 4 THEN 1 ELSE 0 END) AS m04,
+        SUM(CASE WHEN MONTH(t.created_at) = 5 THEN 1 ELSE 0 END) AS m05,
+        SUM(CASE WHEN MONTH(t.created_at) = 6 THEN 1 ELSE 0 END) AS m06,
+        SUM(CASE WHEN MONTH(t.created_at) = 7 THEN 1 ELSE 0 END) AS m07,
+        SUM(CASE WHEN MONTH(t.created_at) = 8 THEN 1 ELSE 0 END) AS m08,
+        SUM(CASE WHEN MONTH(t.created_at) = 9 THEN 1 ELSE 0 END) AS m09,
+        SUM(CASE WHEN MONTH(t.created_at) = 10 THEN 1 ELSE 0 END) AS m10,
+        SUM(CASE WHEN MONTH(t.created_at) = 11 THEN 1 ELSE 0 END) AS m11,
+        SUM(CASE WHEN MONTH(t.created_at) = 12 THEN 1 ELSE 0 END) AS m12
+      FROM dbo.IgxTicketProblem tp
+      INNER JOIN dbo.IgxTickets t ON t.id = tp.ticket_id
+      LEFT JOIN dbo.PU pu ON pu.PUNO = t.puno
+      LEFT JOIN dbo.IgxPUExtension pe ON pe.puno = t.puno
+      WHERE tp.part_code IS NOT NULL
+        AND tp.symptom_code IS NOT NULL
+        AND YEAR(t.created_at) = @year
+        ${plantClause}
+      GROUP BY t.puno, tp.part_code, tp.symptom_code
+      HAVING COUNT(*) >= 1
+      ORDER BY COUNT(*) DESC, MAX(t.created_at) DESC
+    `);
+
+    const allPairs = pairResult.recordset || [];
+    const repeatingPairs = allPairs.filter((row) => Number(row.ticket_count) >= 2);
+    const ticketsInRepeats = repeatingPairs.reduce(
+      (sum, row) => sum + (Number(row.ticket_count) || 0),
+      0,
+    );
+    const top = allPairs.slice(0, 10).map((row) => {
+      const monthly = [
+        row.m01, row.m02, row.m03, row.m04, row.m05, row.m06,
+        row.m07, row.m08, row.m09, row.m10, row.m11, row.m12,
+      ].map((n) => Number(n) || 0);
+
+      let peakMonth = 1;
+      let peakCount = monthly[0];
+      for (let i = 1; i < monthly.length; i += 1) {
+        if (monthly[i] > peakCount) {
+          peakCount = monthly[i];
+          peakMonth = i + 1;
+        }
+      }
+
+      const first = row.first_seen ? new Date(row.first_seen) : null;
+      const last = row.last_seen ? new Date(row.last_seen) : null;
+
+      return {
+        puno: row.puno,
+        pucode: row.pucode,
+        puname: row.puname,
+        plant: row.plant,
+        partCode: row.part_code,
+        symptomCode: row.symptom_code,
+        ticketCount: row.ticket_count,
+        firstSeen: first ? first.toISOString() : null,
+        lastSeen: last ? last.toISOString() : null,
+        peakMonth,
+        peakCount,
+        monthly,
+      };
+    });
+
+    const countRequest = pool.request().input('year', sql.Int, year);
+    let countPlantClause = '';
+    if (plant) {
+      countPlantClause = ' AND pe.plant = @plant';
+      countRequest.input('plant', sql.NVarChar(50), plant);
+    }
+
+    const countResult = await countRequest.query(`
+      SELECT
+        SUM(CASE WHEN tp.part_code IS NOT NULL AND tp.symptom_code IS NOT NULL THEN 1 ELSE 0 END) AS full_match,
+        SUM(CASE WHEN tp.part_code IS NOT NULL AND tp.symptom_code IS NULL THEN 1 ELSE 0 END) AS part_only,
+        SUM(CASE WHEN tp.part_code IS NULL AND tp.symptom_code IS NOT NULL THEN 1 ELSE 0 END) AS symptom_only,
+        SUM(CASE WHEN tp.part_code IS NULL AND tp.symptom_code IS NULL THEN 1 ELSE 0 END) AS no_match,
+        COUNT(*) AS classified,
+        COUNT(DISTINCT CASE WHEN tp.part_code IS NOT NULL AND tp.symptom_code IS NOT NULL THEN CAST(t.puno AS VARCHAR(20)) + '|' + tp.part_code + '|' + tp.symptom_code END) AS distinct_problems
+      FROM dbo.IgxTicketProblem tp
+      INNER JOIN dbo.IgxTickets t ON t.id = tp.ticket_id
+      LEFT JOIN dbo.IgxPUExtension pe ON pe.puno = t.puno
+      WHERE YEAR(t.created_at) = @year
+        ${countPlantClause}
+    `);
+
+    const counts = countResult.recordset[0] || {};
+
+    res.json({
+      success: true,
+      data: {
+        year,
+        plant,
+        summary: {
+          // Analytics-facing metrics (chart uses full part+symptom groups)
+          topRepeatTickets: top[0]?.ticketCount || 0,
+          distinctProblems: counts.distinct_problems || 0,
+          repeatingProblems: repeatingPairs.length,
+          ticketsInRepeats,
+          // Classifier coverage (kept for admin tooling; not primary dashboard tiles)
+          fullMatch: counts.full_match || 0,
+          partOnly: counts.part_only || 0,
+          symptomOnly: counts.symptom_only || 0,
+          noMatch: counts.no_match || 0,
+          classified: counts.classified || 0,
+        },
+        topProblems: top,
+      },
+      message: 'Repeat problems retrieved successfully',
+    });
+  } catch (error) {
+    console.error('Error in getRepeatProblems:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+      error: error.message,
+    });
+  }
+};
+
 exports.getPersonalKPIComparison = getPersonalKPIComparison;
 exports.getPersonalKPIAssignedBreakdown = getPersonalKPIAssignedBreakdown;
 exports.getDepartmentUserKPITicketsCreated = getDepartmentUserKPITicketsCreated;
