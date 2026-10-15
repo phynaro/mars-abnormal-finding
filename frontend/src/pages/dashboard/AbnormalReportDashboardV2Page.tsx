@@ -33,7 +33,16 @@ import hierarchyService from '@/services/hierarchyService';
 import { getAvatarUrl } from '@/utils/url';
 import { formatLocalDate, calculatePeriodForDate, getDateRangeForFilter, getCompanyYearDateRange } from '@/utils/periodCalculations';
 import { openOntimeTicketList } from '@/utils/ontimeChartDrilldown';
+import { openRepeatProblemTicketList } from '@/utils/repeatProblemDrilldown';
+import problemDictionaryService, {
+  type RepeatProblemItem,
+} from '@/services/problemDictionaryService';
 import { cn } from '@/lib/utils';
+
+const formatRepeatProblemLabel = (item: RepeatProblemItem) => {
+  const pos = item.pucode || `PU ${item.puno}`;
+  return `${pos} · ${item.partCode} · ${item.symptomCode}`;
+};
 
 // Utility function for dynamic currency formatting
 const formatCurrencyDynamic = (amount: number): { display: string; tooltip: string } => {
@@ -648,6 +657,9 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
 
   const [caseCountByPUData, setCaseCountByPUData] = useState<Array<{ puno: number; puName: string; caseCount: number }>>([]);
   const [caseCountByPULoading, setCaseCountByPULoading] = useState<boolean>(false);
+
+  const [repeatProblemsData, setRepeatProblemsData] = useState<RepeatProblemItem[]>([]);
+  const [repeatProblemsLoading, setRepeatProblemsLoading] = useState<boolean>(false);
 
   const [categoryBreakdownData, setCategoryBreakdownData] = useState<TicketCategoryBreakdownResponse['data'] | null>(null);
   const [categoryBreakdownLoading, setCategoryBreakdownLoading] = useState<boolean>(false);
@@ -1418,6 +1430,27 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
     }
   }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
 
+  // Fetch top repeat problems (part + symptom) for the same filters
+  const fetchRepeatProblemsData = useCallback(async () => {
+    try {
+      setRepeatProblemsLoading(true);
+      const dateRange = getDateRangeForFilter(timeFilter, selectedYear, selectedPeriod, selectedPeriods);
+      const response = await problemDictionaryService.getRepeatProblems({
+        year: selectedYear,
+        startDate: dateRange.startDate,
+        endDate: dateRange.endDate,
+        plant: plantFilter !== 'all' ? plantFilter : undefined,
+        area: areaFilter !== 'all' ? areaFilter : undefined,
+      });
+      setRepeatProblemsData(response.data?.topProblems || []);
+    } catch (error) {
+      console.error('Error fetching repeat problems data:', error);
+      setRepeatProblemsData([]);
+    } finally {
+      setRepeatProblemsLoading(false);
+    }
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter]);
+
   // Fetch Ticket Category Breakdown (ticket class / priority / critical level)
   const fetchCategoryBreakdownData = useCallback(async () => {
     try {
@@ -1556,6 +1589,11 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
   useEffect(() => {
     fetchCaseCountByPUData();
   }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchCaseCountByPUData]);
+
+  // Fetch repeat problems (part + symptom) when filters change
+  useEffect(() => {
+    fetchRepeatProblemsData();
+  }, [timeFilter, selectedYear, selectedPeriod, selectedPeriods, plantFilter, areaFilter, fetchRepeatProblemsData]);
 
   // Fetch ticket category breakdown when time filter, period, or filters change
   useEffect(() => {
@@ -3462,6 +3500,98 @@ const AbnormalReportDashboardV2Page: React.FC = () => {
                           />
                         ))}
                       </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </CardContent>
+            </Card>
+          );
+        })()}
+
+        {/* Top Repeat Problems (Part + Symptom) */}
+        {(() => {
+          const repeatBarData = repeatProblemsData.map((item, index) => ({
+            name: formatRepeatProblemLabel(item),
+            tickets: item.ticketCount,
+            index,
+          }));
+          return (
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle>{t('dashboard.repeatProblemsByPattern')}</CardTitle>
+                {!repeatProblemsLoading && repeatProblemsData.length > 0 && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => window.open('/dashboard/repeat-problems', '_blank')}
+                  >
+                    {t('common.seeMore')}
+                  </Button>
+                )}
+              </CardHeader>
+              <CardContent>
+                {repeatProblemsLoading ? (
+                  <div className="flex items-center justify-center h-[400px]">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand"></div>
+                  </div>
+                ) : repeatProblemsData.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-[400px] text-muted-foreground">
+                    <AlertTriangle className="h-8 w-8 mb-2" />
+                    <p className="text-sm font-medium">{t('dashboard.repeatProblems.empty')}</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={Math.max(450, repeatBarData.length * 36 + 60)}>
+                    <BarChart
+                      data={repeatBarData}
+                      layout="vertical"
+                      margin={{ top: 20, right: 30, left: 20, bottom: 15 }}
+                      barCategoryGap={0}
+                      barSize={18}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        type="number"
+                        allowDecimals={false}
+                        label={{ value: t('dashboard.repeatProblems.tickets'), position: 'insideBottom', offset: -10 }}
+                      />
+                      <YAxis
+                        dataKey="name"
+                        type="category"
+                        width={280}
+                        tick={{ fontSize: 11 }}
+                      />
+                      <RechartsTooltip
+                        formatter={(value) => [
+                          `${value} ${t('dashboard.tickets')}`,
+                          t('dashboard.repeatProblems.tickets'),
+                        ]}
+                      />
+                      <Bar
+                        dataKey="tickets"
+                        fill="hsl(var(--primary))"
+                        cursor="pointer"
+                        onClick={(data: { payload?: { index?: number }; index?: number }) => {
+                          const row = data?.payload ?? data;
+                          const item = repeatProblemsData[row?.index ?? -1];
+                          if (!item) return;
+                          const dateRange = getDateRangeForFilter(
+                            timeFilter,
+                            selectedYear,
+                            selectedPeriod,
+                            selectedPeriods,
+                          );
+                          openRepeatProblemTicketList({
+                            puno: item.puno,
+                            partCode: item.partCode,
+                            symptomCode: item.symptomCode,
+                            year: selectedYear,
+                            startDate: dateRange.startDate,
+                            endDate: dateRange.endDate,
+                            plant: plantFilter !== 'all' ? plantFilter : undefined,
+                            area: areaFilter !== 'all' ? areaFilter : undefined,
+                          });
+                        }}
+                      />
                     </BarChart>
                   </ResponsiveContainer>
                 )}

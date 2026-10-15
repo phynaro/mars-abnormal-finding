@@ -5,7 +5,11 @@ export interface RepeatProblemDrilldownArgs {
   year: number;
   /** 1–12 for a single month; omit for the full year */
   month?: number;
+  /** When set, overrides year/month date bounds (dashboard period filters) */
+  startDate?: string;
+  endDate?: string;
   plant?: string;
+  area?: string;
 }
 
 function pad2(n: number): string {
@@ -22,7 +26,10 @@ export function buildRepeatProblemTicketListSearch(args: RepeatProblemDrilldownA
   params.set('part_code', args.partCode);
   params.set('symptom_code', args.symptomCode);
 
-  if (args.month && args.month >= 1 && args.month <= 12) {
+  if (args.startDate && args.endDate) {
+    params.set('startDate', args.startDate);
+    params.set('endDate', args.endDate);
+  } else if (args.month && args.month >= 1 && args.month <= 12) {
     params.set('startDate', `${args.year}-${pad2(args.month)}-01`);
     params.set('endDate', `${args.year}-${pad2(args.month)}-${pad2(lastDayOfMonth(args.year, args.month))}`);
   } else {
@@ -31,6 +38,7 @@ export function buildRepeatProblemTicketListSearch(args: RepeatProblemDrilldownA
   }
 
   if (args.plant && args.plant !== 'all') params.set('plant', args.plant);
+  if (args.area && args.area !== 'all') params.set('area', args.area);
   return params.toString();
 }
 

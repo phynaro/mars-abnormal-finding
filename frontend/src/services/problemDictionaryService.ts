@@ -79,10 +79,19 @@ class ProblemDictionaryService {
     return getAuthHeaders();
   }
 
-  async getRepeatProblems(params: { year: number; plant?: string }): Promise<RepeatProblemsResponse> {
+  async getRepeatProblems(params: {
+    year: number;
+    plant?: string;
+    area?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<RepeatProblemsResponse> {
     const query = new URLSearchParams();
     query.set('year', String(params.year));
     if (params.plant && params.plant !== 'all') query.set('plant', params.plant);
+    if (params.area && params.area !== 'all') query.set('area', params.area);
+    if (params.startDate) query.set('startDate', params.startDate);
+    if (params.endDate) query.set('endDate', params.endDate);
     const res = await fetch(`${API_BASE_URL}/dashboard/repeat-problems?${query.toString()}`, {
       headers: this.headers(),
     });

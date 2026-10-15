@@ -5112,12 +5112,26 @@ exports.getRepeatProblems = async (req, res) => {
     const pool = await sql.connect(dbConfig);
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
     const plant = req.query.plant && req.query.plant !== 'all' ? String(req.query.plant) : null;
+    const area = req.query.area && req.query.area !== 'all' ? String(req.query.area) : null;
+    const startDate = req.query.startDate ? String(req.query.startDate) : null;
+    const endDate = req.query.endDate ? String(req.query.endDate) : null;
 
     const request = pool.request().input('year', sql.Int, year);
-    let plantClause = '';
+    let filterClause = '';
+    if (startDate && endDate) {
+      filterClause += ' AND CAST(t.created_at AS DATE) >= @startDate AND CAST(t.created_at AS DATE) <= @endDate';
+      request.input('startDate', sql.Date, startDate);
+      request.input('endDate', sql.Date, endDate);
+    } else {
+      filterClause += ' AND YEAR(t.created_at) = @year';
+    }
     if (plant) {
-      plantClause = ' AND pe.plant = @plant';
+      filterClause += ' AND pe.plant = @plant';
       request.input('plant', sql.NVarChar(50), plant);
+    }
+    if (area) {
+      filterClause += ' AND pe.area = @area';
+      request.input('area', sql.NVarChar(50), area);
     }
 
     const pairResult = await request.query(`
@@ -5149,8 +5163,7 @@ exports.getRepeatProblems = async (req, res) => {
       LEFT JOIN dbo.IgxPUExtension pe ON pe.puno = t.puno
       WHERE tp.part_code IS NOT NULL
         AND tp.symptom_code IS NOT NULL
-        AND YEAR(t.created_at) = @year
-        ${plantClause}
+        ${filterClause}
       GROUP BY t.puno, tp.part_code, tp.symptom_code
       HAVING COUNT(*) >= 1
       ORDER BY COUNT(*) DESC, MAX(t.created_at) DESC
@@ -5197,10 +5210,21 @@ exports.getRepeatProblems = async (req, res) => {
     });
 
     const countRequest = pool.request().input('year', sql.Int, year);
-    let countPlantClause = '';
+    let countFilterClause = '';
+    if (startDate && endDate) {
+      countFilterClause += ' AND CAST(t.created_at AS DATE) >= @startDate AND CAST(t.created_at AS DATE) <= @endDate';
+      countRequest.input('startDate', sql.Date, startDate);
+      countRequest.input('endDate', sql.Date, endDate);
+    } else {
+      countFilterClause += ' AND YEAR(t.created_at) = @year';
+    }
     if (plant) {
-      countPlantClause = ' AND pe.plant = @plant';
+      countFilterClause += ' AND pe.plant = @plant';
       countRequest.input('plant', sql.NVarChar(50), plant);
+    }
+    if (area) {
+      countFilterClause += ' AND pe.area = @area';
+      countRequest.input('area', sql.NVarChar(50), area);
     }
 
     const countResult = await countRequest.query(`
@@ -5214,8 +5238,8 @@ exports.getRepeatProblems = async (req, res) => {
       FROM dbo.IgxTicketProblem tp
       INNER JOIN dbo.IgxTickets t ON t.id = tp.ticket_id
       LEFT JOIN dbo.IgxPUExtension pe ON pe.puno = t.puno
-      WHERE YEAR(t.created_at) = @year
-        ${countPlantClause}
+      WHERE 1=1
+        ${countFilterClause}
     `);
 
     const counts = countResult.recordset[0] || {};
