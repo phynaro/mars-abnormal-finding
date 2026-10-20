@@ -8,13 +8,12 @@ param(
 # Configuration
 $BackendImageName = "mars-backend"
 $FrontendImageName = "mars-frontend"
-$NginxImageName = "mars-nginx"
 
 Write-Host "Building Docker images for $Platform..." -ForegroundColor Yellow
 
 # Build backend image
 Write-Host "Building backend image for $Platform..." -ForegroundColor Yellow
-docker build --platform $Platform -f backend/Dockerfile.production -t "${Registry}${BackendImageName}:${Version}" ./backend
+docker build --platform $Platform -f backend/Dockerfile -t "${Registry}${BackendImageName}:${Version}" ./backend
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Backend build failed!" -ForegroundColor Red
@@ -35,19 +34,19 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# Build nginx image with configuration
-Write-Host "Building nginx image for $Platform..." -ForegroundColor Yellow
-docker build --platform $Platform -f Dockerfile.nginx -t "${Registry}${NginxImageName}:${Version}" .
+# Pull the stock nginx image used by docker-compose.yml
+Write-Host "Pulling nginx image for $Platform..." -ForegroundColor Yellow
+docker pull --platform $Platform nginx:alpine
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "Nginx build failed!" -ForegroundColor Red
+    Write-Host "Nginx pull failed!" -ForegroundColor Red
     exit 1
 }
 
 # Create image archive
 Write-Host "Creating image archive..." -ForegroundColor Yellow
 $ArchiveName = "mars-images-${Version}.tar.gz"
-docker save "${Registry}${BackendImageName}:${Version}" "${Registry}${FrontendImageName}:${Version}" "${Registry}${NginxImageName}:${Version}" | gzip > $ArchiveName
+docker save "${Registry}${BackendImageName}:${Version}" "${Registry}${FrontendImageName}:${Version}" nginx:alpine | gzip > $ArchiveName
 
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Archive creation failed!" -ForegroundColor Red
@@ -58,13 +57,13 @@ Write-Host "Build completed successfully!" -ForegroundColor Green
 Write-Host "Images:" -ForegroundColor Green
 Write-Host "  - ${Registry}${BackendImageName}:${Version}" -ForegroundColor Green
 Write-Host "  - ${Registry}${FrontendImageName}:${Version}" -ForegroundColor Green
-Write-Host "  - ${Registry}${NginxImageName}:${Version}" -ForegroundColor Green
+Write-Host "  - nginx:alpine" -ForegroundColor Green
 Write-Host "Archive: $ArchiveName" -ForegroundColor Green
 Write-Host ""
 Write-Host "To deploy on target server:" -ForegroundColor Yellow
 Write-Host "1. Copy $ArchiveName to target server" -ForegroundColor Yellow
 Write-Host "2. Run: docker load < $ArchiveName" -ForegroundColor Yellow
-Write-Host "3. Copy deployment files and run: docker-compose -f docker-compose.deploy.yml up -d" -ForegroundColor Yellow
+Write-Host "3. Copy deployment files and run: docker compose up -d" -ForegroundColor Yellow
 Write-Host ""
 Write-Host "Usage examples:" -ForegroundColor Yellow
 Write-Host "  Build for AMD64 servers: .\build-images.ps1 -Version latest -Registry '' -Platform linux/amd64" -ForegroundColor Yellow

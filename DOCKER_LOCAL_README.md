@@ -73,10 +73,10 @@ The local setup includes:
 
 ### Services
 
-1. **Backend** (`mars-backend:local`)
+1. **Backend** (`mars-backend:latest`)
    - Built from `./backend/Dockerfile`
-   - Runs on port 3001
-   - Source code mounted for development
+   - Runs `node src/app.js` on port 3001
+   - Uses `backend/.env.production`
    - Health checks enabled
 
 2. **Frontend** (`mars-frontend:local`)
@@ -275,8 +275,9 @@ If you're using an external database, ensure:
 
 ## 🔗 Related Files
 
-- `docker-compose.local.yml` - Main compose file
-- `scripts/docker-local.sh` - Management script
-- `nginx-development.conf` - Nginx configuration
+- `docker-compose.yml` - Production compose file
+- `nginx.conf` - Edge nginx configuration
 - `backend/Dockerfile` - Backend image definition
 - `frontend/Dockerfile` - Frontend image definition
+- `backend/.env` - Host `npm run dev` only
+- `backend/.env.production` - Container env

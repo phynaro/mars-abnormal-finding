@@ -45,7 +45,7 @@ fi
 
 # Start services
 echo -e "${YELLOW}Starting services...${NC}"
-docker compose -f docker-compose.deploy.yml up -d
+docker compose up -d
 
 # Wait for services to be healthy
 echo -e "${YELLOW}Waiting for services to be healthy...${NC}"
@@ -53,7 +53,7 @@ sleep 30
 
 # Check service status
 echo -e "${YELLOW}Checking service status...${NC}"
-docker compose -f docker-compose.deploy.yml ps
+docker compose ps
 
 # Test endpoints
 echo -e "${YELLOW}Testing endpoints...${NC}"
@@ -73,6 +73,6 @@ echo -e "${GREEN}Deployment completed!${NC}"
 echo -e "${GREEN}Application is available at: http://localhost${NC}"
 echo ""
 echo -e "${YELLOW}Useful commands:${NC}"
-echo -e "  View logs: docker-compose -f docker-compose.deploy.yml logs -f"
-echo -e "  Stop services: docker-compose -f docker-compose.deploy.yml down"
-echo -e "  Restart services: docker-compose -f docker-compose.deploy.yml restart"
+echo -e "  View logs: docker compose logs -f"
+echo -e "  Stop services: docker compose down"
+echo -e "  Restart services: docker compose restart"

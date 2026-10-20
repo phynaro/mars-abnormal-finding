@@ -1,46 +1,110 @@
 services:
-  frontend:
-    image: ${FRONTEND_IMAGE:-ghcr.io/toruj/frontend:latest}
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: mars-backend:latest
+    container_name: mars-backend
     env_file:
-      - ./frontend/.env.development
+      - ./backend/.env.production
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      - redis
+    networks:
+      - mars-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3001/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  notification-worker:
+    image: mars-backend:latest
+    container_name: mars-notification-worker
+    command: ["node", "src/workers/notificationWorker.js"]
+    healthcheck:
+      disable: true
+    env_file:
+      - ./backend/.env.production
+    environment:
+      - NODE_ENV=production
+    depends_on:
+      redis:
+        condition: service_started
+      backend:
+        condition: service_healthy
+    networks:
+      - mars-network
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    container_name: mars-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - mars_redis_data:/data
+    networks:
+      - mars-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NODE_ENV: production
+        VITE_API_URL: /api
+        VITE_LIFF_ID: 2008351084-nRdr4kE4
+    image: mars-frontend:latest
+    container_name: mars-frontend
     networks:
       - mars-network
     depends_on:
-      - backend
-
-  backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/toruj/backend:latest}
-    env_file:
-      - ./backend/.env.development
-    environment:
-      # Override NODE_ENV if needed
-      - NODE_ENV=development
-    volumes:
-      - mars_upload_data:/app/uploads
+      backend:
+        condition: service_healthy
     restart: unless-stopped
-    networks:
-      - mars-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   nginx:
     image: nginx:alpine
+    container_name: mars-nginx
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - /home/jirawuth/docker-configs/nginx/nginx-development.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - frontend
-      - backend
-    restart: unless-stopped
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
     networks:
       - mars-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
 networks:
   mars-network:
     driver: bridge
 
 volumes:
-  mars_upload_data:
-    driver: local
+  mars_redis_data:
+    external: true
+    name: mars-redis-data-preview

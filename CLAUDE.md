@@ -10,13 +10,14 @@ The system reads/writes to an **external Cedar CMMS MSSQL database**. There are 
 
 ## Commands
 
-### Local Development (primary workflow)
+### Production (Docker)
 ```bash
-# Build and run everything with hot-reload source mounts
-docker compose -f docker-compose.local.yml up --build
+# Build images, then start the production stack
+docker compose build
+docker compose up -d
 
-# Backend uses ./backend/.env (not .env.development) when running via docker-compose.local.yml
-# Frontend env is baked into the compose file (VITE_API_URL=/api, VITE_LIFF_ID=...)
+# Containers use ./backend/.env.production (NODE_ENV=production).
+# Host npm run dev uses ./backend/.env and does not run inside Docker.
 ```
 
 ### Backend (Node.js/Express — plain JS)
@@ -40,16 +41,10 @@ npm run lint         # ESLint
 npm run build        # production build
 ```
 
-### Docker compose files
-| File | Purpose |
-|---|---|
-| `docker-compose.local.yml` | **Local dev** — builds images locally, mounts src for hot-reload, includes Redis |
-| `docker-compose.local-preview.yml` | **Local customer preview** — same backend/worker/redis hot-reload as local, but frontend is a production build served by nginx. Use `-p mars-preview`. Stop the Vite local stack first (ports 80/443/6379). |
-| `docker-compose.yml` | Pulls GHCR pre-built images (dev/staging) |
-| `docker-compose.deploy.yml` | Deploys locally-tagged images to production |
-| `docker-compose.production.yml` | Production image composition |
+### Docker compose
+`docker-compose.yml` is the production stack: API, notification worker, Redis, built frontend, and nginx. Dev servers stay on the host (`npm run dev`).
 
-Backend env: `backend/.env` (local dev) or `backend/.env.development` / `backend/.env.production`  
+Backend env: `backend/.env` for host `npm run dev`, `backend/.env.production` for containers.  
 API docs: `http://localhost:3001/api-docs` | Health: `http://localhost:3001/api/health`
 
 ## Architecture

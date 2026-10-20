@@ -35,9 +35,9 @@ jobs:
         run: |
           cd /opt/mars-abnormal-finding
           mkdir -p backend frontend
-          # Create backend .env.development
-          cat > backend/.env.development << EOF
-          NODE_ENV=development
+          # Create backend .env.production
+          cat > backend/.env.production << EOF
+          NODE_ENV=production
           DB_PORT=${{ secrets.STAGING_DB_PORT }}
           DB_NAME=${{ secrets.STAGING_DB_NAME }}
           DB_PORT=${{ secrets.STAGING_DB_PORT }}

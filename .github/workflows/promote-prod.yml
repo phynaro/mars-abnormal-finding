@@ -74,16 +74,16 @@ jobs:
       - name: Create backup of current production
         run: |
           # Create backup of current production state
-          if docker compose -f docker compose.production.yml ps | grep -q "Up"; then
+          if docker compose ps | grep -q "Up"; then
             echo "Creating backup of current production deployment..."
-            docker compose -f docker-compose.production.yml ps > production_backup_$(date +%Y%m%d_%H%M%S).txt
-            docker compose -f docker-compose.production.yml logs > production_logs_$(date +%Y%m%d_%H%M%S).txt
+            docker compose ps > production_backup_$(date +%Y%m%d_%H%M%S).txt
+            docker compose logs > production_logs_$(date +%Y%m%d_%H%M%S).txt
           fi
 
       - name: Stop current production
         run: |
           echo "Stopping current production deployment..."
-          docker compose -f docker-compose.production.yml down || true
+          docker compose down || true
 
       - name: Deploy to production
         run: |
@@ -96,7 +96,7 @@ jobs:
           echo "Backend: $BACKEND_IMAGE"
           
           # Deploy using docker compose with production environment
-          docker compose -f docker-compose.production.yml up -d
+          docker compose up -d
 
       - name: Verify production deployment
         run: |
@@ -104,10 +104,10 @@ jobs:
           sleep 45
           
           # Check if containers are running
-          docker compose -f docker-compose.production.yml ps
+          docker compose ps
           
           # Basic health check
-          if docker compose -f docker compose.production.yml ps | grep -q "Up"; then
+          if docker compose ps | grep -q "Up"; then
             echo "✅ Production deployment successful - services are running"
             
             # Additional health checks can be added here
@@ -115,7 +115,7 @@ jobs:
             echo "Production deployment completed successfully"
           else
             echo "❌ Production deployment failed - some services are not running"
-            docker compose -f docker-compose.production.yml logs
+            docker compose logs
             exit 1
           fi
 

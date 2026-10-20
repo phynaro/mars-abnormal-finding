@@ -52,16 +52,16 @@ scp mars-images-latest.tar.gz user@target-server:/path/to/deployment/
    - Serves with nginx in production stage
    - Optimized for production
 
-3. **Nginx Image** (`Dockerfile.nginx`):
-   - Includes production nginx configuration
-   - Non-root user
+3. **Nginx**:
+   - Stock `nginx:alpine` image
+   - Repo `nginx.conf` mounted at start
    - Health checks
 
 ### Deployment Process
 
 1. **Load Images**: `docker load < mars-images-latest.tar.gz`
 2. **Create Environment Files**: From templates if not present
-3. **Start Services**: `docker-compose -f docker-compose.deploy.yml up -d`
+3. **Start Services**: `docker compose up -d`
 4. **Health Checks**: Automatic verification of all services
 
 ## Configuration
@@ -122,37 +122,37 @@ VITE_BUILD_VERSION=1.0.0
 ### View Logs
 ```bash
 # All services
-docker-compose -f docker-compose.deploy.yml logs -f
+docker compose logs -f
 
 # Specific service
-docker-compose -f docker-compose.deploy.yml logs -f backend
+docker compose logs -f backend
 ```
 
 ### Restart Services
 ```bash
 # All services
-docker-compose -f docker-compose.deploy.yml restart
+docker compose restart
 
 # Specific service
-docker-compose -f docker-compose.deploy.yml restart backend
+docker compose restart backend
 ```
 
 ### Stop Services
 ```bash
-docker-compose -f docker-compose.deploy.yml down
+docker compose down
 ```
 
 ### Update Deployment
 ```bash
 # Stop services
-docker-compose -f docker-compose.deploy.yml down
+docker compose down
 
 # Load new images
 docker load < mars-images-new-version.tar.gz
 
-# Update image tags in docker-compose.deploy.yml
+# Images are tagged mars-backend:latest and mars-frontend:latest
 # Start services
-docker-compose -f docker-compose.deploy.yml up -d
+docker compose up -d
 ```
 
 ## Troubleshooting
@@ -168,7 +168,7 @@ docker-compose -f docker-compose.deploy.yml up -d
 
 ```bash
 # Check service status
-docker-compose -f docker-compose.deploy.yml ps
+docker compose ps
 
 # Check individual container logs
 docker logs mars-backend
@@ -182,7 +182,7 @@ curl http://localhost/
 
 ### Performance Optimization
 
-1. **Resource Limits**: Add resource limits to docker-compose.deploy.yml
+1. **Resource Limits**: Add resource limits to docker-compose.yml
 2. **Caching**: Configure nginx caching for static assets
 3. **Database**: Use connection pooling
 4. **Monitoring**: Add monitoring and logging

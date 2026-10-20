@@ -1,7 +1,7 @@
 #!/bin/bash
 
-echo "🛑 Stopping Nginx..."
+echo "Stopping the production stack..."
 
-docker compose -f docker-compose.nginx-local.yml down
+docker compose down
 
-echo "✅ Nginx stopped"
+echo "Stopped"
