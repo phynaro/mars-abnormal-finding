@@ -68,6 +68,9 @@ const Sidebar: React.FC<SidebarProps> = ({
   };
 
   const canAccess = (item: MenuItem) => {
+    if (user?.userKind === 'external' && item.hideForExternal) {
+      return false;
+    }
     if (item.id === 'ems' || item.emsMenu) {
       return checkPermission(user?.id, 'ems_access').allowed;
     }

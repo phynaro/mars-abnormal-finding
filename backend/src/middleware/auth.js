@@ -10,6 +10,14 @@ const API_TOKEN_PREFIX = 'eden_sk_';
 // Only these HTTP methods are allowed for read-only service tokens.
 const READ_ONLY_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+function resolveUserKind(value) {
+  return String(value || '').toLowerCase() === 'external' ? 'external' : 'internal';
+}
+
+function isExternalUser(user) {
+  return !!(user && !user.isApiToken && user.userKind === 'external');
+}
+
 function hashApiToken(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
@@ -170,6 +178,7 @@ const authenticateToken = async (req, res, next) => {
             ue.LineID,
             ue.AvatarUrl,
             ue.IsActive,
+            ue.UserKind,
             g.UserGCode,
             g.UserGName,
             p.PERSONCODE,
@@ -216,7 +225,8 @@ const authenticateToken = async (req, res, next) => {
         lineId: user.LineID,
         avatarUrl: user.AvatarUrl,
         lastLogin: user.LastLogin,
-        createdAt: user.CreatedAt
+        createdAt: user.CreatedAt,
+        userKind: resolveUserKind(user.UserKind)
       };
       
       next();
@@ -342,6 +352,76 @@ const requireFormPermission = (formId, action = 'view') => {
   };
 };
 
+// Internal staff and read-only API tokens. External users are limited to their own tickets.
+const requireInternalUser = (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required'
+    });
+  }
+
+  if (isExternalUser(req.user)) {
+    return res.status(403).json({
+      success: false,
+      message: 'External users cannot access this resource'
+    });
+  }
+
+  next();
+};
+
+// External users may act only on tickets they created. Other callers pass through.
+const requireExternalTicketOwner = async (req, res, next) => {
+  if (!req.user) {
+    return res.status(401).json({
+      success: false,
+      message: 'Authentication required'
+    });
+  }
+
+  if (!isExternalUser(req.user)) {
+    return next();
+  }
+
+  const ticketId = parseInt(req.params.id, 10);
+  if (!ticketId) {
+    return res.status(400).json({
+      success: false,
+      message: 'Ticket ID required'
+    });
+  }
+
+  try {
+    const pool = await getConnection();
+    const result = await pool.request()
+      .input('id', sql.Int, ticketId)
+      .query('SELECT created_by FROM IgxTickets WHERE id = @id');
+
+    if (result.recordset.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ticket not found'
+      });
+    }
+
+    if (Number(result.recordset[0].created_by) !== Number(req.user.id)) {
+      return res.status(404).json({
+        success: false,
+        message: 'Ticket not found'
+      });
+    }
+
+    next();
+  } catch (error) {
+    console.error('External ticket ownership check error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Permission check failed'
+    });
+  }
+};
+
 // Delete ticket: allow if user has TKT delete permission OR is the ticket creator
 const requireDeleteTicketPermission = async (req, res, next) => {
   if (!req.user) {
@@ -353,7 +433,9 @@ const requireDeleteTicketPermission = async (req, res, next) => {
 
   try {
     const { hasPermission } = require('../controllers/authController');
-    const hasDeletePermission = await hasPermission(req.user.userId, req.user.groupNo, 'TKT', 'delete');
+    // External users may delete only a ticket they created, even if their group has TKT delete.
+    const hasDeletePermission = !isExternalUser(req.user)
+      && await hasPermission(req.user.userId, req.user.groupNo, 'TKT', 'delete');
     
     if (hasDeletePermission) {
       return next();
@@ -408,5 +490,9 @@ module.exports = {
   requireSupplier,
   requireFormPermission,
   requirePermissionLevel,
-  requireDeleteTicketPermission
+  requireDeleteTicketPermission,
+  requireInternalUser,
+  requireExternalTicketOwner,
+  resolveUserKind,
+  isExternalUser
 }; 

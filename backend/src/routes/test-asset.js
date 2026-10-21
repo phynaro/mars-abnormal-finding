@@ -2,6 +2,10 @@ const express = require('express');
 const router = express.Router();
 const sql = require('mssql');
 const dbConfig = require('../config/dbConfig');
+const { authenticateToken, requireInternalUser } = require('../middleware/auth');
+
+router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // Helper function to get database connection
 async function getConnection() {

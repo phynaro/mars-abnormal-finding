@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const machineController = require('../controllers/machineController');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireInternalUser } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // GET /api/machines - Get all machines with optional filtering and pagination
 router.get('/', machineController.getAllMachines);

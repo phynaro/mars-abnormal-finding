@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const personalTargetController = require('../controllers/personalTargetController');
+const { authenticateToken, requireInternalUser } = require('../middleware/auth');
+
+router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // Get personal targets with optional filtering
 router.get('/', personalTargetController.getPersonalTargets);

@@ -33,6 +33,7 @@ export interface User {
   lastLogin?: string;
   createdAt?: string;
   isActive?: boolean;
+  userKind?: 'internal' | 'external';
 }
 
 export interface CreateUserData {
@@ -53,6 +54,7 @@ export interface CreateUserData {
   storeRoom?: number;
   dbNo?: number;
   lineId?: string;
+  userKind?: 'internal' | 'external';
 }
 
 export interface UpdateUserData {
@@ -72,6 +74,7 @@ export interface UpdateUserData {
   dbNo?: number;
   lineId?: string;
   isActive?: boolean;
+  userKind?: 'internal' | 'external';
 }
 
 export interface Group {

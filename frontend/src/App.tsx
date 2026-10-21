@@ -154,6 +154,28 @@ const AppContent: React.FC = () => {
     return <>{children}</>;
   };
 
+  const BLOCKED_EXTERNAL_PREFIXES = ['/dashboard', '/ems', '/maintenance', '/inventory', '/spare', '/settings', '/org', '/workflow', '/users', '/charts'];
+
+  const ExternalUserGuard: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+    const { user } = useAuth();
+    const location = useLocation();
+    if (user?.userKind === 'external') {
+      const path = location.pathname;
+      const blocked = path === '/home' || BLOCKED_EXTERNAL_PREFIXES.some(
+        (prefix) => path === prefix || path.startsWith(`${prefix}/`)
+      );
+      if (blocked) {
+        return <Navigate to="/tickets" replace />;
+      }
+    }
+    return <>{children}</>;
+  };
+
+  const SignedInFallback: React.FC = () => {
+    const { user } = useAuth();
+    return <Navigate to={user?.userKind === 'external' ? '/tickets' : '/dashboard'} replace />;
+  };
+
   // Public Route Component (moved inside to access auth context)
   const PublicRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { isAuthenticated, redirectUrl, clearRedirectUrl, user } = useAuth();
@@ -174,9 +196,9 @@ const AppContent: React.FC = () => {
         return <Navigate to={destination} replace />;
       }
       
-      // Redirect authenticated users away from public pages to home
-      if (!needsLineIdSetup && location.pathname !== '/home' && location.pathname !== '/welcome') {
-        return <Navigate to="/home" replace />;
+      const landing = user?.userKind === 'external' ? '/tickets' : '/home';
+      if (!needsLineIdSetup && location.pathname !== landing && location.pathname !== '/welcome') {
+        return <Navigate to={landing} replace />;
       }
     }
     
@@ -216,7 +238,9 @@ const AppContent: React.FC = () => {
         {/* Standalone Chart Routes (No Layout) */}
         <Route path="/charts/user-activity" element={
           <ProtectedRoute>
-            <UserActivityChartPage />
+            <ExternalUserGuard>
+              <UserActivityChartPage />
+            </ExternalUserGuard>
           </ProtectedRoute>
         } />
         
@@ -224,7 +248,9 @@ const AppContent: React.FC = () => {
         <Route path="/" element={
           <ProtectedRoute>
             <Layout>
-              <Outlet />
+              <ExternalUserGuard>
+                <Outlet />
+              </ExternalUserGuard>
             </Layout>
           </ProtectedRoute>
         }>
@@ -373,7 +399,7 @@ const AppContent: React.FC = () => {
           <Route path="workflow/types" element={<WorkflowTypesPage />} />
           
           {/* Catch all route - redirect to dashboard */}
-          <Route path="*" element={<Navigate to="/dashboard" replace />} />
+          <Route path="*" element={<SignedInFallback />} />
         </Route>
       </Routes>
     </Router>

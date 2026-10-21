@@ -31,7 +31,7 @@ export const EmsAccessProvider: React.FC<{ children: ReactNode }> = ({ children 
     }
 
     const currentUser = userRef.current;
-    if (!isAuthenticated || userId == null || !currentUser) {
+    if (!isAuthenticated || userId == null || !currentUser || currentUser.userKind === 'external') {
       setEmsRoles([]);
       setCanAccess(false);
       setCanAdmin(false);
@@ -60,7 +60,7 @@ export const EmsAccessProvider: React.FC<{ children: ReactNode }> = ({ children 
     } finally {
       setLoading(false);
     }
-  }, [authLoading, isAuthenticated, userId]);
+  }, [authLoading, isAuthenticated, userId, user?.userKind]);
 
   useEffect(() => {
     refresh();

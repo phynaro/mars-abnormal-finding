@@ -1,5 +1,5 @@
 const express = require('express');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireInternalUser } = require('../middleware/auth');
 const { uploadAvatar, compressAvatarMiddleware } = require('../middleware/upload');
 const userController = require('../controllers/userController');
 const userManagementController = require('../controllers/userManagementController');
@@ -17,20 +17,18 @@ router.put('/profile/line-id', userController.updateLineId);
 router.post('/line/test', userController.sendLineTest);
 router.delete('/profile/line-account', userController.unlinkLineAccount);
 router.get('/profile/line-profile', userController.getLineProfile);
-router.get('/stats', userController.getUserStats);
+router.get('/stats', requireInternalUser, userController.getUserStats);
 router.get('/role', userController.getRole);
-router.get('/all-basic', userController.getAllUsers); // Get all users for filtering (basic info only)
+router.get('/all-basic', requireInternalUser, userController.getAllUsers);
 
-// User management routes (Admin only)
-router.get('/all', userManagementController.getAllUsers);
-router.get('/groups', userManagementController.getAvailableGroups);
+// User management stays internal. Profile routes above remain available to external users.
+router.get('/all', requireInternalUser, userManagementController.getAllUsers);
+router.get('/groups', requireInternalUser, userManagementController.getAvailableGroups);
 router.get('/departments', userManagementController.getDepartments);
-router.get('/:userId', userManagementController.getUserById);
-router.post('/', userManagementController.createUser);
-router.put('/:userId', userManagementController.updateUser);
-router.delete('/:userId', userManagementController.deleteUser);
-
-// Password management
-router.put('/:userId/password', userManagementController.resetUserPassword);
+router.get('/:userId', requireInternalUser, userManagementController.getUserById);
+router.post('/', requireInternalUser, userManagementController.createUser);
+router.put('/:userId', requireInternalUser, userManagementController.updateUser);
+router.delete('/:userId', requireInternalUser, userManagementController.deleteUser);
+router.put('/:userId/password', requireInternalUser, userManagementController.resetUserPassword);
 
 module.exports = router;

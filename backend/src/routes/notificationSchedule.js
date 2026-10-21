@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const notificationScheduleController = require('../controllers/notificationScheduleController');
-const { authenticateToken, requirePermissionLevel } = require('../middleware/auth');
+const { authenticateToken, requirePermissionLevel, requireInternalUser } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // Get all notification schedules
 router.get('/', notificationScheduleController.getNotificationSchedules);

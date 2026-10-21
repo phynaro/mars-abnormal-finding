@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const ticketController = require('../controllers/ticketController');
-const { authenticateToken, requireFormPermission, requireDeleteTicketPermission } = require('../middleware/auth');
+const { authenticateToken, requireFormPermission, requireDeleteTicketPermission, requireInternalUser, requireExternalTicketOwner } = require('../middleware/auth');
 const { upload, uploadMemory } = require('../middleware/upload');
 
 // Apply authentication middleware to all routes
@@ -16,97 +16,69 @@ router.get('/', requireFormPermission('TKT', 'view'), ticketController.getTicket
 // Get user-related pending tickets (requires TKT form view permission)
 router.get('/pending/user', requireFormPermission('TKT', 'view'), ticketController.getUserPendingTickets);
 
-// Get user ticket count per period for personal dashboard (requires TKT form view permission)
-router.get('/user/count-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserTicketCountPerPeriod);
-
-// Get user Finished ticket count per period for personal dashboard (L2+ users only, requires TKT form view permission)
-router.get('/user/Finished-count-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserFinishedTicketCountPerPeriod);
-
-// Get user closure rate per period (on-time closed / total, requires TKT form view permission)
-router.get('/user/closure-rate-per-period', requireFormPermission('TKT', 'view'), ticketController.getUserClosureRatePerPeriod);
-
-// Get personal KPI data for personal dashboard (requires TKT form view permission)
-router.get('/user/personal-kpi', requireFormPermission('TKT', 'view'), ticketController.getPersonalKPIData);
+// Personal dashboard metrics are internal-only
+router.get('/user/count-per-period', requireInternalUser, requireFormPermission('TKT', 'view'), ticketController.getUserTicketCountPerPeriod);
+router.get('/user/Finished-count-per-period', requireInternalUser, requireFormPermission('TKT', 'view'), ticketController.getUserFinishedTicketCountPerPeriod);
+router.get('/user/closure-rate-per-period', requireInternalUser, requireFormPermission('TKT', 'view'), ticketController.getUserClosureRatePerPeriod);
+router.get('/user/personal-kpi', requireInternalUser, requireFormPermission('TKT', 'view'), ticketController.getPersonalKPIData);
 
 // Get failure modes (requires TKT form view permission)
 router.get('/failure-modes', requireFormPermission('TKT', 'view'), ticketController.getFailureModes);
 
 // Send pending ticket notification to specific user (requires TKT form view permission)
-router.post('/notifications/pending/:userId', requireFormPermission('TKT', 'view'), ticketController.sendPendingTicketNotification);
+router.post('/notifications/pending/:userId', requireInternalUser, requireFormPermission('TKT', 'view'), ticketController.sendPendingTicketNotification);
 
 // Send pending ticket notifications to all users (requires TKT form save permission)
-router.post('/notifications/pending', requireFormPermission('TKT', 'save'), ticketController.sendPendingTicketNotificationsToAll);
+router.post('/notifications/pending', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.sendPendingTicketNotificationsToAll);
 
 // Get ticket-scoped users for filters (requires TKT form view permission)
-router.get('/filter-users', requireFormPermission('TKT', 'view'), ticketController.getTicketFilterUsers);
+router.get('/filter-users', requireInternalUser, requireFormPermission('TKT', 'view'), ticketController.getTicketFilterUsers);
 
-// Get ticket by ID (requires TKT form view permission)
-router.get('/:id', requireFormPermission('TKT', 'view'), ticketController.getTicketById);
+// Get ticket by ID (requires TKT form view permission). External users only receive tickets they created.
+router.get('/:id', requireFormPermission('TKT', 'view'), requireExternalTicketOwner, ticketController.getTicketById);
 
 // Update ticket detail (L3/L4 with PU right, any status)
-router.patch('/:id/detail', requireFormPermission('TKT', 'save'), ticketController.updateTicketDetail);
+router.patch('/:id/detail', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.updateTicketDetail);
 
 // Update ticket (requires TKT form save permission)
-router.put('/:id', requireFormPermission('TKT', 'save'), ticketController.updateTicket);
+router.put('/:id', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.updateTicket);
 
 // Add comment to ticket (requires TKT form save permission)
-router.post('/:id/comments', requireFormPermission('TKT', 'save'), ticketController.addComment);
+router.post('/:id/comments', requireExternalTicketOwner, requireFormPermission('TKT', 'save'), ticketController.addComment);
 
 // Assign ticket (requires TKT form save permission)
-router.post('/:id/assign', requireFormPermission('TKT', 'save'), ticketController.assignTicket);
+router.post('/:id/assign', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.assignTicket);
 
 // Workflow endpoints
-// Accept ticket (requires TKT form save permission)
-router.post('/:id/accept', requireFormPermission('TKT', 'save'), ticketController.acceptTicket);
+router.post('/:id/accept', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.acceptTicket);
+router.post('/:id/plan', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.planTicket);
+router.post('/:id/start', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.startTicket);
+router.post('/:id/reject', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.rejectTicket);
+router.post('/:id/finish', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.finishTicket);
+router.post('/:id/escalate', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.escalateTicket);
 
-// Plan ticket (requires TKT form save permission) - NEW WORKFLOW
-router.post('/:id/plan', requireFormPermission('TKT', 'save'), ticketController.planTicket);
+// Approve review ticket (requestor, including an external creator of this ticket)
+router.post('/:id/approve-review', requireExternalTicketOwner, requireFormPermission('TKT', 'save'), ticketController.approveReview);
 
-// Start ticket (requires TKT form save permission) - NEW WORKFLOW
-router.post('/:id/start', requireFormPermission('TKT', 'save'), ticketController.startTicket);
+router.post('/:id/approve-close', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.approveClose);
+router.post('/:id/review-and-close', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.reviewAndClose);
+router.post('/:id/reopen', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.reopenTicket);
+router.post('/:id/reassign', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.reassignTicket);
 
-// Reject ticket (requires TKT form save permission)
-router.post('/:id/reject', requireFormPermission('TKT', 'save'), ticketController.rejectTicket);
-
-// Finish job (requires TKT form save permission)
-router.post('/:id/finish', requireFormPermission('TKT', 'save'), ticketController.finishTicket);
-
-// Escalate ticket (requires TKT form save permission)
-router.post('/:id/escalate', requireFormPermission('TKT', 'save'), ticketController.escalateTicket);
-
-// Approve review ticket (L1 - Requestor only, requires TKT form save permission)
-router.post('/:id/approve-review', requireFormPermission('TKT', 'save'), ticketController.approveReview);
-
-// Approve close ticket (L4+ Managers only, requires TKT form save permission)
-router.post('/:id/approve-close', requireFormPermission('TKT', 'save'), ticketController.approveClose);
-
-// Review and close escalated review ticket (L4+ Managers only, requires TKT form save permission)
-router.post('/:id/review-and-close', requireFormPermission('TKT', 'save'), ticketController.reviewAndClose);
-
-// Reopen ticket (requires TKT form save permission)
-router.post('/:id/reopen', requireFormPermission('TKT', 'save'), ticketController.reopenTicket);
-
-// Reassign ticket (requires TKT form save permission)
-router.post('/:id/reassign', requireFormPermission('TKT', 'save'), ticketController.reassignTicket);
-
-// Get available assignees (requires TKT form view permission)
-router.get('/assignees/available', requireFormPermission('TKT', 'view'), ticketController.getAvailableAssignees);
+router.get('/assignees/available', requireInternalUser, requireFormPermission('TKT', 'view'), ticketController.getAvailableAssignees);
 
 // Test notification recipients (requires admin level 3+)
 const { requirePermissionLevel } = require('../middleware/auth');
-router.post('/test-notification-recipients', requirePermissionLevel(3), ticketController.testNotificationRecipients);
+router.post('/test-notification-recipients', requireInternalUser, requirePermissionLevel(3), ticketController.testNotificationRecipients);
 
 // Delete ticket (requires TKT delete permission OR user is ticket creator)
-router.delete('/:id', requireDeleteTicketPermission, ticketController.deleteTicket);
+router.delete('/:id', requireExternalTicketOwner, requireDeleteTicketPermission, ticketController.deleteTicket);
 
-// Upload ticket image (requires TKT form save permission)
-router.post('/:id/images', requireFormPermission('TKT', 'save'), upload.single('image'), ticketController.uploadTicketImage);
-
-// Delete ticket image (requires TKT form save permission)
-router.delete('/:id/images/:imageId', requireFormPermission('TKT', 'save'), ticketController.deleteTicketImage);
+router.post('/:id/images', requireExternalTicketOwner, requireFormPermission('TKT', 'save'), upload.single('image'), ticketController.uploadTicketImage);
+router.delete('/:id/images/:imageId', requireExternalTicketOwner, requireFormPermission('TKT', 'save'), ticketController.deleteTicketImage);
 
 // Test email notification (for development/testing)
-router.post('/test-email', async (req, res) => {
+router.post('/test-email', requireInternalUser, async (req, res) => {
     try {
         const emailService = require('../services/emailService');
         

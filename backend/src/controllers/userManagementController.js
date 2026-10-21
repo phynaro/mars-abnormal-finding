@@ -13,6 +13,21 @@ async function getConnection() {
   }
 }
 
+function parseUserKind(value, fallback) {
+  if (value === undefined || value === null || value === '') {
+    return fallback === undefined ? null : fallback;
+  }
+  const kind = String(value).toLowerCase();
+  if (kind !== 'internal' && kind !== 'external') {
+    return false;
+  }
+  return kind;
+}
+
+function userKindFromRow(value) {
+  return String(value || '').toLowerCase() === 'external' ? 'external' : 'internal';
+}
+
 const userManagementController = {
   // Get all users (Admin only)
   getAllUsers: async (req, res) => {
@@ -46,6 +61,7 @@ const userManagementController = {
               ue.LineID,
               ue.AvatarUrl,
               ue.IsActive,
+              ue.UserKind,
               g.UserGCode,
               g.UserGName,
               p.PERSONCODE,
@@ -96,7 +112,8 @@ const userManagementController = {
           avatarUrl: user.AvatarUrl,
           lastLogin: user.LastLogin,
           createdAt: user.CreatedAt,
-          isActive: user.IsActive === 1 || user.IsActive === true
+          isActive: user.IsActive === 1 || user.IsActive === true,
+          userKind: userKindFromRow(user.UserKind)
         }));
 
         res.json({
@@ -153,6 +170,7 @@ const userManagementController = {
             ue.LineID,
             ue.AvatarUrl,
             ue.IsActive,
+            ue.UserKind,
             g.UserGCode,
             g.UserGName,
             p.PERSONCODE,
@@ -211,7 +229,8 @@ const userManagementController = {
         avatarUrl: user.AvatarUrl,
         lastLogin: user.LastLogin,
         createdAt: user.CreatedAt,
-        isActive: user.IsActive === 1 || user.IsActive === true
+        isActive: user.IsActive === 1 || user.IsActive === true,
+        userKind: userKindFromRow(user.UserKind)
       };
 
       res.json({
@@ -256,8 +275,17 @@ const userManagementController = {
         storeRoom,
         dbNo,
         lineId,
-        personCode
+        personCode,
+        userKind: requestedUserKind
       } = req.body;
+
+      const userKind = parseUserKind(requestedUserKind, 'internal');
+      if (userKind === false) {
+        return res.status(400).json({
+          success: false,
+          message: 'userKind must be internal or external'
+        });
+      }
 
       // Validation
       if (!userId || !password || !firstName || !lastName || !groupNo) {
@@ -416,6 +444,21 @@ const userManagementController = {
             SELECT @personNo as PersonNo, @userID as UserID, GETDATE() as CreatedAt
           `);
 
+        await transaction.request()
+          .input('userID', sql.VarChar(50), userId)
+          .input('personNo', sql.Int, personNo)
+          .input('userKind', sql.NVarChar(20), userKind)
+          .query(`
+            INSERT INTO IgxUserExtension (
+              UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires,
+              LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive, UserKind
+            )
+            VALUES (
+              @userID, @personNo, 'Y', NULL, NULL,
+              NULL, GETDATE(), GETDATE(), NULL, NULL, 1, @userKind
+            )
+          `);
+
         await transaction.commit();
 
         const newUser = secUserResult.recordset[0];
@@ -435,7 +478,8 @@ const userManagementController = {
           dbNo: dbNo || 1,
           lineId: lineId,
           createdAt: newUser.CreatedAt,
-          isActive: false
+          isActive: true,
+          userKind
         };
 
         res.status(201).json({
@@ -577,6 +621,45 @@ const userManagementController = {
                   IsActive = COALESCE(@isActive, IsActive),
                   UpdatedAt = GETDATE()
               WHERE UserID = @userID
+            `);
+        }
+
+        if (updateData.userKind !== undefined) {
+          if (req.user && req.user.userKind === 'external') {
+            await transaction.rollback();
+            return res.status(403).json({
+              success: false,
+              message: 'External users cannot change user kind'
+            });
+          }
+
+          const userKind = parseUserKind(updateData.userKind);
+          if (!userKind) {
+            await transaction.rollback();
+            return res.status(400).json({
+              success: false,
+              message: 'userKind must be internal or external'
+            });
+          }
+
+          await transaction.request()
+            .input('userID', sql.VarChar(50), userId)
+            .input('personNo', sql.Int, personNo)
+            .input('userKind', sql.NVarChar(20), userKind)
+            .query(`
+              IF EXISTS (SELECT 1 FROM IgxUserExtension WHERE UserID = @userID)
+                UPDATE IgxUserExtension
+                SET UserKind = @userKind, UpdatedAt = GETDATE()
+                WHERE UserID = @userID
+              ELSE
+                INSERT INTO IgxUserExtension (
+                  UserID, PersonNo, EmailVerified, EmailVerificationToken, EmailVerificationExpires,
+                  LastLogin, CreatedAt, UpdatedAt, LineID, AvatarUrl, IsActive, UserKind
+                )
+                VALUES (
+                  @userID, @personNo, 'Y', NULL, NULL,
+                  NULL, GETDATE(), GETDATE(), NULL, NULL, 1, @userKind
+                )
             `);
         }
 

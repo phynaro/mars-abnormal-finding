@@ -305,7 +305,8 @@ const TicketDetailsPage: React.FC = () => {
   };
 
   // Use area-specific approval levels instead of global permission levels
-  const isCreator = ticket?.user_relationship === "creator";
+  const isCreator = ticket?.user_relationship === "creator"
+    || (ticket?.created_by != null && Number(ticket.created_by) === Number(user?.id));
   const userApprovalLevel = ticket?.user_approval_level || 0;
   const isL2Plus = userApprovalLevel >= 2;
   const isL3Plus = userApprovalLevel >= 3;

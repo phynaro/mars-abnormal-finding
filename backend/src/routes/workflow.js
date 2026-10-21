@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const workflowController = require('../controllers/workflowController');
-const { authenticateToken, requireFormPermission } = require('../middleware/auth');
+const { authenticateToken, requireFormPermission, requireInternalUser } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // Get workflow types (requires WF form view permission)
 router.get('/types', requireFormPermission('WF', 'view'), workflowController.getWorkflowTypes);

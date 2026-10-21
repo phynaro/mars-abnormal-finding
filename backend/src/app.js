@@ -139,6 +139,7 @@ app.use('/api/personnel', personnelRoutes);
 app.use('/api/workflow', workflowRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/backlog', backlogRoutes);
+// Hierarchy, ticket class, work groups, and assets stay open so external users can file a ticket.
 app.use('/api/hierarchy', hierarchyRoutes);
 app.use('/api/administration', administrationRoutes);
 app.use('/api/targets', targetRoutes);

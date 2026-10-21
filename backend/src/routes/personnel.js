@@ -1,6 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const PersonnelController = require('../controllers/personnelController');
+const { authenticateToken, requireInternalUser } = require('../middleware/auth');
+
+router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // Person endpoints
 router.get('/persons', PersonnelController.getPersons);

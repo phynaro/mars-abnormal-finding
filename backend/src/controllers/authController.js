@@ -18,6 +18,10 @@ console.log('JWT_EXPIRES_IN:', JWT_EXPIRES_IN);
 // Renew token when remaining lifetime is in the last 25% (sliding session)
 const JWT_RENEW_FRACTION = parseFloat(process.env.JWT_RENEW_FRACTION || '0.25', 10) || 0.25;
 
+function resolveUserKind(value) {
+  return String(value || '').toLowerCase() === 'external' ? 'external' : 'internal';
+}
+
 function shouldRenewToken(decoded) {
   if (!decoded || typeof decoded.exp !== 'number') return false;
   const now = Math.floor(Date.now() / 1000);
@@ -216,6 +220,7 @@ const login = async (req, res) => {
           ue.LineID,
           ue.AvatarUrl,
           ue.IsActive,
+          ue.UserKind,
           g.UserGCode,
           g.UserGName,
           p.PERSONCODE,
@@ -345,7 +350,8 @@ const login = async (req, res) => {
         lineId: user.LineID,
         avatarUrl: user.AvatarUrl,
         lastLogin: user.LastLogin,
-        createdAt: user.CreatedAt
+        createdAt: user.CreatedAt,
+        userKind: resolveUserKind(user.UserKind)
       }
     });
 
@@ -498,6 +504,7 @@ const getProfile = async (req, res) => {
           ue.LineID,
           ue.AvatarUrl,
           ue.IsActive,
+          ue.UserKind,
           g.UserGCode,
           g.UserGName,
           p.PERSONCODE,
@@ -545,7 +552,8 @@ const getProfile = async (req, res) => {
         lineId: user.LineID,
         avatarUrl: user.AvatarUrl,
         lastLogin: user.LastLogin,
-        createdAt: user.CreatedAt
+        createdAt: user.CreatedAt,
+        userKind: resolveUserKind(user.UserKind)
       }
     };
 
@@ -854,6 +862,7 @@ const lineLogin = async (req, res) => {
           ue.LineID,
           ue.AvatarUrl,
           ue.IsActive,
+          ue.UserKind,
           g.UserGCode,
           g.UserGName,
           p.PERSONCODE,
@@ -963,7 +972,8 @@ const lineLogin = async (req, res) => {
         lineId: user.LineID,
         avatarUrl: user.AvatarUrl,
         lastLogin: user.LastLogin,
-        createdAt: user.CreatedAt
+        createdAt: user.CreatedAt,
+        userKind: resolveUserKind(user.UserKind)
       }
     });
 

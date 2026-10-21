@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const inventoryController = require('../controllers/inventoryController');
-const { authenticateToken, requireFormPermission } = require('../middleware/auth');
+const { authenticateToken, requireFormPermission, requireInternalUser } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // Inventory Catalog (requires IV form view permission)
 router.get('/catalog', requireFormPermission('IV', 'view'), inventoryController.getInventoryCatalog);

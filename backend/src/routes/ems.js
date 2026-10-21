@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireInternalUser } = require('../middleware/auth');
 const { attachEmsRoles, requireEmsAccess, requireEmsAdmin, requireEmsEditor } = require('../middleware/emsAuth');
 const { uploadEquipmentMemory } = require('../middleware/upload');
 
@@ -12,6 +12,7 @@ const roleController = require('../controllers/ems/roleController');
 const calibrationUserEventsController = require('../controllers/calibrationUserEventsController');
 
 router.use(authenticateToken);
+router.use(requireInternalUser);
 
 router.get('/me', attachEmsRoles, (req, res) => {
   const level = Number(req.user.levelReport) || 0;

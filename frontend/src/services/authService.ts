@@ -18,6 +18,7 @@ export interface User {
   createdAt?: string;
   lineId?: string;
   avatarUrl?: string;
+  userKind?: 'internal' | 'external';
 }
 
 export interface LoginCredentials {

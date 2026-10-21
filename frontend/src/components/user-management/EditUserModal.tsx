@@ -37,7 +37,8 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
     groupNo: user.groupNo,
     levelReport: user.levelReport,
     storeRoom: user.storeRoom,
-    dbNo: user.dbNo
+    dbNo: user.dbNo,
+    userKind: user.userKind || 'internal'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isResettingPassword, setIsResettingPassword] = useState(false);
@@ -59,7 +60,8 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
       groupNo: user.groupNo,
       levelReport: user.levelReport,
       storeRoom: user.storeRoom,
-      dbNo: user.dbNo
+      dbNo: user.dbNo,
+      userKind: user.userKind || 'internal'
     });
   }, [user]);
 
@@ -259,6 +261,23 @@ export const EditUserModal: React.FC<EditUserModalProps> = ({
               </div>
             </div>
             
+            <div className="space-y-2">
+              <Label htmlFor="userKind">User kind</Label>
+              <Select
+                value={formData.userKind || 'internal'}
+                onValueChange={(value) => handleInputChange('userKind', value)}
+              >
+                <SelectTrigger id="userKind">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="internal">Internal — full access</SelectItem>
+                  <SelectItem value="external">External — own tickets only</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">External users see only tickets they create and cannot open dashboards.</p>
+            </div>
+
             <div className="flex justify-end space-x-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>
                 Cancel

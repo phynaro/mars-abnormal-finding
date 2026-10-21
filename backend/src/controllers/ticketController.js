@@ -912,9 +912,13 @@ const getTickets = async (req, res) => {
       }
     }
 
-    if (created_by) {
-      if (created_by.includes(',')) {
-        const createdByList = created_by
+    const createdByScope = req.user && req.user.userKind === 'external'
+      ? String(req.user.id)
+      : created_by;
+
+    if (createdByScope) {
+      if (String(createdByScope).includes(',')) {
+        const createdByList = String(createdByScope)
           .split(',')
           .map((value) => parseInt(value.trim()))
           .filter((value) => !isNaN(value));
@@ -927,7 +931,7 @@ const getTickets = async (req, res) => {
         }
       } else {
         whereClause += " AND t.created_by = @created_by";
-        params.push({ name: "created_by", value: created_by, type: sql.Int });
+        params.push({ name: "created_by", value: parseInt(createdByScope, 10), type: sql.Int });
       }
     }
 
@@ -1221,6 +1225,13 @@ const getTicketById = async (req, res) => {
     }
 
     const ticket = result.recordset[0];
+
+    if (req.user && req.user.userKind === 'external' && Number(ticket.created_by) !== Number(userId)) {
+      return res.status(404).json({
+        success: false,
+        message: "Ticket not found",
+      });
+    }
 
     // Get user's max approval level for this ticket's PU using the helper function
     const userApprovalLevel = await getUserMaxApprovalLevelForPU(
@@ -5402,11 +5413,11 @@ const getUserPendingTickets = async (req, res) => {
                 LEFT JOIN Person finished_person ON t.finished_by = finished_person.PERSONNO
                 LEFT JOIN Person rejected_person ON t.rejected_by = rejected_person.PERSONNO
                 WHERE (
-                    -- IgxTickets created by the user
-                    t.created_by = @userId
-                    OR 
-                    -- IgxTickets where user has approval_level >= 2 for the line/area/plant
-                    (ta.approval_level >= 2 AND ta.is_active = 1)
+                    ${req.user && req.user.userKind === 'external'
+                      ? 't.created_by = @userId'
+                      : `t.created_by = @userId
+                    OR
+                    (ta.approval_level >= 2 AND ta.is_active = 1)`}
                 )
                 AND t.status NOT IN ('closed', 'canceled', 'rejected_final')
             ) AS deduped_results

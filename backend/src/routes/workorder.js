@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const workOrderController = require('../controllers/workOrderController');
-const { authenticateToken, requireFormPermission } = require('../middleware/auth');
+const { authenticateToken, requireFormPermission, requireInternalUser } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // Get all work orders with filtering and pagination (requires WO form view permission)
 router.get('/', requireFormPermission('WO', 'view'), workOrderController.getWorkOrders);

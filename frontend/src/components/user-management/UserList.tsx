@@ -128,6 +128,9 @@ export const UserList: React.FC<UserListProps> = ({
                       <Badge className={getPermissionLevelColor(user.permissionLevel)}>
                         {user.groupCode}
                       </Badge>
+                      <Badge variant="outline">
+                        {user.userKind === 'external' ? 'External' : 'Internal'}
+                      </Badge>
                       {/* <div className="text-xs text-gray-500">
                         Level {user.permissionLevel}
                       </div> */}

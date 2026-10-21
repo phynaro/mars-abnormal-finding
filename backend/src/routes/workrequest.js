@@ -1,10 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const workRequestController = require('../controllers/workRequestController');
-const { authenticateToken, requireFormPermission } = require('../middleware/auth');
+const { authenticateToken, requireFormPermission, requireInternalUser } = require('../middleware/auth');
 
 // Apply authentication middleware to all routes
 router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // Get all work requests with filtering and pagination (requires WR form view permission)
 router.get('/', requireFormPermission('WR', 'view'), workRequestController.getWorkRequests);

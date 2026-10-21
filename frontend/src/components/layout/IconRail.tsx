@@ -27,6 +27,9 @@ export const IconRail: React.FC<IconRailProps> = ({ activeId, submenuCollapsed =
   const { periodWeek } = usePeriodWeek();
   // Permission check function
   const canAccess = (item: MenuItem) => {
+    if (user?.userKind === 'external' && item.hideForExternal) {
+      return false;
+    }
     if (item.id === 'ems') {
       return checkPermission(user?.id, 'ems_access').allowed;
     }

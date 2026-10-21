@@ -107,6 +107,10 @@ export const ViewUserModal: React.FC<ViewUserModalProps> = ({
               <Label>Permission Level</Label>
               <p className="text-sm text-gray-600">Level {user.permissionLevel}</p>
             </div>
+            <div>
+              <Label>User kind</Label>
+              <p className="text-sm text-gray-600">{user.userKind === 'external' ? 'External' : 'Internal'}</p>
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-4">

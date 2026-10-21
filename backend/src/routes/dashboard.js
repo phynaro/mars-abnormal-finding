@@ -4,7 +4,7 @@ const dashboardController = require('../controllers/dashboardController');
 const calibrationController = require('../controllers/calibrationController');
 const pmCalibrationScheduleController = require('../controllers/pmCalibrationScheduleController');
 const calibrationUserEventsController = require('../controllers/calibrationUserEventsController');
-const { authenticateToken, requireFormPermission } = require('../middleware/auth');
+const { authenticateToken, requireFormPermission, requireInternalUser } = require('../middleware/auth');
 
 // Public endpoints (before authentication middleware)
 // Get Current Period and Week (public endpoint, no authentication required)
@@ -12,6 +12,7 @@ router.get('/current-period-week', dashboardController.getCurrentPeriodAndWeek);
 
 // Apply authentication middleware to all other routes
 router.use(authenticateToken);
+router.use(requireInternalUser);
 
 // Get Work Order Volume Trend (requires WO form view permission)
 router.get('/workorder-volume-trend', requireFormPermission('WO', 'view'), dashboardController.getWorkOrderVolumeTrend);

@@ -29,6 +29,8 @@ export interface MenuItem {
   emsMenu?: boolean;
   /** EMS settings — visible only to plant managers / L3 admins */
   emsAdminOnly?: boolean;
+  /** Hidden from external users, who only see their own tickets */
+  hideForExternal?: boolean;
   children?: MenuItem[];
 }
 
@@ -48,6 +50,7 @@ export const menuItems: MenuItem[] = [
     icon: <div className="h-7 w-7 rounded-full bg-white flex items-center justify-center"><img src="/Eden_Logo.png" alt="MARS Logo" className="h-6 w-6" /></div>,
     path: '/home',
     permissionLevel: 1,
+    hideForExternal: true,
   },
   {
     id: 'dashboard',
@@ -55,6 +58,7 @@ export const menuItems: MenuItem[] = [
     icon: <LayoutDashboard className="h-5 w-5" />,
     path: '/dashboard',
     permissionLevel: 1,
+    hideForExternal: true,
     children: [
      // { id: 'dashboard-abnormal', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal', permissionLevel: 1 },
       { id: 'dashboard-abnormal', label: 'Abnormal Report', icon: <FileText className="h-4 w-4" />, path: '/dashboard/abnormal', permissionLevel: 1 },
@@ -79,6 +83,7 @@ export const menuItems: MenuItem[] = [
     icon: <Gauge className="h-5 w-5" />,
     path: '/ems',
     permissionLevel: 1,
+    hideForExternal: true,
     emsMenu: true,
     children: [
       {
@@ -174,6 +179,7 @@ export const menuItems: MenuItem[] = [
     icon: <Settings className="h-5 w-5" />,
     path: '/settings',
     permissionLevel: 1,
+    hideForExternal: true,
     children: [
       { id: 'settings-hierarchy', label: 'Hierarchy View', icon: <TrendingUp className="h-4 w-4" />, path: '/settings/hierarchy', permissionLevel: 1 },
       { id: 'settings-ticket-approvals', label: 'Ticket Approvals', icon: <UserCheck className="h-4 w-4" />, path: '/settings/ticket-approvals', permissionLevel: 1 },

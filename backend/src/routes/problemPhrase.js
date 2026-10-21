@@ -1,9 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const problemPhraseController = require('../controllers/problemPhraseController');
-const { authenticateToken, requirePermissionLevel } = require('../middleware/auth');
+const { authenticateToken, requirePermissionLevel, requireInternalUser } = require('../middleware/auth');
 
 router.use(authenticateToken);
+router.use(requireInternalUser);
 router.use(requirePermissionLevel(3));
 
 router.get('/phrases', problemPhraseController.getPhrases);

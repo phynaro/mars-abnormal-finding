@@ -36,7 +36,8 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
     groupNo: 11,      // Default security group
     levelReport: 5,   // Default level
     storeRoom: 1,
-    dbNo: 1
+    dbNo: 1,
+    userKind: 'internal'
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string>('');
@@ -185,6 +186,23 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
               </div>
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="userKind">User kind</Label>
+              <Select
+                value={formData.userKind || 'internal'}
+                onValueChange={(value) => handleInputChange('userKind', value)}
+              >
+                <SelectTrigger id="userKind">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="internal">Internal — full access</SelectItem>
+                  <SelectItem value="external">External — own tickets only</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-gray-500">External users see only tickets they create and cannot open dashboards.</p>
+            </div>
+
             {/* Info Section */}
             <div className="bg-blue-50 border border-blue-200 p-4 rounded">
               <p className="text-sm text-blue-800">
@@ -194,7 +212,7 @@ export const CreateUserModal: React.FC<CreateUserModalProps> = ({
                 <li>Site: Site 3 (default)</li>
                 <li>Security Group: Group 11 (default)</li>
                 <li>Permission Level: Level 5 (default)</li>
-                <li>Status: Inactive (will activate on first login)</li>
+                <li>User kind: Internal unless you choose External</li>
               </ul>
             </div>
             

@@ -181,28 +181,33 @@ const BottomNavigation: React.FC<BottomNavigationProps> = ({ className }) => {
       aria-label="Bottom navigation"
     >
       <div className="flex items-center justify-around px-2 py-2 safe-area-inset-bottom">
-        {/* First two items: Home and Dashboard */}
+        {/* First two items: Home and Dashboard. External users still see them so the create button stays centered. */}
         {bottomNavItems.slice(0, 2).map((item) => {
           if (!canAccess(item.permissionLevel)) {
             return null;
           }
 
-          const active = isActive(item.path);
+          const locked = user?.userKind === 'external';
+          const active = !locked && isActive(item.path);
           
           return (
             <button
               key={item.id}
+              type="button"
+              disabled={locked}
               onClick={() => handleNavigation(item.path)}
               className={cn(
                 "relative flex flex-col items-center justify-center min-w-0 flex-1 py-2 px-1",
                 "transition-all duration-200 ease-in-out",
                 "focus:outline-none",
+                locked && "cursor-not-allowed opacity-40",
                 active 
                   ? "text-primary" 
                   : "text-muted-foreground"
               )}
-              aria-label={`Navigate to ${item.label}`}
+              aria-label={locked ? `${item.label} unavailable` : `Navigate to ${item.label}`}
               aria-current={active ? 'page' : undefined}
+              aria-disabled={locked}
             >
               <div className={cn(
                 "mb-1 transition-all duration-200 relative",

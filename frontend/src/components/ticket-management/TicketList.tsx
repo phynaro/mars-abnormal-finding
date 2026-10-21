@@ -256,7 +256,8 @@ export const TicketList: React.FC = () => {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { t, language } = useLanguage();
-  useAuth();
+  const { user } = useAuth();
+  const isExternalUser = user?.userKind === 'external';
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [totalPages, setTotalPages] = useState(1);
@@ -781,13 +782,14 @@ export const TicketList: React.FC = () => {
 
 
   useEffect(() => {
-    fetchPlants();
-    // Don't fetch areas on mount - wait for plant selection
-    fetchTicketFilterUsers();
+    if (!isExternalUser) {
+      fetchPlants();
+      fetchTicketFilterUsers();
+    }
     fetchCriticalLevels();
     fetchTicketClasses();
     fetchWorkGroups();
-  }, []);
+  }, [isExternalUser]);
 
   // Refetch areas when plant filter changes
   useEffect(() => {
@@ -1587,7 +1589,7 @@ export const TicketList: React.FC = () => {
           {t('nav.tickets')} ({totalTickets})
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {/* Plant quick filter (toggle group) */}
+          {!isExternalUser && (
           <div className="flex rounded-md border overflow-hidden bg-muted/30">
             <Button
               variant={selectedPlants.length === 0 ? "default" : "ghost"}
@@ -1617,6 +1619,7 @@ export const TicketList: React.FC = () => {
               </Button>
             ))}
           </div>
+          )}
           {/* Overdue toggle */}
           <Button
             variant={filters.overdue ? "default" : "outline"}
@@ -1758,6 +1761,8 @@ export const TicketList: React.FC = () => {
                       />
                     </div>
                   </div>
+                  {!isExternalUser && (
+                  <>
                   {/* 2. Created By */}
                   <SearchableMultiSelectUserFilter
                     id="created_by"
@@ -1871,7 +1876,10 @@ export const TicketList: React.FC = () => {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
-                  {/* 5. Area */}
+                  </>
+                  )}
+                  {!isExternalUser && (
+                  /* 5. Area */
                   <div className="space-y-2">
                     <Label htmlFor="area">{t('ticket.area')}</Label>
                     <DropdownMenu>
@@ -1921,6 +1929,7 @@ export const TicketList: React.FC = () => {
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
+                  )}
                   {/* 6. Status */}
                   <div className="space-y-2">
                     <Label htmlFor="status">{t('ticket.status')}</Label>
