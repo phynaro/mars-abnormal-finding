@@ -38,8 +38,6 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
     title: ticket.title ?? '',
     description: ticket.description ?? '',
     pucriticalno: ticket.pucriticalno?.toString() ?? '',
-    schedule_start: ticket.schedule_start ? timestampToDatetimeLocal(ticket.schedule_start) : '',
-    schedule_finish: ticket.schedule_finish ? timestampToDatetimeLocal(ticket.schedule_finish) : '',
     actual_start_at: ticket.actual_start_at ? timestampToDatetimeLocal(ticket.actual_start_at) : '',
     actual_finish_at: ticket.actual_finish_at ? timestampToDatetimeLocal(ticket.actual_finish_at) : '',
     satisfaction_rating: ticket.satisfaction_rating?.toString() ?? '',
@@ -58,8 +56,6 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
       title: ticket.title ?? '',
       description: ticket.description ?? '',
       pucriticalno: ticket.pucriticalno?.toString() ?? '',
-      schedule_start: ticket.schedule_start ? timestampToDatetimeLocal(ticket.schedule_start) : '',
-      schedule_finish: ticket.schedule_finish ? timestampToDatetimeLocal(ticket.schedule_finish) : '',
       actual_start_at: ticket.actual_start_at ? timestampToDatetimeLocal(ticket.actual_start_at) : '',
       actual_finish_at: ticket.actual_finish_at ? timestampToDatetimeLocal(ticket.actual_finish_at) : '',
       satisfaction_rating: ticket.satisfaction_rating?.toString() ?? '',
@@ -67,6 +63,7 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
       downtime_avoidance_hours: ticket.downtime_avoidance_hours?.toString() ?? '',
       failure_mode_id: ticket.failure_mode_id?.toString() ?? 'none',
       ticketClass: ticket.ticketClass?.toString() ?? 'none',
+      work_group_id: ticket.work_group_id?.toString() ?? '',
     });
     setErrors({});
   }, [ticket]);
@@ -123,10 +120,6 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
       newErrors.work_group_id = t('workGroup.required');
     }
 
-    if (formData.schedule_start && formData.schedule_finish && new Date(formData.schedule_start) > new Date(formData.schedule_finish)) {
-      newErrors.schedule_finish = 'Schedule finish must be later than schedule start';
-    }
-
     if (formData.actual_start_at && formData.actual_finish_at && new Date(formData.actual_start_at) > new Date(formData.actual_finish_at)) {
       newErrors.actual_finish_at = 'Actual finish must be later than actual start';
     }
@@ -160,8 +153,6 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
         title: formData.title.trim(),
         description: formData.description.trim(),
         pucriticalno: parseNullableInt(formData.pucriticalno),
-        schedule_start: formData.schedule_start || null,
-        schedule_finish: formData.schedule_finish || null,
         actual_start_at: formData.actual_start_at || null,
         actual_finish_at: formData.actual_finish_at || null,
         satisfaction_rating: parseNullableInt(formData.satisfaction_rating),
@@ -294,30 +285,6 @@ export const EditTicketModal: React.FC<EditTicketModalProps> = ({
                   ))}
                 </SelectContent>
               </Select>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="schedule_start">Schedule Start</Label>
-              <Input
-                id="schedule_start"
-                type="datetime-local"
-                value={formData.schedule_start}
-                onChange={(e) => handleInputChange('schedule_start', e.target.value)}
-              />
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="schedule_finish">Schedule Finish</Label>
-              <Input
-                id="schedule_finish"
-                type="datetime-local"
-                value={formData.schedule_finish}
-                min={formData.schedule_start || undefined}
-                onChange={(e) => handleInputChange('schedule_finish', e.target.value)}
-              />
-              {errors.schedule_finish && <p className="text-sm text-red-500">{errors.schedule_finish}</p>}
             </div>
           </div>
 

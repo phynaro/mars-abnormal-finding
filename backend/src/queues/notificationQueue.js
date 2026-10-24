@@ -16,6 +16,7 @@ const JOB_NAME_ESCALATE_TICKET = 'escalate-ticket';
 const JOB_NAME_REVIEWED_TICKET = 'reviewed-ticket';
 const JOB_NAME_CLOSE_TICKET = 'close-ticket';
 const JOB_NAME_REASSIGN_TICKET = 'reassign-ticket';
+const JOB_NAME_RESCHEDULE_TICKET = 'reschedule-ticket';
 const JOB_NAME_REOPEN_TICKET = 'reopen-ticket';
 const JOB_NAME_STATUS_UPDATE_TICKET = 'status-update-ticket';
 const JOB_NAME_ASSIGNMENT_TICKET = 'assignment-ticket';
@@ -190,6 +191,9 @@ async function addCloseTicketNotificationJob(payload) {
 async function addReassignTicketNotificationJob(payload) {
   return addNotificationJob(JOB_NAME_REASSIGN_TICKET, payload, 'reassign-ticket');
 }
+async function addRescheduleTicketNotificationJob(payload) {
+  return addNotificationJob(JOB_NAME_RESCHEDULE_TICKET, payload, 'reschedule-ticket');
+}
 async function addReopenTicketNotificationJob(payload) {
   return addNotificationJob(JOB_NAME_REOPEN_TICKET, payload, 'reopen-ticket');
 }
@@ -327,6 +331,7 @@ module.exports = {
   addReviewedTicketNotificationJob,
   addCloseTicketNotificationJob,
   addReassignTicketNotificationJob,
+  addRescheduleTicketNotificationJob,
   addReopenTicketNotificationJob,
   addStatusUpdateTicketNotificationJob,
   addAssignmentTicketNotificationJob,
@@ -348,6 +353,7 @@ module.exports = {
   JOB_NAME_REVIEWED_TICKET,
   JOB_NAME_CLOSE_TICKET,
   JOB_NAME_REASSIGN_TICKET,
+  JOB_NAME_RESCHEDULE_TICKET,
   JOB_NAME_REOPEN_TICKET,
   JOB_NAME_STATUS_UPDATE_TICKET,
   JOB_NAME_ASSIGNMENT_TICKET,

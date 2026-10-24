@@ -97,6 +97,7 @@ export interface Ticket {
   images?: TicketImage[];
   comments?: TicketComment[];
   status_history?: TicketStatusHistory[];
+  schedule_history?: TicketScheduleHistory[];
   // User relationship and approval level for current user
   user_relationship?: 'creator' | 'approver' | 'viewer';
   user_approval_level?: number;
@@ -123,6 +124,20 @@ export interface TicketComment {
   user_name?: string;
   user_email?: string;
   user_avatar_url?: string;
+}
+
+export interface TicketScheduleHistory {
+  id: number;
+  ticket_id: number;
+  old_schedule_start?: string | null;
+  new_schedule_start?: string | null;
+  old_schedule_finish?: string | null;
+  new_schedule_finish?: string | null;
+  reason_code: string;
+  note?: string | null;
+  changed_by: number;
+  changed_at: string;
+  changed_by_name?: string;
 }
 
 export interface TicketStatusHistory {
@@ -179,8 +194,6 @@ export interface UpdateTicketDetailRequest {
   title?: string;
   description?: string | null;
   pucriticalno?: number | null;
-  schedule_start?: string | null;
-  schedule_finish?: string | null;
   actual_start_at?: string | null;
   actual_finish_at?: string | null;
   satisfaction_rating?: number | null;
@@ -821,20 +834,33 @@ class TicketService {
     return result;
   }
 
-  async reassignTicket(id: number, schedule_start: string, schedule_finish: string, assigned_to: number, notes?: string): Promise<{ success: boolean; message: string }> {
+  async reassignTicket(id: number, assigned_to: number, notes?: string): Promise<{ success: boolean; message: string }> {
     const headers = getAuthHeaders();
     const res = await fetch(`${API_BASE_URL}/tickets/${id}/reassign`, {
       method: 'POST',
       headers,
-      body: JSON.stringify({ 
-        schedule_start, 
-        schedule_finish, 
-        assigned_to, 
-        notes 
+      body: JSON.stringify({
+        assigned_to,
+        notes
       })
     });
     const result = await res.json();
     if (!res.ok) throw new Error(result.message || 'Failed to reassign ticket');
+    return result;
+  }
+
+  async rescheduleTicket(
+    id: number,
+    payload: { schedule_start: string; schedule_finish: string; reason_code: string; note?: string }
+  ): Promise<{ success: boolean; message: string }> {
+    const headers = getAuthHeaders();
+    const res = await fetch(`${API_BASE_URL}/tickets/${id}/reschedule`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.message || 'Failed to reschedule ticket');
     return result;
   }
 

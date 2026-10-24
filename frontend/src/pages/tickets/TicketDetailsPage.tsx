@@ -34,6 +34,7 @@ import {
   AlertCircle,
   Star,
   Pencil,
+  Calendar,
 } from "lucide-react";
 import { getApiBaseUrl, getFileUrl } from "@/utils/url";
 import { Input } from "@/components/ui/input";
@@ -74,6 +75,7 @@ import { compressTicketImage, formatFileSize, compressImage } from "@/utils/imag
 import { StarRating, StarRatingDisplay } from "@/components/ui/star-rating";
 import { cn } from "@/lib/utils";
 import { EditTicketModal } from "@/components/ticket-management/EditTicketModal";
+import { RescheduleDialog } from "@/components/ticket-management/RescheduleDialog";
 
 type TicketCacheEntry = { data: Ticket; timestamp: number };
 type SelectedMachine = { puno: number; pucode: string; pudescription?: string; pucriticalno?: number };
@@ -263,6 +265,7 @@ const TicketDetailsPage: React.FC = () => {
   const [actionExtraId, setActionExtraId] = useState("");
   const [acting, setActing] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteComment, setDeleteComment] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -315,6 +318,12 @@ const TicketDetailsPage: React.FC = () => {
 
   // Check if current user is the assigned person for this ticket
   const isAssignedUser = ticket?.assigned_to === user?.id;
+  const canReschedule = Boolean(
+    ticket &&
+    ticket.schedule_finish &&
+    (ticket.status === "planed" || ticket.status === "in_progress" || ticket.status === "reopened_in_progress") &&
+    (isAssignedUser || isL3Plus)
+  );
 
   // Reassign modal helper state (loaded regardless of status to keep hook order stable)
   const [assigneeQuery, setAssigneeQuery] = useState("");
@@ -1054,19 +1063,14 @@ const TicketDetailsPage: React.FC = () => {
           );
           break;
         case "reassign": {
-          if (!scheduleStart || !scheduleFinish || !actionExtraId) {
-            throw new Error("Schedule start, schedule finish, and assigned user are required for reassignment");
-          }
-          if (new Date(scheduleStart) >= new Date(scheduleFinish)) {
-            throw new Error("Schedule start must be before schedule finish");
+          if (!actionExtraId) {
+            throw new Error("Assigned user is required for reassignment");
           }
           const toId = parseInt(actionExtraId || "0", 10);
           if (!toId)
             throw new Error("Please select a new assignee from the dropdown list");
           await ticketService.reassignTicket(
             ticket.id,
-            scheduleStart,
-            scheduleFinish,
             toId,
             actionComment || undefined,
           );
@@ -1183,6 +1187,11 @@ const TicketDetailsPage: React.FC = () => {
             {canEditTicketDetail && (
               <Button variant="outline" onClick={() => setEditOpen(true)}>
                 <Pencil className="mr-2 h-4 w-4" /> {t('common.edit')}
+              </Button>
+            )}
+            {canReschedule && (
+              <Button variant="outline" onClick={() => setRescheduleOpen(true)}>
+                <Calendar className="mr-2 h-4 w-4" /> {t('ticket.reschedule')}
               </Button>
             )}
             {/* L3 Reassign button - L3 can reassign tickets in any status except rejected_final and closed */}
@@ -1518,7 +1527,7 @@ const TicketDetailsPage: React.FC = () => {
                   {ticket.comments.map((comment, index) => {
                     const isStatusChange = comment.comment?.startsWith(
                       "Status changed from",
-                    );
+                    ) || comment.comment?.startsWith("Schedule changed");
                     const userInitials = comment.user_name
                       ? `${comment.user_name.split(" ")[0]?.[0] || ""}${comment.user_name.split(" ")[1]?.[0] || ""}`
                       : `U${comment.user_id}`;
@@ -2003,6 +2012,7 @@ const TicketDetailsPage: React.FC = () => {
                       | "closed"
                       | "reviewed"
                       | "reopened"
+                      | "rescheduled"
                       | "l3_override";
                     timestamp: string;
                     title: string;
@@ -2126,6 +2136,24 @@ const TicketDetailsPage: React.FC = () => {
                         icon: getStatusIcon(statusChange.new_status),
                         iconBg: getStatusIconBg(statusChange.new_status),
                         iconColor: getStatusIconColor(statusChange.new_status),
+                      });
+                    });
+                  }
+
+                  if (ticket.schedule_history && ticket.schedule_history.length > 0) {
+                    ticket.schedule_history.forEach((change) => {
+                      const reasonLabel = t(`ticket.reschedule.reason.${change.reason_code}`);
+                      const startText = `${change.old_schedule_start ? formatUITime(change.old_schedule_start, language) : "-"} → ${change.new_schedule_start ? formatUITime(change.new_schedule_start, language) : "-"}`;
+                      const finishText = `${change.old_schedule_finish ? formatUITime(change.old_schedule_finish, language) : "-"} → ${change.new_schedule_finish ? formatUITime(change.new_schedule_finish, language) : "-"}`;
+                      timelineEvents.push({
+                        id: `reschedule-${change.id}`,
+                        type: "rescheduled",
+                        timestamp: change.changed_at,
+                        title: t("ticket.rescheduledTimeline"),
+                        description: `${t("ticket.by")} ${change.changed_by_name || ""}. ${t("ticket.scheduleStart")}: ${startText}. ${t("ticket.scheduleFinish")}: ${finishText}. ${t("ticket.rescheduleReason")}: ${reasonLabel}${change.note ? `. ${change.note}` : ""}`,
+                        icon: <Calendar className="h-4 w-4" />,
+                        iconBg: "bg-teal-100 dark:bg-teal-900",
+                        iconColor: "text-teal-700 dark:text-teal-300",
                       });
                     });
                   }
@@ -2694,36 +2722,6 @@ const TicketDetailsPage: React.FC = () => {
             )}
             {actionType === "reassign" && (
               <div className="space-y-4 min-w-0 w-full">
-                <div className="space-y-2 min-w-0 w-full">
-                  <Label>{t('ticket.scheduleStart')}</Label>
-                  <Input
-                    type="datetime-local"
-                    value={scheduleStart}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setScheduleStart(v);
-                      if (v && scheduleFinish && new Date(v) >= new Date(scheduleFinish)) {
-                        setScheduleFinish("");
-                      }
-                    }}
-                    required
-                    className="w-full max-w-full min-w-0 box-border"
-                  />
-                </div>
-                <div className="space-y-2 min-w-0 w-full">
-                  <Label>{t('ticket.scheduleFinish')}</Label>
-                  <Input
-                    type="datetime-local"
-                    value={scheduleFinish}
-                    onChange={(e) => setScheduleFinish(e.target.value)}
-                    min={scheduleStart || undefined}
-                    required
-                    className="w-full max-w-full min-w-0 box-border"
-                  />
-                  {scheduleStart && scheduleFinish && new Date(scheduleStart) >= new Date(scheduleFinish) && (
-                    <p className="text-xs text-red-500">Schedule start must be before schedule finish</p>
-                  )}
-                </div>
                 <div className="space-y-2">
                   <Label>{t('ticket.newAssignee')}</Label>
                   <div className="relative" ref={assigneeDropdownRef}>
@@ -2871,7 +2869,7 @@ const TicketDetailsPage: React.FC = () => {
                     })()
                   )) ||
                   (actionType === "reject" && (!actionComment || actionComment.trim() === "")) ||
-                  (actionType === "reassign" && (!scheduleStart || !scheduleFinish || (scheduleStart && scheduleFinish && new Date(scheduleStart) >= new Date(scheduleFinish)) || !actionExtraId)) ||
+                  (actionType === "reassign" && !actionExtraId) ||
                   (actionType === "escalate" && !actionExtraId)
                 }
               >
@@ -2998,6 +2996,12 @@ const TicketDetailsPage: React.FC = () => {
         onOpenChange={setEditOpen}
         onTicketUpdated={refreshTicketDetails}
       />
+      <RescheduleDialog
+        ticket={ticket}
+        open={rescheduleOpen}
+        onOpenChange={setRescheduleOpen}
+        onRescheduled={refreshTicketDetails}
+      />
 
       {/* Mobile Floating Action Buttons */}
       {canEditTicketDetail && (
@@ -3020,7 +3024,7 @@ const TicketDetailsPage: React.FC = () => {
                 ? "opacity-100 translate-y-0"
                 : "opacity-0 translate-y-4 pointer-events-none"
             )}
-            style={{ maxHeight: isActionPaneExpanded ? '400px' : '0', overflow: 'hidden' }}
+            style={{ maxHeight: isActionPaneExpanded ? '560px' : '0', overflow: 'hidden' }}
           >
             {/* Accept button - Only assigned L2 user can accept open tickets */}
             {isL2Plus &&
@@ -3126,6 +3130,19 @@ const TicketDetailsPage: React.FC = () => {
                 className="shadow-lg w-auto whitespace-nowrap"
               >
                 <Pencil className="mr-2 h-4 w-4" /> {t('common.edit')}
+              </Button>
+            )}
+            {canReschedule && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setIsActionPaneExpanded(false);
+                  setRescheduleOpen(true);
+                }}
+                size="sm"
+                className="shadow-lg w-auto whitespace-nowrap"
+              >
+                <Calendar className="mr-2 h-4 w-4" /> {t('ticket.reschedule')}
               </Button>
             )}
             {/* L3 Reassign button - L3 can reassign tickets in any status except rejected_final and closed */}

@@ -42,6 +42,7 @@ const JOB_NAME_ESCALATE_TICKET = notificationQueue.JOB_NAME_ESCALATE_TICKET;
 const JOB_NAME_REVIEWED_TICKET = notificationQueue.JOB_NAME_REVIEWED_TICKET;
 const JOB_NAME_CLOSE_TICKET = notificationQueue.JOB_NAME_CLOSE_TICKET;
 const JOB_NAME_REASSIGN_TICKET = notificationQueue.JOB_NAME_REASSIGN_TICKET;
+const JOB_NAME_RESCHEDULE_TICKET = notificationQueue.JOB_NAME_RESCHEDULE_TICKET;
 const JOB_NAME_REOPEN_TICKET = notificationQueue.JOB_NAME_REOPEN_TICKET;
 const JOB_NAME_STATUS_UPDATE_TICKET = notificationQueue.JOB_NAME_STATUS_UPDATE_TICKET;
 const JOB_NAME_ASSIGNMENT_TICKET = notificationQueue.JOB_NAME_ASSIGNMENT_TICKET;
@@ -484,6 +485,44 @@ async function processReassignTicketNotification(job) {
   }
 }
 
+async function processRescheduleTicketNotification(job) {
+  const { ticketData, changedByName, emailRecipients, lineRecipients, linePayload, scheduleDetails } = job.data;
+  if (!ticketData || !ticketData.ticket_number) {
+    warn('reschedule-ticket job missing ticketData or ticket_number, skipping');
+    return;
+  }
+  const ticketNumber = ticketData.ticket_number;
+  if (emailRecipients && emailRecipients.length > 0) {
+    try {
+      await emailService.sendTicketRescheduledNotification(
+        ticketData,
+        changedByName || 'User',
+        scheduleDetails || {},
+        emailRecipients
+      );
+      log(`✅ [Worker] Reschedule email sent for ticket ${ticketNumber} to ${emailRecipients.length} recipient(s)`);
+    } catch (err) {
+      error(`❌ [Worker] Reschedule email failed for ticket ${ticketNumber}:`, err.message);
+      throw err;
+    }
+  }
+  if (lineRecipients && lineRecipients.length > 0 && linePayload) {
+    try {
+      const language = (job.data.language !== undefined) ? job.data.language : 'th';
+      const linePromises = lineRecipients.map((user) =>
+        abnFlexService.sendToUser(user.LineID, [
+          abnFlexService.buildTicketFlexMessage(abnFlexService.TicketState.RESCHEDULED, linePayload, { language }),
+        ])
+      );
+      await Promise.all(linePromises);
+      log(`✅ [Worker] Reschedule LINE sent for ticket ${ticketNumber} to ${lineRecipients.length} recipient(s)`);
+    } catch (err) {
+      error(`❌ [Worker] Reschedule LINE failed for ticket ${ticketNumber}:`, err.message);
+      throw err;
+    }
+  }
+}
+
 async function processReopenTicketNotification(job) {
   const { ticketData, reopenerName, reopen_reason, emailRecipients, lineRecipients, linePayload } = job.data;
   if (!ticketData || !ticketData.ticket_number) {
@@ -749,6 +788,10 @@ async function processor(job) {
   }
   if (job.name === JOB_NAME_REASSIGN_TICKET) {
     await processReassignTicketNotification(job);
+    return;
+  }
+  if (job.name === JOB_NAME_RESCHEDULE_TICKET) {
+    await processRescheduleTicketNotification(job);
     return;
   }
   if (job.name === JOB_NAME_REOPEN_TICKET) {

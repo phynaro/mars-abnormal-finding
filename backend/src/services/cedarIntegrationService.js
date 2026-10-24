@@ -649,7 +649,42 @@ class CedarIntegrationService {
         const assignedTo =
           updateData.assignedTo || updateData.assigned_to || ticket.assigned_to;
 
-        if (scheduleStart && scheduleFinish && assignedTo) {
+        if (assignedTo) {
+          updateFields.push(
+            {
+              name: "assignTo",
+              type: sql.Int,
+              field: "ASSIGN",
+              value: assignedTo,
+            },
+            {
+              name: "repairBy",
+              type: sql.Int,
+              field: "REPAIRBY",
+              value: assignedTo,
+            },
+            {
+              name: "workBy",
+              type: sql.Int,
+              field: "WORKBY",
+              value: assignedTo,
+            },
+            {
+                name: "assignUser",
+                type: sql.Int,
+                field: "AssignUser",
+                value: assignedTo,
+            },
+            {
+                name: "assignDate",
+                type: sql.NVarChar,
+                field: "AssignDate",
+                value: currentDate,
+            }
+          );
+        }
+
+        if (scheduleStart && scheduleFinish) {
           const startDate = new Date(scheduleStart);
           const finishDate = new Date(scheduleFinish);
 
@@ -682,36 +717,6 @@ class CedarIntegrationService {
               type: sql.NVarChar,
               field: "SCH_FINISH_T",
               value: finishTimeStr,
-            },
-            {
-              name: "assignTo",
-              type: sql.Int,
-              field: "ASSIGN",
-              value: assignedTo,
-            },
-            {
-              name: "repairBy",
-              type: sql.Int,
-              field: "REPAIRBY",
-              value: assignedTo,
-            },
-            {
-              name: "workBy",
-              type: sql.Int,
-              field: "WORKBY",
-              value: assignedTo,
-            },
-            {
-                name: "assignUser",
-                type: sql.Int,
-                field: "AssignUser",
-                value: assignedTo,
-            },
-            {
-                name: "assignDate",
-                type: sql.NVarChar,
-                field: "AssignDate",
-                value: currentDate,
             }
           );
         }
@@ -897,6 +902,46 @@ class CedarIntegrationService {
     };
 
     return priorityMapping[priorityLevel] || 3; // Default to normal
+  }
+
+  /**
+   * Update only the work order scheduled start and finish. Does not change WO status.
+   */
+  async updateScheduledDates(wono, scheduleStart, scheduleFinish, changedBy) {
+    if (!wono || !scheduleStart || !scheduleFinish) {
+      return { success: false, message: "Missing schedule or work order" };
+    }
+
+    if (!this.pool) {
+      this.pool = await sql.connect(dbConfig);
+    }
+
+    const startDate = new Date(scheduleStart);
+    const finishDate = new Date(scheduleFinish);
+    const { date: currentDate, time: currentTime } = this.getCurrentDateTime();
+    const request = this.pool.request();
+    request.input("wono", sql.Int, wono);
+    request.input("schStartDate", sql.NVarChar, this.getStrDate(startDate));
+    request.input("schStartTime", sql.NVarChar, this.getStrTime(startDate));
+    request.input("schFinishDate", sql.NVarChar, this.getStrDate(finishDate));
+    request.input("schFinishTime", sql.NVarChar, this.getStrTime(finishDate));
+    request.input("updateUser", sql.Int, changedBy || 1);
+    request.input("updateDate", sql.NVarChar, currentDate);
+    request.input("updateTime", sql.NVarChar, currentTime);
+
+    await request.query(`
+      UPDATE WO SET
+        SCH_START_D = @schStartDate,
+        SCH_START_T = @schStartTime,
+        SCH_FINISH_D = @schFinishDate,
+        SCH_FINISH_T = @schFinishTime,
+        UPDATEUSER = @updateUser,
+        UPDATEDATE = @updateDate,
+        UpdateTime = @updateTime
+      WHERE WONO = @wono
+    `);
+
+    return { success: true };
   }
 
   /**

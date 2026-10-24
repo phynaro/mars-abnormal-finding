@@ -444,6 +444,43 @@ const getTicketNotificationRecipients = async (ticketId, actionType, actorPerson
                     });
                 }
                 break;
+
+            case 'reschedule': {
+                const requesterReschedule = await getUserById(pool, created_by);
+                if (requesterReschedule) {
+                    specificUsers.push({
+                        PERSONNO: requesterReschedule.PERSONNO,
+                        PERSON_NAME: requesterReschedule.PERSON_NAME,
+                        EMAIL: requesterReschedule.EMAIL,
+                        LineID: requesterReschedule.LineID || null,
+                        notification_reason: 'Requester Notification - Schedule Changed',
+                        recipient_type: 'requester'
+                    });
+                }
+                const l3Reschedule = await getNotificationApproversWithLineId(pool, puno, 3, actorPersonno);
+                l3Reschedule.forEach((user) => {
+                    specificUsers.push({
+                        PERSONNO: user.PERSONNO,
+                        PERSON_NAME: user.PERSON_NAME,
+                        EMAIL: user.EMAIL,
+                        LineID: user.LineID,
+                        notification_reason: 'L3 Notification - Schedule Changed',
+                        recipient_type: 'L3ForPU'
+                    });
+                });
+                const l4Reschedule = await getNotificationApproversWithLineId(pool, puno, 4, actorPersonno);
+                l4Reschedule.forEach((user) => {
+                    specificUsers.push({
+                        PERSONNO: user.PERSONNO,
+                        PERSON_NAME: user.PERSON_NAME,
+                        EMAIL: user.EMAIL,
+                        LineID: user.LineID,
+                        notification_reason: 'L4 Notification - Schedule Changed',
+                        recipient_type: 'L4ForPU'
+                    });
+                });
+                break;
+            }
                 
             case 'reopen':
                 // Get assignee
@@ -747,6 +784,50 @@ const getNotificationRecipientsForPU = async (puno, actionType, createdBy = null
                     }
                 }
                 break;
+
+            case 'reschedule': {
+                if (createdBy) {
+                    const requesterReschedule = await getUserByIdWithAvatar(pool, createdBy);
+                    if (requesterReschedule) {
+                        specificUsers.push({
+                            PERSONNO: requesterReschedule.PERSONNO,
+                            PERSON_NAME: requesterReschedule.PERSON_NAME,
+                            EMAIL: requesterReschedule.EMAIL,
+                            LineID: requesterReschedule.LineID || null,
+                            AvatarUrl: requesterReschedule.AvatarUrl || null,
+                            notification_reason: 'Requester Notification - Schedule Changed',
+                            recipient_type: 'requester'
+                        });
+                    }
+                }
+                const l3Reschedule = await getNotificationApproversWithLineId(pool, puno, 3, null);
+                for (const user of l3Reschedule) {
+                    const userWithAvatar = await getUserByIdWithAvatar(pool, user.PERSONNO);
+                    specificUsers.push({
+                        PERSONNO: user.PERSONNO,
+                        PERSON_NAME: user.PERSON_NAME,
+                        EMAIL: user.EMAIL,
+                        LineID: user.LineID,
+                        AvatarUrl: userWithAvatar?.AvatarUrl || null,
+                        notification_reason: 'L3 Notification - Schedule Changed',
+                        recipient_type: 'L3ForPU'
+                    });
+                }
+                const l4Reschedule = await getNotificationApproversWithLineId(pool, puno, 4, null);
+                for (const user of l4Reschedule) {
+                    const userWithAvatar = await getUserByIdWithAvatar(pool, user.PERSONNO);
+                    specificUsers.push({
+                        PERSONNO: user.PERSONNO,
+                        PERSON_NAME: user.PERSON_NAME,
+                        EMAIL: user.EMAIL,
+                        LineID: user.LineID,
+                        AvatarUrl: userWithAvatar?.AvatarUrl || null,
+                        notification_reason: 'L4 Notification - Schedule Changed',
+                        recipient_type: 'L4ForPU'
+                    });
+                }
+                break;
+            }
                 
             case 'reopen':
                 // Get assignee

@@ -4,6 +4,16 @@ const notificationQueue = require("../queues/notificationQueue");
 const cedarIntegrationService = require("../services/cedarIntegrationService");
 const { getCriticalLevelText } = require("../utils/criticalMapping");
 const problemTicketService = require("../services/problemTicketService");
+const {
+  RESCHEDULE_STATUSES,
+  isRescheduleReason,
+  getRescheduleReasonLabel,
+  inputMinuteKey,
+  scheduleInputUnchanged,
+  formatStoredSchedule,
+  formatInputSchedule,
+  buildScheduleChangeComment,
+} = require("../constants/rescheduleReasons");
 const fs = require("fs");
 const path = require("path");
 
@@ -1284,9 +1294,21 @@ const getTicketById = async (req, res) => {
                 ORDER BY tsh.changed_at
             `);
 
+    const scheduleHistoryResult = await pool.request().input("ticket_id", sql.Int, id)
+      .query(`
+                SELECT
+                    h.*,
+                    ISNULL(u.FIRSTNAME,'') + ' ' + ISNULL(u.LASTNAME,'') as changed_by_name
+                FROM IgxTicketScheduleHistory h
+                LEFT JOIN Person u ON h.changed_by = u.PERSONNO
+                WHERE h.ticket_id = @ticket_id
+                ORDER BY h.changed_at
+            `);
+
     ticket.images = imagesResult.recordset;
     ticket.comments = commentsResult.recordset;
     ticket.status_history = historyResult.recordset;
+    ticket.schedule_history = scheduleHistoryResult.recordset;
 
     // Add user relationship and approval level (calculated from helper)
     ticket.user_relationship = userRelationship;
@@ -1526,8 +1548,6 @@ const updateTicketDetail = async (req, res) => {
     let title;
     let description;
     let pucriticalno;
-    let schedule_start;
-    let schedule_finish;
     let actual_start_at;
     let actual_finish_at;
     let satisfaction_rating;
@@ -1541,8 +1561,6 @@ const updateTicketDetail = async (req, res) => {
       title = parseOptionalString(rawBody.title, { emptyAsNull: false });
       description = parseOptionalString(rawBody.description);
       pucriticalno = parseOptionalInt(rawBody.pucriticalno);
-      schedule_start = parseOptionalDate(rawBody.schedule_start, "Schedule start");
-      schedule_finish = parseOptionalDate(rawBody.schedule_finish, "Schedule finish");
       actual_start_at = parseOptionalDate(rawBody.actual_start_at, "Actual start");
       actual_finish_at = parseOptionalDate(rawBody.actual_finish_at, "Actual finish");
       satisfaction_rating = parseOptionalInt(rawBody.satisfaction_rating);
@@ -1572,13 +1590,6 @@ const updateTicketDetail = async (req, res) => {
           message: "Satisfaction rating must be between 1 and 5",
         });
       }
-    }
-
-    if (schedule_start && schedule_finish && schedule_start > schedule_finish) {
-      return res.status(400).json({
-        success: false,
-        message: "Schedule finish must be later than schedule start",
-      });
     }
 
     if (actual_start_at && actual_finish_at && actual_start_at > actual_finish_at) {
@@ -1651,8 +1662,6 @@ const updateTicketDetail = async (req, res) => {
       { key: "title", value: title, type: sql.NVarChar(255) },
       { key: "description", value: description, type: sql.NVarChar(sql.MAX) },
       { key: "pucriticalno", value: pucriticalno, type: sql.Int },
-      { key: "schedule_start", value: schedule_start, type: sql.DateTime2 },
-      { key: "schedule_finish", value: schedule_finish, type: sql.DateTime2 },
       { key: "actual_start_at", value: actual_start_at, type: sql.DateTime2 },
       { key: "actual_finish_at", value: actual_finish_at, type: sql.DateTime2 },
       { key: "satisfaction_rating", value: satisfaction_rating, type: sql.Int },
@@ -4675,20 +4684,16 @@ const reassignTicket = async (req, res) => {
     const { id } = req.params;
     const {
       notes,
-      schedule_start,
-      schedule_finish,
       assigned_to: new_assignee_id,
       reassignment_reason,
     } = req.body;
     const reassigned_by = req.user.id;
     const pool = await sql.connect(dbConfig);
 
-    // Validate required fields (same as plan function)
-    if (!schedule_start || !schedule_finish || !new_assignee_id) {
+    if (!new_assignee_id) {
       return res.status(400).json({
         success: false,
-        message:
-          "Schedule start, schedule finish, and assigned user are required for reassignment",
+        message: "Assigned user is required for reassignment",
       });
     }
 
@@ -4700,7 +4705,9 @@ const reassignTicket = async (req, res) => {
                 t.status, 
                 t.created_by,
                 t.assigned_to,
-                t.puno
+                t.puno,
+                t.schedule_start,
+                t.schedule_finish
             FROM IgxTickets t
             WHERE t.id = @id
         `,
@@ -4751,23 +4758,18 @@ const reassignTicket = async (req, res) => {
       });
     }
 
-    // Update ticket status to planed with new schedule and assignment (same as plan function)
     await pool
       .request()
       .input("id", sql.Int, id)
       .input("status", sql.VarChar(50), "planed")
       .input("assigned_to", sql.Int, new_assignee_id)
       .input("reassigned_by", sql.Int, reassigned_by)
-      .input("schedule_start", sql.DateTime2, new Date(schedule_start))
-      .input("schedule_finish", sql.DateTime2, new Date(schedule_finish))
       .query(`
                 UPDATE IgxTickets 
                 SET status = @status, 
                     assigned_to = @assigned_to,
                     reassigned_at = GETDATE(),
                     reassigned_by = @reassigned_by,
-                    schedule_start = @schedule_start,
-                    schedule_finish = @schedule_finish,
                     updated_at = GETDATE()
                 WHERE id = @id
             `);
@@ -4778,7 +4780,7 @@ const reassignTicket = async (req, res) => {
       newStatus: "planed",
       changedBy: reassigned_by,
       toUser: new_assignee_id,
-      notes: notes || "Ticket reassigned and rescheduled",
+      notes: notes || "Ticket reassigned",
     });
 
     // Add status change comment
@@ -4803,13 +4805,12 @@ const reassignTicket = async (req, res) => {
       await cedarIntegrationService.syncTicketToCedar(id, "plan", {
         newStatus: "planed",
         changedBy: reassigned_by,
-        notes: notes || "Ticket reassigned and rescheduled",
-        scheduleStart: schedule_start,
-        scheduleFinish: schedule_finish,
+        notes: notes || "Ticket reassigned",
+        scheduleStart: ticket.schedule_start,
+        scheduleFinish: ticket.schedule_finish,
         assignedTo: new_assignee_id,
-        // Additional data for Cedar integration
-        schedule_start: schedule_start,
-        schedule_finish: schedule_finish,
+        schedule_start: ticket.schedule_start,
+        schedule_finish: ticket.schedule_finish,
         assigned_to: new_assignee_id,
       });
 
@@ -4856,8 +4857,8 @@ const reassignTicket = async (req, res) => {
         created_by: ticket.created_by,
         assigned_to: new_assignee_id,
         previous_assignee: ticket.assigned_to,
-        schedule_start: schedule_start,
-        schedule_finish: schedule_finish,
+        schedule_start: ticket.schedule_start,
+        schedule_finish: ticket.schedule_finish,
         created_at: new Date().toISOString(),
       };
 
@@ -4868,15 +4869,15 @@ const reassignTicket = async (req, res) => {
         assetName: ticketData.PUNAME || ticketData.machine_number || "Unknown Asset",
         problem: ticketData.title || "No description",
         actionBy: reassignerName,
-        comment: notes || "งานได้รับการมอบหมายและกำหนดตารางเวลาใหม่",
+        comment: notes || "งานได้รับการมอบหมายใหม่",
         detailUrl: `${process.env.LIFF_URL}/tickets/${id}`,
         extraKVs: [
           { label: "Work Group", value: getWorkGroupLabel(ticketData) },
           { label: "Severity", value: (ticketData.severity_level || "medium").toUpperCase() },
           { label: "Priority", value: formatTicketPriority(ticketData.priority) },
           { label: "New Assignee", value: validAssignee.PERSON_NAME },
-          { label: "Schedule Start", value: new Date(schedule_start).toLocaleDateString("th-TH") },
-          { label: "Schedule Finish", value: new Date(schedule_finish).toLocaleDateString("th-TH") },
+          { label: "Schedule Start", value: formatStoredSchedule(ticket.schedule_start) },
+          { label: "Schedule Finish", value: formatStoredSchedule(ticket.schedule_finish) },
           { label: "Status", value: "PLANED" },
           { label: "Reassigned by", value: reassignerName },
         ],
@@ -4896,12 +4897,12 @@ const reassignTicket = async (req, res) => {
 
     res.json({
       success: true,
-      message: "Ticket reassigned and rescheduled successfully",
+      message: "Ticket reassigned successfully",
       data: {
         status: "planed",
         assigned_to: new_assignee_id,
-        schedule_start,
-        schedule_finish,
+        schedule_start: ticket.schedule_start,
+        schedule_finish: ticket.schedule_finish,
         new_assignee_name: validAssignee.PERSON_NAME,
       },
     });
@@ -6281,6 +6282,243 @@ const testNotificationRecipients = async (req, res) => {
   }
 };
 
+const rescheduleTicket = async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const { schedule_start, schedule_finish, reason_code, note } = req.body || {};
+    const changedBy = req.user.id;
+    const pool = await sql.connect(dbConfig);
+
+    if (!inputMinuteKey(schedule_start) || !inputMinuteKey(schedule_finish)) {
+      return res.status(400).json({
+        success: false,
+        message: "Schedule start and schedule finish are required",
+      });
+    }
+    if (new Date(schedule_start) >= new Date(schedule_finish)) {
+      return res.status(400).json({
+        success: false,
+        message: "Schedule start must be before schedule finish",
+      });
+    }
+    if (!isRescheduleReason(reason_code)) {
+      return res.status(400).json({
+        success: false,
+        message: "A valid reschedule reason is required",
+      });
+    }
+    const trimmedNote = typeof note === "string" ? note.trim() : "";
+    if (trimmedNote.length > 500) {
+      return res.status(400).json({
+        success: false,
+        message: "Note must be 500 characters or fewer",
+      });
+    }
+
+    const currentResult = await runQuery(
+      pool,
+      `
+        SELECT t.id, t.status, t.created_by, t.assigned_to, t.puno, t.cedar_wono,
+               t.schedule_start, t.schedule_finish, t.ticket_number, t.title,
+               t.severity_level, t.priority, t.work_group_id,
+               pe.plant as plant_code, pe.area as area_code, pe.line as line_code,
+               pe.machine as machine_code, pe.number as machine_number, pe.puname as PUNAME
+        FROM IgxTickets t
+        LEFT JOIN PU pu ON t.puno = pu.PUNO AND pu.FLAGDEL != 'Y'
+        LEFT JOIN IgxPUExtension pe ON pu.PUNO = pe.puno
+        WHERE t.id = @id
+      `,
+      [{ name: "id", type: sql.Int, value: id }]
+    );
+
+    const ticket = firstRecord(currentResult);
+    if (!ticket) {
+      return res.status(404).json({ success: false, message: "Ticket not found" });
+    }
+    if (!RESCHEDULE_STATUSES.includes(ticket.status) || !ticket.schedule_finish) {
+      return res.status(400).json({
+        success: false,
+        message: "Only an active ticket that already has a scheduled finish can be rescheduled",
+      });
+    }
+
+    const approvalLevel = await getUserMaxApprovalLevelForPU(changedBy, ticket.puno);
+    const isAssignee = Number(ticket.assigned_to) === Number(changedBy);
+    if (!isAssignee && approvalLevel < 3) {
+      return res.status(403).json({
+        success: false,
+        message: "Only the assignee or an L3/L4 user for this area can reschedule",
+      });
+    }
+
+    if (
+      scheduleInputUnchanged(ticket.schedule_start, schedule_start) &&
+      scheduleInputUnchanged(ticket.schedule_finish, schedule_finish)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Change the scheduled start or the scheduled finish",
+      });
+    }
+
+    const newStart = new Date(schedule_start);
+    const newFinish = new Date(schedule_finish);
+    const comment = buildScheduleChangeComment({
+      oldStart: ticket.schedule_start,
+      oldFinish: ticket.schedule_finish,
+      newStartInput: schedule_start,
+      newFinishInput: schedule_finish,
+      reasonCode: reason_code,
+      note: trimmedNote,
+    });
+
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      await new sql.Request(transaction)
+        .input("id", sql.Int, id)
+        .input("schedule_start", sql.DateTime2, newStart)
+        .input("schedule_finish", sql.DateTime2, newFinish)
+        .query(`
+          UPDATE IgxTickets
+          SET schedule_start = @schedule_start,
+              schedule_finish = @schedule_finish,
+              updated_at = GETDATE()
+          WHERE id = @id
+        `);
+
+      await new sql.Request(transaction)
+        .input("ticket_id", sql.Int, id)
+        .input("old_schedule_start", sql.DateTime2, ticket.schedule_start || null)
+        .input("new_schedule_start", sql.DateTime2, newStart)
+        .input("old_schedule_finish", sql.DateTime2, ticket.schedule_finish || null)
+        .input("new_schedule_finish", sql.DateTime2, newFinish)
+        .input("reason_code", sql.VarChar(50), reason_code)
+        .input("note", sql.NVarChar(500), trimmedNote || null)
+        .input("changed_by", sql.Int, changedBy)
+        .query(`
+          INSERT INTO IgxTicketScheduleHistory (
+            ticket_id, old_schedule_start, new_schedule_start,
+            old_schedule_finish, new_schedule_finish,
+            reason_code, note, changed_by
+          ) VALUES (
+            @ticket_id, @old_schedule_start, @new_schedule_start,
+            @old_schedule_finish, @new_schedule_finish,
+            @reason_code, @note, @changed_by
+          )
+        `);
+
+      await new sql.Request(transaction)
+        .input("ticket_id", sql.Int, id)
+        .input("user_id", sql.Int, changedBy)
+        .input("comment", sql.NVarChar(500), comment)
+        .query(`
+          INSERT INTO IgxTicketComments (ticket_id, user_id, comment, created_at)
+          VALUES (@ticket_id, @user_id, @comment, GETDATE())
+        `);
+
+      await transaction.commit();
+    } catch (txError) {
+      try {
+        await transaction.rollback();
+      } catch (rollbackError) {
+        console.error("Reschedule rollback failed:", rollbackError.message);
+      }
+      throw txError;
+    }
+
+    if (ticket.cedar_wono) {
+      try {
+        await cedarIntegrationService.updateScheduledDates(
+          ticket.cedar_wono,
+          newStart,
+          newFinish,
+          changedBy
+        );
+      } catch (cedarError) {
+        console.error("Cedar schedule update failed:", cedarError.message);
+      }
+    }
+
+    await safeSendNotifications("send ticket reschedule notifications", async () => {
+      const notificationUsers = await getTicketNotificationRecipients(id, "reschedule", changedBy);
+      if (notificationUsers.length === 0) return;
+
+      const changedByName = getUserDisplayNameFromRequest(req);
+      const oldStartLabel = formatStoredSchedule(ticket.schedule_start);
+      const newStartLabel = formatInputSchedule(schedule_start);
+      const oldFinishLabel = formatStoredSchedule(ticket.schedule_finish);
+      const newFinishLabel = formatInputSchedule(schedule_finish);
+      const reasonLabel = getRescheduleReasonLabel(reason_code, "th");
+      const reasonLabelEn = getRescheduleReasonLabel(reason_code, "en");
+      const extraKVs = [
+        { label: "Work Group", value: getWorkGroupLabel(ticket) },
+        { label: "Previous Start", value: oldStartLabel },
+        { label: "New Start", value: newStartLabel },
+        { label: "Previous Finish", value: oldFinishLabel },
+        { label: "New Finish", value: newFinishLabel },
+        { label: "Reason", value: reasonLabel },
+      ];
+      if (trimmedNote) extraKVs.push({ label: "Note", value: trimmedNote });
+      extraKVs.push({ label: "Rescheduled by", value: changedByName });
+
+      await notificationQueue.addRescheduleTicketNotificationJob({
+        ticketData: {
+          id,
+          ticket_number: ticket.ticket_number,
+          title: ticket.title,
+          description: ticket.title,
+          plant_code: ticket.plant_code,
+          area_code: ticket.area_code,
+          line_code: ticket.line_code,
+          machine_code: ticket.machine_code,
+          machine_number: ticket.machine_number,
+          plant_name: ticket.PUNAME,
+          PUNAME: ticket.PUNAME,
+          severity_level: ticket.severity_level,
+          priority: ticket.priority,
+          created_by: ticket.created_by,
+          assigned_to: ticket.assigned_to,
+        },
+        changedByName,
+        scheduleDetails: {
+          oldStart: oldStartLabel,
+          newStart: newStartLabel,
+          oldFinish: oldFinishLabel,
+          newFinish: newFinishLabel,
+          reason: reasonLabelEn,
+          note: trimmedNote || "",
+        },
+        emailRecipients: notificationUsers.filter((user) => user.EMAIL && user.EMAIL.trim() !== ""),
+        lineRecipients: notificationUsers.filter((user) => user.LineID && user.LineID.trim() !== ""),
+        linePayload: {
+          caseNo: ticket.ticket_number,
+          assetName: ticket.PUNAME || ticket.machine_number || "Unknown Asset",
+          problem: ticket.title || "No description",
+          actionBy: changedByName,
+          comment: trimmedNote || reasonLabel,
+          detailUrl: getTicketDetailUrl(id),
+          extraKVs,
+        },
+        language: "th",
+      });
+    });
+
+    res.json({
+      success: true,
+      message: "Ticket schedule updated",
+      data: { schedule_start, schedule_finish, reason_code },
+    });
+  } catch (error) {
+    console.error("Error rescheduling ticket:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to reschedule ticket",
+      error: error.message,
+    });
+  }
+};
+
 module.exports = {
   createTicket,
   getTickets,
@@ -6304,6 +6542,7 @@ module.exports = {
   reviewAndClose,
   reopenTicket,
   reassignTicket,
+  rescheduleTicket,
   getTicketFilterUsers,
   getAvailableAssignees,
 

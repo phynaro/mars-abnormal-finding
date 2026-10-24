@@ -36,6 +36,7 @@ const TicketState = Object.freeze({
   FINISHED: "FINISHED",
   REVIEWED: "REVIEWED",
   REASSIGNED: "REASSIGNED",
+  RESCHEDULED: "RESCHEDULED",
   ESCALATED: "ESCALATED",
   CLOSED: "CLOSED",
   REOPENED: "REOPENED",
@@ -57,6 +58,7 @@ const STATE_COLORS = Object.freeze({
   [TicketState.FINISHED]: "#10B981",          // Emerald green
   [TicketState.REVIEWED]: "#8B5CF6",           // Purple
   [TicketState.REASSIGNED]: "#A855F7",         // Violet
+  [TicketState.RESCHEDULED]: "#0F766E",        // Teal - schedule moved
   [TicketState.ESCALATED]: "#FB7185",          // Rose
   [TicketState.CLOSED]: "#64748B",             // Slate gray
   [TicketState.REOPENED]: "#F97316",           // Orange
@@ -78,6 +80,7 @@ const STATE_LABELS_TH = Object.freeze({
   [TicketState.FINISHED]: "เสร็จสิ้น",
   [TicketState.REVIEWED]: "ตรวจสอบแล้ว รอการปิด",
   [TicketState.REASSIGNED]: "มอบหมาย",
+  [TicketState.RESCHEDULED]: "เลื่อนกำหนดการ",
   [TicketState.ESCALATED]: "ส่งต่อให้หัวหน้างาน",
   [TicketState.CLOSED]: "ปิดเคส",
   [TicketState.REOPENED]: "เปิดเคสใหม่",
@@ -99,6 +102,7 @@ const STATE_LABELS_EN = Object.freeze({
   [TicketState.FINISHED]: "Work Finished",
   [TicketState.REVIEWED]: "Reviewed - Pending Closure",
   [TicketState.REASSIGNED]: "Reassigned",
+  [TicketState.RESCHEDULED]: "Schedule Changed",
   [TicketState.ESCALATED]: "Escalated to Manager",
   [TicketState.CLOSED]: "Ticket Closed",
   [TicketState.REOPENED]: "Ticket Reopened",
@@ -116,6 +120,13 @@ const EXTRA_LABELS_TH = Object.freeze({
   "Assigned to": "ผู้รับผิดชอบ",
   "Schedule Start": "เริ่มตามแผน",
   "Schedule Finish": "เสร็จตามแผน",
+  "Previous Start": "เริ่มตามแผนเดิม",
+  "New Start": "เริ่มตามแผนใหม่",
+  "Previous Finish": "เสร็จตามแผนเดิม",
+  "New Finish": "เสร็จตามแผนใหม่",
+  Reason: "เหตุผล",
+  Note: "หมายเหตุ",
+  "Rescheduled by": "ผู้เลื่อนกำหนดการ",
   "Actual Start": "เริ่มจริง",
   "Actual Finish": "เสร็จจริง",
   "Started by": "ผู้เริ่มงาน",

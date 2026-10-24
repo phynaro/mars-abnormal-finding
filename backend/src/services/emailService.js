@@ -2041,6 +2041,67 @@ class EmailService {
   }
 
   /**
+   * Schedule change notification. Status is unchanged, so this is not a status email.
+   */
+  async sendTicketRescheduledNotification(ticketData, changedByName, details = {}, notificationUsers = []) {
+    try {
+      const recipients = (notificationUsers || []).filter((user) => user.EMAIL && user.EMAIL.trim() !== '');
+      if (recipients.length === 0) {
+        console.warn('No email recipients for ticket reschedule notification');
+        return { success: true, sentCount: 0 };
+      }
+
+      const escapeHtml = (value) => String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+      const noteRow = details.note
+        ? `<p><span style="font-weight:600;">Note:</span> ${escapeHtml(details.note)}</p>`
+        : '';
+      const html = `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head><meta charset="UTF-8"><title>Schedule Changed</title></head>
+        <body style="font-family: Arial, Helvetica, sans-serif; background:#f4f4f4; margin:0; padding:30px 0; color:#333;">
+          <div style="max-width:600px; margin:auto; background:#fff; border:1px solid #e0e0e0; border-radius:6px; padding:30px 25px;">
+            <h2 style="font-size:20px; margin:0 0 16px;">Schedule changed</h2>
+            <p><span style="font-weight:600;">Ticket:</span> ${escapeHtml(ticketData.ticket_number || '')}</p>
+            <p><span style="font-weight:600;">Title:</span> ${escapeHtml(ticketData.title || '')}</p>
+            <p><span style="font-weight:600;">Previous start:</span> ${escapeHtml(details.oldStart || '-')}</p>
+            <p><span style="font-weight:600;">New start:</span> ${escapeHtml(details.newStart || '-')}</p>
+            <p><span style="font-weight:600;">Previous finish:</span> ${escapeHtml(details.oldFinish || '-')}</p>
+            <p><span style="font-weight:600;">New finish:</span> ${escapeHtml(details.newFinish || '-')}</p>
+            <p><span style="font-weight:600;">Reason:</span> ${escapeHtml(details.reason || '')}</p>
+            ${noteRow}
+            <p><span style="font-weight:600;">Changed by:</span> ${escapeHtml(changedByName)}</p>
+          </div>
+        </body>
+        </html>`;
+
+      for (let i = 0; i < recipients.length; i++) {
+        const user = recipients[i];
+        const { error } = await resend.emails.send({
+          from: this.fromEmail,
+          to: [user.EMAIL],
+          subject: `Schedule changed - ${ticketData.ticket_number}`,
+          html,
+        });
+        if (error) {
+          throw new Error(error.message);
+        }
+        if (i < recipients.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, 600));
+        }
+      }
+
+      return { success: true, sentCount: recipients.length };
+    } catch (error) {
+      console.error('Email service error (reschedule):', error);
+      throw error;
+    }
+  }
+
+  /**
    * Test email service connection
    * @returns {Promise<Object>} - Test result
    */

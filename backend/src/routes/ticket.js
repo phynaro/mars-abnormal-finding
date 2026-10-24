@@ -64,6 +64,7 @@ router.post('/:id/approve-close', requireInternalUser, requireFormPermission('TK
 router.post('/:id/review-and-close', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.reviewAndClose);
 router.post('/:id/reopen', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.reopenTicket);
 router.post('/:id/reassign', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.reassignTicket);
+router.post('/:id/reschedule', requireInternalUser, requireFormPermission('TKT', 'save'), ticketController.rescheduleTicket);
 
 router.get('/assignees/available', requireInternalUser, requireFormPermission('TKT', 'view'), ticketController.getAvailableAssignees);
 
